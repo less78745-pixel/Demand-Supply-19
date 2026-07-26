@@ -1,0 +1,10 @@
+fastapi==0.115.0
+uvicorn[standard]==0.30.0
+pandas==2.2.0
+numpy==1.26.0
+openpyxl==3.1.2
+python-multipart==0.0.9
+statsmodels==0.14.1
+pmdarima==2.0.4
+scikit-learn==1.4.0
+xgboost==2.0.3

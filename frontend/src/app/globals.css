@@ -1,0 +1,136 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 98%; /* Light bone white */
+    --foreground: 0 0% 9%; /* Charcoal */
+    
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 9%;
+    
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 9%;
+    
+    --primary: 15 65% 45%; /* Terracotta / Earthy */
+    --primary-foreground: 0 0% 98%;
+    
+    --secondary: 0 0% 96.1%;
+    --secondary-foreground: 0 0% 9%;
+    
+    --muted: 0 0% 96.1%;
+    --muted-foreground: 0 0% 45.1%;
+    
+    --accent: 15 65% 45%;
+    --accent-foreground: 0 0% 98%;
+    
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    
+    --border: 0 0% 89.8%;
+    --input: 0 0% 89.8%;
+    --ring: 15 65% 45%;
+    
+    --radius: 0.3rem; /* Sharper corners */
+  }
+
+  .dark {
+    --background: 0 0% 7%; /* Sharp charcoal/black */
+    --foreground: 0 0% 95%; /* Crisp off-white */
+    
+    --card: 0 0% 10%; /* Slightly lighter charcoal for cards */
+    --card-foreground: 0 0% 95%;
+    
+    --popover: 0 0% 10%;
+    --popover-foreground: 0 0% 95%;
+    
+    --primary: 15 65% 55%; /* Lighter terracotta for dark mode contrast */
+    --primary-foreground: 0 0% 100%;
+    
+    --secondary: 0 0% 15%;
+    --secondary-foreground: 0 0% 95%;
+    
+    --muted: 0 0% 15%;
+    --muted-foreground: 0 0% 65%;
+    
+    --accent: 15 65% 55%;
+    --accent-foreground: 0 0% 100%;
+    
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 95%;
+    
+    --border: 0 0% 20%; /* Crisp borders */
+    --input: 0 0% 20%;
+    --ring: 15 65% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+/* Clean Minimalist Utilities */
+@layer utilities {
+  .glass {
+    @apply bg-card border border-border;
+  }
+  .glass-card {
+    @apply bg-card border border-border shadow-sm;
+  }
+  .glass-card-hover {
+    @apply hover:border-primary/50 transition-colors duration-200;
+  }
+  .glass-alert {
+    @apply bg-destructive/10 border border-destructive/50 text-destructive;
+  }
+}
+
+/* Custom Scrollbar */
+.custom-scrollbar::-webkit-scrollbar,
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.4);
+}
+
+/* Smooth transitions for interactive elements */
+button, a, input, select, textarea {
+  transition-property: color, background-color, border-color, box-shadow, opacity;
+  transition-duration: 150ms;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Animate-in utilities (for page transitions) */
+.animate-in {
+  animation-duration: 500ms;
+  animation-fill-mode: both;
+}
+.fade-in {
+  animation-name: fadeIn;
+}
+.slide-in-from-bottom-2 {
+  --tw-translate-y: 0.5rem;
+}
+.slide-in-from-bottom-4 {
+  --tw-translate-y: 1rem;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(var(--tw-translate-y, 0)); }
+  to   { opacity: 1; transform: translateY(0); }
+}
