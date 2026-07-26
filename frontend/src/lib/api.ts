@@ -6,6 +6,9 @@ import axios from 'axios';
 export const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || '/api/v1',
   timeout: 120000, // 2 minutes for ML model training
+  headers: {
+    'Bypass-Tunnel-Reminder': 'true'
+  }
 });
 
 // Intercept errors and surface backend detail messages
