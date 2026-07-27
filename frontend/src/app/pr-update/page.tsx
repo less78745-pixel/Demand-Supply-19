@@ -198,15 +198,12 @@ export default function PRUpdatePage() {
         <div className="md:col-span-1">
           <GlassCard className="h-full bg-muted/30">
             <h3 className="text-lg font-bold mb-4 flex items-center gap-2 uppercase tracking-wide">
-              <Info className="w-5 h-5 text-primary" /> Cara Kerja
+              <Info className="w-5 h-5 text-primary" /> Executive Insights
             </h3>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              Sistem akan otomatis menghitung jumlah item berdasarkan <strong>STATUS Compile</strong>.<br/><br/>
-              Kolom Filter otomatis aktif jika ditemukan nama: <br/>
-              - <code>branch_name / Regional</code><br/>
-              - <code>ITEM CATEGORY / GRUP</code><br/>
-              - <code>Week ETA / ETA FIX</code>
-            </p>
+            <ul className="text-sm text-muted-foreground leading-relaxed list-disc list-inside space-y-2">
+              <li><strong>Kesiapan Rantai Pasok (Supply Chain):</strong> Pantau <em>Status Compile</em> untuk mendeteksi posisi terlama (bottleneck) dari pengadaan barang, baik di sisi internal maupun vendor.</li>
+              <li><strong>Prioritas Kedatangan Barang:</strong> Melalui analisis <em>Week ETA</em> vs <em>Total Qty</em>, rencanakan prioritas penerimaan barang untuk memastikan kapasitas gudang tiap cabang memadai.</li>
+            </ul>
           </GlassCard>
         </div>
       </div>

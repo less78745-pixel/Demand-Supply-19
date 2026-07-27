@@ -147,14 +147,12 @@ export default function HistorySalesPage() {
         <div className="md:col-span-1">
           <GlassCard className="h-full bg-muted/30">
             <h3 className="text-lg font-bold mb-4 flex items-center gap-2 uppercase tracking-wide">
-              <Info className="w-5 h-5 text-primary" /> Cara Kerja
+              <Info className="w-5 h-5 text-primary" /> Executive Insights
             </h3>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              Sistem akan otomatis mendeteksi semua metrik angka (Sales, Outstanding, dll).<br/><br/>
-              Kolom Filter otomatis aktif jika ditemukan nama: <br/>
-              - <code>Cabang / Region</code><br/>
-              - <code>Category / Kategori Item</code>
-            </p>
+            <ul className="text-sm text-muted-foreground leading-relaxed list-disc list-inside space-y-2">
+              <li><strong>Pencapaian Kinerja (Sales Performance):</strong> Visualisasi ini mempermudah evaluasi tren <em>AVG Sales</em> historis terhadap pencapaian target penjualan tiap kuartal secara instan.</li>
+              <li><strong>Fokus Kategori & Insentif:</strong> Pantau kategori produk yang berkontribusi paling tinggi vs terendah. Data ini krusial untuk mengevaluasi efektivitas <em>Category Insentif</em> dalam memotivasi penjualan di masing-masing Cabang (Kota).</li>
+            </ul>
           </GlassCard>
         </div>
       </div>

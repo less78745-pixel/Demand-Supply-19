@@ -174,14 +174,12 @@ export default function SOHAnalysisPage() {
         <div className="md:col-span-1">
           <GlassCard className="h-full bg-muted/30">
             <h3 className="text-lg font-bold mb-4 flex items-center gap-2 uppercase tracking-wide">
-              <Info className="w-5 h-5 text-primary" /> Cara Kerja
+              <Info className="w-5 h-5 text-primary" /> Executive Insights
             </h3>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              Sistem akan otomatis mendeteksi semua kolom metrik angka (Sales, On Hand, dll).<br/><br/>
-              Kolom Filter akan otomatis aktif jika ditemukan nama: <br/>
-              - <code>Cabang / Region</code><br/>
-              - <code>Category / Grup</code>
-            </p>
+            <ul className="text-sm text-muted-foreground leading-relaxed list-disc list-inside space-y-2">
+              <li><strong>Efisiensi Persediaan:</strong> Evaluasi jumlah SOH berbanding dengan status <em>Dead Moving</em> atau <em>Ready</em> untuk mengambil keputusan bisnis yang lebih cepat.</li>
+              <li><strong>Sumber Inbound (Cabang/Kota):</strong> <em>Transfer Order (TO)</em> dan <em>Vessel (Kapal)</em> merupakan sumber utama di mana tiap cabang (Kota) mendapatkan pasokan <em>inbound</em> barang. Monitor penumpukan antrean TO yang belum masuk tahap <em>Plan Loading</em> untuk mencegah bottleneck logistik.</li>
+            </ul>
           </GlassCard>
         </div>
       </div>
