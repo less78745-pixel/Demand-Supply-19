@@ -11,6 +11,9 @@ echo Starting Frontend Server...
 cd ../frontend
 start "Frontend App" cmd /k "npm run dev"
 
-echo Both servers are starting in separate windows!
+echo Starting Localtunnel for Vercel...
+start "Localtunnel" cmd /k "npx localtunnel --port 8000 --subdomain dsp-backend-afif-19"
+
+echo Both servers and tunnel are starting in separate windows!
 echo Backend will be running at http://localhost:8000
 echo Frontend will be running at http://localhost:3000

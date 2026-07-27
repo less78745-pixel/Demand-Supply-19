@@ -3,7 +3,7 @@ import axios from 'axios';
 // IMPORTANT: Do NOT set Content-Type for multipart/form-data.
 // Axios/browser must set it automatically with the correct boundary.
 export const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1',
+  baseURL: process.env.NEXT_PUBLIC_API_URL || 'https://dsp-backend-afif-19.loca.lt/api/v1',
   timeout: 120000, // 2 minutes for ML model training
   headers: {
     'Bypass-Tunnel-Reminder': 'true'
