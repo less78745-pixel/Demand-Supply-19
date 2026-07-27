@@ -9,8 +9,9 @@ import { FileBarChart, Info, Calendar, BarChart3, Clock, Table as TableIcon, Dow
 import toast from 'react-hot-toast';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  Legend, ResponsiveContainer
+  Legend, ResponsiveContainer, PieChart, Pie, Cell
 } from 'recharts';
+import { get, set } from 'idb-keyval';
 import { parseDynamicCSV, findColumn, ParsedData } from '@/lib/csvParser';
 
 const COLORS = ['#eab308', '#f97316', '#3b82f6', '#22c55e', '#a855f7', '#ef4444'];
@@ -20,10 +21,9 @@ export default function PRUpdatePage() {
   const [isProcessing, setIsProcessing] = useState(false);
   
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('last_pr_update');
-      if (saved) setParsed(JSON.parse(saved));
-    } catch {}
+    get('last_pr_update').then(saved => {
+      if (saved) setParsed(saved);
+    }).catch(err => console.warn('Failed to load PR Update state from IndexDB', err));
   }, []);
   
   // Filter states
@@ -37,10 +37,11 @@ export default function PRUpdatePage() {
     try {
       const parsedData = await parseDynamicCSV(file);
       setParsed(parsedData);
+      
       try {
-        localStorage.setItem('last_pr_update', JSON.stringify(parsedData));
+        await set('last_pr_update', parsedData);
       } catch (e) {
-        console.warn('Data terlalu besar untuk disimpan di memori browser');
+        console.warn('Data terlalu besar untuk disimpan di IndexDB', e);
       }
       toast.success('Data PR Update berhasil di-load!', { id: 'pr' });
     } catch (err: any) {

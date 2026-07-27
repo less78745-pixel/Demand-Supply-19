@@ -11,6 +11,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   Legend, ResponsiveContainer
 } from 'recharts';
+import { get, set } from 'idb-keyval';
 import { parseDynamicCSV, findColumn, ParsedData } from '@/lib/csvParser';
 
 const COLORS = ['#f97316', '#3b82f6', '#22c55e', '#ef4444', '#a855f7', '#eab308'];
@@ -20,10 +21,9 @@ export default function SOHAnalysisPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('last_soh_data');
-      if (saved) setParsed(JSON.parse(saved));
-    } catch {}
+    get('last_soh_data').then(saved => {
+      if (saved) setParsed(saved);
+    }).catch(err => console.warn('Failed to load SOH state from IndexDB', err));
   }, []);
 
   // Filter states
@@ -51,9 +51,9 @@ export default function SOHAnalysisPage() {
       }
       
       try {
-        localStorage.setItem('last_soh_data', JSON.stringify(parsedData));
+        await set('last_soh_data', parsedData);
       } catch (e) {
-        console.warn('Data terlalu besar untuk disimpan di memori browser (localStorage)');
+        console.warn('Data terlalu besar untuk disimpan di IndexDB', e);
       }
       toast.success('Data SOH berhasil di-load!', { id: 'soh' });
     } catch (err: any) {

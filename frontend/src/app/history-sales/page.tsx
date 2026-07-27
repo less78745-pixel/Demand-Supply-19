@@ -11,6 +11,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   Legend, ResponsiveContainer
 } from 'recharts';
+import { get, set } from 'idb-keyval';
 import { parseDynamicCSV, findColumn, ParsedData } from '@/lib/csvParser';
 
 const COLORS = ['#3b82f6', '#f97316', '#22c55e', '#ef4444', '#a855f7', '#eab308'];
@@ -20,10 +21,9 @@ export default function HistorySalesPage() {
   const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('last_history_sales');
-      if (saved) setParsed(JSON.parse(saved));
-    } catch {}
+    get('last_history_sales').then(saved => {
+      if (saved) setParsed(saved);
+    }).catch(err => console.warn('Failed to load History Sales state from IndexDB', err));
   }, []);
   
   // Filter states
@@ -37,9 +37,9 @@ export default function HistorySalesPage() {
       const parsedData = await parseDynamicCSV(file);
       setParsed(parsedData);
       try {
-        localStorage.setItem('last_history_sales', JSON.stringify(parsedData));
+        await set('last_history_sales', parsedData);
       } catch (e) {
-        console.warn('Data terlalu besar untuk disimpan di memori browser');
+        console.warn('Data terlalu besar untuk disimpan di IndexDB', e);
       }
       toast.success('Data History Sales berhasil di-load!', { id: 'history' });
     } catch (err: any) {
