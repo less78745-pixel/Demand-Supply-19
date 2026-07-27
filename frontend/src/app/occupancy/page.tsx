@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { FileUploader } from '@/components/ui/FileUploader';
 import { KPICard } from '@/components/ui/KPICard';
@@ -15,6 +15,16 @@ export default function OccupancyPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [results, setResults]           = useState<any>(null);
 
+  // ── Restore previous results from localStorage ──
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('lastOccupancy');
+      if (saved) {
+        setResults(JSON.parse(saved));
+      }
+    } catch { /* ignore corrupt data */ }
+  }, []);
+
   const [selectedCabang,   setSelectedCabang]   = useState<string[]>(['All']);
   const [selectedDate,     setSelectedDate]     = useState<string[]>(['All']);
   const [selectedCategory, setSelectedCategory] = useState<string[]>(['All']);
@@ -27,10 +37,16 @@ export default function OccupancyPage() {
     try {
       const data = await uploadOccupancyFile(file);
       setResults(data);
-      localStorage.setItem('lastOccupancy', JSON.stringify(data));
+      try {
+        localStorage.setItem('lastOccupancy', JSON.stringify(data));
+      } catch (e) {
+        console.warn('Data terlalu besar untuk disimpan di memori browser');
+      }
       // Also save inventory data separately for dashboard compatibility
       if (data.inventory_analysis) {
-        localStorage.setItem('lastInventory', JSON.stringify(data.inventory_analysis));
+        try {
+          localStorage.setItem('lastInventory', JSON.stringify(data.inventory_analysis));
+        } catch(e) {}
       }
       toast.success('Analysis complete!', { id: 'occ' });
     } catch (err: any) {
@@ -108,9 +124,17 @@ export default function OccupancyPage() {
       }
     }
 
-    const csv = lines.join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url  = URL.createObjectURL(blob);
+    // Over Occupancy Insights
+    if (results.over_occupancy_insights?.length) {
+      lines.push('');
+      lines.push('--- WARNING: RAWAN PENUH (>90%) ---');
+      results.over_occupancy_insights.forEach((ins: string) => {
+        lines.push(`"${ins}"`);
+      });
+    }
+
+    const blob = new Blob(['sep=,\r\n' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
     const a    = document.createElement('a');
     a.href     = url;
     const dateStr = new Date().toISOString().split('T')[0];
@@ -179,49 +203,49 @@ export default function OccupancyPage() {
         </p>
       </header>
 
-      {!results ? (
-        /* ── Upload state ── */
-        <div className="grid md:grid-cols-3 gap-6">
-          <div className="md:col-span-2">
-            <GlassCard>
-              <FileUploader
-                onFileUpload={handleFileUpload}
-                isLoading={isProcessing}
-                templateCsv={
-                  'Cabang,Category,On Hand,In,Out,Capacity,Date\n' +
-                  'Jakarta,Electronics,200,150,120,5000,2024-01-01\n' +
-                  'Surabaya,Apparel,300,180,190,4000,2024-01-01'
-                }
-                templateName="occupancy_template.csv"
-                label="Upload Occupancy & Inventory Data"
-                description="File Excel dengan kolom: Cabang, Category, On Hand, In, Out, Capacity, Date."
-              />
-            </GlassCard>
-          </div>
-          <div className="md:col-span-1">
-            <GlassCard className="h-full bg-muted/30">
-              <h3 className="text-lg font-bold mb-4 flex items-center gap-2 uppercase tracking-wide">
-                <Info className="w-5 h-5 text-primary" /> Required Schema
-              </h3>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                {['Cabang','Category','On Hand (stok awal)','In (masuk)','Out (keluar / penjualan)',
-                  'Capacity (total kapasitas warehouse per cabang)','Date'].map(col => (
-                  <li key={col} className="flex items-start gap-2">
-                    <div className="w-1.5 h-1.5 rounded-none bg-primary mt-1.5 shrink-0" />
-                    <span className="font-mono text-foreground font-semibold text-xs">{col}</span>
-                  </li>
-                ))}
-              </ul>
-              <div className="mt-6 p-4 bg-primary/10 border border-primary/20 rounded-md">
-                <p className="text-xs text-foreground flex items-start gap-2 leading-relaxed">
-                  <AlertTriangle className="w-4 h-4 shrink-0 text-primary" />
-                  <span><b>Out</b> akan digunakan sebagai proxy <b>Penjualan</b> untuk analisa ABC-XYZ Inventory.</span>
-                </p>
-              </div>
-            </GlassCard>
-          </div>
+      {/* Upload & Instructions Row */}
+      <div className="grid md:grid-cols-3 gap-6 mb-8">
+        <div className="md:col-span-2">
+          <GlassCard>
+            <FileUploader
+              onFileUpload={handleFileUpload}
+              isLoading={isProcessing}
+              templateCsv={
+                'Cabang,Category,On Hand,In,Out,Capacity,Date\n' +
+                'Jakarta,Electronics,200,150,120,5000,2024-01-01\n' +
+                'Surabaya,Apparel,300,180,190,4000,2024-01-01'
+              }
+              templateName="occupancy_template.csv"
+              label="Upload Occupancy & Inventory Data"
+              description="File Excel dengan kolom: Cabang, Category, On Hand, In, Out, Capacity, Date."
+            />
+          </GlassCard>
         </div>
-      ) : (
+        <div className="md:col-span-1">
+          <GlassCard className="h-full bg-muted/30">
+            <h3 className="text-lg font-bold mb-4 flex items-center gap-2 uppercase tracking-wide">
+              <Info className="w-5 h-5 text-primary" /> Required Schema
+            </h3>
+            <ul className="space-y-2 text-sm text-muted-foreground">
+              {['Cabang','Category','On Hand (stok awal)','In (masuk)','Out (keluar / penjualan)',
+                'Capacity (total kapasitas warehouse per cabang)','Date'].map(col => (
+                <li key={col} className="flex items-start gap-2">
+                  <div className="w-1.5 h-1.5 rounded-none bg-primary mt-1.5 shrink-0" />
+                  <span className="font-mono text-foreground font-semibold text-xs">{col}</span>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-6 p-4 bg-primary/10 border border-primary/20 rounded-md">
+              <p className="text-xs text-foreground flex items-start gap-2 leading-relaxed">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-primary" />
+                <span><b>Out</b> akan digunakan sebagai proxy <b>Penjualan</b> untuk analisa ABC-XYZ Inventory.</span>
+              </p>
+            </div>
+          </GlassCard>
+        </div>
+      </div>
+
+      {results && (
         /* ── Result state ── */
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
 
@@ -327,10 +351,6 @@ export default function OccupancyPage() {
                 <button onClick={handleExport}
                   className="px-4 py-2 bg-background text-foreground border border-border rounded-md hover:border-primary transition text-sm flex items-center gap-2 font-medium">
                   <Download className="w-4 h-4" /> Export CSV
-                </button>
-                <button onClick={() => setResults(null)}
-                  className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition text-sm font-medium">
-                  Upload Baru
                 </button>
               </div>
             </div>

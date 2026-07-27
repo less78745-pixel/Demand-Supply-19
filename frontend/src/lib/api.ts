@@ -2,7 +2,6 @@ import axios from 'axios';
 
 // IMPORTANT: Do NOT set Content-Type for multipart/form-data.
 // Axios/browser must set it automatically with the correct boundary.
-// If you hardcode it, the boundary is missing and backend cannot parse the file.
 export const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || '/api/v1',
   timeout: 120000, // 2 minutes for ML model training
@@ -15,6 +14,13 @@ export const api = axios.create({
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    // Network error (backend not reachable)
+    if (!error.response) {
+      error.message =
+        'Backend tidak tersedia. Pastikan backend server berjalan di localhost:8000, atau set NEXT_PUBLIC_API_URL.';
+      return Promise.reject(error);
+    }
+
     const detail = error?.response?.data?.detail;
     if (detail) {
       const msg = typeof detail === 'string' ? detail : JSON.stringify(detail);
@@ -27,7 +33,6 @@ api.interceptors.response.use(
 export const uploadOccupancyFile = async (file: File) => {
   const formData = new FormData();
   formData.append('file', file);
-  // No Content-Type header — let axios/browser auto-set multipart boundary
   const response = await api.post('/analyze/occupancy', formData);
   return response.data;
 };
@@ -35,7 +40,6 @@ export const uploadOccupancyFile = async (file: File) => {
 export const uploadForecastFile = async (file: File) => {
   const formData = new FormData();
   formData.append('file', file);
-  // No Content-Type header — let axios/browser auto-set multipart boundary
   const response = await api.post('/analyze/forecast', formData);
   return response.data;
 };
@@ -43,7 +47,6 @@ export const uploadForecastFile = async (file: File) => {
 export const uploadInventoryFile = async (file: File) => {
   const formData = new FormData();
   formData.append('file', file);
-  // No Content-Type header — let axios/browser auto-set multipart boundary
   const response = await api.post('/analyze/inventory', formData);
   return response.data;
 };

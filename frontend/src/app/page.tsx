@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Package, Lock, User, ArrowRight, ShieldCheck } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { authenticate, useAuthStore } from '@/stores/useAuthStore';
 import toast from 'react-hot-toast';
 
 export default function LoginPage() {
@@ -11,50 +12,60 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
+  const { login } = useAuthStore();
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (username === 'AFIF' && password === 'out19') {
-      setIsLoading(true);
+    setIsLoading(true);
+
+    const user = authenticate(username, password);
+    if (user) {
       localStorage.setItem('isAuthenticated', 'true');
-      toast.success('Welcome back, Commander!', { icon: '🚀' });
+      login(user);
+      toast.success(`Welcome, ${user.name}!`, { icon: '🚀' });
       router.push('/dashboard');
     } else {
       toast.error('Access Denied. Invalid credentials.');
     }
+    setIsLoading(false);
   };
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-background relative overflow-hidden">
-      {/* Background Graphic */}
+      {/* Background Effects */}
+      <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none bg-grid-pattern opacity-30"></div>
       <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-[-10%] left-[-10%] w-1/2 h-1/2 bg-muted rounded-full blur-[120px] opacity-20"></div>
-        <div className="absolute bottom-[-10%] right-[-10%] w-1/2 h-1/2 bg-primary/20 rounded-full blur-[120px] opacity-20"></div>
+        <div className="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] bg-primary/10 rounded-full blur-[150px]"></div>
+        <div className="absolute bottom-[-20%] right-[-10%] w-[500px] h-[500px] bg-primary/5 rounded-full blur-[150px]"></div>
       </div>
 
       <div className="w-full max-w-md z-10 px-4">
-        <GlassCard className="p-8 border-border shadow-lg">
+        <GlassCard className="p-8 border-border shadow-xl">
+          {/* Logo */}
           <div className="flex flex-col items-center mb-8">
-            <div className="w-16 h-16 bg-primary/10 rounded-none flex items-center justify-center border border-primary/20 mb-4">
+            <div className="w-16 h-16 bg-primary/10 rounded-xl flex items-center justify-center border border-primary/20 mb-4">
               <Package className="w-8 h-8 text-primary" />
             </div>
-            <h1 className="text-2xl font-bold text-foreground tracking-tight uppercase">Demand & Supply</h1>
-            <p className="text-sm text-muted-foreground mt-1">Enterprise Analytics Platform</p>
+            <h1 className="text-2xl font-bold text-foreground tracking-tight">
+              DSP <span className="gradient-text">Analytics</span>
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">Demand & Supply Planning Platform</p>
           </div>
 
+          {/* Form */}
           <form onSubmit={handleLogin} className="space-y-5">
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">Username</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <User className="h-5 w-5 text-muted-foreground" />
+                  <User className="h-4 w-4 text-muted-foreground" />
                 </div>
                 <input
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="block w-full pl-10 pr-3 py-2.5 bg-background border border-border rounded-md focus:ring-1 focus:ring-primary focus:border-primary transition text-foreground sm:text-sm outline-none"
-                  placeholder="e.g. AFIF"
+                  className="block w-full pl-10 pr-3 py-2.5 bg-background border border-border rounded-lg focus:ring-1 focus:ring-primary focus:border-primary transition text-foreground sm:text-sm outline-none"
+                  placeholder="e.g. AFIF, R1, SPV"
                   required
                 />
               </div>
@@ -64,25 +75,26 @@ export default function LoginPage() {
               <label className="text-sm font-medium text-foreground">Password</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-muted-foreground" />
+                  <Lock className="h-4 w-4 text-muted-foreground" />
                 </div>
                 <input
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="block w-full pl-10 pr-3 py-2.5 bg-background border border-border rounded-md focus:ring-1 focus:ring-primary focus:border-primary transition text-foreground sm:text-sm outline-none"
-                  placeholder="Enter any password"
+                  className="block w-full pl-10 pr-3 py-2.5 bg-background border border-border rounded-lg focus:ring-1 focus:ring-primary focus:border-primary transition text-foreground sm:text-sm outline-none"
+                  placeholder="Enter password"
                   required
                 />
               </div>
             </div>
 
-            <div className="pt-4">
+            <div className="pt-2">
               <button
                 type="submit"
-                className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-primary hover:bg-primary/90 text-primary-foreground rounded-none font-medium transition-colors"
+                disabled={isLoading}
+                className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg font-medium transition-all disabled:opacity-50"
               >
-                Secure Login
+                {isLoading ? 'Signing in...' : 'Secure Login'}
                 <ArrowRight className="w-4 h-4" />
               </button>
             </div>

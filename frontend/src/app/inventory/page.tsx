@@ -25,7 +25,11 @@ export default function InventoryPage() {
     try {
       const data = await uploadInventoryFile(file);
       setResults(data);
-      localStorage.setItem('lastInventory', JSON.stringify(data));
+      try {
+        localStorage.setItem('lastInventory', JSON.stringify(data));
+      } catch (e) {
+        console.warn('Data terlalu besar untuk disimpan di memori browser');
+      }
       toast.success('Classification complete!', { id: 'inventory-upload' });
     } catch (error: any) {
       console.error(error);

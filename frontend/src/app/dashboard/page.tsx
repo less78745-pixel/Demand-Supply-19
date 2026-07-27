@@ -138,6 +138,16 @@ export default function DashboardOverview() {
         });
         lines.push('');
       }
+      
+      const deadStockFiltered = (data.inventory?.matrix_data || []).filter((d: any) => d.doh > 90);
+      if (deadStockFiltered.length > 0) {
+        lines.push('--- DEAD STOCK SNAPSHOT ---');
+        lines.push('Cabang,Kategori,DOH');
+        deadStockFiltered.slice(0, 20).forEach((d: any) => {
+          lines.push(`"${d.cabang}","${d.category || '-'}",${Number(d.doh).toFixed(0)}`);
+        });
+        lines.push('');
+      }
     }
 
     // Forecast Snapshot
@@ -163,33 +173,31 @@ export default function DashboardOverview() {
     if (invSnapshot) {
       lines.push('--- INVENTORY HEALTH SNAPSHOT ---');
       lines.push(`Total Kategori,${invSnapshot.total}`);
-      lines.push(`Fast Movers (Kelas A),${invSnapshot.aClass}`);
-      lines.push(`Dead Stock Warning,${invSnapshot.dead}`);
+      lines.push(`Kategori Kelas A,${invSnapshot.aClass}`);
+      lines.push(`Dead Stock Risiko Tinggi (>90 hari),${invSnapshot.dead}`);
       lines.push('');
       
-      const inv = (data.inventory?.matrix_data || []).filter(
-        (d: any) => 
-          (globalCabang.includes('All') || globalCabang.includes(d.cabang)) &&
-          (globalCategory.includes('All') || !d.category || globalCategory.includes(d.category))
-      );
-      if (inv.length > 0) {
-        lines.push('--- INVENTORY DETAILS ---');
-        lines.push('Cabang,Kategori,Kelas,DOH,Trend,Risk,Strategy');
-        inv.forEach((d: any) => {
-          const risk = d.stockout_risk ? 'STOCKOUT' : d.overstock ? 'OVERSTOCK' : 'OK';
-          lines.push(`"${d.cabang}","${d.category}","${d.abc}${d.xyz}",${d.doh},${d.trend_pct},"${risk}","${d.strategy}"`);
+      if (data.inventory?.matrix_data) {
+        lines.push('--- SUMMARY KESELURUHAN DATA ---');
+        lines.push('Cabang,Kategori,Klasifikasi ABC,Prioritas,DOH,Safety Stock,ROP,Rekomendasi Aksi');
+        const allFiltered = data.inventory.matrix_data.filter(
+          (d: any) => 
+            (globalCabang.includes('All') || globalCabang.includes(d.cabang)) &&
+            (globalCategory.includes('All') || !d.category || globalCategory.includes(d.category))
+        );
+        allFiltered.forEach((d: any) => {
+          lines.push(`"${d.cabang}","${d.category || '-'}","${d.abc}","${d.priority}",${Number(d.doh).toFixed(0)},${Number(d.safety_stock).toFixed(0)},${Number(d.reorder_point).toFixed(0)},"${d.action || '-'}"`);
         });
-        lines.push('');
       }
+      lines.push('');
     }
 
     if (lines.length <= 3) {
-      toast.error('Tidak ada data untuk diexport.');
+      toast.error('Tidak ada data yang bisa di-export');
       return;
     }
 
-    const csvContent = lines.join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;

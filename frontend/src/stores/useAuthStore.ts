@@ -1,36 +1,107 @@
 import { create } from 'zustand';
 
-export type UserRole = 'Super Admin' | 'Admin Cabang' | 'Staff Cabang';
+export type UserRole = 'Super Admin' | 'Supervisor' | 'Regional';
 
 interface User {
   id: string;
   name: string;
-  email: string;
   role: UserRole;
-  branch_id: string | null;
 }
 
 interface AuthState {
   user: User | null;
-  activeBranchId: string | null; // Used primarily by Super Admin via Branch Selector
   login: (userData: User) => void;
   logout: () => void;
-  setActiveBranch: (branchId: string | null) => void;
 }
 
-// Mock User Data for demonstration
-export const MOCK_USER: User = {
-  id: 'u1',
-  name: 'AFIF',
-  email: 'admin@wms.com',
-  role: 'Super Admin',
-  branch_id: null,
+// --- User credentials database ---
+interface UserCredentials {
+  password: string;
+  user: User;
+}
+
+export const USERS_DB: Record<string, UserCredentials> = {
+  AFIF: {
+    password: 'out19',
+    user: { id: 'u-afif', name: 'AFIF', role: 'Super Admin' },
+  },
+  R1: {
+    password: 'DSP19',
+    user: { id: 'u-r1', name: 'R1', role: 'Regional' },
+  },
+  R2: {
+    password: 'DSP19',
+    user: { id: 'u-r2', name: 'R2', role: 'Regional' },
+  },
+  R3: {
+    password: 'DSP19',
+    user: { id: 'u-r3', name: 'R3', role: 'Regional' },
+  },
+  R4: {
+    password: 'DSP19',
+    user: { id: 'u-r4', name: 'R4', role: 'Regional' },
+  },
+  SPV: {
+    password: 'DSP19',
+    user: { id: 'u-spv', name: 'SPV', role: 'Supervisor' },
+  },
 };
 
+// --- Role-based menu access ---
+// Which routes each role can access
+export const ROLE_ACCESS: Record<UserRole, string[]> = {
+  'Super Admin': [
+    '/dashboard',
+    '/occupancy',
+    '/forecast',
+    '/soh-to-analysis',
+    '/history-sales',
+    '/pr-update',
+  ],
+  Supervisor: [
+    '/dashboard',
+    '/occupancy',
+    '/forecast',
+    '/soh-to-analysis',
+    '/history-sales',
+    '/pr-update',
+  ],
+  Regional: [
+    '/dashboard',
+    '/forecast',
+    '/soh-to-analysis',
+    '/history-sales',
+    '/pr-update',
+  ],
+};
+
+export function authenticate(
+  username: string,
+  password: string
+): User | null {
+  const entry = USERS_DB[username.toUpperCase()];
+  if (!entry) return null;
+  if (entry.password !== password) return null;
+  return entry.user;
+}
+
+export function canAccess(role: UserRole | undefined, path: string): boolean {
+  if (!role) return false;
+  const allowed = ROLE_ACCESS[role];
+  if (!allowed) return false;
+  return allowed.some((p) => path.startsWith(p));
+}
+
+// --- Zustand store ---
 export const useAuthStore = create<AuthState>((set) => ({
-  user: MOCK_USER, // Automatically logged in as Super Admin for mock
-  activeBranchId: 'B-JKT-01', // Default selected branch
-  login: (userData) => set({ user: userData }),
-  logout: () => set({ user: null, activeBranchId: null }),
-  setActiveBranch: (branchId) => set({ activeBranchId: branchId }),
+  user: null,
+  login: (userData) => {
+    localStorage.setItem('authUser', JSON.stringify(userData));
+    set({ user: userData });
+  },
+  logout: () => {
+    localStorage.removeItem('authUser');
+    localStorage.removeItem('isAuthenticated');
+    set({ user: null });
+  },
 }));

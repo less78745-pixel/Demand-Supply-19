@@ -94,7 +94,9 @@ export function FileUploader({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      const blob = new Blob([templateCsv], { type: 'text/csv' });
+                      // Excel uses system locale delimiter. The user's system separates by comma.
+                      const content = '\ufeff' + (templateCsv || '');
+                      const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
                       const url = window.URL.createObjectURL(blob);
                       const a = document.createElement('a');
                       a.href = url;

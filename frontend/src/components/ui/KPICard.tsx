@@ -1,4 +1,4 @@
-﻿/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
@@ -18,13 +18,14 @@ interface KPICardProps {
 export function KPICard({ title, value, icon, trend, isAlert, className }: KPICardProps) {
   return (
     <div className={cn(
-      "glass p-6 rounded-md flex items-start gap-4",
-      isAlert ? "glass-alert" : "glass-card",
+      "glass p-6 rounded-xl flex items-start gap-4 relative overflow-hidden group",
+      isAlert ? "glass-alert" : "glass-card hover:border-primary/50 transition-colors duration-300",
       className
     )}>
+      <div className="absolute top-0 right-0 p-16 bg-primary/5 rounded-full blur-[40px] pointer-events-none group-hover:bg-primary/10 transition-colors duration-500"></div>
       <div className={cn(
-        "p-3 rounded-md",
-        isAlert ? "bg-destructive/10 text-destructive" : "bg-primary/10 text-primary"
+        "p-3 rounded-xl shadow-sm z-10",
+        isAlert ? "bg-destructive/10 text-destructive border border-destructive/20" : "bg-gradient-to-br from-primary/20 to-primary/5 text-primary border border-primary/20"
       )}>
         {icon}
       </div>

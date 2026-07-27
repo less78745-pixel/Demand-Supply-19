@@ -5,23 +5,59 @@ import { usePathname, useRouter } from 'next/navigation';
 import { Sidebar } from "./Sidebar";
 import { Navbar } from "./Navbar";
 import { Toaster } from 'react-hot-toast';
+import { useAuthStore, canAccess } from '@/stores/useAuthStore';
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
+  const { user, login } = useAuthStore();
 
   useEffect(() => {
     setMounted(true);
-    // Simple mock auth guard
+
+    // Restore user from localStorage
     const isAuth = localStorage.getItem('isAuthenticated');
-    if (!isAuth && pathname !== '/') {
+    const savedUser = localStorage.getItem('authUser');
+
+    if (isAuth && savedUser && !user) {
+      try {
+        const parsed = JSON.parse(savedUser);
+        login(parsed);
+      } catch {
+        // corrupt data – force re-login
+        localStorage.removeItem('isAuthenticated');
+        localStorage.removeItem('authUser');
+        if (pathname !== '/') router.push('/');
+      }
+    } else if (!isAuth && pathname !== '/') {
       router.push('/');
     }
-  }, [pathname, router]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Don't render until mounted to avoid hydration mismatch
-  if (!mounted) return <div className="h-screen bg-background"></div>;
+  // Role-based route guard (runs when user or pathname changes)
+  useEffect(() => {
+    if (!mounted) return;
+    if (pathname === '/') return;
+
+    const isAuth = localStorage.getItem('isAuthenticated');
+    if (!isAuth) {
+      router.push('/');
+      return;
+    }
+
+    const currentUser = useAuthStore.getState().user;
+    if (currentUser && !canAccess(currentUser.role, pathname)) {
+      router.push('/dashboard');
+    }
+  }, [pathname, mounted, router]);
+
+  if (!mounted) return (
+    <div className="h-screen w-full bg-background flex flex-col items-center justify-center">
+      <div className="w-12 h-12 border-3 border-primary/20 border-t-primary rounded-full animate-spin mb-4"></div>
+      <p className="text-muted-foreground animate-pulse font-medium tracking-wide text-sm">Menyiapkan Aplikasi...</p>
+    </div>
+  );
 
   const isLoginPage = pathname === '/';
 
