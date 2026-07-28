@@ -14,6 +14,11 @@ const getBaseURL = (): string => {
   if (process.env.NEXT_PUBLIC_API_URL) {
     return process.env.NEXT_PUBLIC_API_URL;
   }
+  
+  if (process.env.NODE_ENV === 'production') {
+    return 'https://dsp-backend-afif-19.loca.lt/api/v1';
+  }
+
   // Development: Proxy via next.config.mjs rewrites → localhost:8000
   return '/api/v1';
 };
