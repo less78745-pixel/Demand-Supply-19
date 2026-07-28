@@ -127,18 +127,18 @@ def run_inventory_analysis(df: pd.DataFrame) -> dict:
                                            bool(row['stockout_risk']), bool(row['overstock']))
 
             entry = {
-                "cabang":        row['cabang'],
-                "category":      row['category'],
+                "cabang":        str(row['cabang']),
+                "category":      str(row['category']),
                 "class":         abc_xyz,
-                "abc":           row['abc_class'],
-                "xyz":           row['xyz_class'],
+                "abc":           str(row['abc_class']),
+                "xyz":           str(row['xyz_class']),
                 "volume":        _safe_float(row['volume']),
                 "doh":           _safe_float(row['doh']),
                 "on_hand":       _safe_float(row['on_hand']),
                 "mean_sales":    _safe_float(row['mean_sales']),
                 "cv":            _safe_float(row['cv']),
-                "stockout_risk": row['stockout_risk'],
-                "overstock":     row['overstock'],
+                "stockout_risk": bool(row['stockout_risk']),
+                "overstock":     bool(row['overstock']),
                 "trend_pct":     _safe_float(row['trend_pct']),
                 "strategy":      strategy,
             }
@@ -146,10 +146,10 @@ def run_inventory_analysis(df: pd.DataFrame) -> dict:
 
             if row['doh'] > 90:
                 dead_stock.append({
-                    "cabang":   row['cabang'],
-                    "category": row['category'],
-                    "doh":      row['doh'],
-                    "on_hand":  row['on_hand'],
+                    "cabang":   str(row['cabang']),
+                    "category": str(row['category']),
+                    "doh":      _safe_float(row['doh']),
+                    "on_hand":  _safe_float(row['on_hand']),
                     "class":    abc_xyz
                 })
 
