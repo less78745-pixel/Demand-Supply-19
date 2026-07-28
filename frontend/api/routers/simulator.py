@@ -1,8 +1,5 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-import pandas as pd
-import numpy as np
-from services.forecast_engine import run_forecast_pipeline
 
 router = APIRouter()
 

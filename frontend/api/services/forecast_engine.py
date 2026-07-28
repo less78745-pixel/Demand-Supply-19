@@ -2,12 +2,11 @@ import pandas as pd
 import numpy as np
 import warnings
 import gc
+import math
 
 warnings.filterwarnings("ignore")
 
-# ──────────────────────────────────────────────
-# Helper
-# ──────────────────────────────────────────────
+
 def _mape(y_true, y_pred):
     y_true, y_pred = np.array(y_true, dtype=float), np.array(y_pred, dtype=float)
     mask = y_true != 0
@@ -26,7 +25,6 @@ def _mad(y_true, y_pred):
 def _safe_float(v):
     try:
         val = float(v)
-        import math
         if math.isnan(val) or math.isinf(val):
             return 0.0
         return val
@@ -39,9 +37,18 @@ def _safe_list(arr):
     except Exception:
         return []
 
-# ──────────────────────────────────────────────
-# Per-group forecast (Lightweight Version for Vercel)
-# ──────────────────────────────────────────────
+
+def _ses_forecast(y_train, steps, alpha=0.3):
+    """Simple Exponential Smoothing without statsmodels."""
+    series = list(y_train)
+    if not series:
+        return [0.0] * steps
+    s = series[0]
+    for val in series[1:]:
+        s = alpha * val + (1 - alpha) * s
+    return [_safe_float(s)] * steps
+
+
 def _process_group(cabang: str, category: str, df: pd.DataFrame, test_size: int) -> dict:
     try:
         df = df.set_index('Bulan').sort_index()
@@ -54,60 +61,83 @@ def _process_group(cabang: str, category: str, df: pd.DataFrame, test_size: int)
         return {"cabang": cabang, "category": category, "combined_data": [],
                 "best_model": "SMA-3", "best_mape": 999, "safety_stock": 0.0, "rop": 0.0}
 
-    # Naive Anomaly (fallback)
     df['Anomaly'] = 1
-
     train = df.iloc[:-test_size]
     test  = df.iloc[-test_size:]
     y_train, y_test = train['Penjualan'], test['Penjualan']
 
+    future_size = 6
     models_eval   = []
     forecasts_map = {}
     future_map    = {}
-    future_size   = 6
 
     # ── SMA-3 ──
     sma3_val = y_train.rolling(3).mean().iloc[-1]
     if pd.isna(sma3_val):
         sma3_val = float(y_train.mean())
     y_pred_sma3 = np.full(test_size, _safe_float(sma3_val))
+    rmse_sma3 = _safe_float(np.sqrt(np.mean((y_test.values - y_pred_sma3) ** 2)))
     forecasts_map['SMA-3'] = _safe_list(y_pred_sma3)
-    
-    # Calculate RMSE manually since sklearn is removed
-    rmse = _safe_float(np.sqrt(np.mean((y_test - y_pred_sma3)**2)))
-    
-    models_eval.append({'model': 'SMA-3',
-                        'rmse': rmse,
+    models_eval.append({'model': 'SMA-3', 'rmse': rmse_sma3,
                         'mape': _mape(y_test, y_pred_sma3),
                         'bias': _bias(y_test, y_pred_sma3),
                         'mad': _mad(y_test, y_pred_sma3)})
-                        
-    # Full fit for future
-    full_sma3_val = df['Penjualan'].rolling(3).mean().iloc[-1]
-    if pd.isna(full_sma3_val):
-        full_sma3_val = float(df['Penjualan'].mean())
-    future_map['SMA-3'] = _safe_list(np.full(future_size, _safe_float(full_sma3_val)))
+    full_sma3 = df['Penjualan'].rolling(3).mean().iloc[-1]
+    if pd.isna(full_sma3):
+        full_sma3 = float(df['Penjualan'].mean())
+    future_map['SMA-3'] = _safe_list(np.full(future_size, _safe_float(full_sma3)))
 
-    # Since heavy libraries are removed, we map other models to fallback (SMA) for compatibility
-    for m in ['SES', 'SARIMAX', 'XGBoost']:
-        forecasts_map[m] = forecasts_map['SMA-3'][:]
-        future_map[m] = future_map['SMA-3'][:]
-        models_eval.append({'model': m, 'rmse': rmse,
+    # ── SES (manual, no statsmodels) ──
+    ses_preds = _ses_forecast(y_train.values, test_size)
+    rmse_ses = _safe_float(np.sqrt(np.mean((y_test.values - np.array(ses_preds)) ** 2)))
+    forecasts_map['SES'] = ses_preds
+    future_map['SES'] = _ses_forecast(df['Penjualan'].values, future_size)
+    models_eval.append({'model': 'SES', 'rmse': rmse_ses,
+                        'mape': _mape(y_test, ses_preds),
+                        'bias': _bias(y_test, ses_preds),
+                        'mad': _mad(y_test, ses_preds)})
+
+    # ── Linear Trend (replaces SARIMAX / XGBoost) ──
+    try:
+        x_train = np.arange(len(y_train), dtype=float)
+        x_test  = np.arange(len(y_train), len(y_train) + test_size, dtype=float)
+        x_fut   = np.arange(len(df), len(df) + future_size, dtype=float)
+        coeffs = np.polyfit(x_train, y_train.values, 1)
+        trend_test   = _safe_list(np.polyval(coeffs, x_test))
+        trend_future = _safe_list(np.polyval(coeffs, x_fut))
+        rmse_trend = _safe_float(np.sqrt(np.mean((y_test.values - np.array(trend_test)) ** 2)))
+        forecasts_map['Trend'] = trend_test
+        future_map['Trend']    = trend_future
+        models_eval.append({'model': 'Trend', 'rmse': rmse_trend,
+                            'mape': _mape(y_test, trend_test),
+                            'bias': _bias(y_test, trend_test),
+                            'mad': _mad(y_test, trend_test)})
+    except Exception:
+        forecasts_map['Trend'] = forecasts_map['SMA-3'][:]
+        future_map['Trend']    = future_map['SMA-3'][:]
+        models_eval.append({'model': 'Trend', 'rmse': rmse_sma3,
                             'mape': models_eval[0]['mape'], 'bias': models_eval[0]['bias'],
                             'mad': models_eval[0]['mad']})
 
-    best_model = 'SMA-3'
+    # Add alias names for frontend compatibility
+    forecasts_map['SARIMAX'] = forecasts_map['Trend']
+    forecasts_map['XGBoost'] = forecasts_map['SES']
+    future_map['SARIMAX']    = future_map['Trend']
+    future_map['XGBoost']    = future_map['SES']
+
+    # ── Best model ──
+    models_eval.sort(key=lambda x: x['mape'])
+    best_model = models_eval[0]['model']
     best_mape  = models_eval[0]['mape']
     b_bias = models_eval[0]['bias']
     b_mad  = models_eval[0]['mad']
-    b_rmse = rmse
+    b_rmse = models_eval[0]['rmse']
 
-    std_dev      = _safe_float(np.std(y_train))
-    avg_sales    = _safe_float(np.mean(y_train))
+    std_dev      = _safe_float(np.std(y_train.values))
+    avg_sales    = _safe_float(np.mean(y_train.values))
     safety_stock = 1.65 * std_dev
     rop          = avg_sales + safety_stock
 
-    # ── Build time-series output ──
     test_index = list(df.index[-test_size:])
     combined_data = []
     for date, row in df.iterrows():
@@ -117,56 +147,52 @@ def _process_group(cabang: str, category: str, df: pd.DataFrame, test_size: int)
         for m_name, pred_list in forecasts_map.items():
             preds[m_name] = float(pred_list[test_idx]) if (is_test and test_idx < len(pred_list)) else None
         combined_data.append({
-            'cabang':     cabang,
-            'category':   category,
-            'date':       date.strftime('%Y-%m') if isinstance(date, pd.Timestamp) else str(date),
-            'actual':     _safe_float(row['Penjualan']),
-            'is_anomaly': False,
-            'is_future':  False,
-            'forecasts':  preds,
-            'best_model': best_model,
-            'mape':       b_mape,
-            'bias':       b_bias,
-            'mad':        b_mad,
-            'rmse':       b_rmse,
+            'cabang':       cabang,
+            'category':     category,
+            'date':         date.strftime('%Y-%m') if isinstance(date, pd.Timestamp) else str(date),
+            'actual':       _safe_float(row['Penjualan']),
+            'is_anomaly':   False,
+            'is_future':    False,
+            'forecasts':    preds,
+            'best_model':   best_model,
+            'mape':         best_mape,
+            'bias':         b_bias,
+            'mad':          b_mad,
+            'rmse':         b_rmse,
             'safety_stock': safety_stock,
-            'rop':        rop
+            'rop':          rop,
         })
 
-    # Append Future Dates
     last_date = df.index[-1]
     for i in range(1, future_size + 1):
         future_date = last_date + pd.DateOffset(months=i)
-        preds = {}
-        for m_name, pred_list in future_map.items():
-            preds[m_name] = float(pred_list[i-1])
-
+        preds = {m_name: float(pred_list[i - 1]) for m_name, pred_list in future_map.items()}
         combined_data.append({
-            'cabang':     cabang,
-            'category':   category,
-            'date':       future_date.strftime('%Y-%m'),
-            'actual':     None,
-            'is_anomaly': False,
-            'is_future':  True,
-            'forecasts':  preds,
-            'best_model': best_model,
-            'mape':       b_mape,
-            'bias':       b_bias,
-            'mad':        b_mad,
-            'rmse':       b_rmse,
+            'cabang':       cabang,
+            'category':     category,
+            'date':         future_date.strftime('%Y-%m'),
+            'actual':       None,
+            'is_anomaly':   False,
+            'is_future':    True,
+            'forecasts':    preds,
+            'best_model':   best_model,
+            'mape':         best_mape,
+            'bias':         b_bias,
+            'mad':          b_mad,
+            'rmse':         b_rmse,
             'safety_stock': safety_stock,
-            'rop':        rop
+            'rop':          rop,
         })
 
     return {
-        'cabang':       cabang,
-        'category':     category,
-        'combined_data': combined_data,
+        'cabang':          cabang,
+        'category':        category,
+        'combined_data':   combined_data,
         'model_comparison': models_eval,
-        'best_model':   best_model,
-        'best_mape':    best_mape,
-        'safety_stock': safety_stock,
-        'rop':          rop,
+        'best_model':      best_model,
+        'best_mape':       best_mape,
+        'safety_stock':    safety_stock,
+        'rop':             rop,
     }
 
 
@@ -179,12 +205,11 @@ def run_forecast_pipeline(df: pd.DataFrame) -> dict:
             'november': 'november', 'desember': 'december',
             'jan': 'jan', 'feb': 'feb', 'mar': 'mar', 'apr': 'apr',
             'jun': 'jun', 'jul': 'jul', 'agu': 'aug', 'agt': 'aug',
-            'sep': 'sep', 'okt': 'oct', 'nov': 'nov', 'des': 'dec'
+            'sep': 'sep', 'okt': 'oct', 'nov': 'nov', 'des': 'dec',
         }
         bulletin_str = df['Bulan'].astype(str).str.lower().str.strip()
         for ind, eng in indonesian_months.items():
             bulletin_str = bulletin_str.str.replace(ind, eng, regex=False)
-
         df['Bulan'] = pd.to_datetime(bulletin_str, errors='coerce')
         df = df.dropna(subset=['Bulan'])
     except Exception:
@@ -198,7 +223,7 @@ def run_forecast_pipeline(df: pd.DataFrame) -> dict:
     if 'Kategori' not in df.columns:
         df['Kategori'] = 'Unknown'
 
-    df['Cabang']  = df['Cabang'].astype(str).str.strip()
+    df['Cabang']   = df['Cabang'].astype(str).str.strip()
     df['Kategori'] = df['Kategori'].astype(str).str.strip()
 
     test_size = 6
@@ -211,11 +236,11 @@ def run_forecast_pipeline(df: pd.DataFrame) -> dict:
                 tasks.append((cabang, cat, cat_df, test_size))
 
     if not tasks:
-        return _empty_response("Insufficient data — each Cabang+Category needs at least 6 rows.")
+        return _empty_response("Insufficient data — each Cabang+Category needs at least 9 rows.")
 
-    all_combined  = []
-    overall_kpis  = []
-    model_tally   = {}
+    all_combined = []
+    overall_kpis = []
+    model_tally  = {}
 
     for task in tasks:
         try:
@@ -233,28 +258,28 @@ def run_forecast_pipeline(df: pd.DataFrame) -> dict:
     if not all_combined:
         return _empty_response("All model groups failed or produced no output.")
 
-    best_global  = max(model_tally, key=model_tally.get) if model_tally else 'SMA-3'
+    best_global = max(model_tally, key=model_tally.get) if model_tally else 'SMA-3'
     avg_ss  = sum(x['safety_stock'] for x in overall_kpis) / len(overall_kpis) if overall_kpis else 0
-    avg_rop = sum(x['rop']          for x in overall_kpis) / len(overall_kpis) if overall_kpis else 0
+    avg_rop = sum(x['rop'] for x in overall_kpis) / len(overall_kpis) if overall_kpis else 0
 
-    insights = []
-    if model_tally:
-        overall_best = max(model_tally, key=model_tally.get)
-        insights.append(f"DSP merekomendasikan model {overall_best} sebagai paling akurat untuk mayoritas cabang.")
-        insights.append(f"Total {len(overall_kpis)} kombinasi Cabang × Kategori berhasil diprediksi.")
-        insights.append(f"Safety Stock rata-rata nasional: {avg_ss:,.0f} unit.")
+    insights = [
+        f"Model terbaik: {best_global} untuk mayoritas cabang.",
+        f"Total {len(overall_kpis)} kombinasi Cabang × Kategori berhasil diprediksi.",
+        f"Safety Stock rata-rata nasional: {avg_ss:,.0f} unit.",
+    ]
 
     return {
-        "forecast_data":      all_combined,
-        "best_model":         best_global,
-        "model_tally":        model_tally,
-        "ai_insights":        insights,
-        "available_methods":  ["SMA-3", "SES", "SARIMAX", "XGBoost"],
-        "inventory_kpis": {
+        "forecast_data":     all_combined,
+        "best_model":        best_global,
+        "model_tally":       model_tally,
+        "ai_insights":       insights,
+        "available_methods": ["SMA-3", "SES", "Trend", "SARIMAX", "XGBoost"],
+        "inventory_kpis":    {
             "avg_safety_stock":  round(float(avg_ss), 0),
             "avg_reorder_point": round(float(avg_rop), 0),
         },
     }
+
 
 def _empty_response(reason: str) -> dict:
     return {
@@ -262,7 +287,7 @@ def _empty_response(reason: str) -> dict:
         "best_model":        "None",
         "model_tally":       {},
         "ai_insights":       [reason],
-        "available_methods": ["SMA-3", "SES", "SARIMAX", "XGBoost"],
+        "available_methods": ["SMA-3", "SES", "Trend"],
         "inventory_kpis":    {"avg_safety_stock": 0, "avg_reorder_point": 0},
         "error":             reason,
     }
