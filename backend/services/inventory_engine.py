@@ -1,5 +1,16 @@
 import pandas as pd
 import numpy as np
+import math
+
+def _safe_float(v):
+    """Safely cast to float and replace NaN or Inf with 0.0 to avoid JSON serialization errors."""
+    try:
+        val = float(v)
+        if math.isnan(val) or math.isinf(val):
+            return 0.0
+        return val
+    except Exception:
+        return 0.0
 
 def run_inventory_analysis(df: pd.DataFrame) -> dict:
     """
@@ -34,9 +45,9 @@ def run_inventory_analysis(df: pd.DataFrame) -> dict:
 
             # ── Volume & Variability ──
             sales       = pd.to_numeric(cat_df['Penjualan'], errors='coerce').fillna(0)
-            total_volume = float(sales.sum())
-            mean_sales   = float(sales.mean())
-            std_sales    = float(sales.std(ddof=0))          # population std, safe for small n
+            total_volume = _safe_float(sales.sum())
+            mean_sales   = _safe_float(sales.mean())
+            std_sales    = _safe_float(sales.std(ddof=0))          # population std, safe for small n
 
             # ── XYZ (Coefficient of Variation) ──
             cv = std_sales / mean_sales if mean_sales > 0 else 0
@@ -49,7 +60,7 @@ def run_inventory_analysis(df: pd.DataFrame) -> dict:
 
             # ── Days-on-Hand (DOH) ──
             on_hand_col = 'On Hand' if 'On Hand' in cat_df.columns else None
-            current_on_hand = float(pd.to_numeric(cat_df[on_hand_col], errors='coerce').iloc[-1]) \
+            current_on_hand = _safe_float(pd.to_numeric(cat_df[on_hand_col], errors='coerce').iloc[-1]) \
                               if on_hand_col else 0.0
             daily_sales = mean_sales / 30 if mean_sales > 0 else 0
             doh = current_on_hand / daily_sales if daily_sales > 0 else 9999
@@ -68,16 +79,16 @@ def run_inventory_analysis(df: pd.DataFrame) -> dict:
             results.append({
                 "cabang":         str(cabang),
                 "category":       str(cat),
-                "volume":         total_volume,
+                "volume":         _safe_float(total_volume),
                 "xyz_class":      xyz,
-                "cv":             round(cv, 4),
-                "doh":            round(doh, 1),
-                "on_hand":        current_on_hand,
-                "mean_sales":     round(mean_sales, 2),
-                "std_sales":      round(std_sales, 2),
+                "cv":             _safe_float(round(cv, 4)),
+                "doh":            _safe_float(round(doh, 1)),
+                "on_hand":        _safe_float(current_on_hand),
+                "mean_sales":     _safe_float(round(mean_sales, 2)),
+                "std_sales":      _safe_float(round(std_sales, 2)),
                 "stockout_risk":  bool(stockout_risk),
                 "overstock":      bool(overstock),
-                "trend_pct":      round(trend_pct, 2),
+                "trend_pct":      _safe_float(round(trend_pct, 2)),
             })
 
     if not results:
@@ -121,14 +132,14 @@ def run_inventory_analysis(df: pd.DataFrame) -> dict:
                 "class":         abc_xyz,
                 "abc":           row['abc_class'],
                 "xyz":           row['xyz_class'],
-                "volume":        row['volume'],
-                "doh":           row['doh'],
-                "on_hand":       row['on_hand'],
-                "mean_sales":    row['mean_sales'],
-                "cv":            row['cv'],
+                "volume":        _safe_float(row['volume']),
+                "doh":           _safe_float(row['doh']),
+                "on_hand":       _safe_float(row['on_hand']),
+                "mean_sales":    _safe_float(row['mean_sales']),
+                "cv":            _safe_float(row['cv']),
                 "stockout_risk": row['stockout_risk'],
                 "overstock":     row['overstock'],
-                "trend_pct":     row['trend_pct'],
+                "trend_pct":     _safe_float(row['trend_pct']),
                 "strategy":      strategy,
             }
             final_results.append(entry)

@@ -31,16 +31,20 @@ def _mad(y_true, y_pred):
     return float(np.mean(np.abs(y_pred - y_true)))
 
 def _safe_float(v):
-    """Cast any numpy scalar to native Python float."""
+    """Cast any numpy scalar to native Python float, guarding against NaN and Inf."""
     try:
-        return float(v)
+        val = float(v)
+        import math
+        if math.isnan(val) or math.isinf(val):
+            return 0.0
+        return val
     except Exception:
         return 0.0
 
 def _safe_list(arr):
-    """Cast any array-like to a list of native Python floats."""
+    """Cast any array-like to a list of native Python floats, handling NaNs."""
     try:
-        return [float(x) for x in arr]
+        return [_safe_float(x) for x in arr]
     except Exception:
         return []
 
