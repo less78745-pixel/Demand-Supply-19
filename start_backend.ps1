@@ -30,7 +30,12 @@ Write-Host ""
 # ── Step 1: Start Backend ──
 Write-Host "[1/4] Starting FastAPI backend on port $BACKEND_PORT..." -ForegroundColor Yellow
 
-$backendProcess = Start-Process -FilePath "python" `
+$pythonExe = "$BACKEND_DIR\venv\Scripts\python.exe"
+if (-not (Test-Path $pythonExe)) {
+    $pythonExe = "python" # fallback to global
+}
+
+$backendProcess = Start-Process -FilePath $pythonExe `
     -ArgumentList "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "$BACKEND_PORT", "--reload" `
     -WorkingDirectory $BACKEND_DIR `
     -PassThru `
@@ -111,10 +116,8 @@ $API_URL = "$tunnelUrl/api/v1"
 Write-Host ""
 Write-Host "[3/4] Updating Vercel env NEXT_PUBLIC_API_URL = $API_URL" -ForegroundColor Yellow
 
-# Save to .env.local for reference
-$envFile = "$PSScriptRoot\frontend\.env.local"
-"NEXT_PUBLIC_API_URL=$API_URL" | Set-Content -Path $envFile -Encoding UTF8
-Write-Host "  Saved to .env.local" -ForegroundColor Green
+# We no longer save to .env.local because it breaks local development proxy rewrites.
+# Local development will default to http://127.0.0.1:8000 via next.config.mjs
 
 # Try to update Vercel env var via CLI
 try {

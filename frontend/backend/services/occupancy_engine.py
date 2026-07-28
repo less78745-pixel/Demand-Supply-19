@@ -1,5 +1,16 @@
 import pandas as pd
 import numpy as np
+import math
+
+def _safe_float(v):
+    """Safely cast to float and replace NaN or Inf with 0.0 to avoid JSON serialization errors."""
+    try:
+        val = float(v)
+        if math.isnan(val) or math.isinf(val):
+            return 0.0
+        return val
+    except Exception:
+        return 0.0
 
 def calculate_occupancy(df: pd.DataFrame) -> dict:
     """
@@ -48,11 +59,11 @@ def calculate_occupancy(df: pd.DataFrame) -> dict:
             
             prev_balance = 0
             for idx, row in cat_df.iterrows():
-                inbound = float(row.get('In', 0))
-                outbound = float(row.get('Out', 0))
+                inbound = _safe_float(row.get('In', 0))
+                outbound = _safe_float(row.get('Out', 0))
                 
                 if idx == 0:
-                    current_balance = float(row.get('On Hand', 0))
+                    current_balance = _safe_float(row.get('On Hand', 0))
                 else:
                     current_balance = prev_balance + inbound - outbound
                 
@@ -87,7 +98,7 @@ def calculate_occupancy(df: pd.DataFrame) -> dict:
         for cabang in cabangs:
             cabang_orig_df = df[df['Cabang'] == cabang]
             cap_series = pd.to_numeric(cabang_orig_df['Capacity'], errors='coerce').dropna()
-            capacity_val = float(cap_series.iloc[0]) if len(cap_series) > 0 else 1.0
+            capacity_val = _safe_float(cap_series.iloc[0]) if len(cap_series) > 0 else 1.0
             if capacity_val <= 0: capacity_val = 1.0
 
             c_balances = filled_cat_balances[filled_cat_balances['Cabang'] == cabang]
@@ -98,8 +109,8 @@ def calculate_occupancy(df: pd.DataFrame) -> dict:
             
             for _, row in b_agg.iterrows():
                 date_str = row['Date'].strftime('%Y-%m-%d')
-                total_balance = float(row['running_balance'])
-                occupancy_pct = round((total_balance / capacity_val) * 100, 4)
+                total_balance = _safe_float(row['running_balance'])
+                occupancy_pct = _safe_float(round((total_balance / capacity_val) * 100, 4))
                 is_shortage = total_balance < 0
 
                 daily_data.append({
@@ -113,7 +124,7 @@ def calculate_occupancy(df: pd.DataFrame) -> dict:
 
         # Find shortages per category
         for _, row in filled_cat_balances.iterrows():
-            rb = float(row['running_balance'])
+            rb = _safe_float(row['running_balance'])
             if rb < 0:
                 shortage_alerts.append({
                     'cabang': str(row['Cabang']),

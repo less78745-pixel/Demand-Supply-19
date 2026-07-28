@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/index.py"
+    },
+    {
+      "source": "/analyze/(.*)",
+      "destination": "/api/index.py"
+    },
+    {
+      "source": "/chat",
+      "destination": "/api/index.py"
+    },
+    {
+      "source": "/export/(.*)",
+      "destination": "/api/index.py"
+    },
+    {
+      "source": "/simulate/(.*)",
+      "destination": "/api/index.py"
+    },
+    {
+      "source": "/health",
+      "destination": "/api/index.py"
+    }
+  ]
+}

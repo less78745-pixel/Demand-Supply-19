@@ -5,10 +5,12 @@ echo ===================================================
 
 echo [1/2] Menjalankan Backend (Port 8000)...
 cd backend
-start cmd /k "python -m venv venv & call venv\Scripts\activate & pip install -r requirements.txt & uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+start cmd /k "python -m venv venv & call venv\Scripts\activate & pip install -r requirements.txt & uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
 
 echo [2/2] Menjalankan Frontend (Port 3000)...
 cd ..\frontend
+echo [2/2] Membersihkan cache dan Menjalankan Frontend (Port 3000)...
+if exist .next rmdir /s /q .next
 start cmd /k "npm install & npm run dev"
 
 echo.
