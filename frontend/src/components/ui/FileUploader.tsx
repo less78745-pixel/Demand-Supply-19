@@ -52,8 +52,8 @@ export function FileUploader({
         {...getRootProps()}
         className={cn(
           "relative overflow-hidden rounded-xl border-2 border-dashed p-10 flex flex-col items-center justify-center transition-all duration-300 min-h-[300px]",
-          isDragActive ? "border-cyan-400 bg-cyan-950/20 shadow-[0_0_30px_rgba(0,240,255,0.2)]" : "border-white/20 hover:border-cyan-500/50 hover:bg-white/5",
-          isDragReject && "border-red-500 bg-red-950/20",
+          isDragActive ? "border-primary bg-primary/20 shadow-[0_0_30px_hsl(var(--primary)/0.2)]" : "border-white/20 hover:border-primary/50 hover:bg-white/5",
+          isDragReject && "border-destructive bg-destructive/20",
           isLoading && "opacity-50 cursor-not-allowed pointer-events-none"
         )}
       >
@@ -63,7 +63,7 @@ export function FileUploader({
         {isDragActive && (
           <motion.div 
             layoutId="dropzone-ring"
-            className="absolute inset-0 border-4 border-cyan-400/30 rounded-xl"
+            className="absolute inset-0 border-4 border-primary/30 rounded-xl"
             initial={{ scale: 1.1, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ type: "spring", damping: 20 }}
@@ -81,7 +81,7 @@ export function FileUploader({
             >
               <div className={cn(
                 "p-4 rounded-full transition-colors duration-300",
-                isDragActive ? "bg-cyan-500/20 text-cyan-400" : "bg-white/5 text-slate-400"
+                isDragActive ? "bg-primary/20 text-primary" : "bg-white/5 text-slate-400"
               )}>
                 <UploadCloud className="w-10 h-10" />
               </div>
@@ -104,7 +104,7 @@ export function FileUploader({
                       a.click();
                       window.URL.revokeObjectURL(url);
                     }}
-                    className="mt-4 px-3 py-1.5 bg-cyan-900/50 hover:bg-cyan-900 text-cyan-300 text-xs rounded border border-cyan-700/50 transition z-20 relative"
+                    className="mt-4 px-3 py-1.5 bg-primary/20 hover:bg-primary/40 text-primary text-xs rounded border border-primary/50 transition z-20 relative"
                   >
                     Download Excel/CSV Format
                   </button>
@@ -119,10 +119,10 @@ export function FileUploader({
               className="flex flex-col items-center text-center space-y-4 z-10"
             >
               <div className="relative">
-                <FileSpreadsheet className="w-16 h-16 text-cyan-400" />
+                <FileSpreadsheet className="w-16 h-16 text-primary" />
                 {isLoading && (
                   <motion.div
-                    className="absolute inset-0 rounded-full border-2 border-cyan-500 border-t-transparent"
+                    className="absolute inset-0 rounded-full border-2 border-primary border-t-transparent"
                     animate={{ rotate: 360 }}
                     transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
                   />

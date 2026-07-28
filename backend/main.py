@@ -26,3 +26,7 @@ app.include_router(chat.router, prefix="/api/v1", tags=["Chat"])
 @app.get("/")
 def read_root():
     return {"message": "WMS Analytics API is running"}
+
+@app.get("/health")
+def health_check():
+    return {"status": "ok", "service": "WMS Analytics Backend"}

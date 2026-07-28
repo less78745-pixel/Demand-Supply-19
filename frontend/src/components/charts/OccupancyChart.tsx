@@ -1,4 +1,4 @@
-﻿/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
@@ -28,8 +28,8 @@ const CustomTickOcc = (props: any) => {
 
   return (
     <g transform={`translate(${x},${y})`}>
-      <text x={0} y={0} dy={16} textAnchor="middle" fill="#94a3b8" fontSize={11}>{date}</text>
-      <text x={0} y={0} dy={30} textAnchor="middle" fill="#94a3b8" fontSize={11} className="font-semibold">{cabang}</text>
+      <text x={0} y={0} dy={16} textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize={11}>{date}</text>
+      <text x={0} y={0} dy={30} textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize={11} className="font-semibold">{cabang}</text>
     </g>
   );
 };
@@ -60,23 +60,23 @@ export function OccupancyChart({ data }: OccupancyChartProps) {
     <div className="w-full h-[400px]">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
           <XAxis
             dataKey="label"
-            stroke="#64748b"
+            stroke="hsl(var(--muted-foreground))"
             tick={<CustomTickOcc />}
             tickLine={false}
             axisLine={false}
             height={50}
           />
           <YAxis
-            stroke="#64748b"
-            tick={{ fill: '#94a3b8', fontSize: 12 }}
+            stroke="hsl(var(--muted-foreground))"
+            tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
             tickLine={false}
             axisLine={false}
             unit="%"
           />
-          <Tooltip content={<CustomTooltip />} cursor={{ fill: '#1e293b', opacity: 0.5 }} />
+          <Tooltip content={<CustomTooltip />} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.5 }} />
           <Legend wrapperStyle={{ paddingTop: '20px' }} />
           <ReferenceLine y={100} stroke="#ef4444" strokeDasharray="4 2" label={{ value: '100% Full', fill: '#ef4444', fontSize: 11 }} />
           <ReferenceLine y={80}  stroke="#f59e0b" strokeDasharray="4 2" label={{ value: '80% Warn', fill: '#f59e0b', fontSize: 11 }} />
@@ -84,7 +84,7 @@ export function OccupancyChart({ data }: OccupancyChartProps) {
           <Bar
             dataKey="occupancy_pct"
             name="Occupancy %"
-            fill="#00f0ff"
+            fill="hsl(var(--primary))"
             radius={[4, 4, 0, 0]}
           />
         </BarChart>

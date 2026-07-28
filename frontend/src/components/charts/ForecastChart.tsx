@@ -1,4 +1,4 @@
-﻿/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
@@ -31,9 +31,9 @@ const CustomTick = (props: any) => {
 
   return (
     <g transform={`translate(${x},${y})`}>
-      <text x={0} y={0} dy={16} textAnchor="middle" fill="#94a3b8" fontSize={11}>{date}</text>
-      <text x={0} y={0} dy={30} textAnchor="middle" fill="#94a3b8" fontSize={11} className="font-semibold">{category}</text>
-      <text x={0} y={0} dy={44} textAnchor="middle" fill="#94a3b8" fontSize={11}>{cabang}</text>
+      <text x={0} y={0} dy={16} textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize={11}>{date}</text>
+      <text x={0} y={0} dy={30} textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize={11} className="font-semibold">{category}</text>
+      <text x={0} y={0} dy={44} textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize={11}>{cabang}</text>
     </g>
   );
 };
@@ -54,24 +54,24 @@ export function ForecastChart({ data, activeMethod }: ForecastChartProps) {
     <div className="w-full h-[400px]">
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
           <XAxis 
             dataKey="label" 
-            stroke="#64748b" 
+            stroke="hsl(var(--muted-foreground))" 
             tick={<CustomTick />} 
             tickLine={false} 
             axisLine={false} 
             height={70}
           />
           <YAxis 
-            stroke="#64748b" 
-            tick={{ fill: '#94a3b8', fontSize: 12 }} 
+            stroke="hsl(var(--muted-foreground))" 
+            tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} 
             tickLine={false} 
             axisLine={false} 
           />
           <Tooltip 
-            contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', color: '#f8fafc' }}
-            cursor={{ fill: '#1e293b', opacity: 0.4 }}
+            contentStyle={{ backgroundColor: 'hsl(var(--background))', borderColor: 'hsl(var(--border))', color: 'hsl(var(--foreground))' }}
+            cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }}
             formatter={(value: any, name: any) => [value?.toFixed(2) || value, name]}
           />
           <Legend wrapperStyle={{ paddingTop: '20px' }} />
@@ -79,7 +79,7 @@ export function ForecastChart({ data, activeMethod }: ForecastChartProps) {
           <Bar 
             dataKey="actual" 
             name="Actual Sales" 
-            fill="#cbd5e1" 
+            fill="hsl(var(--muted-foreground))" 
             radius={[4, 4, 0, 0]}
             barSize={30}
           />
@@ -87,10 +87,10 @@ export function ForecastChart({ data, activeMethod }: ForecastChartProps) {
             type="monotone"
             dataKey="forecast" 
             name={`Forecast (${activeMethod})`} 
-            stroke="#00f0ff" 
+            stroke="hsl(var(--primary))" 
             strokeWidth={3}
-            dot={{ r: 4, fill: '#0f172a', stroke: '#00f0ff', strokeWidth: 2 }}
-            activeDot={{ r: 6, fill: '#00f0ff' }}
+            dot={{ r: 4, fill: 'hsl(var(--background))', stroke: 'hsl(var(--primary))', strokeWidth: 2 }}
+            activeDot={{ r: 6, fill: 'hsl(var(--primary))' }}
           />
           
           {firstFuture && (
