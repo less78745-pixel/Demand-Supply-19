@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routers import occupancy, forecast, export, simulator, inventory, chat
 
-app = FastAPI(title="WMS Advanced Analytics API")
+app = FastAPI(title="Demand Supply Planning API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -21,8 +21,8 @@ app.include_router(chat.router, prefix="/api/v1", tags=["Chat"])
 
 @app.get("/")
 def read_root():
-    return {"message": "WMS Analytics API is running"}
+    return {"message": "Demand Supply Planning API is running"}
 
 @app.get("/health")
 def health_check():
-    return {"status": "ok", "service": "WMS Analytics Backend"}
+    return {"status": "ok", "service": "Demand Supply Planning Backend"}

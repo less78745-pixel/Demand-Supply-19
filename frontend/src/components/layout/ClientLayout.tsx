@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { Sidebar } from "./Sidebar";
 import { Navbar } from "./Navbar";
 import { Toaster } from 'react-hot-toast';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { useAuthStore, canAccess } from '@/stores/useAuthStore';
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {

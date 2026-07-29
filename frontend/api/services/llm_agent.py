@@ -5,7 +5,7 @@ def process_chat_query(query: str, context_data: dict = None) -> str:
     query = query.lower()
     
     if context_data is None:
-        return "Halo! Saya adalah WMS AI Assistant. Silakan upload data terlebih dahulu di halaman terkait agar saya bisa menganalisanya."
+        return "Halo! Saya adalah DSP AI Assistant. Silakan upload data terlebih dahulu di halaman terkait agar saya bisa menganalisanya."
         
     # Pattern matching for mock AI
     if "occupancy" in query or "kapasitas" in query:
@@ -30,6 +30,6 @@ def process_chat_query(query: str, context_data: dict = None) -> str:
             return f"Terdapat {context_data['kpi_summary']['a_class_count']} kategori barang Kelas A (penyumbang 80% volume). Sebaiknya barang-barang ini diletakkan di dekat area Outbound (pintu keluar) gudang."
             
     if "halo" in query or "hai" in query:
-        return "Halo Elite Commander! WMS AI siap membantu analisa supply chain Anda. Ada metrik tertentu yang ingin dibahas?"
+        return "Halo Elite Commander! DSP AI siap membantu analisa supply chain Anda. Ada metrik tertentu yang ingin dibahas?"
         
     return "Analisa saya menunjukkan data Anda sudah terstruktur dengan baik. Ada pertanyaan spesifik mengenai tren, anomali, atau optimasi tata letak?"

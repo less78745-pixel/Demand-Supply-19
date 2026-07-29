@@ -230,7 +230,7 @@ export default function SOHAnalysisPage() {
 
           {/* Dynamic Bar Chart per Cabang */}
           <GlassCard>
-            <h3 className="text-sm font-bold text-foreground mb-4 uppercase tracking-wide">Summary (Kolom 'X') per Cabang</h3>
+            <h3 className="text-sm font-bold text-foreground mb-4 uppercase tracking-wide">Summary (Kolom &apos;X&apos;) per Cabang</h3>
             <div className="h-[400px]">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>

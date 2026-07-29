@@ -6,7 +6,7 @@ import { ClientLayout } from "@/components/layout/ClientLayout";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Demand and Supply Analytics",
+  title: "Demand Supply Planning",
   description: "Sistem Demand and Supply Multi Cabang",
 };
 

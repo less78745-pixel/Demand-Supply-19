@@ -18,7 +18,7 @@ def generate_excel_report(task_id: str) -> io.BytesIO:
     header_font = Font(bold=True, color="FFFFFF")
     header_fill = PatternFill(start_color="0B1120", end_color="0B1120", fill_type="solid")
     
-    ws1['A1'] = "WMS Analysis Report"
+    ws1['A1'] = "DSP Analysis Report"
     ws1['A1'].font = Font(bold=True, size=16)
     ws1.merge_cells('A1:C1')
     

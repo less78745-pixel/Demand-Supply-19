@@ -10,7 +10,7 @@ async def export_report(task_id: str):
         excel_stream = generate_excel_report(task_id)
         
         headers = {
-            'Content-Disposition': f'attachment; filename="wms_report_{task_id}.xlsx"',
+            'Content-Disposition': f'attachment; filename="dsp_report_{task_id}.xlsx"',
             'Access-Control-Expose-Headers': 'Content-Disposition'
         }
         
