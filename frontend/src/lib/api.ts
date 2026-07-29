@@ -61,6 +61,40 @@ export const downloadReport = async (taskId: string) => {
   return response.data;
 };
 
+// ── SCM Analytic API Functions ──
+
+export const uploadSafetyStockFile = async (file: File) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  const response = await api.post('/analyze/safety-stock', formData);
+  return response.data;
+};
+
+export const uploadRebalancingFiles = async (stockFile: File, demandFile: File, freightFile: File) => {
+  const formData = new FormData();
+  formData.append('stock_file', stockFile);
+  formData.append('demand_file', demandFile);
+  formData.append('freight_file', freightFile);
+  const response = await api.post('/analyze/rebalancing', formData);
+  return response.data;
+};
+
+export const uploadLandedCostFiles = async (trackingFile: File, allocationFile: File, exchangeRate?: number) => {
+  const formData = new FormData();
+  formData.append('tracking_file', trackingFile);
+  formData.append('allocation_file', allocationFile);
+  if (exchangeRate) formData.append('exchange_rate', exchangeRate.toString());
+  const response = await api.post('/analyze/landed-cost', formData);
+  return response.data;
+};
+
+export const uploadControlTowerFile = async (file: File) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  const response = await api.post('/analyze/control-tower', formData);
+  return response.data;
+};
+
 /**
  * Health check — ping the backend to verify connectivity.
  */

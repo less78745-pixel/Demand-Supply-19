@@ -57,6 +57,7 @@ export const ROLE_ACCESS: Record<UserRole, string[]> = {
     '/soh-to-analysis',
     '/history-sales',
     '/pr-update',
+    '/scm-analytic',
   ],
   Supervisor: [
     '/dashboard',
@@ -65,6 +66,7 @@ export const ROLE_ACCESS: Record<UserRole, string[]> = {
     '/soh-to-analysis',
     '/history-sales',
     '/pr-update',
+    '/scm-analytic',
   ],
   Regional: [
     '/dashboard',
@@ -72,6 +74,7 @@ export const ROLE_ACCESS: Record<UserRole, string[]> = {
     '/soh-to-analysis',
     '/history-sales',
     '/pr-update',
+    '/scm-analytic',
   ],
 };
 

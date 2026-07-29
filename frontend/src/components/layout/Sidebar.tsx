@@ -1,27 +1,55 @@
 "use client";
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Activity, LineChart, Package,
-  FileBarChart, TrendingUp, ClipboardList
+  FileBarChart, TrendingUp, ClipboardList,
+  Network, ShieldCheck, ArrowLeftRight, Ship, Radar,
+  ChevronDown
 } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthStore, canAccess } from '@/stores/useAuthStore';
 
-const MENU_ITEMS = [
+interface MenuItem {
+  name: string;
+  href: string;
+  icon: React.ElementType;
+  children?: MenuItem[];
+}
+
+const MENU_ITEMS: MenuItem[] = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Occupancy & Inventory', href: '/occupancy', icon: Activity },
   { name: 'Sales Forecasting', href: '/forecast', icon: LineChart },
   { name: 'SOH & TO Analysis', href: '/soh-to-analysis', icon: ClipboardList },
   { name: 'History Sales-Outstanding', href: '/history-sales', icon: TrendingUp },
   { name: 'PR Update', href: '/pr-update', icon: FileBarChart },
+  {
+    name: 'SCM Analytic',
+    href: '/scm-analytic',
+    icon: Network,
+    children: [
+      { name: 'Safety Stock & ROP', href: '/scm-analytic/safety-stock', icon: ShieldCheck },
+      { name: 'Stock Rebalancing', href: '/scm-analytic/rebalancing', icon: ArrowLeftRight },
+      { name: 'Landed Cost Tracker', href: '/scm-analytic/landed-cost', icon: Ship },
+      { name: 'Control Tower', href: '/scm-analytic/control-tower', icon: Radar },
+    ],
+  },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
   const { user } = useAuthStore();
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
+    // Auto-open SCM group if user is on an SCM page
+    return { '/scm-analytic': pathname.startsWith('/scm-analytic') };
+  });
+
+  const toggleGroup = (href: string) => {
+    setOpenGroups((prev) => ({ ...prev, [href]: !prev[href] }));
+  };
 
   // Filter menu items based on user role
   const visibleMenus = MENU_ITEMS.filter((item) =>
@@ -57,8 +85,79 @@ export function Sidebar() {
       {/* Navigation */}
       <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
         {visibleMenus.map((item) => {
-          const isActive = pathname.startsWith(item.href);
+          const hasChildren = item.children && item.children.length > 0;
+          const isGroupOpen = openGroups[item.href] ?? false;
+          const isActive = hasChildren
+            ? pathname.startsWith(item.href)
+            : pathname.startsWith(item.href);
           const Icon = item.icon;
+
+          if (hasChildren) {
+            return (
+              <div key={item.href}>
+                {/* Parent button */}
+                <button
+                  onClick={() => toggleGroup(item.href)}
+                  className={`w-full relative flex items-center px-3 py-2.5 rounded-md transition-all duration-200 ${
+                    isActive
+                      ? 'text-primary bg-primary/10 font-semibold'
+                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                  }`}
+                >
+                  {isActive && (
+                    <motion.div
+                      layoutId="active-nav-parent"
+                      className="absolute left-0 w-1 h-full bg-primary rounded-r-full"
+                      initial={false}
+                      transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                    />
+                  )}
+                  <Icon className={`w-4 h-4 mr-3 ${isActive ? 'text-primary' : ''}`} />
+                  <span className="text-sm tracking-wide flex-1 text-left">{item.name}</span>
+                  <motion.div
+                    animate={{ rotate: isGroupOpen ? 180 : 0 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <ChevronDown className="w-3.5 h-3.5" />
+                  </motion.div>
+                </button>
+
+                {/* Children */}
+                <AnimatePresence initial={false}>
+                  {isGroupOpen && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2, ease: 'easeInOut' }}
+                      className="overflow-hidden"
+                    >
+                      <div className="ml-4 mt-1 pl-3 border-l border-border/50 space-y-0.5">
+                        {item.children!.map((child) => {
+                          const isChildActive = pathname === child.href;
+                          const ChildIcon = child.icon;
+                          return (
+                            <Link
+                              key={child.href}
+                              href={child.href}
+                              className={`relative flex items-center px-3 py-2 rounded-md transition-all duration-200 ${
+                                isChildActive
+                                  ? 'text-primary bg-primary/10 font-semibold'
+                                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                              }`}
+                            >
+                              <ChildIcon className={`w-3.5 h-3.5 mr-2.5 ${isChildActive ? 'text-primary' : ''}`} />
+                              <span className="text-xs tracking-wide">{child.name}</span>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            );
+          }
 
           return (
             <Link
