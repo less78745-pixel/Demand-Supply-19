@@ -235,10 +235,10 @@ export default function ControlTowerPage() {
                   <XAxis type="number" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} tickLine={false} axisLine={false} unit=" hari" />
                   <YAxis type="category" dataKey="cabang" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} tickLine={false} axisLine={false} width={85} />
                   <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--popover))', borderColor: 'hsl(var(--border))', color: 'hsl(var(--popover-foreground))' }}
-                    formatter={(value: any, name: string) => [`${value} hari`, 'Days of Supply']}
-                    labelFormatter={(label: string) => {
+                    formatter={(value: any) => [`${value} hari`, 'Days of Supply']}
+                    labelFormatter={(label: any) => {
                       const b = filtered.find((x: any) => x.cabang === label);
-                      return b ? `${label} (${b.region}) — ${b.zone_label}` : label;
+                      return b ? `${label} (${b.region}) — ${b.zone_label}` : String(label);
                     }} />
                   <Bar dataKey="days_of_supply" name="Days of Supply" radius={[0, 4, 4, 0]}>
                     {filtered.map((entry: any, idx: number) => (
