@@ -6,7 +6,6 @@ import { Sidebar } from "./Sidebar";
 import { Navbar } from "./Navbar";
 import { Toaster } from 'react-hot-toast';
 import { useAuthStore, canAccess } from '@/stores/useAuthStore';
-import { AIAssistant } from '@/components/ui/AIAssistant';
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -85,7 +84,6 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
           }} />
         </main>
       </div>
-      <AIAssistant />
     </div>
   );
 }

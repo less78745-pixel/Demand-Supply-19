@@ -48,6 +48,67 @@ def _ses_forecast(y_train, steps, alpha=0.3):
         s = alpha * val + (1 - alpha) * s
     return [_safe_float(s)] * steps
 
+def _hw_forecast(y_train, steps, seasonality=3):
+    """Lightweight Holt-Winters (Seasonal Trend) proxy for SARIMAX."""
+    series = list(y_train)
+    n = len(series)
+    if n < seasonality * 2:
+        return _ses_forecast(series, steps)
+    indices = [1.0] * seasonality
+    for i in range(seasonality):
+        season_vals = series[i::seasonality]
+        if season_vals and sum(series) > 0:
+            indices[i] = _safe_float(np.mean(season_vals) / (np.mean(series) + 1e-5))
+    deseasonalized = [series[i] / (indices[i % seasonality] + 1e-5) for i in range(n)]
+    x_train = np.arange(n, dtype=float)
+    coeffs = np.polyfit(x_train, deseasonalized, 1)
+    
+    x_steps = np.arange(n, n + steps, dtype=float)
+    trend_steps = np.polyval(coeffs, x_steps)
+    preds = [_safe_float(trend_steps[i] * indices[(n + i) % seasonality]) for i in range(steps)]
+    return preds
+
+def _gb_forecast(y_train, steps):
+    """Lightweight Gradient Boosting proxy for XGBoost."""
+    series = list(y_train)
+    n = len(series)
+    if n < 3:
+        return _ses_forecast(series, steps)
+    X = np.array(series[:-1])
+    Y = np.array(series[1:])
+    F_val = float(np.mean(Y))
+    trees = []
+    residuals = Y - F_val
+    for _ in range(5):
+        best_err = float('inf')
+        best_split = X[0]
+        best_left, best_right = 0.0, 0.0
+        for split_val in np.unique(X):
+            left_mask = X <= split_val
+            right_mask = X > split_val
+            left_val = np.mean(residuals[left_mask]) if left_mask.any() else 0.0
+            right_val = np.mean(residuals[right_mask]) if right_mask.any() else 0.0
+            pred = np.where(left_mask, left_val, right_val)
+            err = float(np.sum((residuals - pred) ** 2))
+            if err < best_err:
+                best_err = err
+                best_split = split_val
+                best_left = float(left_val)
+                best_right = float(right_val)
+        trees.append((best_split, best_left, best_right))
+        pred = np.where(X <= best_split, best_left, best_right)
+        residuals -= pred * 0.5
+    
+    curr_x = series[-1]
+    preds = []
+    for _ in range(steps):
+        nxt = F_val
+        for split, l_val, r_val in trees:
+            nxt += (l_val if curr_x <= split else r_val) * 0.5
+        preds.append(_safe_float(nxt))
+        curr_x = nxt
+    return preds
+
 
 def _process_group(cabang: str, category: str, df: pd.DataFrame, test_size: int) -> dict:
     try:
@@ -119,11 +180,25 @@ def _process_group(cabang: str, category: str, df: pd.DataFrame, test_size: int)
                             'mape': models_eval[0]['mape'], 'bias': models_eval[0]['bias'],
                             'mad': models_eval[0]['mad']})
 
-    # Add alias names for frontend compatibility
-    forecasts_map['SARIMAX'] = forecasts_map['Trend']
-    forecasts_map['XGBoost'] = forecasts_map['SES']
-    future_map['SARIMAX']    = future_map['Trend']
-    future_map['XGBoost']    = future_map['SES']
+    # ── SARIMAX (Lightweight Proxy) ──
+    sarimax_preds = _hw_forecast(y_train.values, test_size)
+    rmse_sarimax = _safe_float(np.sqrt(np.mean((y_test.values - np.array(sarimax_preds)) ** 2)))
+    forecasts_map['SARIMAX'] = sarimax_preds
+    future_map['SARIMAX'] = _hw_forecast(df['Penjualan'].values, future_size)
+    models_eval.append({'model': 'SARIMAX', 'rmse': rmse_sarimax,
+                        'mape': _mape(y_test, sarimax_preds),
+                        'bias': _bias(y_test, sarimax_preds),
+                        'mad': _mad(y_test, sarimax_preds)})
+
+    # ── XGBoost (Lightweight Proxy) ──
+    xgb_preds = _gb_forecast(y_train.values, test_size)
+    rmse_xgb = _safe_float(np.sqrt(np.mean((y_test.values - np.array(xgb_preds)) ** 2)))
+    forecasts_map['XGBoost'] = xgb_preds
+    future_map['XGBoost'] = _gb_forecast(df['Penjualan'].values, future_size)
+    models_eval.append({'model': 'XGBoost', 'rmse': rmse_xgb,
+                        'mape': _mape(y_test, xgb_preds),
+                        'bias': _bias(y_test, xgb_preds),
+                        'mad': _mad(y_test, xgb_preds)})
 
     # ── Best model ──
     models_eval.sort(key=lambda x: x['mape'])

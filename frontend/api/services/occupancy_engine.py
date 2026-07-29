@@ -97,15 +97,18 @@ def calculate_occupancy(df: pd.DataFrame) -> dict:
         
         for cabang in cabangs:
             cabang_orig_df = df[df['Cabang'] == cabang]
-            cap_series = pd.to_numeric(cabang_orig_df['Capacity'], errors='coerce').dropna()
-            capacity_val = _safe_float(cap_series.iloc[0]) if len(cap_series) > 0 else 1.0
-            if capacity_val <= 0: capacity_val = 1.0
+            cap_series = pd.to_numeric(cabang_orig_df.get('Capacity', pd.Series()), errors='coerce').dropna()
+            capacity_val = _safe_float(cap_series.iloc[0]) if len(cap_series) > 0 else 0.0
 
             c_balances = filled_cat_balances[filled_cat_balances['Cabang'] == cabang]
             if c_balances.empty: continue
             
             b_agg = c_balances.groupby('Date')['running_balance'].sum().reset_index()
             b_agg = b_agg.sort_values('Date')
+
+            if capacity_val <= 0:
+                max_hist = max(b_agg['running_balance'].max(), 1.0)
+                capacity_val = float(max_hist * 1.2)
             
             for _, row in b_agg.iterrows():
                 date_str = row['Date'].strftime('%Y-%m-%d')
