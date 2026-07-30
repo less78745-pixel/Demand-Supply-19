@@ -145,9 +145,9 @@ export default function ForecastPage() {
               isLoading={isProcessing}
               templateCsv={
                 'Bulan,Deskripsi,Cabang,Kategori,Penjualan,AO,RO,Rerata Drop Size,NOO\n' +
-                'Jan-2023,Deskripsi,Jakarta,Electronics,150,10,5,1.5,2\n' +
-                'Feb-2023,Deskripsi,Surabaya,Apparel,200,12,6,1.8,3\n' +
-                'Mar-2023,Deskripsi,Jakarta,Electronics,160,11,4,1.6,1'
+                '2024-01-01,Januari,Bali,Apparel,44806,681,141,956,51\n' +
+                '2024-01-01,Januari,Bali,Automotive,32476,296,227,121,8\n' +
+                '2024-01-01,Januari,Bali,Building Materials,95630,593,365,832,11'
               }
               templateName="forecast_template.csv"
               label="Upload Data Historis Penjualan"
@@ -163,19 +163,19 @@ export default function ForecastPage() {
             <ul className="space-y-3 text-sm text-muted-foreground">
               <li className="flex items-start gap-2">
                 <div className="w-1.5 h-1.5 rounded-none bg-primary mt-1.5 shrink-0" />
-                <span><strong className="text-foreground">SMA (Simple Moving Avg)</strong>: Baseline stabil untuk produk minim tren.</span>
+                <span><strong className="text-foreground">XGBoost & LightGBM</strong>: Machine Learning (Gradient Boosting) untuk interaksi kompleks antar variabel.</span>
               </li>
               <li className="flex items-start gap-2">
                 <div className="w-1.5 h-1.5 rounded-none bg-primary mt-1.5 shrink-0" />
-                <span><strong className="text-foreground">SES (Exponential Smoothing)</strong>: Sensitif pada data terbaru.</span>
+                <span><strong className="text-foreground">ARIMAX & Fb Prophet</strong>: Menangkap pola musiman, tren, dan auto-korelasi yang dinamis.</span>
               </li>
               <li className="flex items-start gap-2">
                 <div className="w-1.5 h-1.5 rounded-none bg-primary mt-1.5 shrink-0" />
-                <span><strong className="text-foreground">SARIMAX</strong>: Menangkap pola musiman & auto-korelasi.</span>
+                <span><strong className="text-foreground">Hybrid (BiLSTM + XGBoost)</strong>: Ensemble adaptif untuk fluktuasi (*volatility*) tinggi.</span>
               </li>
               <li className="flex items-start gap-2">
                 <div className="w-1.5 h-1.5 rounded-none bg-primary mt-1.5 shrink-0" />
-                <span><strong className="text-foreground">XGBoost</strong>: Machine Learning untuk interaksi kompleks antar variabel (Gradient Boosting).</span>
+                <span><strong className="text-foreground">Covariates Optimization</strong>: Variabel eksogen (AO, RO, Rerata Drop Size, NOO) digunakan sebagai *multiplier* pendorong akurasi model.</span>
               </li>
             </ul>
           </GlassCard>
