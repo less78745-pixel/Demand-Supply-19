@@ -225,7 +225,9 @@ export default function RouteOptimizationPage() {
                   isLoading={isProcessing}
                   label="Upload Data Rute & Pelanggan"
                   description="Upload file CSV/Excel berisi daftar titik pelanggan dan demand-nya. Wajib mengandung kolom 'Latitude', 'Longitude', 'Demand'. Pastikan titik pertama (atau yang memiliki Demand=0) dianggap sebagai Depot."
-                  templateCsv="ID,Name,Latitude,Longitude,Demand\nDEPOT,Pusat Distribusi,-6.200000,106.816666,0\nCUST1,Toko A,-6.210000,106.820000,15"
+                  templateCsv={`Tipe Lokasi,Nama Lokasi,Latitude,Longitude,Demand (Unit),Time Windows,Service Time (Menit)
+Depot,Pusat Distribusi,-6.200000,106.816666,0,08:00-17:00,0
+Pelanggan,Toko A,-6.210000,106.820000,15,08:00-12:00,30`}
                 />
               </div>
             )}

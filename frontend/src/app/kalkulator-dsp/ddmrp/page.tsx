@@ -126,17 +126,15 @@ export default function DDMRPPage() {
               <div className="flex bg-muted/50 p-1 rounded-lg">
                 <button
                   onClick={() => setActiveMode('manual')}
-                  className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-all ${
-                    activeMode === 'manual' ? 'bg-primary text-primary-foreground shadow-md' : 'text-muted-foreground hover:text-foreground'
-                  }`}
+                  className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-all ${activeMode === 'manual' ? 'bg-primary text-primary-foreground shadow-md' : 'text-muted-foreground hover:text-foreground'
+                    }`}
                 >
                   Manual Input
                 </button>
                 <button
                   onClick={() => setActiveMode('file')}
-                  className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-all ${
-                    activeMode === 'file' ? 'bg-primary text-primary-foreground shadow-md' : 'text-muted-foreground hover:text-foreground'
-                  }`}
+                  className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-all ${activeMode === 'file' ? 'bg-primary text-primary-foreground shadow-md' : 'text-muted-foreground hover:text-foreground'
+                    }`}
                 >
                   Upload File
                 </button>
@@ -211,13 +209,15 @@ export default function DDMRPPage() {
                     </div>
                   ))}
                 </div>
-                
+
                 <FileUploader
                   onFileUpload={handleFileUpload}
                   isLoading={isProcessing}
                   label="Upload Riwayat Sales & Inventory"
                   description="Upload file CSV/Excel berisi riwayat penjualan per SKU. Kolom opsional: Nama Cabang, Category Product, On-Hand, On-Order, Qualified Demand."
-                  templateCsv="Bulan,Deskripsi,Cabang,Kategori,Penjualan,Lead Time (Hari),MOQ,Order Cycle (Hari),On-Hand,On-Order,Qualified Demand\n2024-01-01,Januari,Bali,Apparel,44806,14,500,7,12000,5000,2000\n2024-01-01,Januari,Bali,Automotive,32476,21,100,14,8000,2000,1000"
+                  templateCsv={`Bulan,Deskripsi,Cabang,Kategori,Penjualan,Lead Time (Hari),MOQ,Order Cycle (Hari),On-Hand,On-Order,Qualified Demand
+2024-01-01,Januari,Bali,Apparel,44806,14,500,7,12000,5000,2000
+2024-01-01,Januari,Bali,Automotive,32476,21,100,14,8000,2000,1000`}
                 />
               </div>
             )}
@@ -265,102 +265,102 @@ export default function DDMRPPage() {
               )}
               {/* KPI Cards */}
               <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            <KPICard title="ADU" value={`${res.adu?.toFixed(2)} /hari`} icon={<Activity className="w-5 h-5" />} />
-            <KPICard title="CoV" value={res.cov?.toFixed(3)} icon={<BarChart3 className="w-5 h-5" />} />
-            <KPICard
-              title="Variability"
-              value={res.variability?.category}
-              icon={<AlertTriangle className="w-5 h-5" />}
-              trend={`VF: ${res.variability?.factor}`}
-            />
-            <KPICard
-              title="Lead Time"
-              value={res.lead_time?.category}
-              icon={<Truck className="w-5 h-5" />}
-              trend={`LTF: ${res.lead_time?.factor}`}
-            />
-            <KPICard
-              title="Net Flow"
-              value={res.net_flow_position?.toLocaleString()}
-              icon={<TrendingUp className="w-5 h-5" />}
-              isAlert={res.replenishment?.urgency === 'high'}
-            />
-          </div>
-
-          {/* Buffer Chart */}
-          <GlassCard>
-            <DDMRPBufferChart
-              bufferZones={res.buffer_zones}
-              netFlowPosition={res.net_flow_position}
-            />
-          </GlassCard>
-
-          {/* Replenishment Decision */}
-          <GlassCard>
-            <h3 className="text-lg font-bold mb-4 flex items-center gap-2 uppercase tracking-wide">
-              <Package className="w-5 h-5 text-primary" />
-              Keputusan Replenishment
-            </h3>
-
-            <div className="flex items-start gap-6 p-4 rounded-lg bg-card/50 border border-border">
-              <div className="shrink-0">
-                {getUrgencyBadge(res.replenishment?.urgency)}
+                <KPICard title="ADU" value={`${res.adu?.toFixed(2)} /hari`} icon={<Activity className="w-5 h-5" />} />
+                <KPICard title="CoV" value={res.cov?.toFixed(3)} icon={<BarChart3 className="w-5 h-5" />} />
+                <KPICard
+                  title="Variability"
+                  value={res.variability?.category}
+                  icon={<AlertTriangle className="w-5 h-5" />}
+                  trend={`VF: ${res.variability?.factor}`}
+                />
+                <KPICard
+                  title="Lead Time"
+                  value={res.lead_time?.category}
+                  icon={<Truck className="w-5 h-5" />}
+                  trend={`LTF: ${res.lead_time?.factor}`}
+                />
+                <KPICard
+                  title="Net Flow"
+                  value={res.net_flow_position?.toLocaleString()}
+                  icon={<TrendingUp className="w-5 h-5" />}
+                  isAlert={res.replenishment?.urgency === 'high'}
+                />
               </div>
-              <div className="flex-1">
-                <p className="text-sm text-foreground font-medium">{res.replenishment?.description}</p>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4 text-xs">
-                  <div>
-                    <span className="text-muted-foreground uppercase tracking-wider">Zone</span>
-                    <p className="font-bold text-foreground mt-0.5">{res.replenishment?.zone}</p>
+
+              {/* Buffer Chart */}
+              <GlassCard>
+                <DDMRPBufferChart
+                  bufferZones={res.buffer_zones}
+                  netFlowPosition={res.net_flow_position}
+                />
+              </GlassCard>
+
+              {/* Replenishment Decision */}
+              <GlassCard>
+                <h3 className="text-lg font-bold mb-4 flex items-center gap-2 uppercase tracking-wide">
+                  <Package className="w-5 h-5 text-primary" />
+                  Keputusan Replenishment
+                </h3>
+
+                <div className="flex items-start gap-6 p-4 rounded-lg bg-card/50 border border-border">
+                  <div className="shrink-0">
+                    {getUrgencyBadge(res.replenishment?.urgency)}
                   </div>
-                  <div>
-                    <span className="text-muted-foreground uppercase tracking-wider">Order Qty</span>
-                    <p className="font-bold text-foreground mt-0.5">{res.replenishment?.suggested_order_qty?.toLocaleString()} unit</p>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground uppercase tracking-wider">On-Hand</span>
-                    <p className="font-bold text-foreground mt-0.5">{res.on_hand?.toLocaleString()} unit</p>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground uppercase tracking-wider">On-Order</span>
-                    <p className="font-bold text-foreground mt-0.5">{res.on_order?.toLocaleString()} unit</p>
+                  <div className="flex-1">
+                    <p className="text-sm text-foreground font-medium">{res.replenishment?.description}</p>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4 text-xs">
+                      <div>
+                        <span className="text-muted-foreground uppercase tracking-wider">Zone</span>
+                        <p className="font-bold text-foreground mt-0.5">{res.replenishment?.zone}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground uppercase tracking-wider">Order Qty</span>
+                        <p className="font-bold text-foreground mt-0.5">{res.replenishment?.suggested_order_qty?.toLocaleString()} unit</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground uppercase tracking-wider">On-Hand</span>
+                        <p className="font-bold text-foreground mt-0.5">{res.on_hand?.toLocaleString()} unit</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground uppercase tracking-wider">On-Order</span>
+                        <p className="font-bold text-foreground mt-0.5">{res.on_order?.toLocaleString()} unit</p>
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </div>
 
-            {/* Buffer Detail Table */}
-            <div className="mt-6 overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border text-xs text-muted-foreground uppercase tracking-wider">
-                    <th className="text-left py-2 px-3">Parameter</th>
-                    <th className="text-right py-2 px-3">Nilai</th>
-                    <th className="text-left py-2 px-3">Keterangan</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/50">
-                  {[
-                    { label: 'Red Base', value: res.buffer_zones?.red_base, desc: 'ADU × DLT × LTF' },
-                    { label: 'Red Safety', value: res.buffer_zones?.red_safety, desc: 'Red Base × VF' },
-                    { label: 'Red Zone', value: res.buffer_zones?.red_zone, desc: 'Red Base + Red Safety', color: 'text-red-400' },
-                    { label: 'Yellow Zone', value: res.buffer_zones?.yellow_zone, desc: 'ADU × DLT', color: 'text-amber-400' },
-                    { label: 'Green Zone', value: res.buffer_zones?.green_zone, desc: 'max(ADU×DLT×LTF, ADU×OC, MOQ)', color: 'text-emerald-400' },
-                    { label: 'Top of Red (TOR)', value: res.buffer_zones?.top_of_red, desc: 'Batas atas zona merah' },
-                    { label: 'Top of Yellow (TOY)', value: res.buffer_zones?.top_of_yellow, desc: 'Trigger replenishment' },
-                    { label: 'Top of Green (TOG)', value: res.buffer_zones?.top_of_green, desc: 'Target order sampai sini' },
-                    { label: 'Net Flow Position', value: res.net_flow_position, desc: 'OH + OO − QD', color: 'text-primary font-bold' },
-                  ].map((row) => (
-                    <tr key={row.label} className="hover:bg-muted/30 transition-colors">
-                      <td className={`py-2 px-3 font-medium ${row.color || ''}`}>{row.label}</td>
-                      <td className={`py-2 px-3 text-right font-mono font-semibold ${row.color || ''}`}>{row.value?.toLocaleString()}</td>
-                      <td className="py-2 px-3 text-muted-foreground text-xs">{row.desc}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </GlassCard>
+                {/* Buffer Detail Table */}
+                <div className="mt-6 overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border text-xs text-muted-foreground uppercase tracking-wider">
+                        <th className="text-left py-2 px-3">Parameter</th>
+                        <th className="text-right py-2 px-3">Nilai</th>
+                        <th className="text-left py-2 px-3">Keterangan</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/50">
+                      {[
+                        { label: 'Red Base', value: res.buffer_zones?.red_base, desc: 'ADU × DLT × LTF' },
+                        { label: 'Red Safety', value: res.buffer_zones?.red_safety, desc: 'Red Base × VF' },
+                        { label: 'Red Zone', value: res.buffer_zones?.red_zone, desc: 'Red Base + Red Safety', color: 'text-red-400' },
+                        { label: 'Yellow Zone', value: res.buffer_zones?.yellow_zone, desc: 'ADU × DLT', color: 'text-amber-400' },
+                        { label: 'Green Zone', value: res.buffer_zones?.green_zone, desc: 'max(ADU×DLT×LTF, ADU×OC, MOQ)', color: 'text-emerald-400' },
+                        { label: 'Top of Red (TOR)', value: res.buffer_zones?.top_of_red, desc: 'Batas atas zona merah' },
+                        { label: 'Top of Yellow (TOY)', value: res.buffer_zones?.top_of_yellow, desc: 'Trigger replenishment' },
+                        { label: 'Top of Green (TOG)', value: res.buffer_zones?.top_of_green, desc: 'Target order sampai sini' },
+                        { label: 'Net Flow Position', value: res.net_flow_position, desc: 'OH + OO − QD', color: 'text-primary font-bold' },
+                      ].map((row) => (
+                        <tr key={row.label} className="hover:bg-muted/30 transition-colors">
+                          <td className={`py-2 px-3 font-medium ${row.color || ''}`}>{row.label}</td>
+                          <td className={`py-2 px-3 text-right font-mono font-semibold ${row.color || ''}`}>{row.value?.toLocaleString()}</td>
+                          <td className="py-2 px-3 text-muted-foreground text-xs">{row.desc}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </GlassCard>
             </div>
           ))}
 
