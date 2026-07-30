@@ -163,6 +163,10 @@ export default function ForecastPage() {
             <ul className="space-y-3 text-sm text-muted-foreground">
               <li className="flex items-start gap-2">
                 <div className="w-1.5 h-1.5 rounded-none bg-primary mt-1.5 shrink-0" />
+                <span><strong className="text-foreground">SMA & SES</strong>: Baseline dan metode *exponential smoothing* stabil.</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <div className="w-1.5 h-1.5 rounded-none bg-primary mt-1.5 shrink-0" />
                 <span><strong className="text-foreground">XGBoost & LightGBM</strong>: Machine Learning (Gradient Boosting) untuk interaksi kompleks antar variabel.</span>
               </li>
               <li className="flex items-start gap-2">

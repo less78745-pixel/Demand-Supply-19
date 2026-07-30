@@ -562,6 +562,37 @@ def _process_group(cabang: str, category: str, df: pd.DataFrame, test_size: int)
         'rop':             rop,
     }
 
+def _compute_exog_factor(exog_train, steps):
+    if exog_train is None or len(exog_train) == 0:
+        return np.ones(steps)
+    try:
+        exog_mean = np.mean(exog_train, axis=0)
+        last_exog = exog_train[-1]
+        factors = []
+        for m, l in zip(exog_mean, last_exog):
+            if m > 0:
+                factors.append(l / m)
+        if not factors:
+            return np.ones(steps)
+        avg_factor = float(np.mean(factors))
+        avg_factor = max(0.9, min(1.1, avg_factor))
+        if math.isnan(avg_factor):
+            return np.ones(steps)
+        return np.full(steps, avg_factor)
+    except Exception:
+        return np.ones(steps)
+
+def _empty_response(reason: str) -> dict:
+    return {
+        "forecast_data":     [],
+        "best_model":        "None",
+        "model_tally":       {},
+        "ai_insights":       [reason],
+        "available_methods": ["SMA-3", "SES", "Trend"],
+        "model_comparison":  [],
+        "inventory_kpis":    {"avg_safety_stock": 0, "avg_reorder_point": 0},
+        "error":             reason,
+    }
 
 def run_forecast_pipeline(df: pd.DataFrame) -> dict:
     try:
@@ -608,6 +639,7 @@ def run_forecast_pipeline(df: pd.DataFrame) -> dict:
     all_combined = []
     overall_kpis = []
     model_tally  = {}
+    global_model_metrics = {}
 
     for task in tasks:
         try:
@@ -617,6 +649,16 @@ def run_forecast_pipeline(df: pd.DataFrame) -> dict:
                 overall_kpis.append(res)
                 bm = res['best_model']
                 model_tally[bm] = model_tally.get(bm, 0) + 1
+                
+                # Aggregate metrics for model_comparison
+                for eval_data in res.get('model_comparison', []):
+                    m_name = eval_data['model']
+                    if m_name not in global_model_metrics:
+                        global_model_metrics[m_name] = {'mape': [], 'bias': [], 'mad': [], 'rmse': []}
+                    global_model_metrics[m_name]['mape'].append(eval_data.get('mape', 0))
+                    global_model_metrics[m_name]['bias'].append(eval_data.get('bias', 0))
+                    global_model_metrics[m_name]['mad'].append(eval_data.get('mad', 0))
+                    global_model_metrics[m_name]['rmse'].append(eval_data.get('rmse', 0))
         except Exception:
             pass
 
@@ -624,6 +666,22 @@ def run_forecast_pipeline(df: pd.DataFrame) -> dict:
 
     if not all_combined:
         return _empty_response("All model groups failed or produced no output.")
+
+    # Calculate averages for model_comparison
+    model_comparison = []
+    for m_name, metrics in global_model_metrics.items():
+        count = len(metrics['mape'])
+        if count > 0:
+            model_comparison.append({
+                'model': m_name,
+                'mape': sum(metrics['mape']) / count,
+                'bias': sum(metrics['bias']) / count,
+                'mad': sum(metrics['mad']) / count,
+                'rmse': sum(metrics['rmse']) / count
+            })
+    
+    # Sort model comparison by MAPE
+    model_comparison.sort(key=lambda x: x['mape'])
 
     best_global = max(model_tally, key=model_tally.get) if model_tally else 'SMA-3'
     avg_ss  = sum(x['safety_stock'] for x in overall_kpis) / len(overall_kpis) if overall_kpis else 0
@@ -635,26 +693,17 @@ def run_forecast_pipeline(df: pd.DataFrame) -> dict:
         f"Safety Stock rata-rata nasional: {avg_ss:,.0f} unit.",
     ]
 
+    all_methods = ["SMA-3", "SES", "Trend", "SARIMAX", "XGBoost", "SAMAI", "BiLSTM", "Hybrid Ensemble", "Fb Prophet", "ARIMAX", "GNN", "LightGBM", "GARCH", "Wavelet", "LSTM-GRU"]
+
     return {
         "forecast_data":     all_combined,
         "best_model":        best_global,
         "model_tally":       model_tally,
         "ai_insights":       insights,
-        "available_methods": ["SMA-3", "SES", "Trend", "SARIMAX", "XGBoost"],
+        "model_comparison":  model_comparison,
+        "available_methods": all_methods,
         "inventory_kpis":    {
             "avg_safety_stock":  round(float(avg_ss), 0),
             "avg_reorder_point": round(float(avg_rop), 0),
         },
-    }
-
-
-def _empty_response(reason: str) -> dict:
-    return {
-        "forecast_data":     [],
-        "best_model":        "None",
-        "model_tally":       {},
-        "ai_insights":       [reason],
-        "available_methods": ["SMA-3", "SES", "Trend"],
-        "inventory_kpis":    {"avg_safety_stock": 0, "avg_reorder_point": 0},
-        "error":             reason,
     }
