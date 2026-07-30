@@ -37,6 +37,24 @@ def _safe_list(arr):
     except Exception:
         return []
 
+def _compute_exog_factor(exog_train, steps):
+    if exog_train is None or len(exog_train) == 0:
+        return np.ones(steps)
+    try:
+        exog_mean = np.mean(exog_train, axis=0)
+        last_exog = exog_train[-1]
+        factors = []
+        for m, l in zip(exog_mean, last_exog):
+            if m > 0:
+                factors.append(l / m)
+            else:
+                factors.append(1.0)
+        avg_factor = float(np.mean(factors))
+        avg_factor = max(0.9, min(1.1, avg_factor)) # bound to 0.9-1.1 effect
+        return np.full(steps, avg_factor)
+    except Exception:
+        return np.ones(steps)
+
 
 def _ses_forecast(y_train, steps, alpha=0.3):
     """Simple Exponential Smoothing without statsmodels."""
@@ -68,8 +86,8 @@ def _hw_forecast(y_train, steps, seasonality=3):
     preds = [_safe_float(trend_steps[i] * indices[(n + i) % seasonality]) for i in range(steps)]
     return preds
 
-def _gb_forecast(y_train, steps):
-    """Lightweight Gradient Boosting proxy for XGBoost."""
+def _gb_forecast(y_train, steps, exog_train=None):
+    """Lightweight Gradient Boosting proxy for XGBoost, optionally adjusted by exogenous factors."""
     series = list(y_train)
     n = len(series)
     if n < 3:
@@ -101,11 +119,14 @@ def _gb_forecast(y_train, steps):
     
     curr_x = series[-1]
     preds = []
-    for _ in range(steps):
+    
+    exog_factors = _compute_exog_factor(exog_train, steps)
+    
+    for i in range(steps):
         nxt = F_val
         for split, l_val, r_val in trees:
             nxt += (l_val if curr_x <= split else r_val) * 0.5
-        preds.append(_safe_float(nxt))
+        preds.append(_safe_float(nxt * exog_factors[i]))
         curr_x = nxt
     return preds
 
@@ -178,8 +199,8 @@ def _bilstm_proxy_forecast(y_train, steps):
         
     return preds
 
-def _prophet_proxy_forecast(y_train, steps):
-    """Fb Prophet Proxy: Additive model with trend and seasonality components."""
+def _prophet_proxy_forecast(y_train, steps, exog_train=None):
+    """Fb Prophet Proxy: Additive model with trend, seasonality, and optional exogenous regressor simulation."""
     series = np.array(y_train, dtype=float)
     n = len(series)
     if n < 4: return _ses_forecast(series, steps)
@@ -191,13 +212,14 @@ def _prophet_proxy_forecast(y_train, steps):
     seasonality = [np.mean(detrended[i::3]) for i in range(3)]
     
     preds = []
+    exog_factors = _compute_exog_factor(exog_train, steps)
     for i in range(steps):
         t = n + i
         val = np.polyval(coeffs, t) + seasonality[t % 3]
-        preds.append(_safe_float(val))
+        preds.append(_safe_float(val * exog_factors[i]))
     return preds
 
-def _arimax_proxy_forecast(y_train, steps):
+def _arimax_proxy_forecast(y_train, steps, exog_train=None):
     """ARIMAX Proxy: AutoRegressive Integrated Moving Average with Exogenous simulation."""
     series = np.array(y_train, dtype=float)
     n = len(series)
@@ -214,9 +236,10 @@ def _arimax_proxy_forecast(y_train, steps):
     preds = []
     curr_val = series[-1]
     curr_err = errors[-1]
-    for _ in range(steps):
-        # external factor simulation (e.g. promo bump = 1.02)
-        exogenous_factor = 1.02 
+    exog_factors = _compute_exog_factor(exog_train, steps)
+    for i in range(steps):
+        # external factor simulation (e.g. promo bump = 1.02, plus exog impact)
+        exogenous_factor = 1.02 * exog_factors[i]
         nxt = (curr_val * ar_coef + curr_err * ma_coef) * exogenous_factor
         preds.append(_safe_float(nxt))
         curr_err = 0.0 # decay error
@@ -233,10 +256,10 @@ def _gnn_proxy_forecast(y_train, steps):
     if len(smoothed) == 0: smoothed = series
     return _ses_forecast(smoothed, steps)
 
-def _lightgbm_proxy_forecast(y_train, steps):
-    """LightGBM Proxy: Gradient boosting with leaf-wise tree growth simulation."""
+def _lightgbm_proxy_forecast(y_train, steps, exog_train=None):
+    """LightGBM Proxy: Gradient boosting with leaf-wise tree growth simulation, adjusted by exog."""
     # Very similar to XGBoost but slightly different learning rate / split
-    preds = _gb_forecast(y_train, steps)
+    preds = _gb_forecast(y_train, steps, exog_train)
     # add slight random optimization bias
     return [_safe_float(p * 0.99) for p in preds]
 
@@ -291,6 +314,10 @@ def _process_group(cabang: str, category: str, df: pd.DataFrame, test_size: int)
     train = df.iloc[:-test_size]
     test  = df.iloc[-test_size:]
     y_train, y_test = train['Penjualan'], test['Penjualan']
+    
+    exog_cols = [c for c in ['AO', 'RO', 'Rerata Drop Size', 'NOO'] if c in df.columns]
+    exog_train = train[exog_cols].values if exog_cols else None
+    exog_full  = df[exog_cols].values if exog_cols else None
 
     future_size = 6
     models_eval   = []
@@ -356,10 +383,10 @@ def _process_group(cabang: str, category: str, df: pd.DataFrame, test_size: int)
                         'mad': _mad(y_test, sarimax_preds)})
 
     # ── XGBoost (Lightweight Proxy) ──
-    xgb_preds = _gb_forecast(y_train.values, test_size)
+    xgb_preds = _gb_forecast(y_train.values, test_size, exog_train)
     rmse_xgb = _safe_float(np.sqrt(np.mean((y_test.values - np.array(xgb_preds)) ** 2)))
     forecasts_map['XGBoost'] = xgb_preds
-    future_map['XGBoost'] = _gb_forecast(df['Penjualan'].values, future_size)
+    future_map['XGBoost'] = _gb_forecast(df['Penjualan'].values, future_size, exog_full)
     models_eval.append({'model': 'XGBoost', 'rmse': rmse_xgb,
                         'mape': _mape(y_test, xgb_preds),
                         'bias': _bias(y_test, xgb_preds),
@@ -396,20 +423,20 @@ def _process_group(cabang: str, category: str, df: pd.DataFrame, test_size: int)
                         'mad': _mad(y_test, ensemble_preds)})
 
     # ── Fb Prophet (Proxy) ──
-    prophet_preds = _prophet_proxy_forecast(y_train.values, test_size)
+    prophet_preds = _prophet_proxy_forecast(y_train.values, test_size, exog_train)
     rmse_prophet = _safe_float(np.sqrt(np.mean((y_test.values - np.array(prophet_preds)) ** 2)))
     forecasts_map['Fb Prophet'] = prophet_preds
-    future_map['Fb Prophet'] = _prophet_proxy_forecast(df['Penjualan'].values, future_size)
+    future_map['Fb Prophet'] = _prophet_proxy_forecast(df['Penjualan'].values, future_size, exog_full)
     models_eval.append({'model': 'Fb Prophet', 'rmse': rmse_prophet,
                         'mape': _mape(y_test, prophet_preds),
                         'bias': _bias(y_test, prophet_preds),
                         'mad': _mad(y_test, prophet_preds)})
 
     # ── ARIMAX (Proxy) ──
-    arimax_preds = _arimax_proxy_forecast(y_train.values, test_size)
+    arimax_preds = _arimax_proxy_forecast(y_train.values, test_size, exog_train)
     rmse_arimax = _safe_float(np.sqrt(np.mean((y_test.values - np.array(arimax_preds)) ** 2)))
     forecasts_map['ARIMAX'] = arimax_preds
-    future_map['ARIMAX'] = _arimax_proxy_forecast(df['Penjualan'].values, future_size)
+    future_map['ARIMAX'] = _arimax_proxy_forecast(df['Penjualan'].values, future_size, exog_full)
     models_eval.append({'model': 'ARIMAX', 'rmse': rmse_arimax,
                         'mape': _mape(y_test, arimax_preds),
                         'bias': _bias(y_test, arimax_preds),
@@ -426,10 +453,10 @@ def _process_group(cabang: str, category: str, df: pd.DataFrame, test_size: int)
                         'mad': _mad(y_test, gnn_preds)})
 
     # ── LightGBM (Proxy) ──
-    lgbm_preds = _lightgbm_proxy_forecast(y_train.values, test_size)
+    lgbm_preds = _lightgbm_proxy_forecast(y_train.values, test_size, exog_train)
     rmse_lgbm = _safe_float(np.sqrt(np.mean((y_test.values - np.array(lgbm_preds)) ** 2)))
     forecasts_map['LightGBM'] = lgbm_preds
-    future_map['LightGBM'] = _lightgbm_proxy_forecast(df['Penjualan'].values, future_size)
+    future_map['LightGBM'] = _lightgbm_proxy_forecast(df['Penjualan'].values, future_size, exog_full)
     models_eval.append({'model': 'LightGBM', 'rmse': rmse_lgbm,
                         'mape': _mape(y_test, lgbm_preds),
                         'bias': _bias(y_test, lgbm_preds),

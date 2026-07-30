@@ -144,14 +144,14 @@ export default function ForecastPage() {
               onFileUpload={handleFileUpload}
               isLoading={isProcessing}
               templateCsv={
-                'Cabang,Category,Date,Sales\n' +
-                'Jakarta,Electronics,2023-01-01,150\n' +
-                'Surabaya,Apparel,2023-01-01,200\n' +
-                'Jakarta,Electronics,2023-02-01,160'
+                'Bulan,Deskripsi,Cabang,Kategori,Penjualan,AO,RO,Rerata Drop Size,NOO\n' +
+                'Jan-2023,Deskripsi,Jakarta,Electronics,150,10,5,1.5,2\n' +
+                'Feb-2023,Deskripsi,Surabaya,Apparel,200,12,6,1.8,3\n' +
+                'Mar-2023,Deskripsi,Jakarta,Electronics,160,11,4,1.6,1'
               }
               templateName="forecast_template.csv"
               label="Upload Data Historis Penjualan"
-              description="File CSV dengan minimal kolom: Cabang, Category, Date, Sales. Data akan ditraining dengan 4 model ML sekaligus."
+              description="File CSV dengan kolom: Bulan, Deskripsi, Cabang, Kategori, Penjualan, AO, RO, Rerata Drop Size, NOO."
             />
           </GlassCard>
         </div>
