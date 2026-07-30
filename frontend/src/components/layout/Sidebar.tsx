@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Activity, LineChart, Package,
   FileBarChart, TrendingUp, ClipboardList,
   Network, ShieldCheck, ArrowLeftRight, Ship, Radar,
-  ChevronDown
+  ChevronDown, CalendarClock, Calculator
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthStore, canAccess } from '@/stores/useAuthStore';
@@ -21,11 +21,25 @@ interface MenuItem {
 
 const MENU_ITEMS: MenuItem[] = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Occupancy & Inventory', href: '/occupancy', icon: Activity },
-  { name: 'Sales Forecasting', href: '/forecast', icon: LineChart },
-  { name: 'SOH & TO Analysis', href: '/soh-to-analysis', icon: ClipboardList },
-  { name: 'History Sales-Outstanding', href: '/history-sales', icon: TrendingUp },
-  { name: 'PR Update', href: '/pr-update', icon: FileBarChart },
+  {
+    name: 'Dashboard Data Harian',
+    href: '/dashboard-harian',
+    icon: CalendarClock,
+    children: [
+      { name: 'SOH & TO Analysis', href: '/dashboard-harian/soh-to-analysis', icon: ClipboardList },
+      { name: 'History Sales-Outstanding', href: '/dashboard-harian/history-sales', icon: TrendingUp },
+      { name: 'PR Update', href: '/dashboard-harian/pr-update', icon: FileBarChart },
+    ],
+  },
+  {
+    name: 'Kalkulator DSP',
+    href: '/kalkulator-dsp',
+    icon: Calculator,
+    children: [
+      { name: 'Occupancy & Inventory', href: '/kalkulator-dsp/occupancy', icon: Activity },
+      { name: 'Sales Forecasting', href: '/kalkulator-dsp/forecast', icon: LineChart },
+    ],
+  },
   {
     name: 'SCM Analytic',
     href: '/scm-analytic',
@@ -43,8 +57,12 @@ export function Sidebar() {
   const pathname = usePathname();
   const { user } = useAuthStore();
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
-    // Auto-open SCM group if user is on an SCM page
-    return { '/scm-analytic': pathname.startsWith('/scm-analytic') };
+    // Auto-open groups if user is on a page within them
+    return {
+      '/dashboard-harian': pathname.startsWith('/dashboard-harian'),
+      '/kalkulator-dsp': pathname.startsWith('/kalkulator-dsp'),
+      '/scm-analytic': pathname.startsWith('/scm-analytic'),
+    };
   });
 
   const toggleGroup = (href: string) => {
@@ -87,9 +105,7 @@ export function Sidebar() {
         {visibleMenus.map((item) => {
           const hasChildren = item.children && item.children.length > 0;
           const isGroupOpen = openGroups[item.href] ?? false;
-          const isActive = hasChildren
-            ? pathname.startsWith(item.href)
-            : pathname.startsWith(item.href);
+          const isActive = pathname.startsWith(item.href);
           const Icon = item.icon;
 
           if (hasChildren) {

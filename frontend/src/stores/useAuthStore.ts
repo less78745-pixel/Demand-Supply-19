@@ -52,29 +52,38 @@ export const USERS_DB: Record<string, UserCredentials> = {
 export const ROLE_ACCESS: Record<UserRole, string[]> = {
   'Super Admin': [
     '/dashboard',
+    '/dashboard-harian',
+    '/kalkulator-dsp',
+    '/scm-analytic',
+    // Legacy routes (redirect)
     '/occupancy',
     '/forecast',
     '/soh-to-analysis',
     '/history-sales',
     '/pr-update',
-    '/scm-analytic',
   ],
   Supervisor: [
     '/dashboard',
+    '/dashboard-harian',
+    '/kalkulator-dsp',
+    '/scm-analytic',
+    // Legacy routes (redirect)
     '/occupancy',
     '/forecast',
     '/soh-to-analysis',
     '/history-sales',
     '/pr-update',
-    '/scm-analytic',
   ],
   Regional: [
     '/dashboard',
+    '/dashboard-harian',
+    '/kalkulator-dsp',
+    '/scm-analytic',
+    // Legacy routes (redirect)
     '/forecast',
     '/soh-to-analysis',
     '/history-sales',
     '/pr-update',
-    '/scm-analytic',
   ],
 };
 
