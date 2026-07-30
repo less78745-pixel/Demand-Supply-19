@@ -441,6 +441,98 @@ def genetic_algorithm(
     return best_routes, convergence
 
 
+def hybrid_aco(
+    dist_matrix: list[list[float]],
+    demands: list[float],
+    vehicle_capacity: float,
+    depot: int = 0,
+    num_ants: int = 15,
+    generations: int = 30,
+) -> list[list[int]]:
+    """
+    Hybrid Ant Colony Optimization (HACO) proxy.
+    Uses pheromone matrix and visibility to construct routes.
+    """
+    n = len(dist_matrix)
+    customers = [i for i in range(n) if i != depot]
+    if not customers:
+        return []
+    
+    pheromone = [[1.0]*n for _ in range(n)]
+    best_routes = []
+    best_dist = float('inf')
+    
+    for _ in range(generations):
+        all_routes = []
+        for _ in range(num_ants):
+            unvisited = set(customers)
+            routes = []
+            while unvisited:
+                curr_route = []
+                curr_cap = vehicle_capacity
+                curr_node = depot
+                
+                while unvisited:
+                    # Filter valid next stops
+                    valid = [c for c in unvisited if demands[c] <= curr_cap]
+                    if not valid:
+                        break
+                        
+                    # Calculate probabilities
+                    probs = []
+                    for c in valid:
+                        p = pheromone[curr_node][c]
+                        # visibility = 1 / dist
+                        v = 1.0 / (dist_matrix[curr_node][c] + 1e-6)
+                        probs.append((p ** 1.0) * (v ** 2.0))
+                        
+                    total_prob = sum(probs)
+                    if total_prob == 0:
+                        chosen = random.choice(valid)
+                    else:
+                        probs = [p/total_prob for p in probs]
+                        r = random.random()
+                        cum = 0
+                        chosen = valid[-1]
+                        for i, p in enumerate(probs):
+                            cum += p
+                            if r <= cum:
+                                chosen = valid[i]
+                                break
+                                
+                    curr_route.append(chosen)
+                    unvisited.remove(chosen)
+                    curr_cap -= demands[chosen]
+                    curr_node = chosen
+                    
+                routes.append(curr_route)
+            
+            # Post-process with 2-opt
+            routes = [two_opt(r, dist_matrix, depot) for r in routes]
+            dist = _total_distance(routes, dist_matrix, depot)
+            all_routes.append((dist, routes))
+            
+            if dist < best_dist:
+                best_dist = dist
+                best_routes = routes
+                
+        # Evaporate pheromones
+        for i in range(n):
+            for j in range(n):
+                pheromone[i][j] *= 0.9 # evaporation rate
+                
+        # Deposit pheromones (best ant only)
+        if best_routes:
+            deposit = 100.0 / best_dist
+            for route in best_routes:
+                if not route: continue
+                pheromone[depot][route[0]] += deposit
+                for i in range(len(route)-1):
+                    pheromone[route[i]][route[i+1]] += deposit
+                pheromone[route[-1]][depot] += deposit
+                
+    return best_routes
+
 # ══════════════════════════════════════════════════════════════
 #  7. SENSITIVITY ANALYSIS
 # ══════════════════════════════════════════════════════════════
@@ -532,15 +624,17 @@ def generate_demo_data(n_customers: int = 20) -> dict:
 
 def analyze_routes_from_file(df: pd.DataFrame, params: dict) -> dict:
     """
-    Parse a DataFrame into depot and customers, then run optimization.
+    Parse a DataFrame into depot and customers, then run optimization per Cabang.
     Expected columns:
       - Tipe Lokasi / Type: "Depot" or "Pelanggan"
       - Nama Lokasi / Name: Name of the stop
       - Latitude / Lat
       - Longitude / Lon
       - Permintaan / Demand (0 for Depot)
+      - Cabang / Branch (optional for grouping)
+      - Bulan / Date (optional for grouping)
+      - Parameter columns (optional, overrides UI params)
     """
-    # Normalize columns
     col_map = {}
     for c in df.columns:
         cl = str(c).strip().lower()
@@ -554,44 +648,109 @@ def analyze_routes_from_file(df: pd.DataFrame, params: dict) -> dict:
             col_map[c] = "lon"
         elif cl in ("demand", "permintaan", "qty", "quantity"):
             col_map[c] = "demand"
-    
+        elif cl in ("cabang", "branch", "lokasi"):
+            col_map[c] = "cabang"
+        elif cl in ("bulan", "date", "tanggal", "waktu", "bulan-tahun"):
+            col_map[c] = "date"
+        elif cl in ("kapasitas kendaraan", "kapasitas kendaraan (unit)", "vehicle_capacity"):
+            col_map[c] = "vehicle_capacity"
+        elif cl in ("harga bbm", "harga bbm (rp/l)", "fuel_price"):
+            col_map[c] = "fuel_price"
+        elif cl in ("efisiensi bbm", "efisiensi bbm (km/l)", "fuel_efficiency"):
+            col_map[c] = "fuel_efficiency"
+        elif cl in ("upah sopir", "upah sopir (rp/hari)", "driver_cost"):
+            col_map[c] = "driver_cost"
+        elif cl in ("fixed cost", "fixed cost (rp/trip)"):
+            col_map[c] = "fixed_cost"
+        elif cl in ("maintenance", "maintenance (rp/km)"):
+            col_map[c] = "maintenance"
+        elif cl in ("traffic factor", "traffic factor (1.0-1.5)"):
+            col_map[c] = "traffic_factor"
+        elif cl in ("ga generasi", "generasi ga", "ga_generations"):
+            col_map[c] = "ga_generations"
+            
     df = df.rename(columns=col_map)
     
     req_cols = {"type", "name", "lat", "lon", "demand"}
     missing = req_cols - set(df.columns)
     if missing:
-        # Try to fallback if columns are missing but standard
         if "lat" not in df.columns or "lon" not in df.columns:
             return {"error": f"Kolom GPS tidak lengkap. Kurang: {', '.join(missing)}"}
-    
-    depot = None
-    customers = []
-    
-    for _, row in df.iterrows():
-        t = str(row.get("type", "")).strip().lower()
-        name = str(row.get("name", "Unknown"))
+
+    group_cols = []
+    if "cabang" in df.columns:
+        group_cols.append("cabang")
+    if "date" in df.columns:
+        group_cols.append("date")
+
+    results = []
+    groups = df.groupby(group_cols) if group_cols else [("All", df)]
+
+    for group_key, group_df in groups:
+        if isinstance(group_key, str):
+            label = group_key
+        else:
+            label = " — ".join(str(k) for k in group_key)
+            
+        depot = None
+        customers = []
         
-        try:
-            lat = float(row.get("lat", 0))
-            lon = float(row.get("lon", 0))
-            demand = float(row.get("demand", 0))
-        except (ValueError, TypeError):
+        # Override params if present in first row
+        group_params = params.copy()
+        group_cost_params = group_params.get("cost_params", DEFAULT_COST_PARAMS.copy()).copy()
+        
+        first_row = group_df.iloc[0]
+        if "vehicle_capacity" in group_df.columns and not pd.isna(first_row["vehicle_capacity"]):
+            group_params["vehicle_capacity"] = float(first_row["vehicle_capacity"])
+        if "fuel_price" in group_df.columns and not pd.isna(first_row["fuel_price"]):
+            group_cost_params["fuel_price_per_liter"] = float(first_row["fuel_price"])
+        if "fuel_efficiency" in group_df.columns and not pd.isna(first_row["fuel_efficiency"]):
+            group_cost_params["fuel_efficiency_km_per_liter"] = float(first_row["fuel_efficiency"])
+        if "driver_cost" in group_df.columns and not pd.isna(first_row["driver_cost"]):
+            group_cost_params["driver_cost_per_day"] = float(first_row["driver_cost"])
+        if "fixed_cost" in group_df.columns and not pd.isna(first_row["fixed_cost"]):
+            group_cost_params["fixed_cost_per_vehicle"] = float(first_row["fixed_cost"])
+        if "maintenance" in group_df.columns and not pd.isna(first_row["maintenance"]):
+            group_cost_params["maintenance_per_km"] = float(first_row["maintenance"])
+        if "traffic_factor" in group_df.columns and not pd.isna(first_row["traffic_factor"]):
+            group_cost_params["traffic_factor"] = float(first_row["traffic_factor"])
+        if "ga_generations" in group_df.columns and not pd.isna(first_row["ga_generations"]):
+            group_params["ga_generations"] = int(first_row["ga_generations"])
+            
+        group_params["cost_params"] = group_cost_params
+        
+        for _, row in group_df.iterrows():
+            t = str(row.get("type", "")).strip().lower()
+            name = str(row.get("name", "Unknown"))
+            try:
+                lat, lon, demand = float(row.get("lat", 0)), float(row.get("lon", 0)), float(row.get("demand", 0))
+            except (ValueError, TypeError):
+                continue
+                
+            if t == "depot" or "depot" in t:
+                depot = {"name": name, "lat": lat, "lon": lon, "demand": 0}
+            else:
+                customers.append({"name": name, "lat": lat, "lon": lon, "demand": demand})
+                
+        if not depot:
+            if not results: return {"error": f"Tidak ditemukan 'Depot' di grup {label}."}
+            continue
+        if not customers:
+            if not results: return {"error": f"Tidak ditemukan 'Pelanggan' di grup {label}."}
             continue
             
-        if t == "depot" or "depot" in t:
-            depot = {"name": name, "lat": lat, "lon": lon, "demand": 0}
-        else:
-            customers.append({"name": name, "lat": lat, "lon": lon, "demand": demand})
-            
-    if not depot:
-        return {"error": "Tidak ditemukan baris dengan tipe 'Depot' di dalam file."}
-    if not customers:
-        return {"error": "Tidak ditemukan baris dengan tipe 'Pelanggan' di dalam file."}
+        group_params["depot"] = depot
+        group_params["customers"] = customers
         
-    params["depot"] = depot
-    params["customers"] = customers
-    
-    return run_route_optimization(params)
+        opt_res = run_route_optimization(group_params)
+        opt_res["label"] = label
+        results.append(opt_res)
+        
+    if not results:
+        return {"error": "Tidak ada grup rute yang valid untuk diproses."}
+        
+    # Return array of results
+    return {"results": results}
 
 
 # ══════════════════════════════════════════════════════════════
@@ -679,6 +838,22 @@ def run_route_optimization(params: dict) -> dict:
         "n_vehicles": len(ga_routes),
         "cost": ga_cost,
         "convergence": [round(v, 2) for v in ga_convergence],
+    })
+
+    # 4. Hybrid ACO (Ant Colony) + 2-opt
+    haco_routes = hybrid_aco(
+        dist_matrix, demands, vehicle_capacity,
+        generations=min(30, ga_generations),
+    )
+    haco_dist = _total_distance(haco_routes, dist_matrix)
+    haco_cost = calc_route_cost(haco_dist, len(haco_routes), total_stops, cost_params)
+    methods_results.append({
+        "method": "Hybrid ACO + 2-opt",
+        "routes": _format_routes(haco_routes, names),
+        "raw_routes": haco_routes,
+        "total_distance_km": round(haco_dist, 2),
+        "n_vehicles": len(haco_routes),
+        "cost": haco_cost,
     })
 
     # Find best method

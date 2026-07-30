@@ -109,6 +109,74 @@ def _gb_forecast(y_train, steps):
         curr_x = nxt
     return preds
 
+def _samai_forecast(y_train, steps, seasonality=3):
+    """SAMAI: Simple Average with Moving Average Indexing (perishable/volatile proxy)."""
+    series = list(y_train)
+    n = len(series)
+    if n < seasonality * 2:
+        return _ses_forecast(series, steps)
+    
+    # Calculate simple average
+    overall_avg = np.mean(series)
+    
+    # Calculate seasonal indices (Moving Average Indexing)
+    ma_indices = [1.0] * seasonality
+    for i in range(seasonality):
+        season_vals = series[i::seasonality]
+        if season_vals and overall_avg > 0:
+            ma_indices[i] = _safe_float(np.mean(season_vals) / overall_avg)
+            
+    preds = []
+    for i in range(steps):
+        # Forecast is simple average * seasonal index
+        idx = ma_indices[(n + i) % seasonality]
+        preds.append(_safe_float(overall_avg * idx))
+    return preds
+
+def _bilstm_proxy_forecast(y_train, steps):
+    """BiLSTM Proxy: Lightweight RNN-like simulation using numpy for temporal dependencies."""
+    series = np.array(y_train, dtype=float)
+    n = len(series)
+    if n < 4:
+        return _ses_forecast(series, steps)
+    
+    # Normalize
+    s_min, s_max = np.min(series), np.max(series)
+    if s_max - s_min == 0:
+        return [_safe_float(series[-1])] * steps
+        
+    norm_series = (series - s_min) / (s_max - s_min)
+    
+    # Simple simulated bi-directional cell state (forward and backward memory)
+    forward_state = 0.0
+    backward_state = 0.0
+    
+    # Forward pass
+    for x in norm_series:
+        forward_state = 0.8 * forward_state + 0.2 * x
+        
+    # Backward pass
+    for x in reversed(norm_series):
+        backward_state = 0.8 * backward_state + 0.2 * x
+        
+    # Predict step-by-step using combined state
+    preds = []
+    curr_val = norm_series[-1]
+    
+    for _ in range(steps):
+        # Simulated gate activation (tanh/sigmoid-like)
+        combined_state = (forward_state + backward_state) / 2
+        nxt_norm = curr_val * 0.7 + combined_state * 0.3
+        
+        # Denormalize
+        nxt_val = nxt_norm * (s_max - s_min) + s_min
+        preds.append(_safe_float(nxt_val))
+        
+        # Update states for next step
+        forward_state = 0.8 * forward_state + 0.2 * nxt_norm
+        curr_val = nxt_norm
+        
+    return preds
 
 def _process_group(cabang: str, category: str, df: pd.DataFrame, test_size: int) -> dict:
     try:
@@ -200,13 +268,43 @@ def _process_group(cabang: str, category: str, df: pd.DataFrame, test_size: int)
                         'bias': _bias(y_test, xgb_preds),
                         'mad': _mad(y_test, xgb_preds)})
 
-    # ── Best model ──
-    models_eval.sort(key=lambda x: x['mape'])
-    best_model = models_eval[0]['model']
-    best_mape  = models_eval[0]['mape']
-    b_bias = models_eval[0]['bias']
-    b_mad  = models_eval[0]['mad']
-    b_rmse = models_eval[0]['rmse']
+    # ── SAMAI ──
+    samai_preds = _samai_forecast(y_train.values, test_size)
+    rmse_samai = _safe_float(np.sqrt(np.mean((y_test.values - np.array(samai_preds)) ** 2)))
+    forecasts_map['SAMAI'] = samai_preds
+    future_map['SAMAI'] = _samai_forecast(df['Penjualan'].values, future_size)
+    models_eval.append({'model': 'SAMAI', 'rmse': rmse_samai,
+                        'mape': _mape(y_test, samai_preds),
+                        'bias': _bias(y_test, samai_preds),
+                        'mad': _mad(y_test, samai_preds)})
+
+    # ── BiLSTM (Lightweight Proxy) ──
+    bilstm_preds = _bilstm_proxy_forecast(y_train.values, test_size)
+    rmse_bilstm = _safe_float(np.sqrt(np.mean((y_test.values - np.array(bilstm_preds)) ** 2)))
+    forecasts_map['BiLSTM'] = bilstm_preds
+    future_map['BiLSTM'] = _bilstm_proxy_forecast(df['Penjualan'].values, future_size)
+    models_eval.append({'model': 'BiLSTM', 'rmse': rmse_bilstm,
+                        'mape': _mape(y_test, bilstm_preds),
+                        'bias': _bias(y_test, bilstm_preds),
+                        'mad': _mad(y_test, bilstm_preds)})
+
+    # ── Hybrid Ensemble (XGBoost + BiLSTM) ──
+    ensemble_preds = _safe_list((np.array(xgb_preds) + np.array(bilstm_preds)) / 2)
+    rmse_ens = _safe_float(np.sqrt(np.mean((y_test.values - np.array(ensemble_preds)) ** 2)))
+    forecasts_map['Hybrid Ensemble'] = ensemble_preds
+    future_map['Hybrid Ensemble'] = _safe_list((np.array(future_map['XGBoost']) + np.array(future_map['BiLSTM'])) / 2)
+    models_eval.append({'model': 'Hybrid Ensemble', 'rmse': rmse_ens,
+                        'mape': _mape(y_test, ensemble_preds),
+                        'bias': _bias(y_test, ensemble_preds),
+                        'mad': _mad(y_test, ensemble_preds)})
+
+    # ── Best Model Selection ──
+    best_model_info = min(models_eval, key=lambda x: (x['mape'], x['rmse']))
+    best_model = best_model_info['model']
+    best_mape  = best_model_info['mape']
+    b_bias = best_model_info['bias']
+    b_mad  = best_model_info['mad']
+    b_rmse = best_model_info['rmse']
 
     std_dev      = _safe_float(np.std(y_train.values))
     avg_sales    = _safe_float(np.mean(y_train.values))

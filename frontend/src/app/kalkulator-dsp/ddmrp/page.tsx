@@ -216,8 +216,8 @@ export default function DDMRPPage() {
                   onFileUpload={handleFileUpload}
                   isLoading={isProcessing}
                   label="Upload Riwayat Sales & Inventory"
-                  description="Upload file CSV/Excel berisi riwayat penjualan per SKU. Kolom opsional: On-Hand, On-Order, Qualified Demand."
-                  templateCsv="SKU,Date,Sales,On-Hand,On-Order,Qualified Demand\nPROD-A,2023-01-01,15,100,20,5"
+                  description="Upload file CSV/Excel berisi riwayat penjualan per SKU. Kolom opsional: Nama Cabang, Category Product, On-Hand, On-Order, Qualified Demand."
+                  templateCsv="SKU,Nama Cabang,Category Product,Date,Sales,On-Hand,On-Order,Qualified Demand\nPROD-A,Cabang Jakarta,Elektronik,2023-01-01,15,100,20,5"
                 />
               </div>
             )}

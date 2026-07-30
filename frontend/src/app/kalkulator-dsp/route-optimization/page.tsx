@@ -42,9 +42,10 @@ const FACTOR_4M1E = [
 ];
 
 export default function RouteOptimizationPage() {
-  const [results, setResults] = useState<any>(null);
+  const [results, setResults] = useState<any[] | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedMethod, setSelectedMethod] = useState(0);
+  const [selectedGroup, setSelectedGroup] = useState(0);
   const [showFormulas, setShowFormulas] = useState(false);
   const [showLiterature, setShowLiterature] = useState(false);
   const [show4M1E, setShow4M1E] = useState(false);
@@ -87,7 +88,9 @@ export default function RouteOptimizationPage() {
         ga_pop_size: 50,
       });
 
-      setResults(data);
+      setResults(data.results ? data.results : [{ ...data, label: 'Demo Data' }]);
+      setSelectedGroup(0);
+      setSelectedMethod(0);
       toast.success('Optimasi rute selesai!', { id: 'route' });
     } catch (error: any) {
       console.error(error);
@@ -114,7 +117,9 @@ export default function RouteOptimizationPage() {
         ga_pop_size: 50,
       });
 
-      setResults(data);
+      setResults(data.results ? data.results : [{ ...data, label: 'File Data' }]);
+      setSelectedGroup(0);
+      setSelectedMethod(0);
       toast.success('Analisis rute selesai!', { id: 'route' });
     } catch (error: any) {
       console.error(error);
@@ -247,29 +252,49 @@ export default function RouteOptimizationPage() {
       </div>
 
       {/* Results */}
-      {results && (
+      {results && results.length > 0 && results[selectedGroup] && (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          
+          {/* Group Selector */}
+          {results.length > 1 && (
+            <GlassCard className="!py-3">
+              <div className="flex flex-wrap gap-2">
+                {results.map((res: any, idx: number) => (
+                  <button
+                    key={idx}
+                    onClick={() => { setSelectedGroup(idx); setSelectedMethod(0); }}
+                    className={`px-4 py-2 rounded-md text-sm font-semibold transition-all ${
+                      selectedGroup === idx ? 'bg-primary text-primary-foreground shadow-md' : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                    }`}
+                  >
+                    {res.label || `Grup ${idx + 1}`}
+                  </button>
+                ))}
+              </div>
+            </GlassCard>
+          )}
+
           {/* KPI Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <KPICard
               title="Metode Terbaik"
-              value={results.best_method?.split('+')[0]?.trim() || '—'}
+              value={results[selectedGroup].best_method?.split('+')[0]?.trim() || '—'}
               icon={<Cpu className="w-5 h-5" />}
             />
             <KPICard
               title="Penghematan vs Baseline"
-              value={`${results.saving_vs_baseline_pct}%`}
+              value={`${results[selectedGroup].saving_vs_baseline_pct}%`}
               icon={<TrendingDown className="w-5 h-5" />}
               trend="vs Nearest Neighbor"
             />
             <KPICard
               title="Total Cost (Best)"
-              value={formatRp(results.methods?.find((m: any) => m.method === results.best_method)?.cost?.total_cost || 0)}
+              value={formatRp(results[selectedGroup].methods?.find((m: any) => m.method === results[selectedGroup].best_method)?.cost?.total_cost || 0)}
               icon={<DollarSign className="w-5 h-5" />}
             />
             <KPICard
               title="Kendaraan Optimal"
-              value={results.methods?.find((m: any) => m.method === results.best_method)?.n_vehicles || 0}
+              value={results[selectedGroup].methods?.find((m: any) => m.method === results[selectedGroup].best_method)?.n_vehicles || 0}
               icon={<Truck className="w-5 h-5" />}
             />
           </div>
@@ -294,8 +319,8 @@ export default function RouteOptimizationPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/50">
-                  {results.methods?.map((m: any, idx: number) => {
-                    const isBest = m.method === results.best_method;
+                  {results[selectedGroup].methods?.map((m: any, idx: number) => {
+                    const isBest = m.method === results[selectedGroup].best_method;
                     return (
                       <tr
                         key={m.method}
@@ -326,32 +351,32 @@ export default function RouteOptimizationPage() {
           </GlassCard>
 
           {/* Route Map */}
-          {results.methods?.[selectedMethod] && results.locations && (
+          {results[selectedGroup].methods?.[selectedMethod] && results[selectedGroup].locations && (
             <GlassCard>
               <RouteMapChart
-                locations={results.locations}
-                routes={results.methods[selectedMethod].routes}
-                methodName={results.methods[selectedMethod].method}
+                locations={results[selectedGroup].locations}
+                routes={results[selectedGroup].methods[selectedMethod].routes}
+                methodName={results[selectedGroup].methods[selectedMethod].method}
               />
             </GlassCard>
           )}
 
           {/* Sensitivity Analysis */}
-          {results.sensitivity && (
+          {results[selectedGroup].sensitivity && (
             <GlassCard>
-              <SensitivityChart data={results.sensitivity} />
+              <SensitivityChart data={results[selectedGroup].sensitivity} />
             </GlassCard>
           )}
 
           {/* Insights */}
-          {results.insights && (
+          {results[selectedGroup].insights && (
             <GlassCard>
               <h3 className="text-lg font-bold mb-4 flex items-center gap-2 uppercase tracking-wide">
                 <Zap className="w-5 h-5 text-primary" />
                 Insights
               </h3>
               <div className="space-y-2">
-                {results.insights.map((ins: string, idx: number) => (
+                {results[selectedGroup].insights.map((ins: string, idx: number) => (
                   <div key={idx} className="flex items-start gap-3 p-3 rounded-lg bg-card/50 border border-border/50">
                     <span className="text-primary font-bold text-sm shrink-0">{idx + 1}.</span>
                     <p className="text-sm text-foreground">{ins}</p>

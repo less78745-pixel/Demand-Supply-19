@@ -330,21 +330,22 @@ def analyze_ddmrp_from_file(
         - Optional: SKU / Produk, Cabang
         - Optional: On-Hand, On-Order, Qualified Demand
     """
-    # Normalize column names
     col_map = {}
     for c in df.columns:
-        cl = c.strip().lower()
-        if cl in ("bulan", "date", "tanggal", "period"):
-            col_map[c] = "date"
-        elif cl in ("penjualan", "sales", "qty", "quantity", "demand"):
-            col_map[c] = "sales"
-        elif cl in ("sku", "produk", "product", "item"):
+        cl = str(c).strip().lower()
+        if cl in ("sku", "item", "product", "nama barang"):
             col_map[c] = "sku"
-        elif cl in ("cabang", "branch", "warehouse"):
+        elif cl in ("cabang", "nama cabang", "branch", "lokasi"):
             col_map[c] = "cabang"
-        elif cl in ("on_hand", "on hand", "on-hand", "stok"):
+        elif cl in ("kategori", "category", "category product", "jenis"):
+            col_map[c] = "category"
+        elif cl in ("date", "tanggal", "waktu"):
+            col_map[c] = "date"
+        elif cl in ("sales", "penjualan", "qty", "demand"):
+            col_map[c] = "sales"
+        elif cl in ("on_hand", "on hand", "stok", "inventory"):
             col_map[c] = "on_hand"
-        elif cl in ("on_order", "on order", "on-order", "pesanan"):
+        elif cl in ("on_order", "on order", "pesanan"):
             col_map[c] = "on_order"
         elif cl in ("qualified_demand", "qualified demand", "kebutuhan"):
             col_map[c] = "qualified_demand"
@@ -356,12 +357,14 @@ def analyze_ddmrp_from_file(
 
     df["sales"] = df["sales"].apply(_safe_float)
 
-    # Group by SKU if exists
+    # Group by available metadata columns
     group_cols = []
     if "sku" in df.columns:
         group_cols.append("sku")
     if "cabang" in df.columns:
         group_cols.append("cabang")
+    if "category" in df.columns:
+        group_cols.append("category")
 
     results = []
 
@@ -369,6 +372,12 @@ def analyze_ddmrp_from_file(
         groups = df.groupby(group_cols)
     else:
         groups = [("All", df)]
+
+    try:
+        from .forecast_engine import _gb_forecast
+    except ImportError:
+        def _gb_forecast(y, steps):
+            return [np.mean(y[-30:])]*steps if len(y)>=30 else [np.mean(y)]*steps
 
     for group_key, group_df in groups:
         if isinstance(group_key, str):
@@ -385,7 +394,15 @@ def analyze_ddmrp_from_file(
         on_order = _safe_float(group_df.iloc[-1]["on_order"]) if "on_order" in group_df.columns else default_on_order
         qualified_demand = _safe_float(group_df.iloc[-1]["qualified_demand"]) if "qualified_demand" in group_df.columns else default_qualified_demand
 
+        # Standard ADU vs XGBoost ADU
         adu = calc_adu(sales_list, period_days=30)
+        
+        xgb_preds = _gb_forecast(sales_list, 30)
+        xgb_adu = float(np.mean(xgb_preds)) if xgb_preds else adu
+        
+        # Use XGBoost ADU if it's reasonable, otherwise fallback to historical ADU
+        final_adu = xgb_adu if xgb_adu > 0 else adu
+
         cov = calc_cov(sales_list)
         vf_info = classify_variability_factor(cov)
         ltf_info = classify_lead_time_factor(dlt_days)
@@ -400,7 +417,7 @@ def analyze_ddmrp_from_file(
                 trend_multiplier = 1.25 # 25% boost to Red Safety
         
         buffer = calc_buffer_zones(
-            adu=adu,
+            adu=final_adu,
             dlt_days=dlt_days,
             lead_time_factor=ltf_info["factor"],
             variability_factor=vf_info["factor"],
@@ -420,7 +437,9 @@ def analyze_ddmrp_from_file(
 
         results.append({
             "label": label,
-            "adu": round(adu, 4),
+            "adu": round(final_adu, 4),
+            "historical_adu": round(adu, 4),
+            "xgb_adu": round(xgb_adu, 4),
             "cov": round(cov, 4),
             "variability": vf_info,
             "lead_time": ltf_info,
