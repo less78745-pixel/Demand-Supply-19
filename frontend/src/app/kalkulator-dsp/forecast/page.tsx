@@ -6,7 +6,7 @@ import { FileUploader } from '@/components/ui/FileUploader';
 import { KPICard } from '@/components/ui/KPICard';
 import { ForecastChart } from '@/components/charts/ForecastChart';
 import { ModelComparisonTable } from '@/components/charts/ModelComparisonTable';
-import { LineChart, Info, AlertTriangle, Cpu, Target, BrainCircuit, Download } from 'lucide-react';
+import { LineChart, Info, AlertTriangle, Cpu, Target, BrainCircuit, Download, BookOpen, ChevronDown, ChevronUp } from 'lucide-react';
 import { uploadForecastFile } from '@/lib/api';
 import { MultiSelect } from '@/components/ui/MultiSelect';
 import toast from 'react-hot-toast';
@@ -14,6 +14,8 @@ import toast from 'react-hot-toast';
 export default function ForecastPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [results, setResults] = useState<any>(null);
+  const [showBenchmark, setShowBenchmark] = useState(false);
+  const [showFactors, setShowFactors] = useState(false);
   
   const [selectedCabang, setSelectedCabang] = useState<string[]>(["All"]);
   const [selectedCategory, setSelectedCategory] = useState<string[]>(["All"]);
@@ -235,6 +237,106 @@ export default function ForecastPage() {
           {results && results.model_comparison && (
             <ModelComparisonTable modelComparison={results.model_comparison} />
           )}
+
+          {/* Literature Benchmark Table */}
+          <GlassCard>
+            <button
+              onClick={() => setShowBenchmark(!showBenchmark)}
+              className="w-full flex items-center justify-between text-left"
+            >
+              <h3 className="text-lg font-bold flex items-center gap-2 uppercase tracking-wide">
+                <BookOpen className="w-5 h-5 text-primary" />
+                Benchmark Literatur Forecasting (ScienceDirect 2020–2026)
+              </h3>
+              {showBenchmark ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+            </button>
+
+            {showBenchmark && (
+              <div className="mt-6 space-y-6 animate-in fade-in duration-300">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border text-xs text-muted-foreground uppercase tracking-wider">
+                        <th className="text-left py-2 px-3">Studi / Konteks</th>
+                        <th className="text-left py-2 px-3">Metode Dibandingkan</th>
+                        <th className="text-left py-2 px-3">Hasil Error Terendah</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/50">
+                      {[
+                        { study: 'Retail multi-store (GNN paper)', methods: 'ARIMA vs XGBoost vs LSTM vs GNN', result: 'XGBoost solid di banyak toko, MAPE 2,2–3,3%' },
+                        { study: 'Retail supply chain', methods: 'ARIMA, Gradient Boosting, LSTM, BiLSTM', result: 'BiLSTM unggul, RMSE/MAE turun 42,35% & 40,10% vs ARIMA' },
+                        { study: 'Hybrid ensemble (M5 Walmart)', methods: 'XGBoost, LightGBM, LSTM-GRU, stacked', result: 'XGBoost MAE 0,82 / MAPE 26,88%; ensemble RMSE terendah (1,48)' },
+                        { study: 'Inventory + variabel eksternal', methods: 'XGBoost, ARIMAX, Fb Prophet', result: 'XGBoost unggul, MAE 22,7 dgn variabel eksternal' },
+                        { study: 'Forecast perishable (PMC)', methods: 'SAMAI, Simple Average, SARIMA', result: 'SAMAI MAPE 13–27%; mengungguli SARIMA' },
+                        { study: 'Retail seasonality tinggi', methods: 'Metode tradisional vs LSTM', result: 'LSTM MAPE 16,43% vs 28,76% tradisional (perbaikan 42,87%)' },
+                      ].map((row, idx) => (
+                        <tr key={idx} className="hover:bg-muted/30 transition-colors">
+                          <td className="py-2 px-3 font-medium text-foreground">{row.study}</td>
+                          <td className="py-2 px-3 text-muted-foreground text-xs">{row.methods}</td>
+                          <td className="py-2 px-3 text-muted-foreground text-xs">{row.result}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="p-4 rounded-lg bg-card/50 border border-border/50">
+                  <h4 className="text-sm font-bold text-foreground mb-3">Kesimpulan Pola Umum</h4>
+                  <ul className="space-y-2 text-xs text-muted-foreground">
+                    <li className="flex items-start gap-2">
+                      <span className="w-1.5 h-1.5 rounded-none bg-primary mt-1.5 shrink-0" />
+                      <span><strong className="text-foreground">XGBoost/Gradient Boosting</strong> unggul saat ada banyak variabel eksogen (harga, promo, kalender, cuaca).</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="w-1.5 h-1.5 rounded-none bg-primary mt-1.5 shrink-0" />
+                      <span><strong className="text-foreground">LSTM/BiLSTM/GRU</strong> unggul saat pola permintaan punya dependensi temporal kompleks & non-linear jangka panjang.</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="w-1.5 h-1.5 rounded-none bg-primary mt-1.5 shrink-0" />
+                      <span><strong className="text-foreground">Model hybrid/ensemble</strong> umumnya memberi kombinasi MAPE-RMSE-MAE paling stabil dan std dev error paling kecil.</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="w-1.5 h-1.5 rounded-none bg-primary mt-1.5 shrink-0" />
+                      <span><strong className="text-foreground">Metode klasik (ARIMA/SARIMA)</strong> tetap kompetitif untuk deret waktu stabil, tapi kalah saat volatilitas & promosi tinggi.</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            )}
+          </GlassCard>
+
+          {/* Factors Affecting Accuracy */}
+          <GlassCard>
+            <button
+              onClick={() => setShowFactors(!showFactors)}
+              className="w-full flex items-center justify-between text-left"
+            >
+              <h3 className="text-lg font-bold flex items-center gap-2 uppercase tracking-wide">
+                <Info className="w-5 h-5 text-primary" />
+                Faktor yang Memengaruhi Akurasi Forecasting
+              </h3>
+              {showFactors ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+            </button>
+
+            {showFactors && (
+              <div className="mt-6 grid md:grid-cols-2 gap-4 animate-in fade-in duration-300">
+                {[
+                  { title: 'Promosi & Event', desc: 'Promosi dan event drive demand spikes — flag deviasi penjualan kontribusi tertinggi (~0,175) pada feature importance XGBoost.' },
+                  { title: 'Seasonality & Hari Libur', desc: 'Musim dan hari libur publik berkontribusi signifikan (~0,075) pada peningkatan akurasi forecasting.' },
+                  { title: 'Hari dalam Minggu', desc: 'Day-of-week effect punya kontribusi ~0,125 — pola pembelian berbeda di hari kerja vs weekend.' },
+                  { title: 'Lag & Rolling Statistics', desc: 'Lag demand (t-1, t-7) dan rolling mean/std meningkatkan kemampuan model menangkap pola temporal.' },
+                  { title: 'Variabel Eksternal', desc: 'Harga bahan bakar, CPI, cuaca, tren pasar terbukti meningkatkan akurasi model boosting.' },
+                  { title: 'Volatilitas Demand', desc: 'Faktor endogen & eksogen — musim, promosi, cuaca — berkontribusi pada volatilitas yang memengaruhi error forecasting.' },
+                ].map((item, idx) => (
+                  <div key={idx} className="p-4 rounded-lg bg-card/50 border border-border/50">
+                    <h4 className="text-sm font-bold text-foreground">{item.title}</h4>
+                    <p className="mt-1.5 text-xs text-muted-foreground">{item.desc}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </GlassCard>
         </div>
       )}
     </div>

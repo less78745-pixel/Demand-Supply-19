@@ -106,3 +106,29 @@ export const checkBackendHealth = async (): Promise<boolean> => {
     return false;
   }
 };
+
+// ── DDMRP API Functions ──
+
+export const analyzeDDMRPManual = async (params: Record<string, number>) => {
+  const response = await api.post('/analyze/ddmrp/manual', params);
+  return response.data;
+};
+
+export const uploadDDMRPFile = async (
+  file: File,
+  params: { dlt_days: number; moq: number; order_cycle_days: number; on_hand: number; on_order: number; qualified_demand: number }
+) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  const queryParams = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => queryParams.append(k, String(v)));
+  const response = await api.post(`/analyze/ddmrp?${queryParams.toString()}`, formData);
+  return response.data;
+};
+
+// ── Route Optimization API Functions ──
+
+export const analyzeRouteOptimization = async (params: Record<string, unknown>) => {
+  const response = await api.post('/analyze/route-optimization', params);
+  return response.data;
+};
