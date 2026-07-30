@@ -63,11 +63,15 @@ export default function ForecastPage() {
   const handleExport = () => {
     if (!results) return;
 
+    const methods = results.available_methods || ['SMA-3', 'SES', 'Trend', 'SARIMAX', 'XGBoost', 'SAMAI', 'BiLSTM', 'Hybrid Ensemble', 'Fb Prophet', 'ARIMAX', 'GNN', 'LightGBM', 'GARCH', 'Wavelet', 'LSTM-GRU'];
+    const methodCols = methods.join(',');
+
     const lines = [
-      'Cabang,Category,Date,Actual,SMA-3,SES,SARIMAX,XGBoost,Is Anomaly,Is Future,Best Model,MAPE,Bias,MAD,RMSE,ROP,Safety Stock',
-      ...(results.forecast_data || []).map((r: any) => 
-        `"${r.cabang}","${r.category}","${r.date}",${r.actual || ''},${r.forecasts['SMA-3'] ?? ''},${r.forecasts['SES'] ?? ''},${r.forecasts['SARIMAX'] ?? ''},${r.forecasts['XGBoost'] ?? ''},${r.is_anomaly},${r.is_future},"${r.best_model || ''}",${r.mape?.toFixed(2) || ''},${r.bias?.toFixed(2) || ''},${r.mad?.toFixed(2) || ''},${r.rmse?.toFixed(2) || ''},${r.rop?.toFixed(2) || ''},${r.safety_stock?.toFixed(2) || ''}`
-      )
+      `Cabang,Category,Date,Actual,${methodCols},Is Anomaly,Is Future,Best Model,MAPE,Bias,MAD,RMSE,ROP,Safety Stock`,
+      ...(results.forecast_data || []).map((r: any) => {
+        const methodVals = methods.map((m: string) => r.forecasts?.[m] ?? '').join(',');
+        return `"${r.cabang}","${r.category}","${r.date}",${r.actual ?? ''},${methodVals},${r.is_anomaly},${r.is_future},"${r.best_model || ''}",${r.mape?.toFixed(2) || ''},${r.bias?.toFixed(2) || ''},${r.mad?.toFixed(2) || ''},${r.rmse?.toFixed(2) || ''},${r.rop?.toFixed(2) || ''},${r.safety_stock?.toFixed(2) || ''}`;
+      })
     ];
 
     // DSP Insights section
@@ -250,7 +254,7 @@ export default function ForecastPage() {
             >
               <h3 className="text-lg font-bold flex items-center gap-2 uppercase tracking-wide">
                 <BookOpen className="w-5 h-5 text-primary" />
-                Benchmark Literatur Forecasting (ScienceDirect 2020–2026)
+                Benchmark Literatur Forecasting
               </h3>
               {showBenchmark ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
             </button>
