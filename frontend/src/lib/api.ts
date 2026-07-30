@@ -132,3 +132,18 @@ export const analyzeRouteOptimization = async (params: Record<string, unknown>) 
   const response = await api.post('/analyze/route-optimization', params);
   return response.data;
 };
+
+export const uploadRouteOptimizationFile = async (
+  file: File,
+  params: Record<string, any>
+) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  Object.entries(params).forEach(([k, v]) => {
+    if (v !== undefined && v !== null) {
+      formData.append(k, String(v));
+    }
+  });
+  const response = await api.post('/analyze/route-optimization/file', formData);
+  return response.data;
+};

@@ -118,13 +118,14 @@ def calc_buffer_zones(
     variability_factor: float,
     moq: float = 1.0,
     order_cycle_days: float = 1.0,
+    trend_multiplier: float = 1.0,
 ) -> dict:
     """
     DDMRP Buffer Zones
     ═══════════════════
     Red Zone:
         Red Base   = ADU × DLT × Lead Time Factor
-        Red Safety = Red Base × Variability Factor
+        Red Safety = Red Base × Variability Factor × Trend Multiplier
         Red Zone   = Red Base + Red Safety
 
     Green Zone:
@@ -140,7 +141,7 @@ def calc_buffer_zones(
     """
     # Red Zone
     red_base = adu * dlt_days * lead_time_factor
-    red_safety = red_base * variability_factor
+    red_safety = red_base * variability_factor * trend_multiplier
     red_zone = red_base + red_safety
 
     # Green Zone
@@ -316,9 +317,9 @@ def analyze_ddmrp_from_file(
     dlt_days: float = 14,
     moq: float = 1,
     order_cycle_days: float = 7,
-    on_hand: float = 0,
-    on_order: float = 0,
-    qualified_demand: float = 0,
+    default_on_hand: float = 0,
+    default_on_order: float = 0,
+    default_qualified_demand: float = 0,
 ) -> dict:
     """
     Run DDMRP analysis from uploaded sales data file.
@@ -327,6 +328,7 @@ def analyze_ddmrp_from_file(
         - Bulan (date) or Date
         - Penjualan (sales) or Sales
         - Optional: SKU / Produk, Cabang
+        - Optional: On-Hand, On-Order, Qualified Demand
     """
     # Normalize column names
     col_map = {}
@@ -340,6 +342,12 @@ def analyze_ddmrp_from_file(
             col_map[c] = "sku"
         elif cl in ("cabang", "branch", "warehouse"):
             col_map[c] = "cabang"
+        elif cl in ("on_hand", "on hand", "on-hand", "stok"):
+            col_map[c] = "on_hand"
+        elif cl in ("on_order", "on order", "on-order", "pesanan"):
+            col_map[c] = "on_order"
+        elif cl in ("qualified_demand", "qualified demand", "kebutuhan"):
+            col_map[c] = "qualified_demand"
 
     df = df.rename(columns=col_map)
 
@@ -371,12 +379,26 @@ def analyze_ddmrp_from_file(
         sales_list = group_df["sales"].tolist()
         if len(sales_list) < 2:
             continue
+            
+        # Get latest inventory data if available
+        on_hand = _safe_float(group_df.iloc[-1]["on_hand"]) if "on_hand" in group_df.columns else default_on_hand
+        on_order = _safe_float(group_df.iloc[-1]["on_order"]) if "on_order" in group_df.columns else default_on_order
+        qualified_demand = _safe_float(group_df.iloc[-1]["qualified_demand"]) if "qualified_demand" in group_df.columns else default_qualified_demand
 
         adu = calc_adu(sales_list, period_days=30)
         cov = calc_cov(sales_list)
         vf_info = classify_variability_factor(cov)
         ltf_info = classify_lead_time_factor(dlt_days)
-
+        
+        # Trend Multiplier Calculation (ML inspired dynamic buffer)
+        # If last 7 days average is > 20% higher than last 30 days average, boost buffer
+        trend_multiplier = 1.0
+        if len(sales_list) >= 30:
+            trend_7d = np.mean(sales_list[-7:])
+            trend_30d = np.mean(sales_list[-30:])
+            if trend_30d > 0 and trend_7d > (1.2 * trend_30d):
+                trend_multiplier = 1.25 # 25% boost to Red Safety
+        
         buffer = calc_buffer_zones(
             adu=adu,
             dlt_days=dlt_days,
@@ -384,6 +406,7 @@ def analyze_ddmrp_from_file(
             variability_factor=vf_info["factor"],
             moq=moq,
             order_cycle_days=order_cycle_days,
+            trend_multiplier=trend_multiplier,
         )
 
         nfp = calc_net_flow_position(on_hand, on_order, qualified_demand)

@@ -73,13 +73,13 @@ async def analyze_ddmrp_file_endpoint(
         df.columns = df.columns.str.strip()
 
         result = analyze_ddmrp_from_file(
-            df,
+            df=df,
             dlt_days=dlt_days,
             moq=moq,
             order_cycle_days=order_cycle_days,
-            on_hand=on_hand,
-            on_order=on_order,
-            qualified_demand=qualified_demand,
+            default_on_hand=on_hand,
+            default_on_order=on_order,
+            default_qualified_demand=qualified_demand
         )
 
         if "error" in result:

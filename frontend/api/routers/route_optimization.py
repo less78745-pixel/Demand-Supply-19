@@ -75,3 +75,75 @@ async def analyze_route_optimization(params: RouteOptimizationInput):
         if isinstance(e, HTTPException):
             raise e
         raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)}")
+
+
+from fastapi import UploadFile, File, Form
+import pandas as pd
+import io
+from services.route_optimization_engine import analyze_routes_from_file
+
+@router.post("/analyze/route-optimization/file")
+async def analyze_route_optimization_file(
+    file: UploadFile = File(...),
+    vehicle_capacity: float = Form(100),
+    ga_generations: int = Form(100),
+    ga_pop_size: int = Form(50),
+    fuel_price_per_liter: float = Form(13500),
+    fuel_efficiency_km_per_liter: float = Form(8),
+    driver_cost_per_day: float = Form(250000),
+    driver_cost_per_hour: float = Form(35000),
+    fixed_cost_per_vehicle: float = Form(150000),
+    maintenance_per_km: float = Form(500),
+    carbon_price_per_kg: float = Form(50000),
+    emission_factor_kg_per_km: float = Form(0.00027),
+    traffic_factor: float = Form(1.0),
+    avg_speed_kmh: float = Form(40),
+    service_time_per_stop_mins: float = Form(30)
+):
+    """Run route optimization from an uploaded Excel or CSV file."""
+    try:
+        contents = await file.read()
+        
+        # Determine file type
+        if file.filename.endswith(".csv"):
+            df = pd.read_csv(io.BytesIO(contents))
+        elif file.filename.endswith((".xls", ".xlsx")):
+            df = pd.read_excel(io.BytesIO(contents))
+        else:
+            raise HTTPException(status_code=400, detail="Hanya mendukung file CSV atau Excel (.xls, .xlsx)")
+
+        cost_params = {
+            "fuel_price_per_liter": fuel_price_per_liter,
+            "fuel_efficiency_km_per_liter": fuel_efficiency_km_per_liter,
+            "driver_cost_per_day": driver_cost_per_day,
+            "driver_cost_per_hour": driver_cost_per_hour,
+            "fixed_cost_per_vehicle": fixed_cost_per_vehicle,
+            "maintenance_per_km": maintenance_per_km,
+            "carbon_price_per_kg": carbon_price_per_kg,
+            "emission_factor_kg_per_km": emission_factor_kg_per_km,
+            "traffic_factor": traffic_factor,
+            "avg_speed_kmh": avg_speed_kmh,
+            "service_time_per_stop_mins": service_time_per_stop_mins
+        }
+
+        run_params = {
+            "vehicle_capacity": vehicle_capacity,
+            "cost_params": cost_params,
+            "ga_generations": ga_generations,
+            "ga_pop_size": ga_pop_size,
+        }
+
+        result = analyze_routes_from_file(df, run_params)
+
+        if "error" in result:
+            raise HTTPException(status_code=400, detail=result["error"])
+
+        return result
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)}")
+

@@ -9,10 +9,11 @@ import { SensitivityChart } from '@/components/charts/SensitivityChart';
 import {
   Route, TrendingDown, Truck, DollarSign, Fuel,
   ChevronDown, ChevronUp, BookOpen, Cpu, Map,
-  Info, Zap, BarChart3, Users, Clock,
+  Info, Zap, BarChart3, Users, Clock, FileSpreadsheet,
 } from 'lucide-react';
-import { analyzeRouteOptimization } from '@/lib/api';
+import { analyzeRouteOptimization, uploadRouteOptimizationFile } from '@/lib/api';
 import toast from 'react-hot-toast';
+import { FileUploader } from '@/components/ui/FileUploader';
 
 // ═══════════════════════════════════════════════
 //  LITERATURE REFERENCE DATA
@@ -47,6 +48,7 @@ export default function RouteOptimizationPage() {
   const [showFormulas, setShowFormulas] = useState(false);
   const [showLiterature, setShowLiterature] = useState(false);
   const [show4M1E, setShow4M1E] = useState(false);
+  const [activeMode, setActiveMode] = useState<'demo' | 'file'>('demo');
 
   // Form state
   const [form, setForm] = useState({
@@ -95,6 +97,33 @@ export default function RouteOptimizationPage() {
     }
   };
 
+  const handleFileUpload = async (file: File) => {
+    setIsProcessing(true);
+    toast.loading('Menganalisis rute dari file...', { id: 'route' });
+
+    try {
+      const data = await uploadRouteOptimizationFile(file, {
+        vehicle_capacity: form.vehicle_capacity,
+        fuel_price_per_liter: form.fuel_price,
+        fuel_efficiency_km_per_liter: form.fuel_efficiency,
+        driver_cost_per_day: form.driver_cost,
+        fixed_cost_per_vehicle: form.fixed_cost,
+        maintenance_per_km: form.maintenance_per_km,
+        traffic_factor: form.traffic_factor,
+        ga_generations: form.ga_generations,
+        ga_pop_size: 50,
+      });
+
+      setResults(data);
+      toast.success('Analisis rute selesai!', { id: 'route' });
+    } catch (error: any) {
+      console.error(error);
+      toast.error(error.message || 'Gagal memproses file.', { id: 'route' });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const formatRp = (v: number) => `Rp ${v?.toLocaleString()}`;
 
   return (
@@ -114,14 +143,34 @@ export default function RouteOptimizationPage() {
       <div className="grid md:grid-cols-3 gap-6">
         <div className="md:col-span-2">
           <GlassCard>
-            <h3 className="text-lg font-bold mb-6 flex items-center gap-2 uppercase tracking-wide">
-              <Zap className="w-5 h-5 text-primary" />
-              Parameter Optimasi
-            </h3>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
+              <h3 className="text-lg font-bold flex items-center gap-2 uppercase tracking-wide">
+                <Zap className="w-5 h-5 text-primary" />
+                Parameter Optimasi
+              </h3>
+              <div className="flex bg-muted/50 p-1 rounded-lg">
+                <button
+                  onClick={() => setActiveMode('demo')}
+                  className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-all ${
+                    activeMode === 'demo' ? 'bg-primary text-primary-foreground shadow-md' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Demo Data
+                </button>
+                <button
+                  onClick={() => setActiveMode('file')}
+                  className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-all ${
+                    activeMode === 'file' ? 'bg-primary text-primary-foreground shadow-md' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Upload File
+                </button>
+              </div>
+            </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
               {[
-                { key: 'n_customers', label: 'Jumlah Pelanggan', step: 1 },
+                ...(activeMode === 'demo' ? [{ key: 'n_customers', label: 'Jumlah Pelanggan', step: 1 }] : []),
                 { key: 'vehicle_capacity', label: 'Kapasitas Kendaraan (unit)', step: 10 },
                 { key: 'fuel_price', label: 'Harga BBM (Rp/L)', step: 500 },
                 { key: 'fuel_efficiency', label: 'Efisiensi BBM (km/L)', step: 1 },
@@ -146,23 +195,35 @@ export default function RouteOptimizationPage() {
               ))}
             </div>
 
-            <button
-              onClick={handleAnalyze}
-              disabled={isProcessing}
-              className="mt-6 w-full px-6 py-3 bg-primary text-primary-foreground rounded-lg font-bold text-sm uppercase tracking-wider hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              {isProcessing ? (
-                <>
-                  <span className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
-                  Mengoptimasi...
-                </>
-              ) : (
-                <>
-                  <Cpu className="w-4 h-4" />
-                  Jalankan Optimasi (Demo Data Jakarta)
-                </>
-              )}
-            </button>
+            {activeMode === 'demo' ? (
+              <button
+                onClick={handleAnalyze}
+                disabled={isProcessing}
+                className="mt-6 w-full px-6 py-3 bg-primary text-primary-foreground rounded-lg font-bold text-sm uppercase tracking-wider hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {isProcessing ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+                    Mengoptimasi...
+                  </>
+                ) : (
+                  <>
+                    <Cpu className="w-4 h-4" />
+                    Jalankan Optimasi (Demo Data Jakarta)
+                  </>
+                )}
+              </button>
+            ) : (
+              <div className="mt-6">
+                <FileUploader
+                  onFileUpload={handleFileUpload}
+                  isLoading={isProcessing}
+                  label="Upload Data Rute & Pelanggan"
+                  description="Upload file CSV/Excel berisi daftar titik pelanggan dan demand-nya. Wajib mengandung kolom 'Latitude', 'Longitude', 'Demand'. Pastikan titik pertama (atau yang memiliki Demand=0) dianggap sebagai Depot."
+                  templateCsv="ID,Name,Latitude,Longitude,Demand\nDEPOT,Pusat Distribusi,-6.200000,106.816666,0\nCUST1,Toko A,-6.210000,106.820000,15"
+                />
+              </div>
+            )}
           </GlassCard>
         </div>
 

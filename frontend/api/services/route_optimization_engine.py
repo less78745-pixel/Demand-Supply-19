@@ -70,25 +70,29 @@ DEFAULT_COST_PARAMS = {
     "fuel_price_per_liter": 13500,       # Rp/liter
     "fuel_efficiency_km_per_liter": 8,   # km/liter
     "driver_cost_per_day": 250000,       # Rp/day
+    "driver_cost_per_hour": 35000,       # Rp/hour (overtime/variable)
     "fixed_cost_per_vehicle": 150000,    # Rp/trip (depreciation, insurance, etc.)
     "maintenance_per_km": 500,           # Rp/km
     "carbon_price_per_kg": 50000,        # Rp/kg CO2  (optional carbon cost)
     "emission_factor_kg_per_km": 0.00027,  # kg CO2/km (light truck)
     "traffic_factor": 1.0,              # 1.0 = normal, 1.3 = heavy traffic (adds 30%)
     "avg_speed_kmh": 40,                 # average speed for time estimation
+    "service_time_per_stop_mins": 30,    # mins/stop (VRPTW insight)
 }
 
 
 def calc_route_cost(
     distance_km: float,
     n_vehicles: int,
+    total_stops: int,
     cost_params: Optional[dict] = None,
 ) -> dict:
     """
-    Total Route Cost
-    ════════════════
+    Total Route Cost with Service Time (VRPTW insight)
+    ══════════════════════════════════════════════════
     Fuel Cost        = distance × traffic_factor × (fuel_price / fuel_efficiency)
-    Driver Cost      = n_vehicles × driver_cost_per_day
+    Time             = (distance × traffic_factor / speed) + (stops × service_time)
+    Driver Cost      = (n_vehicles × fixed_day_rate) + (total_time × hourly_rate)
     Fixed Cost       = n_vehicles × fixed_cost_per_vehicle
     Maintenance Cost = distance × traffic_factor × maintenance_per_km
     Emission Cost    = distance × emission_factor × carbon_price
@@ -98,9 +102,14 @@ def calc_route_cost(
     p = {**DEFAULT_COST_PARAMS, **(cost_params or {})}
 
     effective_distance = distance_km * p["traffic_factor"]
+    
+    driving_time_hours = effective_distance / max(p["avg_speed_kmh"], 1)
+    service_time_hours = total_stops * (p["service_time_per_stop_mins"] / 60)
+    total_time_hours = driving_time_hours + service_time_hours
 
     fuel_cost = effective_distance * (p["fuel_price_per_liter"] / p["fuel_efficiency_km_per_liter"])
-    driver_cost = n_vehicles * p["driver_cost_per_day"]
+    # Hybrid driver cost: base day rate per vehicle + hourly rate for total time
+    driver_cost = (n_vehicles * p["driver_cost_per_day"]) + (total_time_hours * p["driver_cost_per_hour"])
     fixed_cost = n_vehicles * p["fixed_cost_per_vehicle"]
     maint_cost = effective_distance * p["maintenance_per_km"]
     emission_cost = effective_distance * p["emission_factor_kg_per_km"] * p["carbon_price_per_kg"]
@@ -115,7 +124,7 @@ def calc_route_cost(
         "emission_cost": round(emission_cost),
         "total_cost": round(total),
         "effective_distance_km": round(effective_distance, 2),
-        "estimated_time_hours": round(effective_distance / max(p["avg_speed_kmh"], 1), 2),
+        "estimated_time_hours": round(total_time_hours, 2),
     }
 
 
@@ -439,6 +448,7 @@ def genetic_algorithm(
 def run_sensitivity_analysis(
     base_distance: float,
     base_n_vehicles: int,
+    total_stops: int,
     cost_params: dict,
 ) -> list[dict]:
     """
@@ -455,7 +465,7 @@ def run_sensitivity_analysis(
     # Traffic factor variations
     for tf in [0.8, 1.0, 1.2, 1.5]:
         params = {**cost_params, "traffic_factor": tf}
-        cost = calc_route_cost(base_distance, base_n_vehicles, params)
+        cost = calc_route_cost(base_distance, base_n_vehicles, total_stops, params)
         results.append({
             "factor": "Traffic (Lingkungan)",
             "variation": f"{tf}x",
@@ -466,7 +476,7 @@ def run_sensitivity_analysis(
     # Fuel efficiency variations
     for fe in [6, 8, 10, 12]:
         params = {**cost_params, "fuel_efficiency_km_per_liter": fe}
-        cost = calc_route_cost(base_distance, base_n_vehicles, params)
+        cost = calc_route_cost(base_distance, base_n_vehicles, total_stops, params)
         results.append({
             "factor": "Efisiensi BBM (Machine)",
             "variation": f"{fe} km/L",
@@ -477,7 +487,7 @@ def run_sensitivity_analysis(
     # Driver wage variations
     for dw in [150000, 200000, 250000, 300000]:
         params = {**cost_params, "driver_cost_per_day": dw}
-        cost = calc_route_cost(base_distance, base_n_vehicles, params)
+        cost = calc_route_cost(base_distance, base_n_vehicles, total_stops, params)
         results.append({
             "factor": "Upah Sopir (Man)",
             "variation": f"Rp {dw:,.0f}",
@@ -488,7 +498,7 @@ def run_sensitivity_analysis(
     # Carbon price variations
     for cp in [0, 25000, 50000, 100000]:
         params = {**cost_params, "carbon_price_per_kg": cp}
-        cost = calc_route_cost(base_distance, base_n_vehicles, params)
+        cost = calc_route_cost(base_distance, base_n_vehicles, total_stops, params)
         results.append({
             "factor": "Harga Karbon (Environment)",
             "variation": f"Rp {cp:,.0f}",
@@ -518,8 +528,70 @@ def generate_demo_data(n_customers: int = 20) -> dict:
             "lon": depot["lon"] + np.random.uniform(-0.15, 0.15),
             "demand": round(np.random.uniform(5, 30)),
         })
-
     return {"depot": depot, "customers": customers}
+
+def analyze_routes_from_file(df: pd.DataFrame, params: dict) -> dict:
+    """
+    Parse a DataFrame into depot and customers, then run optimization.
+    Expected columns:
+      - Tipe Lokasi / Type: "Depot" or "Pelanggan"
+      - Nama Lokasi / Name: Name of the stop
+      - Latitude / Lat
+      - Longitude / Lon
+      - Permintaan / Demand (0 for Depot)
+    """
+    # Normalize columns
+    col_map = {}
+    for c in df.columns:
+        cl = str(c).strip().lower()
+        if cl in ("tipe", "type", "tipe lokasi", "jenis"):
+            col_map[c] = "type"
+        elif cl in ("nama", "name", "nama lokasi", "customer"):
+            col_map[c] = "name"
+        elif cl in ("lat", "latitude"):
+            col_map[c] = "lat"
+        elif cl in ("lon", "longitude", "long"):
+            col_map[c] = "lon"
+        elif cl in ("demand", "permintaan", "qty", "quantity"):
+            col_map[c] = "demand"
+    
+    df = df.rename(columns=col_map)
+    
+    req_cols = {"type", "name", "lat", "lon", "demand"}
+    missing = req_cols - set(df.columns)
+    if missing:
+        # Try to fallback if columns are missing but standard
+        if "lat" not in df.columns or "lon" not in df.columns:
+            return {"error": f"Kolom GPS tidak lengkap. Kurang: {', '.join(missing)}"}
+    
+    depot = None
+    customers = []
+    
+    for _, row in df.iterrows():
+        t = str(row.get("type", "")).strip().lower()
+        name = str(row.get("name", "Unknown"))
+        
+        try:
+            lat = float(row.get("lat", 0))
+            lon = float(row.get("lon", 0))
+            demand = float(row.get("demand", 0))
+        except (ValueError, TypeError):
+            continue
+            
+        if t == "depot" or "depot" in t:
+            depot = {"name": name, "lat": lat, "lon": lon, "demand": 0}
+        else:
+            customers.append({"name": name, "lat": lat, "lon": lon, "demand": demand})
+            
+    if not depot:
+        return {"error": "Tidak ditemukan baris dengan tipe 'Depot' di dalam file."}
+    if not customers:
+        return {"error": "Tidak ditemukan baris dengan tipe 'Pelanggan' di dalam file."}
+        
+    params["depot"] = depot
+    params["customers"] = customers
+    
+    return run_route_optimization(params)
 
 
 # ══════════════════════════════════════════════════════════════
@@ -563,10 +635,12 @@ def run_route_optimization(params: dict) -> dict:
     # Run all 3 methods
     methods_results = []
 
+    total_stops = len(customers)
+
     # 1. Nearest Neighbor
     nn_routes = nearest_neighbor(dist_matrix, demands, vehicle_capacity)
     nn_dist = _total_distance(nn_routes, dist_matrix)
-    nn_cost = calc_route_cost(nn_dist, len(nn_routes), cost_params)
+    nn_cost = calc_route_cost(nn_dist, len(nn_routes), total_stops, cost_params)
     methods_results.append({
         "method": "Nearest Neighbor",
         "routes": _format_routes(nn_routes, names),
@@ -580,7 +654,7 @@ def run_route_optimization(params: dict) -> dict:
     cw_routes = clarke_wright_savings(dist_matrix, demands, vehicle_capacity)
     cw_routes = [two_opt(r, dist_matrix) for r in cw_routes]
     cw_dist = _total_distance(cw_routes, dist_matrix)
-    cw_cost = calc_route_cost(cw_dist, len(cw_routes), cost_params)
+    cw_cost = calc_route_cost(cw_dist, len(cw_routes), total_stops, cost_params)
     methods_results.append({
         "method": "Clarke-Wright + 2-opt",
         "routes": _format_routes(cw_routes, names),
@@ -596,7 +670,7 @@ def run_route_optimization(params: dict) -> dict:
         pop_size=ga_pop_size, generations=ga_generations,
     )
     ga_dist = _total_distance(ga_routes, dist_matrix)
-    ga_cost = calc_route_cost(ga_dist, len(ga_routes), cost_params)
+    ga_cost = calc_route_cost(ga_dist, len(ga_routes), total_stops, cost_params)
     methods_results.append({
         "method": "Genetic Algorithm + 2-opt",
         "routes": _format_routes(ga_routes, names),
@@ -614,7 +688,7 @@ def run_route_optimization(params: dict) -> dict:
 
     # Sensitivity analysis using best method's distance
     sensitivity = run_sensitivity_analysis(
-        best["total_distance_km"], best["n_vehicles"], cost_params,
+        best["total_distance_km"], best["n_vehicles"], total_stops, cost_params,
     )
 
     # Build location data for frontend visualization
