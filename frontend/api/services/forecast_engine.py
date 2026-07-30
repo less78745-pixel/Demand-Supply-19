@@ -246,6 +246,34 @@ def _arimax_proxy_forecast(y_train, steps, exog_train=None):
         curr_val = nxt
     return preds
 
+def _sarima_proxy_forecast(y_train, steps):
+    """SARIMA Proxy: Seasonal ARIMA simulation without exogenous variables."""
+    series = np.array(y_train, dtype=float)
+    n = len(series)
+    if n < 4: return _ses_forecast(series, steps)
+    
+    ar_coef = 0.5
+    ma_coef = 0.2
+    seasonality = 3
+    
+    errors = [0.0] * n
+    for i in range(1, n):
+        pred_i = series[i-1] * ar_coef
+        errors[i] = series[i] - pred_i
+        
+    preds = []
+    curr_val = series[-1]
+    curr_err = errors[-1]
+    
+    for i in range(steps):
+        # seasonal oscillation proxy
+        s_idx = 1.0 + 0.1 * np.sin(2 * np.pi * (n + i) / seasonality)
+        nxt = (curr_val * ar_coef + curr_err * ma_coef) * s_idx
+        preds.append(_safe_float(nxt))
+        curr_err = 0.0
+        curr_val = nxt
+    return preds
+
 def _gnn_proxy_forecast(y_train, steps):
     """GNN Proxy: Graph Neural Network simulating cross-store spatial correlations."""
     series = np.array(y_train, dtype=float)
@@ -441,6 +469,16 @@ def _process_group(cabang: str, category: str, df: pd.DataFrame, test_size: int)
                         'mape': _mape(y_test, arimax_preds),
                         'bias': _bias(y_test, arimax_preds),
                         'mad': _mad(y_test, arimax_preds)})
+
+    # ── SARIMA (Proxy) ──
+    sarima_preds = _sarima_proxy_forecast(y_train.values, test_size)
+    rmse_sarima = _safe_float(np.sqrt(np.mean((y_test.values - np.array(sarima_preds)) ** 2)))
+    forecasts_map['SARIMA'] = sarima_preds
+    future_map['SARIMA'] = _sarima_proxy_forecast(df['Penjualan'].values, future_size)
+    models_eval.append({'model': 'SARIMA', 'rmse': rmse_sarima,
+                        'mape': _mape(y_test, sarima_preds),
+                        'bias': _bias(y_test, sarima_preds),
+                        'mad': _mad(y_test, sarima_preds)})
 
     # ── GNN (Proxy) ──
     gnn_preds = _gnn_proxy_forecast(y_train.values, test_size)
@@ -693,7 +731,7 @@ def run_forecast_pipeline(df: pd.DataFrame) -> dict:
         f"Safety Stock rata-rata nasional: {avg_ss:,.0f} unit.",
     ]
 
-    all_methods = ["SMA-3", "SES", "Trend", "SARIMAX", "XGBoost", "SAMAI", "BiLSTM", "Hybrid Ensemble", "Fb Prophet", "ARIMAX", "GNN", "LightGBM", "GARCH", "Wavelet", "LSTM-GRU"]
+    all_methods = ["SMA-3", "SES", "Trend", "SARIMA", "SARIMAX", "XGBoost", "SAMAI", "BiLSTM", "Hybrid Ensemble", "Fb Prophet", "ARIMAX", "GNN", "LightGBM", "GARCH", "Wavelet", "LSTM-GRU"]
 
     return {
         "forecast_data":     all_combined,

@@ -339,16 +339,22 @@ def analyze_ddmrp_from_file(
             col_map[c] = "cabang"
         elif cl in ("kategori", "category", "category product", "jenis"):
             col_map[c] = "category"
-        elif cl in ("date", "tanggal", "waktu"):
+        elif cl in ("date", "tanggal", "waktu", "bulan"):
             col_map[c] = "date"
         elif cl in ("sales", "penjualan", "qty", "demand"):
             col_map[c] = "sales"
-        elif cl in ("on_hand", "on hand", "stok", "inventory"):
+        elif cl in ("on_hand", "on hand", "stok", "inventory", "on-hand"):
             col_map[c] = "on_hand"
-        elif cl in ("on_order", "on order", "pesanan"):
+        elif cl in ("on_order", "on order", "pesanan", "on-order"):
             col_map[c] = "on_order"
         elif cl in ("qualified_demand", "qualified demand", "kebutuhan"):
             col_map[c] = "qualified_demand"
+        elif cl in ("lead time", "lead time (hari)", "dlt"):
+            col_map[c] = "dlt"
+        elif cl in ("moq", "moq (unit)"):
+            col_map[c] = "moq"
+        elif cl in ("order cycle", "order cycle (hari)", "oc"):
+            col_map[c] = "oc"
 
     df = df.rename(columns=col_map)
 
@@ -393,6 +399,11 @@ def analyze_ddmrp_from_file(
         on_hand = _safe_float(group_df.iloc[-1]["on_hand"]) if "on_hand" in group_df.columns else default_on_hand
         on_order = _safe_float(group_df.iloc[-1]["on_order"]) if "on_order" in group_df.columns else default_on_order
         qualified_demand = _safe_float(group_df.iloc[-1]["qualified_demand"]) if "qualified_demand" in group_df.columns else default_qualified_demand
+        
+        # Get dynamic DDMRP parameters if available
+        dlt_val = _safe_float(group_df.iloc[-1]["dlt"]) if "dlt" in group_df.columns else dlt_days
+        moq_val = _safe_float(group_df.iloc[-1]["moq"]) if "moq" in group_df.columns else moq
+        oc_val = _safe_float(group_df.iloc[-1]["oc"]) if "oc" in group_df.columns else order_cycle_days
 
         # Standard ADU vs XGBoost ADU
         adu = calc_adu(sales_list, period_days=30)
@@ -405,7 +416,7 @@ def analyze_ddmrp_from_file(
 
         cov = calc_cov(sales_list)
         vf_info = classify_variability_factor(cov)
-        ltf_info = classify_lead_time_factor(dlt_days)
+        ltf_info = classify_lead_time_factor(dlt_val)
         
         # Trend Multiplier Calculation (ML inspired dynamic buffer)
         # If last 7 days average is > 20% higher than last 30 days average, boost buffer
@@ -418,11 +429,11 @@ def analyze_ddmrp_from_file(
         
         buffer = calc_buffer_zones(
             adu=final_adu,
-            dlt_days=dlt_days,
+            dlt_days=dlt_val,
             lead_time_factor=ltf_info["factor"],
             variability_factor=vf_info["factor"],
-            moq=moq,
-            order_cycle_days=order_cycle_days,
+            moq=moq_val,
+            order_cycle_days=oc_val,
             trend_multiplier=trend_multiplier,
         )
 
