@@ -14,6 +14,7 @@ import {
 import { analyzeRouteOptimization, uploadRouteOptimizationFile } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { FileUploader } from '@/components/ui/FileUploader';
+import { exportToExcel } from '@/utils/export';
 
 // ═══════════════════════════════════════════════
 //  LITERATURE REFERENCE DATA
@@ -102,25 +103,25 @@ export default function RouteOptimizationPage() {
 
   const handleFileUpload = async (file: File) => {
     setIsProcessing(true);
-    toast.loading('Menganalisis rute dari file...', { id: 'route' });
-
+    toast.loading('Memproses file & optimasi...', { id: 'route' });
     try {
       const data = await uploadRouteOptimizationFile(file, {
         vehicle_capacity: form.vehicle_capacity,
-        fuel_price_per_liter: form.fuel_price,
-        fuel_efficiency_km_per_liter: form.fuel_efficiency,
-        driver_cost_per_day: form.driver_cost,
-        fixed_cost_per_vehicle: form.fixed_cost,
-        maintenance_per_km: form.maintenance_per_km,
-        traffic_factor: form.traffic_factor,
+        cost_params: {
+          fuel_price_per_liter: form.fuel_price,
+          fuel_efficiency_km_per_liter: form.fuel_efficiency,
+          driver_cost_per_day: form.driver_cost,
+          fixed_cost_per_vehicle: form.fixed_cost,
+          maintenance_per_km: form.maintenance_per_km,
+          traffic_factor: form.traffic_factor,
+        },
         ga_generations: form.ga_generations,
         ga_pop_size: 50,
       });
-
-      setResults(data.results ? data.results : [{ ...data, label: 'File Data' }]);
+      setResults(data.results ? data.results : [{ ...data, label: 'File Upload' }]);
       setSelectedGroup(0);
       setSelectedMethod(0);
-      toast.success('Analisis rute selesai!', { id: 'route' });
+      toast.success('Optimasi rute dari file selesai!', { id: 'route' });
     } catch (error: any) {
       console.error(error);
       toast.error(error.message || 'Gagal memproses file.', { id: 'route' });
@@ -129,22 +130,26 @@ export default function RouteOptimizationPage() {
     }
   };
 
-  const formatRp = (v: number) => `Rp ${v?.toLocaleString()}`;
+  const formatRp = (num: number) => {
+    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(num);
+  };
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto pb-10">
       {/* Header */}
-      <header className="mb-8 border-b border-border pb-6">
-        <h1 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-3 uppercase">
-          <Route className="w-8 h-8 text-primary" />
-          Route Optimization
-        </h1>
-        <p className="text-muted-foreground mt-2 font-medium">
-          Optimasi rute distribusi dengan Nearest Neighbor, Clarke-Wright Savings, dan Genetic Algorithm — termasuk analisis sensitivitas 4M1E.
-        </p>
+      <header className="mb-8 border-b border-border pb-6 flex justify-between items-end">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-3 uppercase">
+            <Route className="w-8 h-8 text-primary" />
+            Route Optimization (VRP)
+          </h1>
+          <p className="text-muted-foreground mt-2 font-medium">
+            Vehicle Routing Problem solver menggunakan Haversine & kombinasi Nearest Neighbor, Clarke-Wright, GA, dan Hybrid ACO.
+          </p>
+        </div>
       </header>
 
-      {/* Input Form */}
+      {/* Input Form & 4M1E Panel */}
       <div className="grid md:grid-cols-3 gap-6">
         <div className="md:col-span-2">
           <GlassCard>
@@ -257,21 +262,59 @@ Pelanggan,Toko A,-6.210000,106.820000,15,08:00-12:00,30`}
       {results && results.length > 0 && results[selectedGroup] && (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
           
-          {/* Group Selector */}
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mt-8 border-b border-border pb-4 gap-4">
+            <h2 className="text-2xl font-bold tracking-tight">Hasil Optimasi Rute</h2>
+            <button
+              onClick={() => {
+                let allExportData: any[] = [];
+                
+                results.forEach((groupData: any, groupIdx: number) => {
+                  const bestMethod = groupData.best_method;
+                  if (!bestMethod) return;
+                  
+                  const methodData = groupData.methods?.find((m: any) => m.method === bestMethod);
+                  if (!methodData || !methodData.routes) return;
+                  
+                  const groupExport = methodData.routes.flatMap((route: any, routeIdx: number) => 
+                    route.path.map((node: string, nodeIdx: number) => ({
+                      'Cabang': groupData.label || `Grup ${groupIdx + 1}`,
+                      'Metode': methodData.method,
+                      'Vehicle': `Kendaraan ${routeIdx + 1}`,
+                      'Urutan': nodeIdx + 1,
+                      'Lokasi': node,
+                      'Total Jarak Rute (KM)': routeIdx === 0 && nodeIdx === 0 ? methodData.total_distance_km : '',
+                      'Total Cost Rute (Rp)': routeIdx === 0 && nodeIdx === 0 ? methodData.cost?.total_cost : ''
+                    }))
+                  );
+                  allExportData = [...allExportData, ...groupExport];
+                });
+                
+                if (allExportData.length > 0) {
+                  exportToExcel(allExportData, 'Route_Optimization_Result');
+                } else {
+                  toast.error('Tidak ada data rute untuk diexport');
+                }
+              }}
+              className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-md text-sm font-semibold flex items-center gap-2 transition-colors shadow-sm"
+            >
+              <FileSpreadsheet className="w-4 h-4" /> Download Excel
+            </button>
+          </div>
+          
+          {/* Group / Branch Filter */}
           {results.length > 1 && (
             <GlassCard className="!py-3">
-              <div className="flex flex-wrap gap-2">
-                {results.map((res: any, idx: number) => (
-                  <button
-                    key={idx}
-                    onClick={() => { setSelectedGroup(idx); setSelectedMethod(0); }}
-                    className={`px-4 py-2 rounded-md text-sm font-semibold transition-all ${
-                      selectedGroup === idx ? 'bg-primary text-primary-foreground shadow-md' : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                    }`}
-                  >
-                    {res.label || `Grup ${idx + 1}`}
-                  </button>
-                ))}
+              <div className="w-full md:w-1/3">
+                <label className="text-sm font-medium text-muted-foreground mb-1 block">Filter Cabang</label>
+                <select 
+                  value={selectedGroup} 
+                  onChange={e => { setSelectedGroup(Number(e.target.value)); setSelectedMethod(0); }}
+                  className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary"
+                >
+                  {results.map((res: any, idx: number) => (
+                    <option key={idx} value={idx}>{res.label || `Cabang ${idx + 1}`}</option>
+                  ))}
+                </select>
               </div>
             </GlassCard>
           )}

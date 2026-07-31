@@ -13,6 +13,7 @@ import {
 import { analyzeDDMRPManual, uploadDDMRPFile } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { FileUploader } from '@/components/ui/FileUploader';
+import { exportToExcel } from '@/utils/export';
 
 // ═══════════════════════════════════════════════
 //  LITERATURE REFERENCE DATA
@@ -37,6 +38,9 @@ const DDMRP_LITERATURE = [
 
 export default function DDMRPPage() {
   const [results, setResults] = useState<any>(null);
+  const [filterCabang, setFilterCabang] = useState<string>('All');
+  const [filterKategori, setFilterKategori] = useState<string>('All');
+  const [filterSku, setFilterSku] = useState<string>('All');
   const [isProcessing, setIsProcessing] = useState(false);
   const [showFormulas, setShowFormulas] = useState(false);
   const [showLiterature, setShowLiterature] = useState(false);
@@ -256,11 +260,134 @@ export default function DDMRPPage() {
       {/* Results */}
       {results && (
         <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500 mt-10">
-          {(results.results || [results]).map((res: any, idx: number) => (
+          
+          {/* Summary & Filters */}
+          <GlassCard className="mb-8 border-primary/20">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+              <h2 className="text-xl font-bold tracking-tight flex items-center gap-2">
+                <BarChart3 className="w-6 h-6 text-primary" />
+                Ringkasan Analisis DDMRP
+              </h2>
+              <button 
+                onClick={() => {
+                  const dataArray = results.results || [results];
+                  const exportData = dataArray.map((res: any) => ({
+                    'Cabang': res.cabang || 'N/A',
+                    'Kategori': res.kategori || 'N/A',
+                    'SKU': res.label,
+                    'ADU': res.adu,
+                    'Lead Time': res.lead_time?.value,
+                    'On-Hand': res.on_hand,
+                    'On-Order': res.on_order,
+                    'Net Flow Position': res.net_flow_position,
+                    'Status': res.replenishment?.status,
+                    'Urgency': res.replenishment?.urgency,
+                    'Order Qty': res.replenishment?.suggested_order_qty,
+                  }));
+                  exportToExcel(exportData, 'DDMRP_Analysis_Result');
+                }}
+                className="bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-md text-sm font-semibold flex items-center gap-2 transition-colors"
+              >
+                <FileSpreadsheet className="w-4 h-4" /> Export to Excel
+              </button>
+            </div>
+            
+            {results.results && (
+              <div className="grid md:grid-cols-3 gap-6 mb-6">
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground mb-1 block">Filter Cabang</label>
+                  <select 
+                    value={filterCabang} 
+                    onChange={e => { setFilterCabang(e.target.value); setFilterSku('All'); }}
+                    className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary"
+                  >
+                    <option value="All">Semua Cabang</option>
+                    {Array.from(new Set(results.results.map((r: any) => r.cabang || 'All'))).filter(x => x !== 'All').map((c: any) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground mb-1 block">Filter Kategori</label>
+                  <select 
+                    value={filterKategori} 
+                    onChange={e => { setFilterKategori(e.target.value); setFilterSku('All'); }}
+                    className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary"
+                  >
+                    <option value="All">Semua Kategori</option>
+                    {Array.from(new Set(results.results.map((r: any) => r.kategori || 'All'))).filter(x => x !== 'All').map((k: any) => (
+                      <option key={k} value={k}>{k}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground mb-1 block">Cari SKU</label>
+                  <select 
+                    value={filterSku} 
+                    onChange={e => setFilterSku(e.target.value)}
+                    className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary"
+                  >
+                    <option value="All">Semua SKU (Max 20 Tampil)</option>
+                    {results.results
+                      .filter((r: any) => (filterCabang === 'All' || r.cabang === filterCabang) && (filterKategori === 'All' || r.kategori === filterKategori))
+                      .map((r: any) => (
+                        <option key={r.label} value={r.label}>{r.label}</option>
+                      ))}
+                  </select>
+                </div>
+              </div>
+            )}
+            
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 rounded-lg bg-card border border-border">
+              {(() => {
+                const dataArray = results.results || [results];
+                const filteredData = dataArray.filter((res: any) => {
+                  if (filterCabang !== 'All' && res.cabang !== filterCabang) return false;
+                  if (filterKategori !== 'All' && res.kategori !== filterKategori) return false;
+                  return true;
+                });
+                const critical = filteredData.filter((r: any) => r.replenishment?.urgency === 'high').length;
+                const totalOrder = filteredData.filter((r: any) => r.replenishment?.action === 'ORDER' || r.replenishment?.action === 'URGENT_ORDER').length;
+                const totalOrderQty = filteredData.reduce((acc: number, r: any) => acc + (r.replenishment?.suggested_order_qty || 0), 0);
+                const overstock = filteredData.filter((r: any) => r.replenishment?.action === 'NO_ORDER').length;
+                
+                return (
+                  <>
+                    <div className="text-center">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Total SKU</p>
+                      <p className="text-2xl font-bold text-foreground">{filteredData.length}</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Butuh Order</p>
+                      <p className="text-2xl font-bold text-amber-500">{totalOrder} <span className="text-sm text-muted-foreground">({critical} Kritis)</span></p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Total Qty Pesan</p>
+                      <p className="text-2xl font-bold text-primary">{totalOrderQty.toLocaleString()}</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Overstock / Aman</p>
+                      <p className="text-2xl font-bold text-emerald-500">{overstock}</p>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          </GlassCard>
+
+          {(results.results || [results])
+            .filter((res: any) => {
+              if (filterCabang !== 'All' && res.cabang !== filterCabang) return false;
+              if (filterKategori !== 'All' && res.kategori !== filterKategori) return false;
+              if (filterSku !== 'All' && res.label !== filterSku) return false;
+              return true;
+            })
+            .slice(0, filterSku === 'All' ? 20 : 1) // Batasi tampilan jika All agar tidak lag
+            .map((res: any, idx: number) => (
             <div key={idx} className="space-y-6">
               {results.results && (
                 <h2 className="text-xl font-bold text-primary mb-4 pb-2 border-b border-border/50">
-                  {res.label}
+                  {res.label} {res.cabang ? `(${res.cabang})` : ''}
                 </h2>
               )}
               {/* KPI Cards */}

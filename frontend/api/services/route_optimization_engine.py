@@ -792,10 +792,30 @@ def run_route_optimization(params: dict) -> dict:
 
     dist_matrix = build_distance_matrix(locations)
 
+    total_stops = len(customers)
+
+    # Limit max input size to prevent timeout without reducing accuracy
+    if total_stops > 50:
+        return {"error": f"Batas maksimal data adalah 50 titik untuk mempertahankan akurasi kalkulasi. Anda memasukkan {total_stops} titik. Harap filter data Anda."}
+
+    # Dynamic scaling to prevent Vercel Timeout (Max 300s)
+    max_ga_ops = 500000
+    current_ga_ops = total_stops * ga_pop_size * ga_generations
+    if current_ga_ops > max_ga_ops:
+        scale_factor = max_ga_ops / max(1, current_ga_ops)
+        ga_generations = max(10, int(ga_generations * scale_factor))
+        
+    max_aco_ops = 150000
+    aco_generations = min(30, ga_generations)
+    aco_ants = 15
+    current_aco_ops = (total_stops ** 2) * aco_ants * aco_generations
+    if current_aco_ops > max_aco_ops:
+        scale_factor = max_aco_ops / max(1, current_aco_ops)
+        aco_generations = max(5, int(aco_generations * math.sqrt(scale_factor)))
+        aco_ants = max(5, int(aco_ants * math.sqrt(scale_factor)))
+
     # Run all 3 methods
     methods_results = []
-
-    total_stops = len(customers)
 
     # 1. Nearest Neighbor
     nn_routes = nearest_neighbor(dist_matrix, demands, vehicle_capacity)
@@ -844,7 +864,8 @@ def run_route_optimization(params: dict) -> dict:
     # 4. Hybrid ACO (Ant Colony) + 2-opt
     haco_routes = hybrid_aco(
         dist_matrix, demands, vehicle_capacity,
-        generations=min(30, ga_generations),
+        generations=aco_generations,
+        num_ants=aco_ants
     )
     haco_dist = _total_distance(haco_routes, dist_matrix)
     haco_cost = calc_route_cost(haco_dist, len(haco_routes), total_stops, cost_params)

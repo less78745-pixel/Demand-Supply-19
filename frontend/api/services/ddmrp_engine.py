@@ -446,8 +446,13 @@ def analyze_ddmrp_from_file(
             top_of_red=buffer["top_of_red"],
         )
 
+        cabang = str(group_key[group_cols.index("cabang")]) if "cabang" in group_cols and isinstance(group_key, tuple) else (group_key if "cabang" in group_cols else "All")
+        kategori = str(group_key[group_cols.index("category")]) if "category" in group_cols and isinstance(group_key, tuple) else (group_key if "category" in group_cols else "All")
+
         results.append({
             "label": label,
+            "cabang": cabang,
+            "kategori": kategori,
             "adu": round(final_adu, 4),
             "historical_adu": round(adu, 4),
             "xgb_adu": round(xgb_adu, 4),
