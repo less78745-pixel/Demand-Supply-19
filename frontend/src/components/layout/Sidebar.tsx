@@ -72,9 +72,18 @@ export function Sidebar() {
   };
 
   // Filter menu items based on user role
-  const visibleMenus = MENU_ITEMS.filter((item) =>
-    canAccess(user?.role, item.href)
-  );
+  const visibleMenus = MENU_ITEMS.map((item) => {
+    if (item.children) {
+      const filteredChildren = item.children.filter((child) => canAccess(user?.role, child.href));
+      return { ...item, children: filteredChildren };
+    }
+    return item;
+  }).filter((item) => {
+    if (item.children) {
+      return item.children.length > 0;
+    }
+    return canAccess(user?.role, item.href);
+  });
 
   return (
     <aside className="w-64 bg-card/50 backdrop-blur-sm flex-shrink-0 min-h-screen flex flex-col z-20 border-r border-border">

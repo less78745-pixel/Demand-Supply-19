@@ -63,22 +63,19 @@ export const ROLE_ACCESS: Record<UserRole, string[]> = {
     '/pr-update',
   ],
   Supervisor: [
-    '/dashboard',
     '/dashboard-harian',
-    '/kalkulator-dsp',
-    '/scm-analytic',
+    '/kalkulator-dsp/forecast',
+    '/kalkulator-dsp/ddmrp',
     // Legacy routes (redirect)
-    '/occupancy',
     '/forecast',
     '/soh-to-analysis',
     '/history-sales',
     '/pr-update',
   ],
   Regional: [
-    '/dashboard',
     '/dashboard-harian',
-    '/kalkulator-dsp',
-    '/scm-analytic',
+    '/kalkulator-dsp/forecast',
+    '/kalkulator-dsp/ddmrp',
     // Legacy routes (redirect)
     '/forecast',
     '/soh-to-analysis',

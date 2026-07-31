@@ -276,14 +276,14 @@ Pelanggan,Toko A,-6.210000,106.820000,15,08:00-12:00,30`}
                   if (!methodData || !methodData.routes) return;
                   
                   const groupExport = methodData.routes.flatMap((route: any, routeIdx: number) => 
-                    route.path.map((node: string, nodeIdx: number) => ({
+                    route.stops.map((stop: any, stopIdx: number) => ({
                       'Cabang': groupData.label || `Grup ${groupIdx + 1}`,
                       'Metode': methodData.method,
                       'Vehicle': `Kendaraan ${routeIdx + 1}`,
-                      'Urutan': nodeIdx + 1,
-                      'Lokasi': node,
-                      'Total Jarak Rute (KM)': routeIdx === 0 && nodeIdx === 0 ? methodData.total_distance_km : '',
-                      'Total Cost Rute (Rp)': routeIdx === 0 && nodeIdx === 0 ? methodData.cost?.total_cost : ''
+                      'Urutan': stopIdx + 1,
+                      'Lokasi': stop.name,
+                      'Total Jarak Rute (KM)': routeIdx === 0 && stopIdx === 0 ? methodData.total_distance_km : '',
+                      'Total Cost Rute (Rp)': routeIdx === 0 && stopIdx === 0 ? methodData.cost?.total_cost : ''
                     }))
                   );
                   allExportData = [...allExportData, ...groupExport];

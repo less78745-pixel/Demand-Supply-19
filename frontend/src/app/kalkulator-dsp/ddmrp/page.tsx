@@ -13,6 +13,7 @@ import {
 import { analyzeDDMRPManual, uploadDDMRPFile } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { FileUploader } from '@/components/ui/FileUploader';
+import { MultiSelect } from '@/components/ui/MultiSelect';
 import { exportToExcel } from '@/utils/export';
 
 // ═══════════════════════════════════════════════
@@ -38,9 +39,9 @@ const DDMRP_LITERATURE = [
 
 export default function DDMRPPage() {
   const [results, setResults] = useState<any>(null);
-  const [filterCabang, setFilterCabang] = useState<string>('All');
-  const [filterKategori, setFilterKategori] = useState<string>('All');
-  const [filterSku, setFilterSku] = useState<string>('All');
+  const [filterCabang, setFilterCabang] = useState<string[]>(['All']);
+  const [filterKategori, setFilterKategori] = useState<string[]>(['All']);
+  const [filterSku, setFilterSku] = useState<string[]>(['All']);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showFormulas, setShowFormulas] = useState(false);
   const [showLiterature, setShowLiterature] = useState(false);
@@ -296,44 +297,39 @@ export default function DDMRPPage() {
               <div className="grid md:grid-cols-3 gap-6 mb-6">
                 <div>
                   <label className="text-sm font-medium text-muted-foreground mb-1 block">Filter Cabang</label>
-                  <select 
-                    value={filterCabang} 
-                    onChange={e => { setFilterCabang(e.target.value); setFilterSku('All'); }}
-                    className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary"
-                  >
-                    <option value="All">Semua Cabang</option>
-                    {Array.from(new Set(results.results.map((r: any) => r.cabang || 'All'))).filter(x => x !== 'All').map((c: any) => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
-                  </select>
+                  <MultiSelect
+                    options={['All', ...Array.from(new Set(results.results.map((r: any) => r.cabang || 'All'))).filter(x => x !== 'All') as string[]]}
+                    selected={filterCabang}
+                    onChange={val => { setFilterCabang(val); setFilterSku(['All']); }}
+                    selectAllLabel="Semua Cabang"
+                    className="w-full"
+                  />
                 </div>
                 <div>
                   <label className="text-sm font-medium text-muted-foreground mb-1 block">Filter Kategori</label>
-                  <select 
-                    value={filterKategori} 
-                    onChange={e => { setFilterKategori(e.target.value); setFilterSku('All'); }}
-                    className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary"
-                  >
-                    <option value="All">Semua Kategori</option>
-                    {Array.from(new Set(results.results.map((r: any) => r.kategori || 'All'))).filter(x => x !== 'All').map((k: any) => (
-                      <option key={k} value={k}>{k}</option>
-                    ))}
-                  </select>
+                  <MultiSelect
+                    options={['All', ...Array.from(new Set(results.results.map((r: any) => r.kategori || 'All'))).filter(x => x !== 'All') as string[]]}
+                    selected={filterKategori}
+                    onChange={val => { setFilterKategori(val); setFilterSku(['All']); }}
+                    selectAllLabel="Semua Kategori"
+                    className="w-full"
+                  />
                 </div>
                 <div>
                   <label className="text-sm font-medium text-muted-foreground mb-1 block">Cari SKU</label>
-                  <select 
-                    value={filterSku} 
-                    onChange={e => setFilterSku(e.target.value)}
-                    className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary"
-                  >
-                    <option value="All">Semua SKU (Max 20 Tampil)</option>
-                    {results.results
-                      .filter((r: any) => (filterCabang === 'All' || r.cabang === filterCabang) && (filterKategori === 'All' || r.kategori === filterKategori))
-                      .map((r: any) => (
-                        <option key={r.label} value={r.label}>{r.label}</option>
-                      ))}
-                  </select>
+                  <MultiSelect
+                    options={['All', ...results.results
+                      .filter((r: any) => 
+                        (filterCabang.includes('All') || filterCabang.includes(r.cabang)) && 
+                        (filterKategori.includes('All') || filterKategori.includes(r.kategori))
+                      )
+                      .map((r: any) => r.label)
+                    ]}
+                    selected={filterSku}
+                    onChange={setFilterSku}
+                    selectAllLabel="Semua SKU (Max 20 Tampil)"
+                    className="w-full"
+                  />
                 </div>
               </div>
             )}
@@ -342,8 +338,8 @@ export default function DDMRPPage() {
               {(() => {
                 const dataArray = results.results || [results];
                 const filteredData = dataArray.filter((res: any) => {
-                  if (filterCabang !== 'All' && res.cabang !== filterCabang) return false;
-                  if (filterKategori !== 'All' && res.kategori !== filterKategori) return false;
+                  if (!filterCabang.includes('All') && !filterCabang.includes(res.cabang)) return false;
+                  if (!filterKategori.includes('All') && !filterKategori.includes(res.kategori)) return false;
                   return true;
                 });
                 const critical = filteredData.filter((r: any) => r.replenishment?.urgency === 'high').length;
@@ -377,12 +373,12 @@ export default function DDMRPPage() {
 
           {(results.results || [results])
             .filter((res: any) => {
-              if (filterCabang !== 'All' && res.cabang !== filterCabang) return false;
-              if (filterKategori !== 'All' && res.kategori !== filterKategori) return false;
-              if (filterSku !== 'All' && res.label !== filterSku) return false;
+              if (!filterCabang.includes('All') && !filterCabang.includes(res.cabang)) return false;
+              if (!filterKategori.includes('All') && !filterKategori.includes(res.kategori)) return false;
+              if (!filterSku.includes('All') && !filterSku.includes(res.label)) return false;
               return true;
             })
-            .slice(0, filterSku === 'All' ? 20 : 1) // Batasi tampilan jika All agar tidak lag
+            .slice(0, filterSku.includes('All') ? 20 : filterSku.length) // Batasi tampilan jika All agar tidak lag
             .map((res: any, idx: number) => (
             <div key={idx} className="space-y-6">
               {results.results && (
