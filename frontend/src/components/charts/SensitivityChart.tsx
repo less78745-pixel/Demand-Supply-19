@@ -29,7 +29,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 
 export function SensitivityChart({ data, title }: SensitivityChartProps) {
   // Group by factor
-  const factors = [...new Set(data.map(d => d.factor))];
+  const factors = Array.from(new Set(data.map(d => d.factor)));
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null;

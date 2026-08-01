@@ -8,6 +8,7 @@ import {
   Package, Info, UploadCloud, FileSpreadsheet, X
 } from 'lucide-react';
 import { uploadLandedCostFiles } from '@/lib/api';
+import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import toast from 'react-hot-toast';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -89,6 +90,7 @@ export default function LandedCostPage() {
     toast.loading('Menghitung Landed Cost & Demurrage...', { id: 'lc' });
     try {
       const data = await uploadLandedCostFiles(trackingFile, allocationFile, exchangeRate);
+      data.processed_at = data.processed_at || new Date().toISOString();
       setResults(data);
       try { localStorage.setItem('lastLandedCost', JSON.stringify(data)); } catch {}
       toast.success('Analisis Landed Cost selesai!', { id: 'lc' });
@@ -159,6 +161,12 @@ export default function LandedCostPage() {
       {/* Results */}
       {results && (
         <div className="space-y-8 animate-in fade-in duration-700">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-border/60 pb-4">
+            <h2 className="text-xl font-bold uppercase tracking-wide text-foreground flex items-center gap-2">
+              🚢 Hasil Analisa Landed Cost & Demurrage
+            </h2>
+            <TimestampBadge timestamp={results.processed_at} />
+          </div>
           {/* KPI Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <KPICard title="Total Container" value={results.kpi.total_containers} icon={<Package />} />

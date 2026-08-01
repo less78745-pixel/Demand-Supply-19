@@ -12,6 +12,7 @@ class LocationInput(BaseModel):
     lat: float
     lon: float
     demand: float = 0.0
+    is_dedicated: bool = False
 
 
 class CostParamsInput(BaseModel):
@@ -30,6 +31,8 @@ class RouteOptimizationInput(BaseModel):
     depot: Optional[LocationInput] = None
     customers: Optional[list[LocationInput]] = None
     vehicle_capacity: float = 100
+    num_vehicles: int = 8
+    num_dedicated_vehicles: int = 2
     cost_params: Optional[CostParamsInput] = None
     ga_generations: int = 100
     ga_pop_size: int = 50
@@ -41,7 +44,7 @@ async def analyze_route_optimization(params: RouteOptimizationInput):
     """Run route optimization with multiple methods."""
     try:
         if params.use_demo_data:
-            demo = generate_demo_data(20)
+            demo = generate_demo_data(20, params.num_dedicated_vehicles)
             depot = demo["depot"]
             customers = demo["customers"]
         else:
@@ -57,6 +60,8 @@ async def analyze_route_optimization(params: RouteOptimizationInput):
             "depot": depot,
             "customers": customers,
             "vehicle_capacity": params.vehicle_capacity,
+            "num_vehicles": params.num_vehicles,
+            "num_dedicated_vehicles": params.num_dedicated_vehicles,
             "cost_params": params.cost_params.model_dump() if params.cost_params else {},
             "ga_generations": params.ga_generations,
             "ga_pop_size": params.ga_pop_size,
@@ -86,6 +91,8 @@ from services.route_optimization_engine import analyze_routes_from_file
 async def analyze_route_optimization_file(
     file: UploadFile = File(...),
     vehicle_capacity: float = Form(100),
+    num_vehicles: int = Form(8),
+    num_dedicated_vehicles: int = Form(2),
     ga_generations: int = Form(100),
     ga_pop_size: int = Form(50),
     fuel_price_per_liter: float = Form(13500),
@@ -128,6 +135,8 @@ async def analyze_route_optimization_file(
 
         run_params = {
             "vehicle_capacity": vehicle_capacity,
+            "num_vehicles": num_vehicles,
+            "num_dedicated_vehicles": num_dedicated_vehicles,
             "cost_params": cost_params,
             "ga_generations": ga_generations,
             "ga_pop_size": ga_pop_size,

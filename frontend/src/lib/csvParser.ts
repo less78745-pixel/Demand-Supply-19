@@ -4,6 +4,7 @@ export interface ParsedData {
   headers: string[];
   targetColumns: { index: number; name: string }[];
   data: any[];
+  processed_at?: string;
 }
 
 export function parseIndonesianNumber(val: any): number {
@@ -92,7 +93,7 @@ export async function parseDynamicCSV(file: File): Promise<ParsedData> {
           data.push(rowObj);
         }
 
-        resolve({ headers, targetColumns, data });
+          resolve({ headers, targetColumns, data, processed_at: new Date().toISOString() });
       },
       error: (error: any) => {
         reject(error);

@@ -166,10 +166,17 @@ export function RouteMapChart({ locations, routes, methodName }: RouteMapChartPr
 
       {/* Route legend */}
       <div className="flex flex-wrap gap-3 mt-3">
-        {routes.map((route, idx) => (
-          <span key={route.route_id} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <span className="w-3 h-0.5 rounded" style={{ background: ROUTE_COLORS[idx % ROUTE_COLORS.length] }} />
-            Rute {route.route_id} ({route.n_stops} stop)
+        {routes.map((route: any, idx) => (
+          <span
+            key={route.route_id}
+            className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md border transition-all ${
+              route.is_dedicated
+                ? 'bg-orange-500/10 border-orange-500/40 text-orange-500 font-bold shadow-xs'
+                : 'bg-background/50 border-border text-muted-foreground'
+            }`}
+          >
+            <span className="w-3 h-1 rounded" style={{ background: ROUTE_COLORS[idx % ROUTE_COLORS.length] }} />
+            {route.vehicle_name || `Rute ${route.route_id}`} {route.is_dedicated ? '🛡️ [DEDICATED]' : '⚡ [OPTIMASI]'} ({route.n_stops} stop)
           </span>
         ))}
       </div>

@@ -6,9 +6,10 @@ import { FileUploader } from '@/components/ui/FileUploader';
 import { KPICard } from '@/components/ui/KPICard';
 import { OccupancyChart } from '@/components/charts/OccupancyChart';
 import { InventoryChart } from '@/components/charts/InventoryChart';
-import { Activity, AlertTriangle, Info, TrendingUp, AlertOctagon, Layers, Download, PackageSearch, LayoutGrid, CheckCircle } from 'lucide-react';
+import { Activity, AlertTriangle, Info, TrendingUp, TrendingDown, AlertOctagon, Layers, Download, PackageSearch, LayoutGrid, CheckCircle } from 'lucide-react';
 import { uploadOccupancyFile } from '@/lib/api';
 import { MultiSelect } from '@/components/ui/MultiSelect';
+import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import toast from 'react-hot-toast';
 
 export default function OccupancyPage() {
@@ -36,6 +37,7 @@ export default function OccupancyPage() {
     toast.loading('Analyzing occupancy & inventory dataset...', { id: 'occ' });
     try {
       const data = await uploadOccupancyFile(file);
+      data.processed_at = data.processed_at || new Date().toISOString();
       setResults(data);
       try {
         localStorage.setItem('lastOccupancy', JSON.stringify(data));
@@ -189,6 +191,93 @@ export default function OccupancyPage() {
     );
   }, [results, selectedCabang, selectedCategory, selectedClass]);
 
+  const filteredShortageAlerts = useMemo(() => {
+    if (!results?.shortage_alerts) return [];
+    return results.shortage_alerts.filter((a: any) =>
+      (selectedCabang.includes('All') || selectedCabang.includes(a.cabang)) &&
+      (selectedDate.includes('All') || selectedDate.includes(a.date)) &&
+      (selectedCategory.includes('All') || selectedCategory.includes(a.category))
+    );
+  }, [results, selectedCabang, selectedDate, selectedCategory]);
+
+  const kpiMetrics = useMemo(() => {
+    if (!filteredData || filteredData.length === 0) {
+      return {
+        avg: 0,
+        peak: 0,
+        top3Peak: [] as Array<{ cabang: string; date: string; val: string }>,
+        min: 0,
+        bottom3Min: [] as Array<{ cabang: string; date: string; val: string }>,
+        riskCount: 0,
+        top5RiskCategories: [] as Array<{ category: string; cabang: string; reason: string }>,
+      };
+    }
+
+    // Avg Occupancy from active filtered data
+    const totalOccupancy = filteredData.reduce((acc: number, item: any) => acc + Number(item.occupancy_pct || 0), 0);
+    const avg = Number((totalOccupancy / filteredData.length).toFixed(1));
+
+    // Sorted by occupancy_pct descending (Peak Occupancy)
+    const sortedDesc = [...filteredData].sort((a: any, b: any) => Number(b.occupancy_pct || 0) - Number(a.occupancy_pct || 0));
+    const peak = sortedDesc[0] ? Number(sortedDesc[0].occupancy_pct || 0).toFixed(1) : 0;
+    const top3Peak = sortedDesc.slice(0, 3).map((item: any) => ({
+      cabang: item.cabang,
+      date: item.date,
+      val: Number(item.occupancy_pct || 0).toFixed(1)
+    }));
+
+    // Sorted by occupancy_pct ascending (Min Occupancy)
+    const sortedAsc = [...filteredData].sort((a: any, b: any) => Number(a.occupancy_pct || 0) - Number(b.occupancy_pct || 0));
+    const min = sortedAsc[0] ? Number(sortedAsc[0].occupancy_pct || 0).toFixed(1) : 0;
+    const bottom3Min = sortedAsc.slice(0, 3).map((item: any) => ({
+      cabang: item.cabang,
+      date: item.date,
+      val: Number(item.occupancy_pct || 0).toFixed(1)
+    }));
+
+    // Categories at Risk: combines shortage alerts and inventory analysis risks
+    const riskMap = new Map<string, { category: string; cabang: string; reason: string; score: number }>();
+    
+    if (filteredShortageAlerts && filteredShortageAlerts.length > 0) {
+      filteredShortageAlerts.forEach((item: any) => {
+        const key = `${item.cabang}-${item.category}`;
+        riskMap.set(key, {
+          category: item.category,
+          cabang: item.cabang,
+          reason: `Defisit: ${item.deficit}`,
+          score: 1000 + Number(item.deficit || 0)
+        });
+      });
+    }
+
+    if (filteredInvData && filteredInvData.length > 0) {
+      filteredInvData.forEach((item: any) => {
+        if (item.stockout_risk || item.xyz === 'Z' || item.doh > 90) {
+          const key = `${item.cabang}-${item.category}`;
+          if (!riskMap.has(key)) {
+            const reason = item.stockout_risk ? `Stockout Risk (DOH: ${item.doh})` : item.doh > 90 ? `Dead Stock (DOH: ${item.doh})` : `High Volatility (${item.class})`;
+            const score = item.stockout_risk ? 500 : item.doh > 90 ? 300 : 100;
+            riskMap.set(key, { category: item.category, cabang: item.cabang, reason, score });
+          }
+        }
+      });
+    }
+
+    const riskList = Array.from(riskMap.values()).sort((a, b) => b.score - a.score);
+    const top5RiskCategories = riskList.slice(0, 5);
+    const riskCount = riskList.length || results?.kpi_summary?.categories_at_risk || 0;
+
+    return {
+      avg,
+      peak,
+      top3Peak,
+      min,
+      bottom3Min,
+      riskCount,
+      top5RiskCategories,
+    };
+  }, [filteredData, filteredShortageAlerts, filteredInvData, results]);
+
   return (
     <div className="space-y-6 max-w-6xl mx-auto pb-10">
 
@@ -203,30 +292,13 @@ export default function OccupancyPage() {
         </p>
       </header>
 
-      {/* Upload & Instructions Row */}
-      <div className="grid md:grid-cols-3 gap-6 mb-8">
+      <div className="grid md:grid-cols-3 gap-6 mb-8 items-stretch">
         <div className="md:col-span-2">
-          <GlassCard>
-            <FileUploader
-              onFileUpload={handleFileUpload}
-              isLoading={isProcessing}
-              templateCsv={
-                'Cabang,Category,On Hand,In,Out,Capacity,Date\n' +
-                'Jakarta,Electronics,200,150,120,5000,2024-01-01\n' +
-                'Surabaya,Apparel,300,180,190,4000,2024-01-01'
-              }
-              templateName="occupancy_template.csv"
-              label="Upload Occupancy & Inventory Data"
-              description="File Excel dengan kolom: Cabang, Category, On Hand, In, Out, Capacity, Date."
-            />
-          </GlassCard>
-        </div>
-        <div className="md:col-span-1">
-          <GlassCard className="h-full bg-muted/30">
+          <GlassCard className="h-full bg-muted/30 flex flex-col justify-center">
             <h3 className="text-lg font-bold mb-4 flex items-center gap-2 uppercase tracking-wide">
               <Info className="w-5 h-5 text-primary" /> Required Schema
             </h3>
-            <ul className="space-y-2 text-sm text-muted-foreground">
+            <ul className="grid grid-cols-2 gap-2 text-sm text-muted-foreground">
               {['Cabang','Category','On Hand (stok awal)','In (masuk)','Out (keluar / penjualan)',
                 'Capacity (total kapasitas warehouse per cabang)','Date'].map(col => (
                 <li key={col} className="flex items-start gap-2">
@@ -243,21 +315,118 @@ export default function OccupancyPage() {
             </div>
           </GlassCard>
         </div>
+        <div className="md:col-span-1 flex flex-col">
+          <GlassCard className="h-full flex items-center justify-center p-3">
+            <FileUploader
+              onFileUpload={handleFileUpload}
+              isLoading={isProcessing}
+              templateCsv={
+                'Cabang,Category,On Hand,In,Out,Capacity,Date\n' +
+                'Jakarta,Electronics,200,150,120,5000,2024-01-01\n' +
+                'Surabaya,Apparel,300,180,190,4000,2024-01-01'
+              }
+              templateName="occupancy_template.csv"
+              label="Upload Occupancy Data"
+              description="File Excel dengan kolom: Cabang, Category, On Hand, In, Out, Capacity, Date."
+            />
+          </GlassCard>
+        </div>
       </div>
 
       {results && (
         /* ── Result state ── */
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-border/60 pb-4">
+            <h2 className="text-xl font-bold uppercase tracking-wide text-foreground flex items-center gap-2">
+              📈 Hasil Analisa Occupancy & Shortage
+            </h2>
+            <TimestampBadge timestamp={results.processed_at} />
+          </div>
 
           {/* ═══ OCCUPANCY SECTION ═══ */}
 
-          {/* KPI Row */}
-          <div className="grid md:grid-cols-3 gap-6">
-            <KPICard title="Avg Occupancy" value={`${results.kpi_summary.avg_occupancy}%`} icon={<TrendingUp />} />
-            <KPICard title="Peak Occupancy" value={`${results.kpi_summary.max_occupancy}%`} icon={<Layers />}
-              isAlert={results.kpi_summary.max_occupancy > 100} />
-            <KPICard title="Categories at Risk" value={results.kpi_summary.categories_at_risk} icon={<AlertOctagon />}
-              isAlert={results.kpi_summary.categories_at_risk > 0} />
+          {/* KPI Row & Deep Insights */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {/* Avg Occupancy */}
+            <GlassCard className="flex flex-col justify-between p-5 border-primary/20">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Avg Occupancy</span>
+                <TrendingUp className="w-5 h-5 text-primary" />
+              </div>
+              <div className="my-4">
+                <div className="text-3xl font-extrabold tracking-tight text-foreground">{kpiMetrics.avg}%</div>
+                <p className="text-xs text-muted-foreground mt-1">Rerata dari filter aktif</p>
+              </div>
+            </GlassCard>
+
+            {/* Peak Occupancy (Top 3) */}
+            <GlassCard className="flex flex-col justify-between p-5 border-orange-500/30 bg-orange-500/5">
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-orange-500 uppercase tracking-wider">Peak Occupancy</span>
+                  <Layers className="w-5 h-5 text-orange-500" />
+                </div>
+                <div className="my-3">
+                  <div className="text-3xl font-extrabold tracking-tight text-foreground">{kpiMetrics.peak}%</div>
+                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mt-1">Top 3 Maksimum (Cabang & Periode):</p>
+                </div>
+                <div className="space-y-1.5 mt-2">
+                  {kpiMetrics.top3Peak.map((p, idx) => (
+                    <div key={idx} className="flex justify-between items-center text-xs py-1 px-2 rounded bg-background/50 border border-border/40">
+                      <span className="font-medium text-foreground truncate max-w-[120px]">#{idx+1} {p.cabang} <span className="text-[10px] text-muted-foreground">({p.date})</span></span>
+                      <span className="font-bold text-orange-500 ml-2">{p.val}%</span>
+                    </div>
+                  ))}
+                  {kpiMetrics.top3Peak.length === 0 && <p className="text-xs text-muted-foreground italic">Tidak ada data</p>}
+                </div>
+              </div>
+            </GlassCard>
+
+            {/* Min Occupancy (Bottom 3) */}
+            <GlassCard className="flex flex-col justify-between p-5 border-blue-500/30 bg-blue-500/5">
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-blue-500 uppercase tracking-wider">Min Occupancy</span>
+                  <TrendingDown className="w-5 h-5 text-blue-500" />
+                </div>
+                <div className="my-3">
+                  <div className="text-3xl font-extrabold tracking-tight text-foreground">{kpiMetrics.min}%</div>
+                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mt-1">Bottom 3 Minimum (Cabang & Periode):</p>
+                </div>
+                <div className="space-y-1.5 mt-2">
+                  {kpiMetrics.bottom3Min.map((m, idx) => (
+                    <div key={idx} className="flex justify-between items-center text-xs py-1 px-2 rounded bg-background/50 border border-border/40">
+                      <span className="font-medium text-foreground truncate max-w-[120px]">#{idx+1} {m.cabang} <span className="text-[10px] text-muted-foreground">({m.date})</span></span>
+                      <span className="font-bold text-blue-500 ml-2">{m.val}%</span>
+                    </div>
+                  ))}
+                  {kpiMetrics.bottom3Min.length === 0 && <p className="text-xs text-muted-foreground italic">Tidak ada data</p>}
+                </div>
+              </div>
+            </GlassCard>
+
+            {/* Categories at Risk (Top 5) */}
+            <GlassCard className="flex flex-col justify-between p-5 border-destructive/30 bg-destructive/5">
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-destructive uppercase tracking-wider">Categories at Risk</span>
+                  <AlertOctagon className="w-5 h-5 text-destructive" />
+                </div>
+                <div className="my-3">
+                  <div className="text-3xl font-extrabold tracking-tight text-foreground">{kpiMetrics.riskCount}</div>
+                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mt-1">Top 5 Kategori Berbahaya:</p>
+                </div>
+                <div className="space-y-1.5 mt-2 max-h-[140px] overflow-y-auto">
+                  {kpiMetrics.top5RiskCategories.map((r, idx) => (
+                    <div key={idx} className="flex justify-between items-center text-[11px] py-1 px-2 rounded bg-background/50 border border-border/40">
+                      <span className="font-medium text-foreground truncate max-w-[110px]">#{idx+1} {r.category} <span className="text-[9px] text-muted-foreground">({r.cabang})</span></span>
+                      <span className="font-bold text-destructive ml-1">{r.reason}</span>
+                    </div>
+                  ))}
+                  {kpiMetrics.top5RiskCategories.length === 0 && <p className="text-xs text-muted-foreground italic">Aman (Tidak ada risiko)</p>}
+                </div>
+              </div>
+            </GlassCard>
           </div>
 
           {/* Insights Row */}
@@ -364,10 +533,10 @@ export default function OccupancyPage() {
           </GlassCard>
 
           {/* Shortage Alerts */}
-          {results.shortage_alerts?.length > 0 && (
+          {filteredShortageAlerts.length > 0 && (
             <GlassCard className="border-destructive/30 bg-destructive/5">
               <h3 className="text-lg font-bold text-destructive mb-4 flex items-center gap-2 uppercase tracking-wide">
-                <AlertTriangle className="w-5 h-5" /> Shortage Alerts
+                <AlertTriangle className="w-5 h-5" /> Shortage Alerts (Mengikuti Filter)
               </h3>
               <div className="overflow-x-auto max-h-64 overflow-y-auto">
                 <table className="w-full text-sm text-left text-muted-foreground">
@@ -380,7 +549,7 @@ export default function OccupancyPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {results.shortage_alerts.map((a: any, i: number) => (
+                    {filteredShortageAlerts.map((a: any, i: number) => (
                       <tr key={i} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
                         <td className="px-4 py-3 font-medium text-foreground">{a.cabang}</td>
                         <td className="px-4 py-3 font-medium text-foreground">{a.category}</td>
@@ -429,6 +598,12 @@ export default function OccupancyPage() {
                     <div>
                       <h3 className="text-lg font-bold text-foreground uppercase tracking-wide">ABC-XYZ Matrix Chart</h3>
                       <div className="flex flex-wrap gap-3 mt-4">
+                        <MultiSelect
+                          options={cabangs}
+                          selected={selectedCabang}
+                          onChange={setSelectedCabang}
+                          selectAllLabel="Semua Cabang"
+                        />
                         {invCategories.length > 1 && (
                           <MultiSelect
                             options={invCategories}

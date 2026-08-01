@@ -4,6 +4,7 @@
 import React, { useState } from 'react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { KPICard } from '@/components/ui/KPICard';
+import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import { RouteMapChart } from '@/components/charts/RouteMapChart';
 import { SensitivityChart } from '@/components/charts/SensitivityChart';
 import {
@@ -56,6 +57,8 @@ export default function RouteOptimizationPage() {
   const [form, setForm] = useState({
     n_customers: 20,
     vehicle_capacity: 100,
+    num_vehicles: 8,
+    num_dedicated_vehicles: 2,
     fuel_price: 13500,
     fuel_efficiency: 8,
     driver_cost: 250000,
@@ -77,6 +80,8 @@ export default function RouteOptimizationPage() {
       const data = await analyzeRouteOptimization({
         use_demo_data: true,
         vehicle_capacity: form.vehicle_capacity,
+        num_vehicles: form.num_vehicles,
+        num_dedicated_vehicles: form.num_dedicated_vehicles,
         cost_params: {
           fuel_price_per_liter: form.fuel_price,
           fuel_efficiency_km_per_liter: form.fuel_efficiency,
@@ -89,7 +94,9 @@ export default function RouteOptimizationPage() {
         ga_pop_size: 50,
       });
 
-      setResults(data.results ? data.results : [{ ...data, label: 'Demo Data' }]);
+      const rawRes = data.results ? data.results : [{ ...data, label: 'Demo Data' }];
+      const now = new Date().toISOString();
+      setResults(rawRes.map((r: any) => ({ ...r, processed_at: r.processed_at || now })));
       setSelectedGroup(0);
       setSelectedMethod(0);
       toast.success('Optimasi rute selesai!', { id: 'route' });
@@ -107,6 +114,8 @@ export default function RouteOptimizationPage() {
     try {
       const data = await uploadRouteOptimizationFile(file, {
         vehicle_capacity: form.vehicle_capacity,
+        num_vehicles: form.num_vehicles,
+        num_dedicated_vehicles: form.num_dedicated_vehicles,
         cost_params: {
           fuel_price_per_liter: form.fuel_price,
           fuel_efficiency_km_per_liter: form.fuel_efficiency,
@@ -118,7 +127,9 @@ export default function RouteOptimizationPage() {
         ga_generations: form.ga_generations,
         ga_pop_size: 50,
       });
-      setResults(data.results ? data.results : [{ ...data, label: 'File Upload' }]);
+      const rawRes = data.results ? data.results : [{ ...data, label: 'File Upload' }];
+      const now = new Date().toISOString();
+      setResults(rawRes.map((r: any) => ({ ...r, processed_at: r.processed_at || now })));
       setSelectedGroup(0);
       setSelectedMethod(0);
       toast.success('Optimasi rute dari file selesai!', { id: 'route' });
@@ -181,7 +192,9 @@ export default function RouteOptimizationPage() {
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
               {[
                 ...(activeMode === 'demo' ? [{ key: 'n_customers', label: 'Jumlah Pelanggan', step: 1 }] : []),
-                { key: 'vehicle_capacity', label: 'Kapasitas Kendaraan (unit)', step: 10 },
+                { key: 'num_vehicles', label: 'Total Jumlah Kendaraan', step: 1 },
+                { key: 'num_dedicated_vehicles', label: 'Kendaraan Rute Dedicated', step: 1 },
+                { key: 'vehicle_capacity', label: 'Kapasitas / Kendaraan (unit)', step: 10 },
                 { key: 'fuel_price', label: 'Harga BBM (Rp/L)', step: 500 },
                 { key: 'fuel_efficiency', label: 'Efisiensi BBM (km/L)', step: 1 },
                 { key: 'driver_cost', label: 'Upah Sopir (Rp/hari)', step: 25000 },
@@ -263,7 +276,12 @@ Pelanggan,Toko A,-6.210000,106.820000,15,08:00-12:00,30`}
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
           
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center mt-8 border-b border-border pb-4 gap-4">
-            <h2 className="text-2xl font-bold tracking-tight">Hasil Optimasi Rute</h2>
+            <div>
+              <h2 className="text-2xl font-bold tracking-tight">Hasil Optimasi Rute</h2>
+              <div className="mt-1">
+                <TimestampBadge timestamp={results[selectedGroup]?.processed_at || new Date().toISOString()} />
+              </div>
+            </div>
             <button
               onClick={() => {
                 let allExportData: any[] = [];
@@ -338,8 +356,9 @@ Pelanggan,Toko A,-6.210000,106.820000,15,08:00-12:00,30`}
               icon={<DollarSign className="w-5 h-5" />}
             />
             <KPICard
-              title="Kendaraan Optimal"
-              value={results[selectedGroup].methods?.find((m: any) => m.method === results[selectedGroup].best_method)?.n_vehicles || 0}
+              title="Penggunaan Armada"
+              value={`${results[selectedGroup].methods?.find((m: any) => m.method === results[selectedGroup].best_method)?.n_vehicles || 0} / ${results[selectedGroup].num_vehicles || form.num_vehicles} Unit`}
+              trend={`Dedicated: ${results[selectedGroup].methods?.find((m: any) => m.method === results[selectedGroup].best_method)?.n_dedicated_vehicles ?? form.num_dedicated_vehicles} | Optimasi: ${results[selectedGroup].methods?.find((m: any) => m.method === results[selectedGroup].best_method)?.n_optimized_vehicles ?? 0}`}
               icon={<Truck className="w-5 h-5" />}
             />
           </div>
@@ -397,13 +416,75 @@ Pelanggan,Toko A,-6.210000,106.820000,15,08:00-12:00,30`}
 
           {/* Route Map */}
           {results[selectedGroup].methods?.[selectedMethod] && results[selectedGroup].locations && (
-            <GlassCard>
-              <RouteMapChart
-                locations={results[selectedGroup].locations}
-                routes={results[selectedGroup].methods[selectedMethod].routes}
-                methodName={results[selectedGroup].methods[selectedMethod].method}
-              />
-            </GlassCard>
+            <>
+              <GlassCard>
+                <RouteMapChart
+                  locations={results[selectedGroup].locations}
+                  routes={results[selectedGroup].methods[selectedMethod].routes}
+                  methodName={results[selectedGroup].methods[selectedMethod].method}
+                />
+              </GlassCard>
+
+              {/* Dedicated vs Optimized Routes Breakdown Table */}
+              <GlassCard>
+                <h3 className="text-lg font-bold mb-4 flex items-center gap-2 uppercase tracking-wide">
+                  <Truck className="w-5 h-5 text-primary" />
+                  Daftar Armada & Pembagian Rute — {results[selectedGroup].methods[selectedMethod].method}
+                </h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border text-xs text-muted-foreground uppercase tracking-wider">
+                        <th className="text-left py-3 px-3">Armada / Rute</th>
+                        <th className="text-center py-3 px-3">Tipe Rute</th>
+                        <th className="text-right py-3 px-3">Stop</th>
+                        <th className="text-right py-3 px-3">Muatan</th>
+                        <th className="text-right py-3 px-3">Utilisasi Kapasitas</th>
+                        <th className="text-right py-3 px-3">Jarak (KM)</th>
+                        <th className="text-left py-3 px-3">Rute Pemberhentian</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/50">
+                      {results[selectedGroup].methods[selectedMethod].routes?.map((r: any, idx: number) => (
+                        <tr key={idx} className="hover:bg-muted/30">
+                          <td className="py-3 px-3 font-bold text-foreground">
+                            {r.vehicle_name || `Kendaraan #${r.route_id}`}
+                          </td>
+                          <td className="py-3 px-3 text-center">
+                            {r.is_dedicated ? (
+                              <span className="px-2 py-0.5 bg-orange-500/10 border border-orange-500/30 text-orange-500 font-bold rounded text-xs uppercase inline-block">
+                                🛡️ Dedicated (Tetap)
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 font-bold rounded text-xs uppercase inline-block">
+                                ⚡ Optimasi (Sistem)
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 text-right font-mono">{r.n_stops} stop</td>
+                          <td className="py-3 px-3 text-right font-mono">{r.load ?? '—'} unit</td>
+                          <td className="py-3 px-3 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <div className="w-16 bg-muted rounded-full h-1.5 overflow-hidden">
+                                <div className={`h-full ${r.capacity_pct > 90 ? 'bg-orange-500' : 'bg-primary'}`} style={{ width: `${Math.min(100, r.capacity_pct || 0)}%` }} />
+                              </div>
+                              <span className="font-mono text-xs">{r.capacity_pct ?? '—'}%</span>
+                            </div>
+                          </td>
+                          <td className="py-3 px-3 text-right font-mono font-semibold">{r.distance_km ?? '—'} km</td>
+                          <td className="py-3 px-3 text-xs text-muted-foreground max-w-xs truncate">
+                            {r.stops?.map((s: any) => s.name).join(' ➔ ')}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="text-xs text-muted-foreground mt-3">
+                  Rute Dedicated dikunci sejak awal dan tidak diubah polanya oleh algoritma. Rute Optimasi adalah hasil perhitungan heuristik untuk sisa pesanan/pelanggan.
+                </p>
+              </GlassCard>
+            </>
           )}
 
           {/* Sensitivity Analysis */}

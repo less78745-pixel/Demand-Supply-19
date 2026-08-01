@@ -9,6 +9,7 @@ import { ModelComparisonTable } from '@/components/charts/ModelComparisonTable';
 import { LineChart, Info, AlertTriangle, Cpu, Target, BrainCircuit, Download, BookOpen, ChevronDown, ChevronUp } from 'lucide-react';
 import { uploadForecastFile } from '@/lib/api';
 import { MultiSelect } from '@/components/ui/MultiSelect';
+import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import toast from 'react-hot-toast';
 
 export default function ForecastPage() {
@@ -42,6 +43,7 @@ export default function ForecastPage() {
       if (data.error) {
         toast.error(data.error, { id: 'forecast-upload' });
       } else {
+        data.processed_at = data.processed_at || new Date().toISOString();
         setResults(data);
         setSelectedMethod(data.best_model);
         try {
@@ -140,10 +142,38 @@ export default function ForecastPage() {
         </p>
       </header>
 
-      {/* Upload & Instructions Row */}
-      <div className="grid md:grid-cols-3 gap-6 mb-8">
+      <div className="grid md:grid-cols-3 gap-6 mb-8 items-stretch">
         <div className="md:col-span-2">
-          <GlassCard>
+          <GlassCard className="h-full bg-muted/30 flex flex-col justify-center">
+            <h3 className="text-lg font-bold mb-4 flex items-center gap-2 uppercase tracking-wide">
+              <BrainCircuit className="w-5 h-5 text-primary" /> Auto-ML Pipeline
+            </h3>
+            <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-muted-foreground leading-relaxed">
+              <li className="flex items-start gap-2">
+                <div className="w-1.5 h-1.5 rounded-none bg-primary mt-1.5 shrink-0" />
+                <span><strong className="text-foreground">SMA & SES</strong>: Baseline & exponential smoothing stabil.</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <div className="w-1.5 h-1.5 rounded-none bg-primary mt-1.5 shrink-0" />
+                <span><strong className="text-foreground">XGBoost & LightGBM</strong>: Machine Learning untuk interaksi kompleks.</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <div className="w-1.5 h-1.5 rounded-none bg-primary mt-1.5 shrink-0" />
+                <span><strong className="text-foreground">ARIMAX & Fb Prophet</strong>: Menangkap pola musiman & tren.</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <div className="w-1.5 h-1.5 rounded-none bg-primary mt-1.5 shrink-0" />
+                <span><strong className="text-foreground">Hybrid (BiLSTM + XGB)</strong>: Ensemble adaptif untuk fluktuasi tinggi.</span>
+              </li>
+              <li className="flex items-start gap-2 sm:col-span-2">
+                <div className="w-1.5 h-1.5 rounded-none bg-primary mt-1.5 shrink-0" />
+                <span><strong className="text-foreground">Covariates Optimization</strong>: Variabel eksogen (AO, RO, Drop Size, NOO) sebagai *multiplier* pendorong akurasi.</span>
+              </li>
+            </ul>
+          </GlassCard>
+        </div>
+        <div className="md:col-span-1 flex flex-col">
+          <GlassCard className="h-full flex items-center justify-center p-3">
             <FileUploader
               onFileUpload={handleFileUpload}
               isLoading={isProcessing}
@@ -154,44 +184,21 @@ export default function ForecastPage() {
                 '2024-01-01,Januari,Bali,Building Materials,95630,593,365,832,11'
               }
               templateName="forecast_template.csv"
-              label="Upload Data Historis Penjualan"
-              description="File CSV dengan kolom: Bulan, Deskripsi, Cabang, Kategori, Penjualan, AO, RO, Rerata Drop Size, NOO."
+              label="Upload Historis Penjualan"
+              description="CSV: Bulan, Deskripsi, Cabang, Kategori, Penjualan, AO, RO, Drop Size, NOO."
             />
-          </GlassCard>
-        </div>
-        <div className="md:col-span-1">
-          <GlassCard className="h-full bg-muted/30">
-            <h3 className="text-lg font-bold mb-4 flex items-center gap-2 uppercase tracking-wide">
-              <BrainCircuit className="w-5 h-5 text-primary" /> Auto-ML Pipeline
-            </h3>
-            <ul className="space-y-3 text-sm text-muted-foreground">
-              <li className="flex items-start gap-2">
-                <div className="w-1.5 h-1.5 rounded-none bg-primary mt-1.5 shrink-0" />
-                <span><strong className="text-foreground">SMA & SES</strong>: Baseline dan metode *exponential smoothing* stabil.</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <div className="w-1.5 h-1.5 rounded-none bg-primary mt-1.5 shrink-0" />
-                <span><strong className="text-foreground">XGBoost & LightGBM</strong>: Machine Learning (Gradient Boosting) untuk interaksi kompleks antar variabel.</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <div className="w-1.5 h-1.5 rounded-none bg-primary mt-1.5 shrink-0" />
-                <span><strong className="text-foreground">ARIMAX & Fb Prophet</strong>: Menangkap pola musiman, tren, dan auto-korelasi yang dinamis.</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <div className="w-1.5 h-1.5 rounded-none bg-primary mt-1.5 shrink-0" />
-                <span><strong className="text-foreground">Hybrid (BiLSTM + XGBoost)</strong>: Ensemble adaptif untuk fluktuasi (*volatility*) tinggi.</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <div className="w-1.5 h-1.5 rounded-none bg-primary mt-1.5 shrink-0" />
-                <span><strong className="text-foreground">Covariates Optimization</strong>: Variabel eksogen (AO, RO, Rerata Drop Size, NOO) digunakan sebagai *multiplier* pendorong akurasi model.</span>
-              </li>
-            </ul>
           </GlassCard>
         </div>
       </div>
 
       {results && (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-border/60 pb-4">
+            <h2 className="text-xl font-bold uppercase tracking-wide text-foreground flex items-center gap-2">
+              📊 Hasil Analisa Forecasting ML
+            </h2>
+            <TimestampBadge timestamp={results.processed_at} />
+          </div>
           <div className="grid md:grid-cols-4 gap-6">
             <KPICard title="Majority Best Model" value={results.best_model} icon={<Cpu />} />
             <KPICard title="Reorder Point (ROP)" value={results.inventory_kpis?.avg_reorder_point || 0} icon={<BrainCircuit />} />

@@ -5,6 +5,7 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { FileUploader } from '@/components/ui/FileUploader';
 import { KPICard } from '@/components/ui/KPICard';
 import { MultiSelect } from '@/components/ui/MultiSelect';
+import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import {
   ShieldCheck, AlertTriangle, TrendingUp, Package,
   Download, Activity, Layers, CheckCircle, XCircle, Info
@@ -80,6 +81,7 @@ export default function SafetyStockPage() {
     toast.loading('Menghitung Safety Stock & ROP...', { id: 'ss' });
     try {
       const data = await uploadSafetyStockFile(file);
+      data.processed_at = data.processed_at || new Date().toISOString();
       setResults(data);
       try { localStorage.setItem('lastSafetyStock', JSON.stringify(data)); } catch {}
       toast.success('Analisis Safety Stock selesai!', { id: 'ss' });
@@ -184,31 +186,43 @@ export default function SafetyStockPage() {
 
       {/* Upload Section */}
       {!results && (
-        <GlassCard>
-          <FileUploader
-            onFileUpload={handleFileUpload}
-            isLoading={isProcessing}
-            label="Upload Data Safety Stock"
-            description="Upload file Excel/CSV dengan kolom: Cabang, SKU, Daily_Usage, Lead_Time_Days. Opsional: Current_Stock, In_Transit, Backorder, MOQ, Order_Cycle_Days."
-            templateCsv={TEMPLATE_CSV}
-            templateName="template_safety_stock.csv"
-          />
-          <div className="mt-6 p-4 bg-muted/30 rounded-lg border border-border">
-            <div className="flex items-start gap-2">
-              <Info className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-              <div className="text-xs text-muted-foreground space-y-1">
-                <p><strong>Service Level Target:</strong> Default 95%. Sistem menghitung Z-score otomatis.</p>
-                <p><strong>DDMRP Zones:</strong> Red (Safety Buffer), Yellow (Primary Coverage), Green (Order Generation).</p>
-                <p><strong>Net Flow Position:</strong> Stock + In_Transit - Backorder. Alert jika ≤ ROP.</p>
+        <div className="grid md:grid-cols-3 gap-6 items-stretch">
+          <div className="md:col-span-2 flex flex-col justify-center">
+            <GlassCard className="h-full flex flex-col justify-center bg-muted/30 p-6">
+              <h3 className="text-lg font-bold mb-4 flex items-center gap-2 uppercase tracking-wide text-foreground">
+                <Info className="w-5 h-5 text-primary" /> Panduan & Parameter Safety Stock
+              </h3>
+              <div className="text-sm text-muted-foreground space-y-3 leading-relaxed">
+                <p><strong>Service Level Target:</strong> Secara default diset 95%. Sistem akan menghitung nilai Z-score secara otomatis berdasarkan distribusi normal standar.</p>
+                <p><strong>DDMRP Zones:</strong> Pembagian zona secara dinamis ke dalam Red (Safety Buffer), Yellow (Primary Coverage), dan Green (Order Generation & Cycle Buffer).</p>
+                <p><strong>Net Flow Position:</strong> Dihitung melalui rumus <em>Stock + In_Transit - Backorder</em>. Sistem akan memberikan alert otomatis jika posisi ini ≤ ROP.</p>
               </div>
-            </div>
+            </GlassCard>
           </div>
-        </GlassCard>
+          <div className="md:col-span-1 flex flex-col">
+            <GlassCard className="h-full flex items-center justify-center p-3">
+              <FileUploader
+                onFileUpload={handleFileUpload}
+                isLoading={isProcessing}
+                label="Upload Safety Stock"
+                description="CSV/Excel: Cabang, SKU, Daily_Usage, Lead_Time_Days."
+                templateCsv={TEMPLATE_CSV}
+                templateName="template_safety_stock.csv"
+              />
+            </GlassCard>
+          </div>
+        </div>
       )}
 
       {/* Results */}
       {results && (
         <div className="space-y-8 animate-in fade-in duration-700">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-border/60 pb-4">
+            <h2 className="text-xl font-bold uppercase tracking-wide text-foreground flex items-center gap-2">
+              🛡️ Hasil Analisa Safety Stock & DDMRP
+            </h2>
+            <TimestampBadge timestamp={results.processed_at} />
+          </div>
 
           {/* KPI Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
@@ -388,16 +402,20 @@ export default function SafetyStockPage() {
           </GlassCard>
 
           {/* Re-upload */}
-          <GlassCard>
-            <FileUploader
-              onFileUpload={handleFileUpload}
-              isLoading={isProcessing}
-              label="Upload Ulang Data"
-              description="Upload file baru untuk menghitung ulang Safety Stock & ROP."
-              templateCsv={TEMPLATE_CSV}
-              templateName="template_safety_stock.csv"
-            />
-          </GlassCard>
+          <div className="flex justify-end pt-4">
+            <div className="w-full max-w-sm ml-auto">
+              <GlassCard className="p-3">
+                <FileUploader
+                  onFileUpload={handleFileUpload}
+                  isLoading={isProcessing}
+                  label="Upload Ulang Data"
+                  description="Upload file baru untuk menghitung ulang."
+                  templateCsv={TEMPLATE_CSV}
+                  templateName="template_safety_stock.csv"
+                />
+              </GlassCard>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -138,6 +138,7 @@ def nearest_neighbor(
     demands: list[float],
     vehicle_capacity: float,
     depot: int = 0,
+    available_customers: Optional[set[int]] = None,
 ) -> list[list[int]]:
     """
     Nearest Neighbor Heuristic
@@ -150,7 +151,7 @@ def nearest_neighbor(
     visited[depot] = True
     routes = []
 
-    remaining = set(range(n)) - {depot}
+    remaining = set(available_customers) if available_customers is not None else (set(range(n)) - {depot})
 
     while remaining:
         route = []
@@ -190,6 +191,7 @@ def clarke_wright_savings(
     demands: list[float],
     vehicle_capacity: float,
     depot: int = 0,
+    available_customers: Optional[set[int]] = None,
 ) -> list[list[int]]:
     """
     Clarke-Wright Savings Algorithm
@@ -204,7 +206,7 @@ def clarke_wright_savings(
       4. Merge routes if capacity allows and customers are at route endpoints.
     """
     n = len(dist_matrix)
-    customers = [i for i in range(n) if i != depot]
+    customers = sorted(list(available_customers)) if available_customers is not None else [i for i in range(n) if i != depot]
 
     # Calculate savings
     savings = []
@@ -371,6 +373,7 @@ def genetic_algorithm(
     generations: int = 100,
     mutation_rate: float = 0.15,
     elite_size: int = 5,
+    available_customers: Optional[set[int]] = None,
 ) -> tuple[list[list[int]], list[float]]:
     """
     Genetic Algorithm for VRP
@@ -384,7 +387,7 @@ def genetic_algorithm(
 
     Returns: (best_routes, convergence_history)
     """
-    customers = [i for i in range(len(dist_matrix)) if i != depot]
+    customers = sorted(list(available_customers)) if available_customers is not None else [i for i in range(len(dist_matrix)) if i != depot]
     n = len(customers)
 
     if n == 0:
@@ -449,13 +452,14 @@ def hybrid_aco(
     depot: int = 0,
     num_ants: int = 15,
     generations: int = 30,
+    available_customers: Optional[set[int]] = None,
 ) -> list[list[int]]:
     """
     Hybrid Ant Colony Optimization (HACO) proxy.
     Uses pheromone matrix and visibility to construct routes.
     """
     n = len(dist_matrix)
-    customers = [i for i in range(n) if i != depot]
+    customers = sorted(list(available_customers)) if available_customers is not None else [i for i in range(n) if i != depot]
     if not customers:
         return []
     
@@ -606,8 +610,8 @@ def run_sensitivity_analysis(
 #  8. SYNTHETIC DATA GENERATOR (for demo)
 # ══════════════════════════════════════════════════════════════
 
-def generate_demo_data(n_customers: int = 20) -> dict:
-    """Generate synthetic distribution data near Jakarta for demo."""
+def generate_demo_data(n_customers: int = 20, num_dedicated_vehicles: int = 2) -> dict:
+    """Generate synthetic distribution data near Jakarta for demo with dedicated routes support."""
     random.seed(42)
     np.random.seed(42)
 
@@ -620,6 +624,7 @@ def generate_demo_data(n_customers: int = 20) -> dict:
             "lat": depot["lat"] + np.random.uniform(-0.15, 0.15),
             "lon": depot["lon"] + np.random.uniform(-0.15, 0.15),
             "demand": round(np.random.uniform(5, 30)),
+            "is_dedicated": i < (num_dedicated_vehicles * 3)
         })
     return {"depot": depot, "customers": customers}
 
@@ -669,6 +674,12 @@ def analyze_routes_from_file(df: pd.DataFrame, params: dict) -> dict:
             col_map[c] = "traffic_factor"
         elif cl in ("ga generasi", "generasi ga", "ga_generations"):
             col_map[c] = "ga_generations"
+        elif cl in ("dedicated", "is_dedicated", "rute dedicated", "tetap"):
+            col_map[c] = "is_dedicated"
+        elif cl in ("jumlah kendaraan", "total armada", "num_vehicles", "n_vehicles"):
+            col_map[c] = "num_vehicles"
+        elif cl in ("kendaraan dedicated", "num_dedicated_vehicles"):
+            col_map[c] = "num_dedicated_vehicles"
             
     df = df.rename(columns=col_map)
     
@@ -717,6 +728,10 @@ def analyze_routes_from_file(df: pd.DataFrame, params: dict) -> dict:
             group_cost_params["traffic_factor"] = float(first_row["traffic_factor"])
         if "ga_generations" in group_df.columns and not pd.isna(first_row["ga_generations"]):
             group_params["ga_generations"] = int(first_row["ga_generations"])
+        if "num_vehicles" in group_df.columns and not pd.isna(first_row["num_vehicles"]):
+            group_params["num_vehicles"] = int(first_row["num_vehicles"])
+        if "num_dedicated_vehicles" in group_df.columns and not pd.isna(first_row["num_dedicated_vehicles"]):
+            group_params["num_dedicated_vehicles"] = int(first_row["num_dedicated_vehicles"])
             
         group_params["cost_params"] = group_cost_params
         
@@ -728,10 +743,11 @@ def analyze_routes_from_file(df: pd.DataFrame, params: dict) -> dict:
             except (ValueError, TypeError):
                 continue
                 
+            is_dedicated = bool(row.get("is_dedicated", False)) if "is_dedicated" in row and not pd.isna(row["is_dedicated"]) else False
             if t == "depot" or "depot" in t:
                 depot = {"name": name, "lat": lat, "lon": lon, "demand": 0}
             else:
-                customers.append({"name": name, "lat": lat, "lon": lon, "demand": demand})
+                customers.append({"name": name, "lat": lat, "lon": lon, "demand": demand, "is_dedicated": is_dedicated})
                 
         if not depot:
             if not results: return {"error": f"Tidak ditemukan 'Depot' di grup {label}."}
@@ -773,6 +789,8 @@ def run_route_optimization(params: dict) -> dict:
     depot_info = params.get("depot")
     customers = params.get("customers", [])
     vehicle_capacity = float(params.get("vehicle_capacity", 100))
+    num_vehicles = int(params.get("num_vehicles", 8))
+    num_dedicated_vehicles = int(params.get("num_dedicated_vehicles", 2))
     cost_params = {**DEFAULT_COST_PARAMS, **params.get("cost_params", {})}
     ga_generations = int(params.get("ga_generations", 100))
     ga_pop_size = int(params.get("ga_pop_size", 50))
@@ -798,6 +816,45 @@ def run_route_optimization(params: dict) -> dict:
     if total_stops > 50:
         return {"error": f"Batas maksimal data adalah 50 titik untuk mempertahankan akurasi kalkulasi. Anda memasukkan {total_stops} titik. Harap filter data Anda."}
 
+    # ── Separate Dedicated vs Optimizable Customers ──
+    dedicated_raw_routes = []
+    assigned_dedicated = set()
+    
+    explicit_dedicated = [i for i, c in enumerate(customers, start=1) if c.get("is_dedicated") or str(c.get("is_dedicated", "")).lower() in ("true", "1", "yes", "ya", "dedicated")]
+    
+    if explicit_dedicated or num_dedicated_vehicles > 0:
+        target_dedicated_vehicles = num_dedicated_vehicles if num_dedicated_vehicles > 0 else max(1, len(explicit_dedicated) // 3)
+        pool = explicit_dedicated if explicit_dedicated else list(range(1, total_stops + 1))
+        
+        curr_route = []
+        curr_load = 0.0
+        routes_created = 0
+        
+        for idx in pool:
+            if routes_created >= target_dedicated_vehicles:
+                break
+            if curr_load + demands[idx] <= vehicle_capacity and len(curr_route) < 4:
+                curr_route.append(idx)
+                curr_load += demands[idx]
+                assigned_dedicated.add(idx)
+            else:
+                if curr_route:
+                    dedicated_raw_routes.append(curr_route)
+                    routes_created += 1
+                if routes_created < target_dedicated_vehicles:
+                    curr_route = [idx]
+                    curr_load = demands[idx]
+                    assigned_dedicated.add(idx)
+                else:
+                    curr_route = []
+                    break
+        if curr_route and routes_created < target_dedicated_vehicles:
+            dedicated_raw_routes.append(curr_route)
+            
+    optimizable_customers = set(range(1, total_stops + 1)) - assigned_dedicated
+    dedicated_dist = _total_distance(dedicated_raw_routes, dist_matrix)
+    dedicated_formatted = _format_detailed_routes(dedicated_raw_routes, names, demands, dist_matrix, vehicle_capacity, start_id=1, is_dedicated=True, prefix="Armada Dedicated")
+
     # Dynamic scaling to prevent Vercel Timeout (Max 300s)
     max_ga_ops = 500000
     current_ga_ops = total_stops * ga_pop_size * ga_generations
@@ -814,81 +871,131 @@ def run_route_optimization(params: dict) -> dict:
         aco_generations = max(5, int(aco_generations * math.sqrt(scale_factor)))
         aco_ants = max(5, int(aco_ants * math.sqrt(scale_factor)))
 
-    # Run all 3 methods
+    # Run all 4 methods on optimizable_customers
     methods_results = []
 
     # 1. Nearest Neighbor
-    nn_routes = nearest_neighbor(dist_matrix, demands, vehicle_capacity)
-    nn_dist = _total_distance(nn_routes, dist_matrix)
-    nn_cost = calc_route_cost(nn_dist, len(nn_routes), total_stops, cost_params)
+    nn_opt_routes = nearest_neighbor(dist_matrix, demands, vehicle_capacity, available_customers=optimizable_customers)
+    nn_opt_dist = _total_distance(nn_opt_routes, dist_matrix)
+    nn_total_dist = dedicated_dist + nn_opt_dist
+    nn_opt_formatted = _format_detailed_routes(nn_opt_routes, names, demands, dist_matrix, vehicle_capacity, start_id=len(dedicated_formatted)+1, is_dedicated=False, prefix="Armada Optimasi (NN)")
+    nn_all_routes = dedicated_raw_routes + nn_opt_routes
+    nn_all_formatted = dedicated_formatted + nn_opt_formatted
+    nn_cost = calc_route_cost(nn_total_dist, len(nn_all_routes), total_stops, cost_params)
     methods_results.append({
         "method": "Nearest Neighbor",
-        "routes": _format_routes(nn_routes, names),
-        "raw_routes": nn_routes,
-        "total_distance_km": round(nn_dist, 2),
-        "n_vehicles": len(nn_routes),
+        "routes": nn_all_formatted,
+        "dedicated_routes": dedicated_formatted,
+        "optimized_routes": nn_opt_formatted,
+        "raw_routes": nn_all_routes,
+        "total_distance_km": round(nn_total_dist, 2),
+        "dedicated_distance_km": round(dedicated_dist, 2),
+        "optimized_distance_km": round(nn_opt_dist, 2),
+        "n_vehicles": len(nn_all_routes),
+        "n_dedicated_vehicles": len(dedicated_formatted),
+        "n_optimized_vehicles": len(nn_opt_formatted),
+        "total_fleet": num_vehicles,
+        "vehicle_capacity": vehicle_capacity,
         "cost": nn_cost,
     })
 
     # 2. Clarke-Wright Savings + 2-opt
-    cw_routes = clarke_wright_savings(dist_matrix, demands, vehicle_capacity)
-    cw_routes = [two_opt(r, dist_matrix) for r in cw_routes]
-    cw_dist = _total_distance(cw_routes, dist_matrix)
-    cw_cost = calc_route_cost(cw_dist, len(cw_routes), total_stops, cost_params)
+    cw_opt_routes = clarke_wright_savings(dist_matrix, demands, vehicle_capacity, available_customers=optimizable_customers)
+    cw_opt_routes = [two_opt(r, dist_matrix) for r in cw_opt_routes]
+    cw_opt_dist = _total_distance(cw_opt_routes, dist_matrix)
+    cw_total_dist = dedicated_dist + cw_opt_dist
+    cw_opt_formatted = _format_detailed_routes(cw_opt_routes, names, demands, dist_matrix, vehicle_capacity, start_id=len(dedicated_formatted)+1, is_dedicated=False, prefix="Armada Optimasi (CW)")
+    cw_all_routes = dedicated_raw_routes + cw_opt_routes
+    cw_all_formatted = dedicated_formatted + cw_opt_formatted
+    cw_cost = calc_route_cost(cw_total_dist, len(cw_all_routes), total_stops, cost_params)
     methods_results.append({
         "method": "Clarke-Wright + 2-opt",
-        "routes": _format_routes(cw_routes, names),
-        "raw_routes": cw_routes,
-        "total_distance_km": round(cw_dist, 2),
-        "n_vehicles": len(cw_routes),
+        "routes": cw_all_formatted,
+        "dedicated_routes": dedicated_formatted,
+        "optimized_routes": cw_opt_formatted,
+        "raw_routes": cw_all_routes,
+        "total_distance_km": round(cw_total_dist, 2),
+        "dedicated_distance_km": round(dedicated_dist, 2),
+        "optimized_distance_km": round(cw_opt_dist, 2),
+        "n_vehicles": len(cw_all_routes),
+        "n_dedicated_vehicles": len(dedicated_formatted),
+        "n_optimized_vehicles": len(cw_opt_formatted),
+        "total_fleet": num_vehicles,
+        "vehicle_capacity": vehicle_capacity,
         "cost": cw_cost,
     })
 
     # 3. Genetic Algorithm + 2-opt
-    ga_routes, ga_convergence = genetic_algorithm(
+    ga_opt_routes, ga_convergence = genetic_algorithm(
         dist_matrix, demands, vehicle_capacity,
         pop_size=ga_pop_size, generations=ga_generations,
+        available_customers=optimizable_customers
     )
-    ga_dist = _total_distance(ga_routes, dist_matrix)
-    ga_cost = calc_route_cost(ga_dist, len(ga_routes), total_stops, cost_params)
+    ga_opt_routes = [two_opt(r, dist_matrix) for r in ga_opt_routes]
+    ga_opt_dist = _total_distance(ga_opt_routes, dist_matrix)
+    ga_total_dist = dedicated_dist + ga_opt_dist
+    ga_opt_formatted = _format_detailed_routes(ga_opt_routes, names, demands, dist_matrix, vehicle_capacity, start_id=len(dedicated_formatted)+1, is_dedicated=False, prefix="Armada Optimasi (GA)")
+    ga_all_routes = dedicated_raw_routes + ga_opt_routes
+    ga_all_formatted = dedicated_formatted + ga_opt_formatted
+    ga_cost = calc_route_cost(ga_total_dist, len(ga_all_routes), total_stops, cost_params)
     methods_results.append({
         "method": "Genetic Algorithm + 2-opt",
-        "routes": _format_routes(ga_routes, names),
-        "raw_routes": ga_routes,
-        "total_distance_km": round(ga_dist, 2),
-        "n_vehicles": len(ga_routes),
+        "routes": ga_all_formatted,
+        "dedicated_routes": dedicated_formatted,
+        "optimized_routes": ga_opt_formatted,
+        "raw_routes": ga_all_routes,
+        "total_distance_km": round(ga_total_dist, 2),
+        "dedicated_distance_km": round(dedicated_dist, 2),
+        "optimized_distance_km": round(ga_opt_dist, 2),
+        "n_vehicles": len(ga_all_routes),
+        "n_dedicated_vehicles": len(dedicated_formatted),
+        "n_optimized_vehicles": len(ga_opt_formatted),
+        "total_fleet": num_vehicles,
+        "vehicle_capacity": vehicle_capacity,
         "cost": ga_cost,
         "convergence": [round(v, 2) for v in ga_convergence],
     })
 
     # 4. Hybrid ACO (Ant Colony) + 2-opt
-    haco_routes = hybrid_aco(
+    haco_opt_routes = hybrid_aco(
         dist_matrix, demands, vehicle_capacity,
         generations=aco_generations,
-        num_ants=aco_ants
+        num_ants=aco_ants,
+        available_customers=optimizable_customers
     )
-    haco_dist = _total_distance(haco_routes, dist_matrix)
-    haco_cost = calc_route_cost(haco_dist, len(haco_routes), total_stops, cost_params)
+    haco_opt_dist = _total_distance(haco_opt_routes, dist_matrix)
+    haco_total_dist = dedicated_dist + haco_opt_dist
+    haco_opt_formatted = _format_detailed_routes(haco_opt_routes, names, demands, dist_matrix, vehicle_capacity, start_id=len(dedicated_formatted)+1, is_dedicated=False, prefix="Armada Optimasi (ACO)")
+    haco_all_routes = dedicated_raw_routes + haco_opt_routes
+    haco_all_formatted = dedicated_formatted + haco_opt_formatted
+    haco_cost = calc_route_cost(haco_total_dist, len(haco_all_routes), total_stops, cost_params)
     methods_results.append({
         "method": "Hybrid ACO + 2-opt",
-        "routes": _format_routes(haco_routes, names),
-        "raw_routes": haco_routes,
-        "total_distance_km": round(haco_dist, 2),
-        "n_vehicles": len(haco_routes),
+        "routes": haco_all_formatted,
+        "dedicated_routes": dedicated_formatted,
+        "optimized_routes": haco_opt_formatted,
+        "raw_routes": haco_all_routes,
+        "total_distance_km": round(haco_total_dist, 2),
+        "dedicated_distance_km": round(dedicated_dist, 2),
+        "optimized_distance_km": round(haco_opt_dist, 2),
+        "n_vehicles": len(haco_all_routes),
+        "n_dedicated_vehicles": len(dedicated_formatted),
+        "n_optimized_vehicles": len(haco_opt_formatted),
+        "total_fleet": num_vehicles,
+        "vehicle_capacity": vehicle_capacity,
         "cost": haco_cost,
     })
 
     # Find best method
     best = min(methods_results, key=lambda x: x["cost"]["total_cost"])
-    baseline_cost = methods_results[0]["cost"]["total_cost"]  # NN is baseline
+    baseline_cost = methods_results[0]["cost"]["total_cost"]
     best_saving_pct = round((1 - best["cost"]["total_cost"] / max(baseline_cost, 1)) * 100, 2)
 
-    # Sensitivity analysis using best method's distance
+    # Sensitivity analysis
     sensitivity = run_sensitivity_analysis(
         best["total_distance_km"], best["n_vehicles"], total_stops, cost_params,
     )
 
-    # Build location data for frontend visualization
     location_data = []
     for i, loc in enumerate(locations):
         location_data.append({
@@ -898,13 +1005,14 @@ def run_route_optimization(params: dict) -> dict:
             "lon": loc["lon"],
             "demand": demands[i],
             "is_depot": i == 0,
+            "is_dedicated": i in assigned_dedicated,
         })
 
     insights = [
         f"Metode terbaik: {best['method']} — total cost Rp {best['cost']['total_cost']:,.0f}.",
         f"Penghematan {best_saving_pct}% dibanding baseline (Nearest Neighbor).",
-        f"Jumlah kendaraan optimal: {best['n_vehicles']} unit.",
-        f"Total jarak: {best['total_distance_km']:.1f} km.",
+        f"Penggunaan Armada: {best['n_vehicles']} unit digunakan dari total {num_vehicles} kendaraan (Kapasitas per armada: {vehicle_capacity} unit).",
+        f"Rute Dedicated: {best['n_dedicated_vehicles']} kendaraan bertugas pada rute tetap ({best['dedicated_distance_km']:.1f} km). Rute Selanjutnya (Optimasi): {best['n_optimized_vehicles']} kendaraan diatur oleh sistem ({best['optimized_distance_km']:.1f} km).",
     ]
 
     return {
@@ -915,6 +1023,9 @@ def run_route_optimization(params: dict) -> dict:
         "locations": location_data,
         "insights": insights,
         "cost_params_used": cost_params,
+        "num_vehicles": num_vehicles,
+        "num_dedicated_vehicles": num_dedicated_vehicles,
+        "vehicle_capacity": vehicle_capacity,
     }
 
 
@@ -927,5 +1038,39 @@ def _format_routes(routes: list[list[int]], names: list[str]) -> list[dict]:
             "route_id": idx + 1,
             "stops": stops,
             "n_stops": len(route),
+        })
+    return formatted
+
+
+def _format_detailed_routes(
+    routes: list[list[int]],
+    names: list[str],
+    demands: list[float],
+    dist_matrix: list[list[float]],
+    vehicle_capacity: float,
+    start_id: int = 1,
+    is_dedicated: bool = False,
+    prefix: str = "Armada"
+) -> list[dict]:
+    formatted = []
+    for idx, route in enumerate(routes):
+        stops_data = [{"index": c, "name": names[c], "demand": demands[c]} for c in route]
+        route_dist = 0.0
+        if route:
+            route_dist += dist_matrix[0][route[0]]
+            for k in range(len(route) - 1):
+                route_dist += dist_matrix[route[k]][route[k + 1]]
+            route_dist += dist_matrix[route[-1]][0]
+        route_load = sum(demands[c] for c in route)
+        cap_pct = round((route_load / max(1, vehicle_capacity)) * 100, 1)
+        formatted.append({
+            "route_id": start_id + idx,
+            "vehicle_name": f"{prefix} #{start_id + idx}",
+            "is_dedicated": is_dedicated,
+            "stops": stops_data,
+            "n_stops": len(route),
+            "distance_km": round(route_dist, 2),
+            "load": round(route_load, 1),
+            "capacity_pct": cap_pct,
         })
     return formatted

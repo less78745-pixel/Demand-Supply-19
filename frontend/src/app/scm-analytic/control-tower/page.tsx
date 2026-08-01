@@ -10,6 +10,7 @@ import {
   Package, XCircle, CheckCircle, Info, TrendingUp
 } from 'lucide-react';
 import { uploadControlTowerFile } from '@/lib/api';
+import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import toast from 'react-hot-toast';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -71,6 +72,7 @@ export default function ControlTowerPage() {
     toast.loading('Menganalisis health score 28 cabang...', { id: 'ct' });
     try {
       const data = await uploadControlTowerFile(file);
+      data.processed_at = data.processed_at || new Date().toISOString();
       setResults(data);
       try { localStorage.setItem('lastControlTower', JSON.stringify(data)); } catch {}
       toast.success('Control Tower analysis selesai!', { id: 'ct' });
@@ -141,20 +143,41 @@ export default function ControlTowerPage() {
       </header>
 
       {!results && (
-        <GlassCard>
-          <FileUploader
-            onFileUpload={handleFileUpload}
-            isLoading={isProcessing}
-            label="Upload Data Branch Health"
-            description="Upload file dengan kolom: Cabang, In_Stock_Rate, Days_of_Supply, OTIF_Score. Opsional: Current_Stock, ROP_Level, Category."
-            templateCsv={TEMPLATE_CSV}
-            templateName="template_branch_health.csv"
-          />
-        </GlassCard>
+        <div className="grid md:grid-cols-3 gap-6 items-stretch mb-8">
+          <div className="md:col-span-2 flex flex-col justify-center">
+            <GlassCard className="h-full flex flex-col justify-center bg-muted/30 p-6">
+              <h3 className="text-lg font-bold mb-4 uppercase tracking-wide text-foreground flex items-center gap-2">
+                📡 Supply Chain Control Tower Insights
+              </h3>
+              <div className="text-sm text-muted-foreground space-y-3 leading-relaxed">
+                <p><strong>Monitoring Holistik:</strong> Pantau kesehatan pasokan dan pergerakan stok seluruh kantor cabang secara langsung dari satu layar eksekutif terpusat.</p>
+                <p><strong>Metrik Kunci (KPI):</strong> Analisa secara real-time <em>In-Stock Rate</em>, <em>Days of Supply (DOS)</em>, dan skor <em>OTIF (On-Time In-Full)</em> guna mendeteksi risiko putus stok maupun kelebihan stok sedini mungkin.</p>
+              </div>
+            </GlassCard>
+          </div>
+          <div className="md:col-span-1 flex flex-col">
+            <GlassCard className="h-full flex items-center justify-center p-3">
+              <FileUploader
+                onFileUpload={handleFileUpload}
+                isLoading={isProcessing}
+                label="Upload Branch Health"
+                description="CSV/Excel: Cabang, In_Stock_Rate, Days_of_Supply, OTIF_Score."
+                templateCsv={TEMPLATE_CSV}
+                templateName="template_branch_health.csv"
+              />
+            </GlassCard>
+          </div>
+        </div>
       )}
 
       {results && (
         <div className="space-y-8 animate-in fade-in duration-700">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-border/60 pb-4">
+            <h2 className="text-xl font-bold uppercase tracking-wide text-foreground flex items-center gap-2">
+              📡 Hasil Monitoring Control Tower 28 Cabang
+            </h2>
+            <TimestampBadge timestamp={results.processed_at} />
+          </div>
           {/* KPI Cards */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <KPICard title="Avg Health Score" value={`${results.kpi.avg_health}%`} icon={<Shield />} />
@@ -327,16 +350,20 @@ export default function ControlTowerPage() {
           </GlassCard>
 
           {/* Re-upload */}
-          <GlassCard>
-            <FileUploader
-              onFileUpload={handleFileUpload}
-              isLoading={isProcessing}
-              label="Upload Ulang Data"
-              description="Upload file baru untuk refresh Control Tower."
-              templateCsv={TEMPLATE_CSV}
-              templateName="template_branch_health.csv"
-            />
-          </GlassCard>
+          <div className="flex justify-end pt-4">
+            <div className="w-full max-w-sm ml-auto">
+              <GlassCard className="p-3">
+                <FileUploader
+                  onFileUpload={handleFileUpload}
+                  isLoading={isProcessing}
+                  label="Upload Ulang Data"
+                  description="Upload file baru untuk refresh."
+                  templateCsv={TEMPLATE_CSV}
+                  templateName="template_branch_health.csv"
+                />
+              </GlassCard>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -44,13 +44,13 @@ export function InventoryChart({ data }: InventoryChartProps) {
           <Bar 
             dataKey="volume" 
             name="Sales Volume" 
-            fill="hsl(var(--accent))" 
+            fill="#f97316" 
             radius={[4, 4, 0, 0]}
           />
           <Bar 
             dataKey="on_hand" 
             name="On Hand Inventory" 
-            fill="hsl(var(--primary))" 
+            fill="#10b981" 
             radius={[4, 4, 0, 0]}
           />
         </BarChart>

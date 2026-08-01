@@ -14,6 +14,7 @@ import { analyzeDDMRPManual, uploadDDMRPFile } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { FileUploader } from '@/components/ui/FileUploader';
 import { MultiSelect } from '@/components/ui/MultiSelect';
+import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import { exportToExcel } from '@/utils/export';
 
 // ═══════════════════════════════════════════════
@@ -265,10 +266,13 @@ export default function DDMRPPage() {
           {/* Summary & Filters */}
           <GlassCard className="mb-8 border-primary/20">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-              <h2 className="text-xl font-bold tracking-tight flex items-center gap-2">
-                <BarChart3 className="w-6 h-6 text-primary" />
-                Ringkasan Analisis DDMRP
-              </h2>
+              <div className="flex flex-wrap items-center gap-3">
+                <h2 className="text-xl font-bold tracking-tight flex items-center gap-2">
+                  <BarChart3 className="w-6 h-6 text-primary" />
+                  Ringkasan Analisis DDMRP
+                </h2>
+                <TimestampBadge timestamp={results.processed_at || new Date().toISOString()} />
+              </div>
               <button 
                 onClick={() => {
                   const dataArray = results.results || [results];

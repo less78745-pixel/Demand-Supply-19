@@ -5,6 +5,7 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { FileUploader } from '@/components/ui/FileUploader';
 import { KPICard } from '@/components/ui/KPICard';
 import { MultiSelect } from '@/components/ui/MultiSelect';
+import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import { TrendingUp, Info, DollarSign, BarChart3, Table as TableIcon, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
@@ -53,9 +54,22 @@ export default function HistorySalesPage() {
   const colCabang = useMemo(() => parsed ? findColumn(parsed.headers, ['cabang', 'cab', 'region']) : undefined, [parsed]);
   const colCategory = useMemo(() => parsed ? findColumn(parsed.headers, ['category', 'grup', 'kategori item', 'kategori']) : undefined, [parsed]);
 
-  // Filter options
-  const cabangs = useMemo(() => parsed && colCabang ? ['All', ...Array.from(new Set(parsed.data.map(d => d[colCabang]).filter(v => v && !String(v).includes('#N/A') && !String(v).includes('#REF!') && String(v).toLowerCase() !== 'semua cabang'))).sort()] : [], [parsed, colCabang]);
-  const categories = useMemo(() => parsed && colCategory ? ['All', ...Array.from(new Set(parsed.data.map(d => d[colCategory]).filter(v => v && !String(v).includes('#N/A') && !String(v).includes('#REF!') && String(v).toLowerCase() !== 'semua kategori'))).sort()] : [], [parsed, colCategory]);
+  // Linked Filter options
+  const cabangs = useMemo(() => {
+    if (!parsed || !colCabang) return [];
+    const source = parsed.data.filter(d =>
+      (!colCategory || selectedCategory.includes('All') || selectedCategory.includes(d[colCategory]))
+    );
+    return ['All', ...Array.from(new Set(source.map(d => d[colCabang]).filter(v => v && !String(v).includes('#N/A') && !String(v).includes('#REF!') && String(v).toLowerCase() !== 'semua cabang'))).sort()];
+  }, [parsed, colCabang, selectedCategory, colCategory]);
+
+  const categories = useMemo(() => {
+    if (!parsed || !colCategory) return [];
+    const source = parsed.data.filter(d =>
+      (!colCabang || selectedCabang.includes('All') || selectedCabang.includes(d[colCabang]))
+    );
+    return ['All', ...Array.from(new Set(source.map(d => d[colCategory]).filter(v => v && !String(v).includes('#N/A') && !String(v).includes('#REF!') && String(v).toLowerCase() !== 'semua kategori'))).sort()];
+  }, [parsed, colCategory, selectedCabang, colCabang]);
 
   // Handle Export
   const handleExport = () => {
@@ -130,10 +144,20 @@ export default function HistorySalesPage() {
         </p>
       </header>
 
-      {/* Upload & Instructions Row */}
-      <div className="grid md:grid-cols-3 gap-6 mb-8">
+      <div className="grid md:grid-cols-3 gap-6 mb-8 items-stretch">
         <div className="md:col-span-2">
-          <GlassCard>
+          <GlassCard className="h-full bg-muted/30 flex flex-col justify-center">
+            <h3 className="text-lg font-bold mb-4 flex items-center gap-2 uppercase tracking-wide">
+              <Info className="w-5 h-5 text-primary" /> Executive Insights
+            </h3>
+            <ul className="text-sm text-muted-foreground leading-relaxed list-disc list-inside space-y-3">
+              <li><strong>Pencapaian Kinerja (Sales Performance):</strong> Visualisasi ini mempermudah evaluasi tren <em>AVG Sales</em> historis terhadap pencapaian target penjualan tiap kuartal secara instan.</li>
+              <li><strong>Fokus Kategori & Insentif:</strong> Pantau kategori produk yang berkontribusi paling tinggi vs terendah. Data ini krusial untuk mengevaluasi efektivitas <em>Category Insentif</em> dalam memotivasi penjualan di masing-masing Cabang (Kota).</li>
+            </ul>
+          </GlassCard>
+        </div>
+        <div className="md:col-span-1 flex flex-col">
+          <GlassCard className="h-full flex items-center justify-center p-3">
             <FileUploader
               onFileUpload={handleFileUpload}
               isLoading={isProcessing}
@@ -144,17 +168,6 @@ export default function HistorySalesPage() {
             />
           </GlassCard>
         </div>
-        <div className="md:col-span-1">
-          <GlassCard className="h-full bg-muted/30">
-            <h3 className="text-lg font-bold mb-4 flex items-center gap-2 uppercase tracking-wide">
-              <Info className="w-5 h-5 text-primary" /> Executive Insights
-            </h3>
-            <ul className="text-sm text-muted-foreground leading-relaxed list-disc list-inside space-y-2">
-              <li><strong>Pencapaian Kinerja (Sales Performance):</strong> Visualisasi ini mempermudah evaluasi tren <em>AVG Sales</em> historis terhadap pencapaian target penjualan tiap kuartal secara instan.</li>
-              <li><strong>Fokus Kategori & Insentif:</strong> Pantau kategori produk yang berkontribusi paling tinggi vs terendah. Data ini krusial untuk mengevaluasi efektivitas <em>Category Insentif</em> dalam memotivasi penjualan di masing-masing Cabang (Kota).</li>
-            </ul>
-          </GlassCard>
-        </div>
       </div>
 
       {parsed && (
@@ -163,7 +176,10 @@ export default function HistorySalesPage() {
           <GlassCard>
             <div className="flex flex-col md:flex-row justify-between md:items-start mb-6 gap-4 border-b border-border pb-6">
               <div>
-                <h3 className="text-lg font-bold text-foreground uppercase tracking-wide">Filter Dashboard</h3>
+                <div className="flex flex-wrap items-center gap-3">
+                  <h3 className="text-lg font-bold text-foreground uppercase tracking-wide">Filter Dashboard</h3>
+                  <TimestampBadge timestamp={parsed.processed_at || new Date().toISOString()} />
+                </div>
                 <div className="flex flex-wrap gap-3 mt-4">
                   {colCabang && <MultiSelect options={cabangs} selected={selectedCabang} onChange={setSelectedCabang} selectAllLabel="Semua Cabang" />}
                   {colCategory && <MultiSelect options={categories} selected={selectedCategory} onChange={setSelectedCategory} selectAllLabel="Semua Kategori" />}

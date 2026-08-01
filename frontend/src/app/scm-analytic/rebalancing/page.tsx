@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { uploadRebalancingFiles } from '@/lib/api';
 import toast from 'react-hot-toast';
+import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   Legend, ResponsiveContainer, Cell,
@@ -129,6 +130,7 @@ export default function RebalancingPage() {
     toast.loading('Mengoptimasi distribusi stok antar-cabang...', { id: 'rb' });
     try {
       const data = await uploadRebalancingFiles(stockFile, demandFile, freightFile);
+      data.processed_at = data.processed_at || new Date().toISOString();
       setResults(data);
       try { localStorage.setItem('lastRebalancing', JSON.stringify(data)); } catch {}
       toast.success('Optimasi selesai!', { id: 'rb' });
@@ -229,6 +231,12 @@ export default function RebalancingPage() {
       {/* Results */}
       {results && (
         <div className="space-y-8 animate-in fade-in duration-700">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-border/60 pb-4">
+            <h2 className="text-xl font-bold uppercase tracking-wide text-foreground flex items-center gap-2">
+              ⚖️ Hasil Optimasi Stock Rebalancing
+            </h2>
+            <TimestampBadge timestamp={results.processed_at} />
+          </div>
           {/* KPI Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <KPICard title="Total Transfer" value={results.kpi.total_transfers} icon={<Truck />} />

@@ -5,7 +5,8 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { FileUploader } from '@/components/ui/FileUploader';
 import { KPICard } from '@/components/ui/KPICard';
 import { MultiSelect } from '@/components/ui/MultiSelect';
-import { ClipboardList, Download, Info, Package, BarChart3, Table as TableIcon } from 'lucide-react';
+import { TimestampBadge } from '@/components/ui/TimestampBadge';
+import { ClipboardList, Download, Info, Package, BarChart3, Table as TableIcon, Layers } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -14,11 +15,34 @@ import {
 import { get, set } from 'idb-keyval';
 import { parseDynamicCSV, findColumn, ParsedData } from '@/lib/csvParser';
 
-const COLORS = ['#f97316', '#3b82f6', '#22c55e', '#ef4444', '#a855f7', '#eab308'];
+const COLORS = ['#f97316', '#3b82f6', '#22c55e', '#ef4444', '#a855f7', '#eab308', '#06b6d4', '#ec4899'];
+
+const getPillarCategory = (colName: string): 'On Hand' | 'VESSEL' | 'TO' | 'PLAN LOADING' | 'READY' | 'Lainnya' => {
+  const lower = colName.toLowerCase().trim();
+  if (lower.includes('on hand') || lower === 'soh' || lower.includes('stock on hand')) return 'On Hand';
+  if (lower.includes('vessel') || lower.includes('kapal') || lower.includes('on vessel')) return 'VESSEL';
+  if (lower.includes('to ') || lower.startsWith('to') || lower.includes('transfer order')) return 'TO';
+  if (lower.includes('plan loading') || lower.includes('loading') || lower.includes('load')) return 'PLAN LOADING';
+  if (lower.includes('ready')) return 'READY';
+  return 'Lainnya';
+};
+
+const PILLAR_COLORS: Record<string, string> = {
+  'On Hand': '#10b981',      // Emerald Green
+  'VESSEL': '#3b82f6',       // Blue
+  'TO': '#f97316',           // Orange
+  'PLAN LOADING': '#a855f7', // Purple
+  'READY': '#06b6d4',        // Cyan
+  'Lainnya': '#64748b'       // Slate Gray
+};
+
+const PILLAR_ORDER = ['On Hand', 'VESSEL', 'TO', 'PLAN LOADING', 'READY'];
 
 export default function SOHAnalysisPage() {
   const [parsed, setParsed] = useState<ParsedData | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [chartMode, setChartMode] = useState<'summary' | 'detail'>('summary');
+  const [expandedPivot, setExpandedPivot] = useState(false);
   
   useEffect(() => {
     get('last_soh_data').then(saved => {
@@ -39,15 +63,8 @@ export default function SOHAnalysisPage() {
       const parsedData = await parseDynamicCSV(file);
       setParsed(parsedData);
       
-      // Default to picking max 4 metrics so chart is readable initially
       if (parsedData && parsedData.targetColumns) {
-        const priority = ['on hand', 'ready', 'plan loading', 'to week', 'vessel'];
-        let defaults = parsedData.targetColumns.map(t => t.name).filter(name => 
-          priority.some(p => name.toLowerCase().includes(p))
-        );
-        if (defaults.length === 0) defaults = parsedData.targetColumns.slice(0, 4).map(t => t.name);
-        // Only select top 4 priority metrics to avoid clutter
-        setSelectedMetrics(defaults.slice(0, 4));
+        setSelectedMetrics(['All']);
       }
       
       try {
@@ -91,12 +108,11 @@ export default function SOHAnalysisPage() {
       lines.push(line);
     });
     
-    // Force Excel to use semicolon separator for Indonesian locale
     const blob = new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'soh_analysis_export.csv';
+    link.download = 'soh_to_pivot_export.csv';
     link.click();
     URL.revokeObjectURL(url);
   };
@@ -111,99 +127,105 @@ export default function SOHAnalysisPage() {
     );
   }, [parsed, selectedCabang, selectedCategory, selectedInsentif, colCabang, colCategory, colInsentif]);
 
-  // KPIs
-  const kpis = useMemo(() => {
-    if (!parsed) return [];
-    // Generate a KPI for the first 4 target columns
-    return parsed.targetColumns.slice(0, 4).map(tc => {
-      const total = filtered.reduce((a, d) => a + (d[tc.name] || 0), 0);
-      return { name: tc.name, total };
+  // Pillar mapping
+  const pillarColumnsMap = useMemo(() => {
+    if (!parsed) return { 'On Hand': [], 'VESSEL': [], 'TO': [], 'PLAN LOADING': [], 'READY': [], 'Lainnya': [] };
+    const map: Record<string, string[]> = { 'On Hand': [], 'VESSEL': [], 'TO': [], 'PLAN LOADING': [], 'READY': [], 'Lainnya': [] };
+    parsed.targetColumns.forEach(tc => {
+      const cat = getPillarCategory(tc.name);
+      map[cat].push(tc.name);
     });
-  }, [parsed, filtered]);
+    return map;
+  }, [parsed]);
 
-  // Chart data: Grouped by Cabang
-  const chartData = useMemo(() => {
+  // Grouped Pivot Data per Cabang
+  const pivotData = useMemo(() => {
     if (!parsed || filtered.length === 0) return [];
     const map: Record<string, any> = {};
-    
-    // Determine which metrics to plot
-    let metricsToPlot = parsed.targetColumns.map(tc => tc.name);
-    if (!selectedMetrics.includes('All') && selectedMetrics.length > 0) {
-      metricsToPlot = selectedMetrics;
-    }
 
     for (const row of filtered) {
       const cbg = colCabang ? (row[colCabang] || 'Unknown') : 'All';
       if (!map[cbg]) {
-        map[cbg] = { cabang: cbg };
-        metricsToPlot.forEach(m => map[cbg][m] = 0);
+        map[cbg] = { cabang: cbg, 'On Hand': 0, 'VESSEL': 0, 'TO': 0, 'PLAN LOADING': 0, 'READY': 0, 'Lainnya': 0, total: 0, details: {} };
+        parsed.targetColumns.forEach(tc => { map[cbg].details[tc.name] = 0; });
       }
-      metricsToPlot.forEach(m => {
-        map[cbg][m] += (row[m] || 0);
+      parsed.targetColumns.forEach(tc => {
+        const val = row[tc.name] || 0;
+        const cat = getPillarCategory(tc.name);
+        map[cbg][cat] += val;
+        map[cbg].details[tc.name] += val;
+        if (cat !== 'Lainnya') {
+          map[cbg].total += val;
+        }
       });
     }
-    return Object.values(map);
-  }, [parsed, filtered, colCabang, selectedMetrics]);
+    return Object.values(map).sort((a, b) => b.total - a.total);
+  }, [parsed, filtered, colCabang]);
+
+  // Pillar KPIs
+  const pillarKpis = useMemo(() => {
+    if (!pivotData || pivotData.length === 0) return [];
+    return PILLAR_ORDER.map(pillar => {
+      const total = pivotData.reduce((a, r) => a + (r[pillar] || 0), 0);
+      const cols = pillarColumnsMap[pillar]?.length || 0;
+      return { name: pillar, total, cols, color: PILLAR_COLORS[pillar] };
+    });
+  }, [pivotData, pillarColumnsMap]);
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-10">
-      <header className="mb-8 border-b border-border pb-6">
-        <h1 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-3 uppercase">
-          <ClipboardList className="w-8 h-8 text-primary" />
-          SOH & TO Analysis
-        </h1>
-        <p className="text-muted-foreground mt-2 font-medium">
-          Dashboard dari sheet On Hand. Menganalisa ringkasan per cabang/kategori (Vessel, Plan Loading, Ready, dll).
-        </p>
+      <header className="mb-8 border-b border-border pb-6 flex justify-between items-end">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-3 uppercase">
+            <ClipboardList className="w-8 h-8 text-primary" />
+            SOH & TO Analysis (Pivot Mode)
+          </h1>
+          <p className="text-muted-foreground mt-2 font-medium">
+            Analisis persediaan terstruktur berdasarkan 5 pilar utama: On Hand ➔ Vessel ➔ TO ➔ Plan Loading ➔ Ready.
+          </p>
+        </div>
       </header>
 
-      {/* Upload & Instructions Row */}
-      <div className="grid md:grid-cols-3 gap-6 mb-8">
+      <div className="grid md:grid-cols-3 gap-6 mb-8 items-stretch">
         <div className="md:col-span-2">
-          <GlassCard>
+          <GlassCard className="h-full bg-muted/30 flex flex-col justify-center">
+            <h3 className="text-lg font-bold mb-4 flex items-center gap-2 uppercase tracking-wide">
+              <Info className="w-5 h-5 text-primary" /> Executive Insights
+            </h3>
+            <ul className="text-sm text-muted-foreground leading-relaxed list-disc list-inside space-y-3">
+              <li><strong>Struktur 5 Pilar:</strong> Data kini dikelompokkan dari persediaan fisik (<em>On Hand</em>) hingga pasokan dalam perjalanan (<em>Vessel</em>, <em>TO</em>, <em>Plan Loading</em>, <em>Ready</em>).</li>
+              <li><strong>Monitoring Inbound:</strong> Klik tombol detail mingguan pada tabel pivot untuk melihat distribusi pasokan antar minggu tanpa mengaburkan ringkasannya.</li>
+            </ul>
+          </GlassCard>
+        </div>
+        <div className="md:col-span-1 flex flex-col">
+          <GlassCard className="h-full flex items-center justify-center p-3">
             <FileUploader
               onFileUpload={handleFileUpload}
               isLoading={isProcessing}
               templateCsv="Cabang,Grup,On Hand,TO WEEK 1 JULI,TO WEEK 2 JULI,TO WEEK 3 JULI,TO WEEK 4 JULI,TO WEEK 5 JULI,VESSEL WEEK 2 JULI,VESSEL WEEK 3 JULI,VESSEL WEEK 4 JULI,VESSEL WEEK 5 JULI,VESSEL WEEK 1 AGT,VESSEL WEEK 2 AGT,PLAN LOADING,READY"
               templateName="soh_template.csv"
               label="Upload Data SOH (Sheet: On Hand)"
-              description="Upload CSV hasil export dari Google Sheet (tidak perlu repot memberi tanda X, sistem akan otomatis membaca kolom metrik seperti TO, VESSEL, dll)."
+              description="Upload CSV hasil export dari Google Sheet. Sistem otomatis memetakan kolom mingguan (Weeks) ke 5 grup pivot SOH & TO."
             />
-          </GlassCard>
-        </div>
-        <div className="md:col-span-1">
-          <GlassCard className="h-full bg-muted/30">
-            <h3 className="text-lg font-bold mb-4 flex items-center gap-2 uppercase tracking-wide">
-              <Info className="w-5 h-5 text-primary" /> Executive Insights
-            </h3>
-            <ul className="text-sm text-muted-foreground leading-relaxed list-disc list-inside space-y-2">
-              <li><strong>Efisiensi Persediaan:</strong> Evaluasi jumlah SOH berbanding dengan status <em>Dead Moving</em> atau <em>Ready</em> untuk mengambil keputusan bisnis yang lebih cepat.</li>
-              <li><strong>Sumber Inbound (Cabang/Kota):</strong> <em>Transfer Order (TO)</em> dan <em>Vessel (Kapal)</em> merupakan sumber utama di mana tiap cabang (Kota) mendapatkan pasokan <em>inbound</em> barang. Monitor penumpukan antrean TO yang belum masuk tahap <em>Plan Loading</em> untuk mencegah bottleneck logistik.</li>
-            </ul>
           </GlassCard>
         </div>
       </div>
 
       {parsed && (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          {/* Filters */}
+          {/* Filters & Header */}
           <GlassCard>
             <div className="flex flex-col md:flex-row justify-between md:items-start mb-6 gap-4 border-b border-border pb-6">
               <div>
-                <h3 className="text-lg font-bold text-foreground uppercase tracking-wide">Filter Dashboard</h3>
+                <div className="flex flex-wrap items-center gap-3">
+                  <h3 className="text-lg font-bold text-foreground uppercase tracking-wide">Filter Dashboard</h3>
+                  <TimestampBadge timestamp={parsed.processed_at || new Date().toISOString()} />
+                </div>
                 <div className="flex flex-wrap gap-3 mt-4">
                   {colCabang && <MultiSelect options={cabangs} selected={selectedCabang} onChange={setSelectedCabang} selectAllLabel="Semua Cabang" />}
                   {colCategory && <MultiSelect options={categories} selected={selectedCategory} onChange={setSelectedCategory} selectAllLabel="Semua Kategori" />}
                   {colInsentif && <MultiSelect options={insentifs} selected={selectedInsentif} onChange={setSelectedInsentif} selectAllLabel="Semua Insentif" />}
-                  {metricOptions.length > 1 && (
-                    <MultiSelect 
-                      options={metricOptions} 
-                      selected={selectedMetrics} 
-                      onChange={setSelectedMetrics} 
-                      selectAllLabel="Semua Metrik" 
-                      placeholder="Pilih Metrik Grafik"
-                    />
-                  )}
                 </div>
               </div>
               <div className="flex gap-3 shrink-0 mt-4 md:mt-0">
@@ -214,61 +236,256 @@ export default function SOHAnalysisPage() {
               </div>
             </div>
 
-            {/* Dynamic KPIs */}
-            <div className="grid md:grid-cols-4 gap-4 mt-6">
-              {kpis.map((kpi, idx) => (
-                <KPICard 
-                  key={idx} 
-                  title={`Total ${kpi.name}`} 
-                  value={kpi.total.toLocaleString('id-ID')} 
-                  icon={<Package />} 
-                />
+            {/* Dynamic Pillar KPIs */}
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mt-6">
+              {pillarKpis.map((kpi, idx) => (
+                <div key={idx} className="p-4 rounded-lg bg-background/60 border border-border flex flex-col justify-between" style={{ borderLeft: `4px solid ${kpi.color}` }}>
+                  <span className="text-xs font-bold uppercase text-muted-foreground tracking-wider">{idx + 1}. {kpi.name}</span>
+                  <div className="mt-2 flex items-baseline justify-between">
+                    <span className="text-lg font-mono font-black text-foreground">{kpi.total.toLocaleString('id-ID')}</span>
+                    <span className="text-[10px] text-muted-foreground">{kpi.cols} kol</span>
+                  </div>
+                </div>
               ))}
-              <KPICard title="Total Rows" value={filtered.length.toLocaleString()} icon={<BarChart3 />} />
+              <KPICard title="Total Baris" value={filtered.length.toLocaleString('id-ID')} icon={<BarChart3 />} />
             </div>
           </GlassCard>
 
-          {/* Dynamic Bar Chart per Cabang */}
+          {/* Structured Pivot Bar Chart per Cabang */}
           <GlassCard>
-            <h3 className="text-sm font-bold text-foreground mb-4 uppercase tracking-wide">Summary (Kolom &apos;X&apos;) per Cabang</h3>
-            <div className="h-[400px]">
+            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-6 border-b border-border pb-4">
+              <div>
+                <h3 className="text-lg font-bold text-foreground uppercase tracking-wide flex items-center gap-2">
+                  <BarChart3 className="w-5 h-5 text-primary" />
+                  Grafik Pivot per Cabang
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Menampilkan perbandingan 5 pilar inbound (On Hand, Vessel, TO, Plan Loading, Ready) di tiap cabang.
+                </p>
+              </div>
+              <div className="flex bg-muted/50 p-1 rounded-lg border border-border shrink-0">
+                <button
+                  onClick={() => setChartMode('summary')}
+                  className={`px-3 py-1.5 rounded text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    chartMode === 'summary' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <Layers className="w-3.5 h-3.5" /> 5 Pilar Utama
+                </button>
+                <button
+                  onClick={() => setChartMode('detail')}
+                  className={`px-3 py-1.5 rounded text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    chartMode === 'detail' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <BarChart3 className="w-3.5 h-3.5" /> Detail Per Week
+                </button>
+              </div>
+            </div>
+
+            <div className="h-[450px] pt-4">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
+                <BarChart data={pivotData} margin={{ top: 10, right: 20, left: 0, bottom: 20 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                  <XAxis dataKey="cabang" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} tickLine={false} axisLine={false} />
-                  <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} tickLine={false} axisLine={false} />
-                  <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--popover))', borderColor: 'hsl(var(--border))', color: 'hsl(var(--popover-foreground))' }} />
-                  <Legend />
-                  {(selectedMetrics.includes('All') || selectedMetrics.length === 0 
-                    ? parsed.targetColumns.map(tc => tc.name) 
-                    : selectedMetrics
-                  ).map((m, idx) => (
-                    <Bar key={m} dataKey={m} fill={COLORS[idx % COLORS.length]} radius={[2, 2, 0, 0]} />
-                  ))}
+                  <XAxis dataKey="cabang" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} tickLine={false} axisLine={false} interval={0} angle={-25} textAnchor="end" height={60} />
+                  <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} tickLine={false} axisLine={false} tickFormatter={(val) => val >= 1000 ? `${(val/1000).toFixed(0)}k` : val} />
+                  <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--popover))', borderColor: 'hsl(var(--border))', color: 'hsl(var(--popover-foreground))', borderRadius: '8px' }} />
+                  <Legend verticalAlign="top" height={36} />
+                  {chartMode === 'summary' ? (
+                    PILLAR_ORDER.map((pillar, idx) => (
+                      <Bar key={pillar} dataKey={pillar} name={`${idx + 1}. ${pillar}`} fill={PILLAR_COLORS[pillar]} radius={[3, 3, 0, 0]} maxBarSize={40} />
+                    ))
+                  ) : (
+                    PILLAR_ORDER.flatMap((pillar) => (pillarColumnsMap[pillar] || []).map((colName, cIdx) => (
+                      <Bar
+                        key={colName}
+                        dataKey={`details.${colName}`}
+                        name={`[${pillar}] ${colName.replace(/to |vessel /gi, '')}`}
+                        fill={cIdx === 0 ? PILLAR_COLORS[pillar] : COLORS[(cIdx + PILLAR_ORDER.indexOf(pillar)) % COLORS.length]}
+                        radius={[2, 2, 0, 0]}
+                        maxBarSize={25}
+                      />
+                    )))
+                  )}
                 </BarChart>
               </ResponsiveContainer>
             </div>
           </GlassCard>
 
-          {/* Full Data Table */}
+          {/* Interactive Pivot Table */}
+          <GlassCard>
+            <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-6 gap-4 border-b border-border pb-4">
+              <div>
+                <h3 className="text-lg font-bold text-foreground uppercase tracking-wide flex items-center gap-2">
+                  <TableIcon className="w-5 h-5 text-primary" />
+                  Tabel Pivot Analisis SOH & TO per Cabang
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Dikelompokkan secara teratur berdasarkan urutan rantai pasok inbound.
+                </p>
+              </div>
+              <button
+                onClick={() => setExpandedPivot(!expandedPivot)}
+                className="px-3.5 py-1.5 bg-muted/60 hover:bg-muted text-foreground rounded-md text-xs font-bold uppercase tracking-wider transition-colors border border-border flex items-center gap-2 shrink-0 shadow-xs"
+              >
+                <Layers className="w-3.5 h-3.5 text-primary" />
+                {expandedPivot ? 'Sembunyikan Sub-Kolom (Weeks)' : 'Tampilkan Sub-Kolom (Weeks)'}
+              </button>
+            </div>
+
+            <div className="overflow-x-auto rounded-lg border border-border">
+              <table className="w-full text-xs text-left">
+                <thead>
+                  <tr className="bg-muted/80 text-muted-foreground uppercase tracking-wider border-b border-border">
+                    <th className="px-4 py-3.5 font-black text-foreground sticky left-0 bg-muted z-10 min-w-[160px]">
+                      Cabang
+                    </th>
+                    {PILLAR_ORDER.map((pillar, pIdx) => {
+                      const cols = pillarColumnsMap[pillar] || [];
+                      const showSubs = expandedPivot && cols.length > 1;
+                      return (
+                        <th
+                          key={pillar}
+                          colSpan={showSubs ? cols.length + 1 : 1}
+                          className="px-4 py-3.5 text-center border-x border-border/60 font-black tracking-wide"
+                          style={{ color: PILLAR_COLORS[pillar], backgroundColor: `${PILLAR_COLORS[pillar]}15` }}
+                        >
+                          {pIdx + 1}. {pillar} {cols.length > 1 && !showSubs ? `(${cols.length} W)` : ''}
+                        </th>
+                      );
+                    })}
+                    <th className="px-4 py-3.5 text-right font-black text-foreground bg-primary/15 min-w-[120px]">
+                      Total Inbound
+                    </th>
+                  </tr>
+                  {expandedPivot && (
+                    <tr className="bg-muted/40 text-muted-foreground border-b border-border text-[11px] font-bold">
+                      <th className="px-4 py-2 sticky left-0 bg-muted/90 z-10 text-foreground">Sub-kolom / Minggu</th>
+                      {PILLAR_ORDER.map(pillar => {
+                        const cols = pillarColumnsMap[pillar] || [];
+                        const showSubs = cols.length > 1;
+                        if (!showSubs) {
+                          return (
+                            <th key={pillar} className="px-3 py-2 text-center text-foreground font-bold border-x border-border/40">
+                              Total
+                            </th>
+                          );
+                        }
+                        return (
+                          <React.Fragment key={pillar}>
+                            <th className="px-3 py-2 text-right font-extrabold text-foreground bg-muted/40 border-l border-border/60" style={{ color: PILLAR_COLORS[pillar] }}>
+                              TOTAL
+                            </th>
+                            {cols.map(c => (
+                              <th key={c} className="px-2.5 py-2 text-right text-muted-foreground border-r border-border/30 truncate max-w-[120px]" title={c}>
+                                {c.replace(/to |vessel |week |w /gi, 'W').trim()}
+                              </th>
+                            ))}
+                          </React.Fragment>
+                        );
+                      })}
+                      <th className="px-4 py-2 bg-primary/10"></th>
+                    </tr>
+                  )}
+                </thead>
+                <tbody className="divide-y divide-border/50 font-mono text-xs">
+                  {pivotData.map((row, idx) => (
+                    <tr key={idx} className="hover:bg-muted/40 transition-colors">
+                      <td className="px-4 py-3 font-sans font-bold text-foreground sticky left-0 bg-background/95 z-10 truncate border-r border-border/20">
+                        {row.cabang}
+                      </td>
+                      {PILLAR_ORDER.map(pillar => {
+                        const cols = pillarColumnsMap[pillar] || [];
+                        const showSubs = expandedPivot && cols.length > 1;
+                        const totalVal = row[pillar] || 0;
+                        if (!showSubs) {
+                          return (
+                            <td key={pillar} className="px-4 py-3 text-right font-semibold border-x border-border/40 text-foreground">
+                              {totalVal > 0 ? totalVal.toLocaleString('id-ID') : '-'}
+                            </td>
+                          );
+                        }
+                        return (
+                          <React.Fragment key={pillar}>
+                            <td className="px-3 py-2.5 text-right font-bold text-foreground bg-muted/20 border-l border-border/50" style={{ color: PILLAR_COLORS[pillar] }}>
+                              {totalVal > 0 ? totalVal.toLocaleString('id-ID') : '-'}
+                            </td>
+                            {cols.map(c => {
+                              const v = row.details[c] || 0;
+                              return (
+                                <td key={c} className="px-2.5 py-2.5 text-right text-muted-foreground border-r border-border/20">
+                                  {v > 0 ? v.toLocaleString('id-ID') : '-'}
+                                </td>
+                              );
+                            })}
+                          </React.Fragment>
+                        );
+                      })}
+                      <td className="px-4 py-3 text-right font-extrabold text-primary bg-primary/10">
+                        {row.total > 0 ? row.total.toLocaleString('id-ID') : '-'}
+                      </td>
+                    </tr>
+                  ))}
+                  {/* Totals Row */}
+                  <tr className="bg-muted/80 font-bold border-t-2 border-border text-foreground">
+                    <td className="px-4 py-3.5 font-sans font-black sticky left-0 bg-muted z-10 text-sm">
+                      TOTAL KESELURUHAN
+                    </td>
+                    {PILLAR_ORDER.map(pillar => {
+                      const cols = pillarColumnsMap[pillar] || [];
+                      const showSubs = expandedPivot && cols.length > 1;
+                      const pillarSum = pivotData.reduce((a, r) => a + (r[pillar] || 0), 0);
+                      if (!showSubs) {
+                        return (
+                          <td key={pillar} className="px-4 py-3.5 text-right font-black border-x border-border/60 text-sm" style={{ color: PILLAR_COLORS[pillar] }}>
+                            {pillarSum > 0 ? pillarSum.toLocaleString('id-ID') : '-'}
+                          </td>
+                        );
+                      }
+                      return (
+                        <React.Fragment key={pillar}>
+                          <td className="px-3 py-3.5 text-right font-black bg-muted/50 border-l border-border/60 text-sm" style={{ color: PILLAR_COLORS[pillar] }}>
+                            {pillarSum > 0 ? pillarSum.toLocaleString('id-ID') : '-'}
+                          </td>
+                          {cols.map(c => {
+                            const colSum = pivotData.reduce((a, r) => a + (r.details[c] || 0), 0);
+                            return (
+                              <td key={c} className="px-2.5 py-3.5 text-right text-muted-foreground border-r border-border/30 font-bold">
+                                {colSum > 0 ? colSum.toLocaleString('id-ID') : '-'}
+                              </td>
+                            );
+                          })}
+                        </React.Fragment>
+                      );
+                    })}
+                    <td className="px-4 py-3.5 text-right font-black text-primary bg-primary/20 text-sm">
+                      {pivotData.reduce((a, r) => a + r.total, 0).toLocaleString('id-ID')}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </GlassCard>
+
+          {/* Full Raw Data Table (Collapsible/Preview) */}
           <GlassCard>
             <h3 className="text-sm font-bold text-foreground mb-4 uppercase tracking-wide flex items-center gap-2">
-              <TableIcon className="w-5 h-5 text-primary" /> Data Detail (Semua Kolom)
+              <TableIcon className="w-4 h-4 text-muted-foreground" /> Data Mentah SOH (Semua Kolom CSV)
             </h3>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
-                <thead className="text-xs uppercase bg-muted/50 text-muted-foreground">
+            <div className="overflow-x-auto max-h-[400px]">
+              <table className="w-full text-xs text-left">
+                <thead className="text-[11px] uppercase bg-muted/70 text-muted-foreground sticky top-0 z-10">
                   <tr>
                     {parsed.headers.map(h => (
-                      <th key={h} className="px-4 py-3 whitespace-nowrap">{h}</th>
+                      <th key={h} className="px-3 py-2.5 whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-border">
+                <tbody className="divide-y divide-border/50 font-mono">
                   {filtered.slice(0, 50).map((row, idx) => (
                     <tr key={idx} className="hover:bg-muted/30">
                       {parsed.headers.map(h => (
-                        <td key={h} className="px-4 py-3 whitespace-nowrap">
+                        <td key={h} className="px-3 py-2 whitespace-nowrap">
                           {typeof row[h] === 'number' ? row[h].toLocaleString('id-ID') : (row[h] || '-')}
                         </td>
                       ))}
@@ -278,8 +495,8 @@ export default function SOHAnalysisPage() {
               </table>
             </div>
             {filtered.length > 50 && (
-              <p className="text-xs text-muted-foreground mt-4 italic">
-                Menampilkan 50 baris pertama dari {filtered.length} baris...
+              <p className="text-xs text-muted-foreground mt-3 italic">
+                * Menampilkan 50 baris pertama dari total {filtered.length.toLocaleString('id-ID')} baris...
               </p>
             )}
           </GlassCard>
@@ -288,3 +505,4 @@ export default function SOHAnalysisPage() {
     </div>
   );
 }
+

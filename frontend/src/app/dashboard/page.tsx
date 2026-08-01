@@ -12,6 +12,7 @@ import {
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { get } from 'idb-keyval';
+import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   Legend, ResponsiveContainer, ReferenceLine, Cell,
@@ -32,15 +33,18 @@ const ZONE_COLORS: Record<string, string> = {
 };
 
 /* ─── Section Header Component ─── */
-function SectionHeader({ title, icon: Icon, href, linkLabel = 'Lihat Modul Lengkap' }: {
-  title: string; icon: React.ElementType; href: string; linkLabel?: string;
+function SectionHeader({ title, icon: Icon, href, linkLabel = 'Lihat Modul Lengkap', timestamp }: {
+  title: string; icon: React.ElementType; href: string; linkLabel?: string; timestamp?: string | number | null;
 }) {
   return (
-    <div className="flex items-center justify-between mb-4 border-t border-border pt-8 first:border-t-0 first:pt-0">
-      <h2 className="text-lg font-bold text-foreground flex items-center gap-2 uppercase tracking-wide">
-        <Icon className="w-5 h-5 text-primary" /> {title}
-      </h2>
-      <Link href={href} className="text-xs text-primary hover:underline flex items-center gap-1 transition font-bold uppercase tracking-wider">
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 border-t border-border pt-8 first:border-t-0 first:pt-0">
+      <div className="flex flex-wrap items-center gap-3">
+        <h2 className="text-lg font-bold text-foreground flex items-center gap-2 uppercase tracking-wide">
+          <Icon className="w-5 h-5 text-primary" /> {title}
+        </h2>
+        <TimestampBadge timestamp={timestamp} label="Olahan Terakhir" className="py-1 px-2.5 text-[11px]" />
+      </div>
+      <Link href={href} className="text-xs text-primary hover:underline flex items-center gap-1 transition font-bold uppercase tracking-wider shrink-0">
         {linkLabel} <ArrowRight className="w-3 h-3" />
       </Link>
     </div>
@@ -469,7 +473,7 @@ export default function DashboardOverview() {
 
           {/* ═══ 1. OCCUPANCY & INVENTORY ═══ */}
           <section>
-            <SectionHeader title="Occupancy & Inventory" icon={Activity} href="/kalkulator-dsp/occupancy" />
+            <SectionHeader title="Occupancy & Inventory" icon={Activity} href="/kalkulator-dsp/occupancy" timestamp={data.occupancy?.processed_at || data.inventory?.processed_at} />
             {occSnapshot ? (
               <div className="grid lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-1 flex flex-col gap-4">
@@ -519,7 +523,7 @@ export default function DashboardOverview() {
 
           {/* ═══ 2. SALES FORECASTING ═══ */}
           <section>
-            <SectionHeader title="Sales Forecasting" icon={LineChart} href="/kalkulator-dsp/forecast" />
+            <SectionHeader title="Sales Forecasting" icon={LineChart} href="/kalkulator-dsp/forecast" timestamp={data.forecast?.processed_at} />
             {forecastSnapshot ? (
               <div className="space-y-6">
                 <div className="grid md:grid-cols-4 gap-4">
@@ -554,7 +558,7 @@ export default function DashboardOverview() {
 
           {/* ═══ 3. SOH & TO ANALYSIS ═══ */}
           <section>
-            <SectionHeader title="SOH & TO Analysis" icon={ClipboardList} href="/dashboard-harian/soh-to-analysis" />
+            <SectionHeader title="SOH & TO Analysis" icon={ClipboardList} href="/dashboard-harian/soh-to-analysis" timestamp={data.soh?.processed_at} />
             {sohSnapshot ? (
               <div className="grid md:grid-cols-5 gap-4">
                 {sohSnapshot.metrics.map((m: any, idx: number) => (
@@ -567,7 +571,7 @@ export default function DashboardOverview() {
 
           {/* ═══ 4. HISTORY SALES-OUTSTANDING ═══ */}
           <section>
-            <SectionHeader title="History Sales-Outstanding" icon={TrendingUp} href="/dashboard-harian/history-sales" />
+            <SectionHeader title="History Sales-Outstanding" icon={TrendingUp} href="/dashboard-harian/history-sales" timestamp={data.historySales?.processed_at} />
             {historySalesSnapshot ? (
               <div className="grid md:grid-cols-5 gap-4">
                 {historySalesSnapshot.metrics.map((m: any, idx: number) => (
@@ -580,7 +584,7 @@ export default function DashboardOverview() {
 
           {/* ═══ 5. PR UPDATE ═══ */}
           <section>
-            <SectionHeader title="PR Update" icon={FileBarChart} href="/dashboard-harian/pr-update" />
+            <SectionHeader title="PR Update" icon={FileBarChart} href="/dashboard-harian/pr-update" timestamp={data.prUpdate?.processed_at} />
             {prSnapshot ? (
               <div className="grid md:grid-cols-5 gap-4">
                 <KPICard title="Total PR Entries" value={prSnapshot.totalRows.toLocaleString()} icon={<FileBarChart />} />
@@ -593,7 +597,7 @@ export default function DashboardOverview() {
 
           {/* ═══ 6. SAFETY STOCK & ROP ═══ */}
           <section>
-            <SectionHeader title="Safety Stock & ROP" icon={ShieldCheck} href="/scm-analytic/safety-stock" />
+            <SectionHeader title="Safety Stock & ROP" icon={ShieldCheck} href="/scm-analytic/safety-stock" timestamp={data.safetyStock?.processed_at} />
             {safetyStockSnapshot ? (
               <div className="grid md:grid-cols-5 gap-4">
                 <KPICard title="Total SKU" value={safetyStockSnapshot.total} icon={<ShieldCheck />} />
@@ -607,7 +611,7 @@ export default function DashboardOverview() {
 
           {/* ═══ 7. STOCK REBALANCING ═══ */}
           <section>
-            <SectionHeader title="Stock Rebalancing" icon={ArrowLeftRight} href="/scm-analytic/rebalancing" />
+            <SectionHeader title="Stock Rebalancing" icon={ArrowLeftRight} href="/scm-analytic/rebalancing" timestamp={data.rebalancing?.processed_at} />
             {rebalancingSnapshot ? (
               <div className="grid md:grid-cols-3 gap-4">
                 <KPICard title="Total Movements" value={rebalancingSnapshot.totalMovements} icon={<ArrowLeftRight />} />
@@ -619,7 +623,7 @@ export default function DashboardOverview() {
 
           {/* ═══ 8. LANDED COST TRACKER ═══ */}
           <section>
-            <SectionHeader title="Landed Cost Tracker" icon={Ship} href="/scm-analytic/landed-cost" />
+            <SectionHeader title="Landed Cost Tracker" icon={Ship} href="/scm-analytic/landed-cost" timestamp={data.landedCost?.processed_at} />
             {landedCostSnapshot ? (
               <div className="grid md:grid-cols-3 gap-4">
                 <KPICard title="Total Shipments" value={landedCostSnapshot.totalShipments} icon={<Ship />} />
@@ -631,7 +635,7 @@ export default function DashboardOverview() {
 
           {/* ═══ 9. CONTROL TOWER ═══ */}
           <section>
-            <SectionHeader title="Control Tower" icon={Radar} href="/scm-analytic/control-tower" />
+            <SectionHeader title="Control Tower" icon={Radar} href="/scm-analytic/control-tower" timestamp={data.controlTower?.processed_at} />
             {controlTowerSnapshot ? (
               <div className="grid md:grid-cols-5 gap-4">
                 <KPICard title="Total Cabang" value={controlTowerSnapshot.total} icon={<Radar />} />

@@ -51,7 +51,7 @@ export function FileUploader({
       <div
         {...getRootProps()}
         className={cn(
-          "relative overflow-hidden rounded-xl border-2 border-dashed p-10 flex flex-col items-center justify-center transition-all duration-300 min-h-[300px]",
+          "relative overflow-hidden rounded-xl border-2 border-dashed p-5 flex flex-col items-center justify-center transition-all duration-300 min-h-[160px]",
           isDragActive ? "border-primary bg-primary/20 shadow-[0_0_30px_hsl(var(--primary)/0.2)]" : "border-white/20 hover:border-primary/50 hover:bg-white/5",
           isDragReject && "border-destructive bg-destructive/20",
           isLoading && "opacity-50 cursor-not-allowed pointer-events-none"
@@ -77,17 +77,17 @@ export function FileUploader({
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9 }}
-              className="flex flex-col items-center text-center space-y-4"
+              className="flex flex-col items-center text-center space-y-2.5"
             >
               <div className={cn(
-                "p-4 rounded-full transition-colors duration-300",
+                "p-2 rounded-full transition-colors duration-300",
                 isDragActive ? "bg-primary/20 text-primary" : "bg-white/5 text-slate-400"
               )}>
-                <UploadCloud className="w-10 h-10" />
+                <UploadCloud className="w-6 h-6" />
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-white">{label}</h3>
-                <p className="text-sm text-slate-400 mt-2 max-w-sm">
+                <h3 className="text-sm font-semibold text-white">{label}</h3>
+                <p className="text-xs text-slate-400 mt-1 max-w-[220px] leading-relaxed">
                   {description}
                 </p>
                 {templateCsv && (
@@ -104,7 +104,7 @@ export function FileUploader({
                       a.click();
                       window.URL.revokeObjectURL(url);
                     }}
-                    className="mt-4 px-3 py-1.5 bg-primary/20 hover:bg-primary/40 text-primary text-xs rounded border border-primary/50 transition z-20 relative"
+                    className="mt-3 px-3 py-1.5 bg-primary/20 hover:bg-primary/40 text-primary text-[11px] font-semibold rounded-md border border-primary/40 shadow-sm transition-all duration-200 hover:scale-105 active:scale-95 z-20 relative"
                   >
                     Download Excel/CSV Format
                   </button>
@@ -116,10 +116,10 @@ export function FileUploader({
               key="file-info"
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="flex flex-col items-center text-center space-y-4 z-10"
+              className="flex flex-col items-center text-center space-y-2 z-10"
             >
               <div className="relative">
-                <FileSpreadsheet className="w-16 h-16 text-primary" />
+                <FileSpreadsheet className="w-10 h-10 text-primary" />
                 {isLoading && (
                   <motion.div
                     className="absolute inset-0 rounded-full border-2 border-primary border-t-transparent"
@@ -131,15 +131,15 @@ export function FileUploader({
                   <motion.div
                     initial={{ scale: 0 }}
                     animate={{ scale: 1 }}
-                    className="absolute -bottom-2 -right-2 bg-emerald-500 rounded-full p-1"
+                    className="absolute -bottom-1 -right-1 bg-emerald-500 rounded-full p-0.5"
                   >
-                    <CheckCircle className="w-4 h-4 text-white" />
+                    <CheckCircle className="w-3.5 h-3.5 text-white" />
                   </motion.div>
                 )}
               </div>
               <div>
-                <p className="font-medium text-white truncate max-w-[200px]">{selectedFile.name}</p>
-                <p className="text-xs text-slate-400 mt-1">
+                <p className="font-medium text-xs text-white truncate max-w-[180px]">{selectedFile.name}</p>
+                <p className="text-[10px] text-slate-400 mt-0.5">
                   {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
                 </p>
               </div>
@@ -151,9 +151,9 @@ export function FileUploader({
                     e.stopPropagation();
                     setSelectedFile(null);
                   }}
-                  className="mt-4 flex items-center gap-2 text-sm text-red-400 hover:text-red-300 transition-colors"
+                  className="mt-2 flex items-center gap-1 text-xs text-red-400 hover:text-red-300 transition-colors"
                 >
-                  <X className="w-4 h-4" /> Remove File
+                  <X className="w-3.5 h-3.5" /> Remove File
                 </button>
               )}
             </motion.div>
