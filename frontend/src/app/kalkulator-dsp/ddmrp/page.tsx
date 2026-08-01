@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { KPICard } from '@/components/ui/KPICard';
 import { DDMRPBufferChart } from '@/components/charts/DDMRPBufferChart';
@@ -16,6 +16,7 @@ import { FileUploader } from '@/components/ui/FileUploader';
 import { MultiSelect } from '@/components/ui/MultiSelect';
 import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import { exportToExcel } from '@/utils/export';
+import { get, set } from 'idb-keyval';
 
 // ═══════════════════════════════════════════════
 //  LITERATURE REFERENCE DATA
@@ -46,7 +47,15 @@ export default function DDMRPPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [showFormulas, setShowFormulas] = useState(false);
   const [showLiterature, setShowLiterature] = useState(false);
-  const [activeMode, setActiveMode] = useState<'manual' | 'file'>('manual');
+  const [activeMode, setActiveMode] = useState<'manual' | 'file'>('file');
+
+  useEffect(() => {
+    get('last_ddmrp_result').then(saved => {
+      if (saved) {
+        setResults(saved);
+      }
+    }).catch(err => console.warn('Failed to load DDMRP state from IndexDB', err));
+  }, []);
 
   // Form state
   const [form, setForm] = useState({
@@ -71,6 +80,7 @@ export default function DDMRPPage() {
     try {
       const data = await analyzeDDMRPManual(form);
       setResults(data);
+      try { await set('last_ddmrp_result', data); } catch(e) { console.warn('Failed to save to IndexDB', e); }
       toast.success('Analisis DDMRP selesai!', { id: 'ddmrp' });
     } catch (error: any) {
       console.error(error);
@@ -87,6 +97,7 @@ export default function DDMRPPage() {
       const { adu, cov_override, ...restParams } = form; // Don't pass manual ADU/CoV
       const data = await uploadDDMRPFile(file, restParams);
       setResults(data);
+      try { await set('last_ddmrp_result', data); } catch(e) { console.warn('Failed to save to IndexDB', e); }
       toast.success('Analisis DDMRP dari file selesai!', { id: 'ddmrp' });
     } catch (error: any) {
       console.error(error);
@@ -109,153 +120,155 @@ export default function DDMRPPage() {
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto pb-10">
-      {/* Header */}
       <header className="mb-8 border-b border-border pb-6">
         <h1 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-3 uppercase">
           <Layers className="w-8 h-8 text-primary" />
           DDMRP — Demand Driven MRP
         </h1>
         <p className="text-muted-foreground mt-2 font-medium">
-          Buffer positioning & replenishment cerdas berbasis Net Flow Position — pendekatan modern pengganti MRP klasik.
+          Buffer positioning & replenishment cerdas berbasis Net Flow Position.
         </p>
       </header>
 
-      {/* Input Form */}
-      <div className="grid md:grid-cols-3 gap-6">
-        <div className="md:col-span-2">
-          <GlassCard>
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
-              <h3 className="text-lg font-bold flex items-center gap-2 uppercase tracking-wide">
-                <Calculator className="w-5 h-5 text-primary" />
-                Input Parameter DDMRP
-              </h3>
-              <div className="flex bg-muted/50 p-1 rounded-lg">
-                <button
-                  onClick={() => setActiveMode('manual')}
-                  className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-all ${activeMode === 'manual' ? 'bg-primary text-primary-foreground shadow-md' : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                >
-                  Manual Input
-                </button>
-                <button
-                  onClick={() => setActiveMode('file')}
-                  className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-all ${activeMode === 'file' ? 'bg-primary text-primary-foreground shadow-md' : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                >
-                  Upload File
-                </button>
+      <div className="grid md:grid-cols-3 gap-6 items-stretch">
+        <div className="md:col-span-2 flex flex-col">
+          <GlassCard className="h-full flex flex-col justify-between">
+            <div>
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 pb-4 border-b border-border">
+                <h2 className="text-xl font-bold tracking-tight text-foreground">Parameter & Input Data</h2>
+                <div className="flex gap-2 bg-muted/30 p-1 rounded-lg border border-border">
+                  <button
+                    onClick={() => setActiveMode('manual')}
+                    className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-all ${activeMode === 'manual' ? 'bg-primary text-primary-foreground shadow-md' : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                  >
+                    Input Manual
+                  </button>
+                  <button
+                    onClick={() => setActiveMode('file')}
+                    className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-all ${activeMode === 'file' ? 'bg-primary text-primary-foreground shadow-md' : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                  >
+                    Upload File
+                  </button>
+                </div>
               </div>
+
+              {activeMode === 'manual' ? (
+                <>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {[
+                      { key: 'adu', label: 'ADU (unit/hari)', icon: <Activity className="w-3.5 h-3.5" /> },
+                      { key: 'dlt_days', label: 'Lead Time (hari)', icon: <Truck className="w-3.5 h-3.5" /> },
+                      { key: 'moq', label: 'MOQ (unit)', icon: <Package className="w-3.5 h-3.5" /> },
+                      { key: 'order_cycle_days', label: 'Order Cycle (hari)', icon: <TrendingUp className="w-3.5 h-3.5" /> },
+                      { key: 'on_hand', label: 'On-Hand (unit)', icon: <BarChart3 className="w-3.5 h-3.5" /> },
+                      { key: 'on_order', label: 'On-Order (unit)', icon: <TrendingUp className="w-3.5 h-3.5" /> },
+                      { key: 'qualified_demand', label: 'Qualified Demand', icon: <TrendingDown className="w-3.5 h-3.5" /> },
+                      { key: 'cov_override', label: 'CoV (0-1)', icon: <ShieldCheck className="w-3.5 h-3.5" /> },
+                    ].map(({ key, label, icon }) => (
+                      <div key={key}>
+                        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5 mb-1.5">
+                          {icon} {label}
+                        </label>
+                        <input
+                          type="number"
+                          step={key === 'cov_override' ? '0.05' : '1'}
+                          value={(form as any)[key]}
+                          onChange={e => updateForm(key, e.target.value)}
+                          className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors"
+                        />
+                      </div>
+                    ))}
+                  </div>
+
+                  <button
+                    onClick={handleAnalyze}
+                    disabled={isProcessing}
+                    className="mt-6 w-full px-6 py-3 bg-primary text-primary-foreground rounded-lg font-bold text-sm uppercase tracking-wider hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {isProcessing ? (
+                      <>
+                        <span className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+                        Menghitung...
+                      </>
+                    ) : (
+                      <>
+                        <Cpu className="w-4 h-4" />
+                        Hitung Buffer DDMRP
+                      </>
+                    )}
+                  </button>
+                </>
+              ) : (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {[
+                      { key: 'dlt_days', label: 'Default Lead Time', icon: <Truck className="w-3.5 h-3.5" /> },
+                      { key: 'moq', label: 'Default MOQ', icon: <Package className="w-3.5 h-3.5" /> },
+                      { key: 'order_cycle_days', label: 'Default Order Cycle', icon: <TrendingUp className="w-3.5 h-3.5" /> },
+                      { key: 'on_hand', label: 'Default On-Hand', icon: <BarChart3 className="w-3.5 h-3.5" /> },
+                    ].map(({ key, label, icon }) => (
+                      <div key={key}>
+                        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5 mb-1.5">
+                          {icon} {label}
+                        </label>
+                        <input
+                          type="number"
+                          value={(form as any)[key]}
+                          onChange={e => updateForm(key, e.target.value)}
+                          className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <div className="bg-muted/30 p-4 rounded-lg text-sm text-muted-foreground space-y-2 border border-border">
+                    <h4 className="font-bold text-foreground flex items-center gap-2">
+                      <Info className="w-4 h-4 text-primary" /> Panduan Upload Data DDMRP
+                    </h4>
+                    <p>File Excel/CSV yang diupload akan dianalisis secara massal menggunakan parameter default di atas apabila kolom parameter tertentu tidak dicantumkan di dalam file.</p>
+                  </div>
+                </div>
+              )}
             </div>
-
-            {activeMode === 'manual' ? (
-              <>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {[
-                    { key: 'adu', label: 'ADU (unit/hari)', icon: <Activity className="w-3.5 h-3.5" /> },
-                    { key: 'dlt_days', label: 'Lead Time (hari)', icon: <Truck className="w-3.5 h-3.5" /> },
-                    { key: 'moq', label: 'MOQ (unit)', icon: <Package className="w-3.5 h-3.5" /> },
-                    { key: 'order_cycle_days', label: 'Order Cycle (hari)', icon: <TrendingUp className="w-3.5 h-3.5" /> },
-                    { key: 'on_hand', label: 'On-Hand (unit)', icon: <BarChart3 className="w-3.5 h-3.5" /> },
-                    { key: 'on_order', label: 'On-Order (unit)', icon: <TrendingUp className="w-3.5 h-3.5" /> },
-                    { key: 'qualified_demand', label: 'Qualified Demand', icon: <TrendingDown className="w-3.5 h-3.5" /> },
-                    { key: 'cov_override', label: 'CoV (0-1)', icon: <ShieldCheck className="w-3.5 h-3.5" /> },
-                  ].map(({ key, label, icon }) => (
-                    <div key={key}>
-                      <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5 mb-1.5">
-                        {icon} {label}
-                      </label>
-                      <input
-                        type="number"
-                        step={key === 'cov_override' ? '0.05' : '1'}
-                        value={(form as any)[key]}
-                        onChange={e => updateForm(key, e.target.value)}
-                        className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors"
-                      />
-                    </div>
-                  ))}
-                </div>
-
-                <button
-                  onClick={handleAnalyze}
-                  disabled={isProcessing}
-                  className="mt-6 w-full px-6 py-3 bg-primary text-primary-foreground rounded-lg font-bold text-sm uppercase tracking-wider hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                >
-                  {isProcessing ? (
-                    <>
-                      <span className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
-                      Menghitung...
-                    </>
-                  ) : (
-                    <>
-                      <Cpu className="w-4 h-4" />
-                      Hitung Buffer DDMRP
-                    </>
-                  )}
-                </button>
-              </>
-            ) : (
-              <div className="space-y-6">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {[
-                    { key: 'dlt_days', label: 'Default Lead Time', icon: <Truck className="w-3.5 h-3.5" /> },
-                    { key: 'moq', label: 'Default MOQ', icon: <Package className="w-3.5 h-3.5" /> },
-                    { key: 'order_cycle_days', label: 'Default Order Cycle', icon: <TrendingUp className="w-3.5 h-3.5" /> },
-                    { key: 'on_hand', label: 'Default On-Hand', icon: <BarChart3 className="w-3.5 h-3.5" /> },
-                  ].map(({ key, label, icon }) => (
-                    <div key={key}>
-                      <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5 mb-1.5">
-                        {icon} {label}
-                      </label>
-                      <input
-                        type="number"
-                        value={(form as any)[key]}
-                        onChange={e => updateForm(key, e.target.value)}
-                        className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors"
-                      />
-                    </div>
-                  ))}
-                </div>
-
-                <FileUploader
-                  onFileUpload={handleFileUpload}
-                  isLoading={isProcessing}
-                  label="Upload Riwayat Sales & Inventory"
-                  description="Upload file CSV/Excel berisi riwayat penjualan per SKU. Kolom opsional: Nama Cabang, Category Product, On-Hand, On-Order, Qualified Demand."
-                  templateCsv={`Bulan,Deskripsi,Cabang,Kategori,Penjualan,Lead Time (Hari),MOQ,Order Cycle (Hari),On-Hand,On-Order,Qualified Demand
-2024-01-01,Januari,Bali,Apparel,44806,14,500,7,12000,5000,2000
-2024-01-01,Januari,Bali,Automotive,32476,21,100,14,8000,2000,1000`}
-                />
-              </div>
-            )}
           </GlassCard>
         </div>
 
-        {/* Info Panel */}
-        <div className="md:col-span-1">
-          <GlassCard className="h-full bg-muted/30">
-            <h3 className="text-lg font-bold mb-4 flex items-center gap-2 uppercase tracking-wide">
-              <Info className="w-5 h-5 text-primary" />
-              Tentang DDMRP
-            </h3>
-            <ul className="space-y-3 text-sm text-muted-foreground">
-              <li className="flex items-start gap-2">
-                <div className="w-1.5 h-1.5 rounded-none bg-red-500 mt-1.5 shrink-0" />
-                <span><strong className="text-destructive">Red Zone</strong>: Safety buffer — stok darurat untuk fluktuasi demand & supply.</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <div className="w-1.5 h-1.5 rounded-none bg-amber-500 mt-1.5 shrink-0" />
-                <span><strong className="text-amber-500">Yellow Zone</strong>: Normal coverage — menutupi demand selama lead time.</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <div className="w-1.5 h-1.5 rounded-none bg-emerald-500 mt-1.5 shrink-0" />
-                <span><strong className="text-emerald-500">Green Zone</strong>: Order sizing — minimum order quantity zone.</span>
-              </li>
-              <li className="flex items-start gap-2 pt-2 border-t border-border">
-                <div className="w-1.5 h-1.5 rounded-none bg-primary mt-1.5 shrink-0" />
-                <span><strong className="text-foreground">Net Flow Position</strong>: NFP menentukan apakah perlu order — jika NFP jatuh di bawah Top of Yellow, sistem merekomendasikan order.</span>
-              </li>
-            </ul>
-          </GlassCard>
+        <div className="md:col-span-1 flex flex-col">
+          {activeMode === 'file' ? (
+            <GlassCard className="h-full flex items-center justify-center p-3">
+              <FileUploader
+                onFileUpload={handleFileUpload}
+                isLoading={isProcessing}
+                label="Upload Riwayat Sales"
+                description="CSV/Excel: Bulan, Deskripsi, Cabang, Kategori, Penjualan."
+                templateCsv={`Bulan,Deskripsi,Cabang,Kategori,Penjualan,Lead Time (Hari),MOQ,Order Cycle (Hari),On-Hand,On-Order,Qualified Demand
+2024-01-01,Januari,Bali,Apparel,44806,14,500,7,12000,5000,2000
+2024-01-01,Januari,Bali,Automotive,32476,21,100,14,8000,2000,1000`}
+              />
+            </GlassCard>
+          ) : (
+            <GlassCard className="h-full bg-muted/30">
+              <h3 className="text-lg font-bold mb-4 flex items-center gap-2 uppercase tracking-wide">
+                <Info className="w-5 h-5 text-primary" />
+                Tentang DDMRP
+              </h3>
+              <ul className="space-y-3 text-sm text-muted-foreground">
+                <li className="flex items-start gap-2">
+                  <div className="w-1.5 h-1.5 rounded-none bg-red-500 mt-1.5 shrink-0" />
+                  <span><strong className="text-destructive">Red Zone</strong>: Safety buffer untuk fluktuasi demand.</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <div className="w-1.5 h-1.5 rounded-none bg-amber-500 mt-1.5 shrink-0" />
+                  <span><strong className="text-amber-500">Yellow Zone</strong>: Normal coverage selama lead time.</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <div className="w-1.5 h-1.5 rounded-none bg-emerald-500 mt-1.5 shrink-0" />
+                  <span><strong className="text-emerald-500">Green Zone</strong>: Order sizing & minimum order quantity.</span>
+                </li>
+              </ul>
+            </GlassCard>
+          )}
         </div>
       </div>
 

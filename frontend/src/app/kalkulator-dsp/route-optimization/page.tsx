@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { KPICard } from '@/components/ui/KPICard';
 import { TimestampBadge } from '@/components/ui/TimestampBadge';
@@ -15,7 +15,9 @@ import {
 import { analyzeRouteOptimization, uploadRouteOptimizationFile } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { FileUploader } from '@/components/ui/FileUploader';
+import { MultiSelect } from '@/components/ui/MultiSelect';
 import { exportToExcel } from '@/utils/export';
+import { get, set } from 'idb-keyval';
 
 // ═══════════════════════════════════════════════
 //  LITERATURE REFERENCE DATA
@@ -51,7 +53,18 @@ export default function RouteOptimizationPage() {
   const [showFormulas, setShowFormulas] = useState(false);
   const [showLiterature, setShowLiterature] = useState(false);
   const [show4M1E, setShow4M1E] = useState(false);
-  const [activeMode, setActiveMode] = useState<'demo' | 'file'>('demo');
+  const [activeMode, setActiveMode] = useState<'demo' | 'file'>('file');
+  
+  const [filterTipeRute, setFilterTipeRute] = useState<string[]>(['All']);
+  const [filterSearchStop, setFilterSearchStop] = useState<string[]>(['All']);
+
+  useEffect(() => {
+    get('last_route_optimization_result').then(saved => {
+      if (saved) {
+        setResults(saved);
+      }
+    }).catch(err => console.warn('Failed to load Route Optimization state from IndexDB', err));
+  }, []);
 
   // Form state
   const [form, setForm] = useState({
@@ -96,7 +109,9 @@ export default function RouteOptimizationPage() {
 
       const rawRes = data.results ? data.results : [{ ...data, label: 'Demo Data' }];
       const now = new Date().toISOString();
-      setResults(rawRes.map((r: any) => ({ ...r, processed_at: r.processed_at || now })));
+      const updatedRes = rawRes.map((r: any) => ({ ...r, processed_at: r.processed_at || now }));
+      setResults(updatedRes);
+      try { await set('last_route_optimization_result', updatedRes); } catch (e) { console.warn('Failed to save state to IndexDB', e); }
       setSelectedGroup(0);
       setSelectedMethod(0);
       toast.success('Optimasi rute selesai!', { id: 'route' });
@@ -129,7 +144,9 @@ export default function RouteOptimizationPage() {
       });
       const rawRes = data.results ? data.results : [{ ...data, label: 'File Upload' }];
       const now = new Date().toISOString();
-      setResults(rawRes.map((r: any) => ({ ...r, processed_at: r.processed_at || now })));
+      const updatedRes = rawRes.map((r: any) => ({ ...r, processed_at: r.processed_at || now }));
+      setResults(updatedRes);
+      try { await set('last_route_optimization_result', updatedRes); } catch (e) { console.warn('Failed to save state to IndexDB', e); }
       setSelectedGroup(0);
       setSelectedMethod(0);
       toast.success('Optimasi rute dari file selesai!', { id: 'route' });
@@ -161,113 +178,124 @@ export default function RouteOptimizationPage() {
       </header>
 
       {/* Input Form & 4M1E Panel */}
-      <div className="grid md:grid-cols-3 gap-6">
-        <div className="md:col-span-2">
-          <GlassCard>
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
-              <h3 className="text-lg font-bold flex items-center gap-2 uppercase tracking-wide">
-                <Zap className="w-5 h-5 text-primary" />
-                Parameter Optimasi
-              </h3>
-              <div className="flex bg-muted/50 p-1 rounded-lg">
-                <button
-                  onClick={() => setActiveMode('demo')}
-                  className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-all ${
-                    activeMode === 'demo' ? 'bg-primary text-primary-foreground shadow-md' : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  Demo Data
-                </button>
-                <button
-                  onClick={() => setActiveMode('file')}
-                  className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-all ${
-                    activeMode === 'file' ? 'bg-primary text-primary-foreground shadow-md' : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  Upload File
-                </button>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
-              {[
-                ...(activeMode === 'demo' ? [{ key: 'n_customers', label: 'Jumlah Pelanggan', step: 1 }] : []),
-                { key: 'num_vehicles', label: 'Total Jumlah Kendaraan', step: 1 },
-                { key: 'num_dedicated_vehicles', label: 'Kendaraan Rute Dedicated', step: 1 },
-                { key: 'vehicle_capacity', label: 'Kapasitas / Kendaraan (unit)', step: 10 },
-                { key: 'fuel_price', label: 'Harga BBM (Rp/L)', step: 500 },
-                { key: 'fuel_efficiency', label: 'Efisiensi BBM (km/L)', step: 1 },
-                { key: 'driver_cost', label: 'Upah Sopir (Rp/hari)', step: 25000 },
-                { key: 'fixed_cost', label: 'Fixed Cost (Rp/trip)', step: 25000 },
-                { key: 'maintenance_per_km', label: 'Maintenance (Rp/km)', step: 100 },
-                { key: 'traffic_factor', label: 'Traffic Factor (1.0-1.5)', step: 0.1 },
-                { key: 'ga_generations', label: 'GA Generasi', step: 10 },
-              ].map(({ key, label, step }) => (
-                <div key={key}>
-                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">
-                    {label}
-                  </label>
-                  <input
-                    type="number"
-                    step={step}
-                    value={(form as any)[key]}
-                    onChange={e => updateForm(key, e.target.value)}
-                    className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors"
-                  />
+      <div className="grid md:grid-cols-3 gap-6 items-stretch">
+        <div className="md:col-span-2 flex flex-col">
+          <GlassCard className="h-full flex flex-col justify-between">
+            <div>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4 border-b border-border pb-4">
+                <h3 className="text-lg font-bold flex items-center gap-2 uppercase tracking-wide">
+                  <Zap className="w-5 h-5 text-primary" />
+                  Parameter Optimasi
+                </h3>
+                <div className="flex bg-muted/50 p-1 rounded-lg border border-border">
+                  <button
+                    onClick={() => setActiveMode('demo')}
+                    className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-all ${
+                      activeMode === 'demo' ? 'bg-primary text-primary-foreground shadow-md' : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    Demo Mode
+                  </button>
+                  <button
+                    onClick={() => setActiveMode('file')}
+                    className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-all ${
+                      activeMode === 'file' ? 'bg-primary text-primary-foreground shadow-md' : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    Upload File
+                  </button>
                 </div>
-              ))}
-            </div>
-
-            {activeMode === 'demo' ? (
-              <button
-                onClick={handleAnalyze}
-                disabled={isProcessing}
-                className="mt-6 w-full px-6 py-3 bg-primary text-primary-foreground rounded-lg font-bold text-sm uppercase tracking-wider hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {isProcessing ? (
-                  <>
-                    <span className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
-                    Mengoptimasi...
-                  </>
-                ) : (
-                  <>
-                    <Cpu className="w-4 h-4" />
-                    Jalankan Optimasi (Demo Data Jakarta)
-                  </>
-                )}
-              </button>
-            ) : (
-              <div className="mt-6">
-                <FileUploader
-                  onFileUpload={handleFileUpload}
-                  isLoading={isProcessing}
-                  label="Upload Data Rute & Pelanggan"
-                  description="Upload file CSV/Excel berisi daftar titik pelanggan dan demand-nya. Wajib mengandung kolom 'Latitude', 'Longitude', 'Demand'. Pastikan titik pertama (atau yang memiliki Demand=0) dianggap sebagai Depot."
-                  templateCsv={`Tipe Lokasi,Nama Lokasi,Latitude,Longitude,Demand (Unit),Time Windows,Service Time (Menit)
-Depot,Pusat Distribusi,-6.200000,106.816666,0,08:00-17:00,0
-Pelanggan,Toko A,-6.210000,106.820000,15,08:00-12:00,30`}
-                />
               </div>
-            )}
+
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+                {[
+                  ...(activeMode === 'demo' ? [{ key: 'n_customers', label: 'Jumlah Pelanggan', step: 1 }] : []),
+                  { key: 'num_vehicles', label: 'Total Jumlah Kendaraan', step: 1 },
+                  { key: 'num_dedicated_vehicles', label: 'Kendaraan Rute Dedicated', step: 1 },
+                  { key: 'vehicle_capacity', label: 'Kapasitas / Kendaraan (unit)', step: 10 },
+                  { key: 'fuel_price', label: 'Harga BBM (Rp/L)', step: 500 },
+                  { key: 'fuel_efficiency', label: 'Efisiensi BBM (km/L)', step: 1 },
+                  { key: 'driver_cost', label: 'Upah Sopir (Rp/hari)', step: 25000 },
+                  { key: 'fixed_cost', label: 'Fixed Cost (Rp/trip)', step: 25000 },
+                  { key: 'maintenance_per_km', label: 'Maintenance (Rp/km)', step: 100 },
+                  { key: 'traffic_factor', label: 'Traffic Factor (1.0-1.5)', step: 0.1 },
+                  { key: 'ga_generations', label: 'GA Generasi', step: 10 },
+                ].map(({ key, label, step }) => (
+                  <div key={key}>
+                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">
+                      {label}
+                    </label>
+                    <input
+                      type="number"
+                      step={step}
+                      value={(form as any)[key]}
+                      onChange={e => updateForm(key, e.target.value)}
+                      className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors"
+                    />
+                  </div>
+                ))}
+              </div>
+
+              {activeMode === 'demo' ? (
+                <button
+                  onClick={handleAnalyze}
+                  disabled={isProcessing}
+                  className="mt-4 w-full px-6 py-3 bg-primary text-primary-foreground rounded-lg font-bold text-sm uppercase tracking-wider hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {isProcessing ? (
+                    <>
+                      <span className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+                      Mengoptimasi...
+                    </>
+                  ) : (
+                    <>
+                      <Cpu className="w-4 h-4" />
+                      Jalankan Optimasi (Demo Data Jakarta)
+                    </>
+                  )}
+                </button>
+              ) : (
+                <div className="bg-muted/30 p-3.5 rounded-lg text-xs text-muted-foreground border border-border flex items-start gap-2.5">
+                  <Info className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                  <div>
+                    <strong className="text-foreground">Catatan Rute Dedicated vs Optimasi:</strong> Kendaraan dedicated akan mengangkut rute yang sudah ditentukan duluan, dan sisa pelanggan kemudian akan dioptimalkan dengan kendaraan reguler yang tersisa.
+                  </div>
+                </div>
+              )}
+            </div>
           </GlassCard>
         </div>
 
-        {/* 4M1E Info Panel */}
-        <div className="md:col-span-1">
-          <GlassCard className="h-full bg-muted/30">
-            <h3 className="text-lg font-bold mb-4 flex items-center gap-2 uppercase tracking-wide">
-              <Info className="w-5 h-5 text-primary" />
-              Faktor 4M1E
-            </h3>
-            <ul className="space-y-3 text-sm text-muted-foreground">
-              {FACTOR_4M1E.map(({ factor, desc, icon }) => (
-                <li key={factor} className="flex items-start gap-2">
-                  <div className="shrink-0 mt-0.5 text-primary">{icon}</div>
-                  <span><strong className="text-foreground">{factor}</strong>: {desc}</span>
-                </li>
-              ))}
-            </ul>
-          </GlassCard>
+        {/* Right Column: FileUploader when in file mode, or 4M1E Info when Demo */}
+        <div className="md:col-span-1 flex flex-col">
+          {activeMode === 'file' ? (
+            <GlassCard className="h-full flex items-center justify-center p-3">
+              <FileUploader
+                onFileUpload={handleFileUpload}
+                isLoading={isProcessing}
+                label="Upload Data Rute"
+                description="CSV/Excel: Tipe Lokasi, Nama Lokasi, Latitude, Longitude, Demand."
+                templateCsv={`Tipe Lokasi,Nama Lokasi,Latitude,Longitude,Demand (Unit),Time Windows,Service Time (Menit)
+Depot,Pusat Distribusi,-6.200000,106.816666,0,08:00-17:00,0
+Pelanggan,Toko A,-6.210000,106.820000,15,08:00-12:00,30`}
+              />
+            </GlassCard>
+          ) : (
+            <GlassCard className="h-full bg-muted/30">
+              <h3 className="text-lg font-bold mb-4 flex items-center gap-2 uppercase tracking-wide">
+                <Info className="w-5 h-5 text-primary" />
+                Faktor 4M1E
+              </h3>
+              <ul className="space-y-3 text-sm text-muted-foreground">
+                {FACTOR_4M1E.map(({ factor, desc, icon }) => (
+                  <li key={factor} className="flex items-start gap-2">
+                    <div className="shrink-0 mt-0.5 text-primary">{icon}</div>
+                    <span><strong className="text-foreground">{factor}</strong>: {desc}</span>
+                  </li>
+                ))}
+              </ul>
+            </GlassCard>
+          )}
         </div>
       </div>
 
@@ -319,14 +347,14 @@ Pelanggan,Toko A,-6.210000,106.820000,15,08:00-12:00,30`}
             </button>
           </div>
           
-          {/* Group / Branch Filter */}
-          {results.length > 1 && (
-            <GlassCard className="!py-3">
-              <div className="w-full md:w-1/3">
-                <label className="text-sm font-medium text-muted-foreground mb-1 block">Filter Cabang</label>
+          {/* Interactive Filters */}
+          <GlassCard className="!py-4 mb-6 border-primary/20">
+            <div className="grid md:grid-cols-3 gap-6">
+              <div>
+                <label className="text-sm font-medium text-muted-foreground mb-1.5 block">Filter Cabang / Grup</label>
                 <select 
                   value={selectedGroup} 
-                  onChange={e => { setSelectedGroup(Number(e.target.value)); setSelectedMethod(0); }}
+                  onChange={e => { setSelectedGroup(Number(e.target.value)); setSelectedMethod(0); setFilterTipeRute(['All']); setFilterSearchStop(['All']); }}
                   className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary"
                 >
                   {results.map((res: any, idx: number) => (
@@ -334,8 +362,30 @@ Pelanggan,Toko A,-6.210000,106.820000,15,08:00-12:00,30`}
                   ))}
                 </select>
               </div>
-            </GlassCard>
-          )}
+              <div>
+                <label className="text-sm font-medium text-muted-foreground mb-1.5 block">Filter Tipe Armada / Rute</label>
+                <MultiSelect
+                  options={['All', 'Dedicated', 'Optimasi']}
+                  selected={filterTipeRute}
+                  onChange={setFilterTipeRute}
+                  selectAllLabel="Semua Tipe Rute"
+                  className="w-full"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-muted-foreground mb-1.5 block">Cari Titik Pemberhentian</label>
+                <MultiSelect
+                  options={['All', ...(Array.from(new Set(
+                    results[selectedGroup]?.methods?.[selectedMethod]?.routes?.flatMap((r: any) => r.stops?.map((s: any) => s.name) || []) || []
+                  )) as string[]).sort()]}
+                  selected={filterSearchStop}
+                  onChange={setFilterSearchStop}
+                  selectAllLabel="Semua Titik Tujuan"
+                  className="w-full"
+                />
+              </div>
+            </div>
+          </GlassCard>
 
           {/* KPI Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -445,7 +495,18 @@ Pelanggan,Toko A,-6.210000,106.820000,15,08:00-12:00,30`}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border/50">
-                      {results[selectedGroup].methods[selectedMethod].routes?.map((r: any, idx: number) => (
+                      {results[selectedGroup].methods[selectedMethod].routes?.filter((r: any) => {
+                        if (!filterTipeRute.includes('All')) {
+                          const routeType = r.is_dedicated ? 'Dedicated' : 'Optimasi';
+                          if (!filterTipeRute.includes(routeType)) return false;
+                        }
+                        if (!filterSearchStop.includes('All')) {
+                          const stopNames = r.stops?.map((s: any) => s.name) || [];
+                          const matchesStop = stopNames.some((name: string) => filterSearchStop.includes(name));
+                          if (!matchesStop) return false;
+                        }
+                        return true;
+                      }).map((r: any, idx: number) => (
                         <tr key={idx} className="hover:bg-muted/30">
                           <td className="py-3 px-3 font-bold text-foreground">
                             {r.vehicle_name || `Kendaraan #${r.route_id}`}
