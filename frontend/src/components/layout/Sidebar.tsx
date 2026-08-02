@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Activity, LineChart, Package,
   FileBarChart, TrendingUp, ClipboardList,
   Network, ShieldCheck, ArrowLeftRight, Ship, Radar,
-  ChevronDown, CalendarClock, Calculator, Layers, Route, Anchor
+  ChevronDown, CalendarClock, Calculator, Layers, Route, Anchor, X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthStore, canAccess } from '@/stores/useAuthStore';
@@ -56,7 +56,7 @@ const MENU_ITEMS: MenuItem[] = [
   },
 ];
 
-export function Sidebar() {
+export function Sidebar({ mobileOpen = false, onCloseMobile }: { mobileOpen?: boolean; onCloseMobile?: () => void } = {}) {
   const pathname = usePathname();
   const { user } = useAuthStore();
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
@@ -87,14 +87,24 @@ export function Sidebar() {
   });
 
   return (
-    <aside className="w-64 bg-card/50 backdrop-blur-sm flex-shrink-0 min-h-screen flex flex-col z-20 border-r border-border">
+    <aside className={`fixed lg:static inset-y-0 left-0 z-40 w-64 bg-card/95 lg:bg-card/50 backdrop-blur-xl lg:backdrop-blur-sm flex-shrink-0 min-h-screen flex flex-col border-r border-border transition-transform duration-300 ease-in-out ${
+      mobileOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full lg:translate-x-0'
+    }`}>
       {/* Logo Area */}
-      <div className="h-16 flex items-center px-6 border-b border-border">
-        <Package className="w-6 h-6 mr-3 text-primary" />
-        <div>
-          <h1 className="font-bold text-base tracking-tight text-foreground leading-tight">DSP Analytics</h1>
-          <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Demand & Supply</p>
+      <div className="h-16 flex items-center justify-between px-6 border-b border-border">
+        <div className="flex items-center">
+          <Package className="w-6 h-6 mr-3 text-primary" />
+          <div>
+            <h1 className="font-bold text-base tracking-tight text-foreground leading-tight">DSP Analytics</h1>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Demand & Supply</p>
+          </div>
         </div>
+        <button
+          onClick={onCloseMobile}
+          className="lg:hidden p-1.5 -mr-2 text-muted-foreground hover:text-foreground rounded-md hover:bg-muted"
+        >
+          <X className="w-5 h-5" />
+        </button>
       </div>
 
       {/* User Info */}
@@ -168,6 +178,7 @@ export function Sidebar() {
                             <Link
                               key={child.href}
                               href={child.href}
+                              onClick={onCloseMobile}
                               className={`relative flex items-center px-3 py-2 rounded-md transition-all duration-200 ${
                                 isChildActive
                                   ? 'text-primary bg-primary/10 font-semibold'
@@ -191,6 +202,7 @@ export function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
+              onClick={onCloseMobile}
               className={`relative flex items-center px-3 py-2.5 rounded-md transition-all duration-200 ${
                 isActive
                   ? 'text-primary bg-primary/10 font-semibold'

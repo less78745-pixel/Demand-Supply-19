@@ -12,7 +12,13 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { user, login } = useAuthStore();
+
+  // Close mobile sidebar whenever route changes
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [pathname]);
 
   useEffect(() => {
     setMounted(true);
@@ -74,14 +80,23 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
-      <Sidebar />
-      <div className="flex flex-col flex-1 overflow-hidden">
-        <Navbar />
-        <main className="flex-1 overflow-y-auto p-6 relative">
+    <div className="flex h-screen overflow-hidden bg-background relative">
+      {/* Mobile Backdrop Overlay */}
+      {mobileMenuOpen && (
+        <div
+          className="fixed inset-0 bg-slate-950/75 z-30 lg:hidden backdrop-blur-xs transition-opacity duration-300"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+
+      <Sidebar mobileOpen={mobileMenuOpen} onCloseMobile={() => setMobileMenuOpen(false)} />
+      
+      <div className="flex flex-col flex-1 overflow-hidden min-w-0">
+        <Navbar onToggleMobile={() => setMobileMenuOpen(!mobileMenuOpen)} />
+        <main className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 relative">
           {children}
           <Toaster position="top-right" toastOptions={{
-            className: '!bg-slate-800 !text-white !border !border-white/10 !backdrop-blur-md',
+            className: '!bg-slate-800 !text-white !border !border-white/10 !backdrop-blur-md text-xs sm:text-sm',
           }} />
         </main>
       </div>

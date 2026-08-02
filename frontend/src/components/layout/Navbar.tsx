@@ -2,10 +2,10 @@
 
 import React from 'react';
 import { useAuthStore } from '@/stores/useAuthStore';
-import { LogOut } from 'lucide-react';
+import { LogOut, Menu } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
-export function Navbar() {
+export function Navbar({ onToggleMobile }: { onToggleMobile?: () => void }) {
   const { user, logout } = useAuthStore();
   const router = useRouter();
 
@@ -16,8 +16,17 @@ export function Navbar() {
 
   return (
     <header className="h-14 border-b border-border bg-card/50 backdrop-blur-sm flex items-center justify-between px-6 shrink-0 z-10 sticky top-0">
-      <div className="flex items-center gap-4">
-        {/* Left side intentionally empty */}
+      <div className="flex items-center gap-3">
+        <button
+          onClick={onToggleMobile}
+          className="lg:hidden p-2 -ml-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors active:scale-95"
+          aria-label="Buka Menu"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+        <span className="lg:hidden font-bold text-sm tracking-tight text-foreground flex items-center gap-1.5">
+          DSP Analytics
+        </span>
       </div>
 
       <div className="flex items-center gap-4">
