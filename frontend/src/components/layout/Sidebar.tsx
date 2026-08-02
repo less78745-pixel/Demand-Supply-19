@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Activity, LineChart, Package,
   FileBarChart, TrendingUp, ClipboardList,
   Network, ShieldCheck, ArrowLeftRight, Ship, Radar,
-  ChevronDown, CalendarClock, Calculator, Layers, Route, Anchor, X
+  ChevronDown, CalendarClock, Calculator, Layers, Route, Anchor, X, GitMerge
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthStore, canAccess } from '@/stores/useAuthStore';
@@ -40,6 +40,7 @@ const MENU_ITEMS: MenuItem[] = [
       { name: 'Occupancy & Inventory', href: '/kalkulator-dsp/occupancy', icon: Activity },
       { name: 'Sales Forecasting', href: '/kalkulator-dsp/forecast', icon: LineChart },
       { name: 'DDMRP Buffer', href: '/kalkulator-dsp/ddmrp', icon: Layers },
+      { name: 'DDMRP Phase 2 (Rolling)', href: '/kalkulator-dsp/ddmrp-phase2', icon: GitMerge },
       { name: 'Route Optimization', href: '/kalkulator-dsp/route-optimization', icon: Route },
     ],
   },
