@@ -124,14 +124,22 @@ const DEFAULT_CONTAINERS: ContainerItem[] = [
   },
 ];
 
-/* ─── Direct Tracking URL Synthesizer (Tanpa Buka Web Satu-Satu & Tanpa Paste) ─── */
+/* ─── Direct Tracking URL Synthesizer (Langsung ke Web Resmi Pelayaran) ─── */
 function getDirectTrackingUrl(carrierName?: string, containerNo?: string): { url: string; source: string } {
   const no = (containerNo || "").trim().toUpperCase();
-  if (!no) return { url: "https://www.searates.com/container/tracking/?shipment-type=sea", source: "SeaRates" };
-
   const carrier = (carrierName || "").toLowerCase().trim();
 
-  // Global shipping lines direct deep link search formulas
+  // 1. Indonesian Domestic & Regional Shipping Lines (DIRECT TO OFFICIAL WEB)
+  if (carrier.includes("meratus")) return { url: "https://www.meratus.com/", source: "Meratus Line Official Web" };
+  if (carrier.includes("temas")) return { url: "https://www.temasline.com/", source: "Temas Line Official Web" };
+  if (carrier.includes("spil") || carrier.includes("salam pacific")) return { url: "https://www.spil.co.id/", source: "SPIL Official Web" };
+  if (carrier.includes("samudera")) return { url: "https://www.samudera.com/", source: "Samudera Indonesia Official Web" };
+  if (carrier.includes("tanto")) return { url: "https://www.tantonet.com/", source: "Tanto Intim Line Official Web" };
+  if (carrier.includes("wan hai") || carrier.includes("wanhai")) return { url: "https://www.wanhai.com/views/Cargo_Tracking/CargoTracking.xhtml", source: "Wan Hai Official Web" };
+  if (carrier.includes("pil") || carrier.includes("pacific int")) return { url: "https://www.pilship.com/cargo-tracking", source: "PIL Official Web" };
+  if (carrier.includes("hmm")) return { url: "https://www.hmm21.com/e-service/general/trackNTrace/TrackNTrace.jsp", source: "HMM Official Web" };
+
+  // 2. Global shipping lines direct deep link search formulas (DIRECT TO OFFICIAL WEB WITH NUMBER PREFILLED)
   if (carrier.includes("maersk")) return { url: `https://www.maersk.com/tracking/${no}`, source: "Maersk Official Direct" };
   if (carrier.includes("msc")) return { url: `https://www.msc.com/en/track-a-shipment?number=${no}`, source: "MSC Official Direct" };
   if (carrier.includes("cma") || carrier.includes("cgm")) return { url: `https://www.cma-cgm.com/ebusiness/tracking/search?SearchBy=CN&Reference=${no}`, source: "CMA CGM Official Direct" };
@@ -143,12 +151,23 @@ function getDirectTrackingUrl(carrierName?: string, containerNo?: string): { url
   if (carrier.includes("yang ming") || carrier.includes("yangming")) return { url: `https://www.yangming.com/e-service/Track_Trace/track_trace_cargo_tracking.aspx?no=${no}`, source: "Yang Ming Official Direct" };
   if (carrier.includes("cosco")) return { url: `https://elines.coscoshipping.com/ebusiness/cargoTracking?no=${no}`, source: "COSCO Official Direct" };
 
-  // For Indonesian Domestic (Meratus, Temas, SPIL, Samudera, Tanto) and ANY custom line:
-  // We utilize Universal Container Tracking Aggregator direct search parameter so user never has to paste or search manually!
+  // 3. Explicit Aggregator requests
+  if (carrier.includes("searates")) return { url: `https://www.searates.com/container/tracking/?number=${no}`, source: "SeaRates Universal" };
   if (carrier.includes("findteu")) return { url: `https://www.findteu.com/tracking/${no}`, source: "FindTEU Universal Direct" };
 
-  // Default Universal Direct Deep Link (SeaRates / Track-Trace) preloaded with container number!
-  return { url: `https://www.searates.com/container/tracking/?number=${no}`, source: `${carrierName || "Agregator"} (Direct Track)` };
+  // 4. Check if existing in CARRIERS catalogue
+  const found = CARRIERS.find(c => c.name.toLowerCase().includes(carrier) && c.url !== "" && !c.name.toLowerCase().includes("agregator"));
+  if (found) {
+    return { url: found.url, source: `${found.name} Official Web` };
+  }
+
+  // 5. Fallback for custom / unlisted shipping line: Directly search their official tracking web!
+  if (carrier && carrier !== "lainnya / custom" && !carrier.includes("agregator")) {
+    return { url: `https://www.google.com/search?q=${encodeURIComponent((carrierName || "") + " container tracking " + no)}`, source: `${carrierName || "Official"} Web` };
+  }
+
+  // Default only if no carrier specified at all
+  return { url: `https://www.searates.com/container/tracking/?number=${no}`, source: "Agregator (Direct Track)" };
 }
 
 /* ─── Helpers ─── */
@@ -808,85 +827,33 @@ export default function TrackingContainerPage() {
         </div>
       </div>
 
-      {/* ═══ PANDUAN 3 KOLOM RAW DATA & UPLOAD EXCEL SECTION ═══ */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-        {/* Panduan & Syarat Raw File */}
-        <div className="lg:col-span-7 flex flex-col justify-between">
-          <GlassCard className="h-full bg-card/70 p-6 border-border shadow-sm flex flex-col justify-between hover:border-primary/40 transition-all duration-300">
-            <div>
-              <div className="flex items-center gap-2.5 pb-3.5 border-b border-border mb-4">
-                <div className="p-2.5 rounded-xl bg-primary/10 text-primary border border-primary/20 shadow-sm">
-                  <Layers className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-sm sm:text-base font-black uppercase tracking-wide text-foreground flex items-center gap-2">
-                    Modul Tracking Raw Data 3 Kolom
-                    <span className="bg-primary/20 text-primary text-[10px] font-extrabold px-2 py-0.5 rounded-md border border-primary/30">Praktis & Super Cepat</span>
-                  </h3>
-                  <p className="text-xs text-muted-foreground">
-                    Format input simpel yang dibutuhkan untuk langsung menyalakan Auto-Tracking
-                  </p>
-                </div>
-              </div>
-
-              <div className="space-y-3.5 text-xs text-muted-foreground leading-relaxed">
-                <div className="flex items-start gap-3 p-3.5 rounded-xl bg-primary/5 border border-primary/20 text-foreground">
-                  <CheckCircle className="w-5 h-5 text-primary shrink-0 mt-0.5" />
-                  <div>
-                    <span className="font-extrabold text-foreground block text-xs uppercase tracking-wide">1. Hanya Butuh 3 Kolom Raw Data:</span>
-                    Anda tidak perlu menyiapkan tabel rumit. Cukup upload file Excel atau CSV yang berisi 3 header murni: <span className="font-mono font-black text-primary bg-background px-1.5 py-0.5 rounded">no_kontainer</span>, <span className="font-mono font-black text-primary bg-background px-1.5 py-0.5 rounded">pelayaran</span>, dan <span className="font-mono font-black text-primary bg-background px-1.5 py-0.5 rounded">cabang</span>.
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3 p-3 rounded-xl bg-background/60 border border-border">
-                  <Zap className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-                  <div>
-                    <span className="font-bold text-foreground block">2. Solusi Tanpa Buka Web Satu-per-Satu:</span>
-                    Setelah diunggah, klik tombol <b>⚡ Auto-Track Semua</b>. Mesin AI dan gateway akan otomatis memproses estimasi status, rute asal/tujuan, dan ETA secara massal tanpa perlu mengklik satu pun link.
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3 p-3 rounded-xl bg-background/60 border border-border">
-                  <Monitor className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                  <div>
-                    <span className="font-bold text-foreground block">3. Portal Web Tracker (Live In-App Viewer):</span>
-                    Ingin memeriksa bukti asli halaman web resmi? Klik <b>🖥️ Portal Web Tracker</b> untuk meluncur melihat web pengiriman satu per satu dalam satu jendela dengan tombol <b>[Selanjutnya &rarr;]</b> tanpa harus ketik atau copy-paste!
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-4 pt-3 border-t border-border flex flex-wrap gap-2 justify-end">
-              <button
-                onClick={() => setIsBulkOpen(true)}
-                className="px-4 py-2 bg-muted hover:bg-muted/80 text-foreground font-bold text-xs rounded-xl transition flex items-center gap-1.5 border border-border min-h-[40px]"
-              >
-                <Upload className="w-3.5 h-3.5 text-primary" /> Impor Teks 3 Kolom
-              </button>
-              <button
-                onClick={handleExportCSV}
-                className="px-4 py-2 bg-muted hover:bg-muted/80 text-foreground font-bold text-xs rounded-xl transition flex items-center gap-1.5 border border-border min-h-[40px]"
-              >
-                <Download className="w-3.5 h-3.5 text-primary" /> Ekspor Hasil Track
-              </button>
-            </div>
-          </GlassCard>
+      {/* ═══ UPLOAD EXCEL & QUICK ACTIONS SECTION ═══ */}
+      <GlassCard className="p-5 bg-card/80 border border-border shadow-sm flex flex-col sm:flex-row items-center justify-between gap-6 hover:border-primary/50 transition-all duration-300">
+        <div className="flex-1 w-full">
+          <FileUploader
+            onFileUpload={handleFileUpload}
+            isLoading={isLoading}
+            templateCsv={"no_kontainer,pelayaran,cabang\nMRTU1234567,Meratus Line,Surabaya\nTEMU7654321,Temas Line,Makassar\nSPIL8899001,SPIL (Salam Pacific Indonesia Lines),Medan\nMAEU9988776,Maersk,Belawan\nMSCU4455667,MSC,Semarang"}
+            templateName="raw_3kolom_tracking_kontainer.csv"
+            label="Upload Raw Data (3 Kolom Murni: no_kontainer, pelayaran, cabang)"
+            description="Tarik & lepas file Excel (.xlsx / .csv) 3 kolom di sini, atau unduh Contoh Format Raw 3 Kolom."
+          />
         </div>
-
-        {/* Upload Excel Card */}
-        <div className="lg:col-span-5 flex flex-col">
-          <GlassCard className="h-full p-5 bg-card/80 border-border shadow-sm flex flex-col justify-center items-center hover:border-primary/50 transition-all duration-300">
-            <FileUploader
-              onFileUpload={handleFileUpload}
-              isLoading={isLoading}
-              templateCsv={"no_kontainer,pelayaran,cabang\nMRTU1234567,Meratus Line,Surabaya\nTEMU7654321,Temas Line,Makassar\nSPIL8899001,SPIL (Salam Pacific Indonesia Lines),Medan\nMAEU9988776,Maersk,Belawan\nMSCU4455667,MSC,Semarang"}
-              templateName="raw_3kolom_tracking_kontainer.csv"
-              label="Upload Raw Data (3 Kolom Murni)"
-              description="Tarik & lepas file Excel (.xlsx / .csv) 3 kolom di sini, atau klik tombol di atas untuk mengunduh Contoh Format Raw 3 Kolom."
-            />
-          </GlassCard>
+        <div className="flex flex-row sm:flex-col gap-2.5 shrink-0 w-full sm:w-auto">
+          <button
+            onClick={() => setIsBulkOpen(true)}
+            className="flex-1 sm:flex-none px-5 py-3 bg-muted hover:bg-muted/80 text-foreground font-extrabold text-xs rounded-xl transition flex items-center justify-center gap-2 border border-border min-h-[44px] shadow-sm active:scale-95"
+          >
+            <Upload className="w-4 h-4 text-primary" /> Impor Teks 3 Kolom
+          </button>
+          <button
+            onClick={handleExportCSV}
+            className="flex-1 sm:flex-none px-5 py-3 bg-muted hover:bg-muted/80 text-foreground font-extrabold text-xs rounded-xl transition flex items-center justify-center gap-2 border border-border min-h-[44px] shadow-sm active:scale-95"
+          >
+            <Download className="w-4 h-4 text-primary" /> Ekspor Hasil Track
+          </button>
         </div>
-      </div>
+      </GlassCard>
 
       {/* ═══ FILTER BAR (MOBILE OPTIMIZED) ═══ */}
       <GlassCard className="p-4 flex flex-col lg:flex-row gap-3.5 items-stretch lg:items-center border border-border bg-card/70 shadow-sm">
