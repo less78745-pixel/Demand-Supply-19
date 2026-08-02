@@ -30,11 +30,11 @@ const CARRIERS = [
   { name: "OOCL", url: "https://www.oocl.com/eng/ourservices/eservices/cargotracking/Pages/cargotracking.aspx" },
   { name: "PIL (Pacific Int'l Lines)", url: "https://www.pilship.com/cargo-tracking" },
   { name: "Wan Hai Lines", url: "https://www.wanhai.com/views/Cargo_Tracking/CargoTracking.xhtml" },
-  { name: "Meratus Line", url: "https://www.meratus.com/" },
-  { name: "Samudera Indonesia", url: "https://www.samudera.com/" },
-  { name: "SPIL (Salam Pacific Indonesia Lines)", url: "https://www.spil.co.id/" },
-  { name: "Temas Line", url: "https://www.temasline.com/" },
-  { name: "Tanto Intim Line", url: "https://www.tantonet.com/" },
+  { name: "Meratus Line", url: "https://www.meratusline.com/" },
+  { name: "Samudera Indonesia (Samudera Connect)", url: "https://samuderaconnect.com/" },
+  { name: "SPIL (mySPIL Online)", url: "https://www.myspil.com/" },
+  { name: "Temas Line (KlikTemas)", url: "https://apps.kliktemas.com/" },
+  { name: "Tanto Intim Line (TantoNet)", url: "https://www.tantonet.com/" },
   { name: "SeaRates (agregator universal)", url: "https://www.searates.com/container/tracking/?shipment-type=sea" },
   { name: "FindTEU (agregator universal)", url: "https://www.findteu.com/" },
   { name: "Lainnya / Custom", url: "" }
@@ -129,12 +129,12 @@ function getDirectTrackingUrl(carrierName?: string, containerNo?: string): { url
   const no = (containerNo || "").trim().toUpperCase();
   const carrier = (carrierName || "").toLowerCase().trim();
 
-  // 1. Indonesian Domestic & Regional Shipping Lines (DIRECT TO OFFICIAL WEB)
-  if (carrier.includes("meratus")) return { url: "https://www.meratus.com/", source: "Meratus Line Official Web" };
-  if (carrier.includes("temas")) return { url: "https://www.temasline.com/", source: "Temas Line Official Web" };
-  if (carrier.includes("spil") || carrier.includes("salam pacific")) return { url: "https://www.spil.co.id/", source: "SPIL Official Web" };
-  if (carrier.includes("samudera")) return { url: "https://www.samudera.com/", source: "Samudera Indonesia Official Web" };
-  if (carrier.includes("tanto")) return { url: "https://www.tantonet.com/", source: "Tanto Intim Line Official Web" };
+  // 1. Indonesian Domestic & Regional Shipping Lines (DIRECT TO OFFICIAL WEB TERUPDATE)
+  if (carrier.includes("temas") || carrier.includes("kliktemas")) return { url: "https://apps.kliktemas.com/", source: "KlikTemas Official Portal" };
+  if (carrier.includes("meratus")) return { url: "https://www.meratusline.com/", source: "Meratus Line Official Web" };
+  if (carrier.includes("spil") || carrier.includes("salam pacific") || carrier.includes("myspil")) return { url: "https://www.myspil.com/", source: "mySPIL Official Portal" };
+  if (carrier.includes("samudera")) return { url: "https://samuderaconnect.com/", source: "Samudera Connect Official" };
+  if (carrier.includes("tanto")) return { url: "https://www.tantonet.com/", source: "TantoNet Official Portal" };
   if (carrier.includes("wan hai") || carrier.includes("wanhai")) return { url: "https://www.wanhai.com/views/Cargo_Tracking/CargoTracking.xhtml", source: "Wan Hai Official Web" };
   if (carrier.includes("pil") || carrier.includes("pacific int")) return { url: "https://www.pilship.com/cargo-tracking", source: "PIL Official Web" };
   if (carrier.includes("hmm")) return { url: "https://www.hmm21.com/e-service/general/trackNTrace/TrackNTrace.jsp", source: "HMM Official Web" };
