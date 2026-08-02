@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Activity, LineChart, Package,
   FileBarChart, TrendingUp, ClipboardList,
   Network, ShieldCheck, ArrowLeftRight, Ship, Radar,
-  ChevronDown, CalendarClock, Calculator, Layers, Route
+  ChevronDown, CalendarClock, Calculator, Layers, Route, Anchor
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthStore, canAccess } from '@/stores/useAuthStore';
@@ -29,6 +29,7 @@ const MENU_ITEMS: MenuItem[] = [
       { name: 'SOH & TO Analysis', href: '/dashboard-harian/soh-to-analysis', icon: ClipboardList },
       { name: 'History Sales-Outstanding', href: '/dashboard-harian/history-sales', icon: TrendingUp },
       { name: 'PR Update', href: '/dashboard-harian/pr-update', icon: FileBarChart },
+      { name: 'Tracking Container', href: '/dashboard-harian/tracking-container', icon: Anchor },
     ],
   },
   {

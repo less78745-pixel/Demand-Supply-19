@@ -7,7 +7,7 @@ import { MultiSelect } from '@/components/ui/MultiSelect';
 import {
   Box, Activity, PackageSearch, ArrowRight, LayoutDashboard, DatabaseZap, Download,
   ClipboardList, TrendingUp, FileBarChart, ShieldCheck, ArrowLeftRight, Ship, Radar,
-  LineChart, AlertTriangle, CheckCircle, XCircle,
+  LineChart, AlertTriangle, CheckCircle, XCircle, Anchor,
 } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
@@ -68,7 +68,7 @@ export default function DashboardOverview() {
   const [data, setData] = useState<any>({
     occupancy: null, forecast: null, inventory: null,
     soh: null, historySales: null, prUpdate: null,
-    safetyStock: null, rebalancing: null, landedCost: null, controlTower: null,
+    safetyStock: null, rebalancing: null, landedCost: null, controlTower: null, trackingContainer: null,
   });
   const [globalCabang, setGlobalCabang] = useState<string[]>(['All']);
   const [isLoading, setIsLoading] = useState(true);
@@ -85,19 +85,26 @@ export default function DashboardOverview() {
         const rbData = JSON.parse(localStorage.getItem('lastRebalancing') || 'null');
         const lcData = JSON.parse(localStorage.getItem('lastLandedCost') || 'null');
         const ctData = JSON.parse(localStorage.getItem('lastControlTower') || 'null');
+        const tcLocal = JSON.parse(localStorage.getItem('last_tracking_containers') || 'null');
 
         // IndexedDB sources (idb-keyval)
         let sohData = null;
         let hsData = null;
         let prData = null;
+        let tcData = tcLocal;
         try { sohData = await get('last_soh_data'); } catch {}
         try { hsData = await get('last_history_sales'); } catch {}
         try { prData = await get('last_pr_update'); } catch {}
+        try { 
+          const dbTc = await get('last_tracking_containers_v2'); 
+          if (dbTc) tcData = dbTc;
+        } catch {}
 
         setData({
           occupancy: occData, forecast: fcData, inventory: invData,
           soh: sohData, historySales: hsData, prUpdate: prData,
           safetyStock: ssData, rebalancing: rbData, landedCost: lcData, controlTower: ctData,
+          trackingContainer: tcData,
         });
       } catch { /* silent */ }
       setIsLoading(false);
@@ -267,6 +274,17 @@ export default function DashboardOverview() {
     return { totalRows: filtered.length, statuses: statusMap };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data.prUpdate, globalCabang]);
+
+  /* ═══ TRACKING CONTAINER ═══ */
+  const trackingContainerSnapshot = useMemo(() => {
+    if (!data.trackingContainer?.containers || !Array.isArray(data.trackingContainer.containers)) return null;
+    const filtered = data.trackingContainer.containers.filter((c: any) => !c.cabang || matchesCabang(c.cabang));
+    const transit = filtered.filter((c: any) => c.status === "Sedang Berlayar").length;
+    const delay = filtered.filter((c: any) => c.status === "Estimasi Delay" || (c.eta && c.status !== "Tiba di Pelabuhan" && c.status !== "Selesai/Diambil" && (new Date(c.eta).getTime() - Date.now()) < 0)).length;
+    const arrived = filtered.filter((c: any) => c.status === "Tiba di Pelabuhan" || c.status === "Selesai/Diambil").length;
+    return { total: filtered.length, transit, delay, arrived };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data.trackingContainer, globalCabang]);
 
   /* ═══ SAFETY STOCK ═══ */
   const safetyStockSnapshot = useMemo(() => {
@@ -595,7 +613,20 @@ export default function DashboardOverview() {
             ) : <EmptySection label="PR Update" />}
           </section>
 
-          {/* ═══ 6. SAFETY STOCK & ROP ═══ */}
+          {/* ═══ TRACKING CONTAINER ═══ */}
+          <section>
+            <SectionHeader title="Tracking Container" icon={Anchor} href="/dashboard-harian/tracking-container" timestamp={data.trackingContainer?.processed_at} />
+            {trackingContainerSnapshot ? (
+              <div className="grid md:grid-cols-4 gap-4">
+                <KPICard title="Total Kontainer" value={trackingContainerSnapshot.total} icon={<Anchor />} />
+                <KPICard title="Sedang Berlayar" value={trackingContainerSnapshot.transit} icon={<Ship />} />
+                <KPICard title="Delay / Lewat ETA" value={trackingContainerSnapshot.delay} icon={<AlertTriangle />} isAlert={trackingContainerSnapshot.delay > 0} />
+                <KPICard title="Tiba / Selesai" value={trackingContainerSnapshot.arrived} icon={<CheckCircle />} />
+              </div>
+            ) : <EmptySection label="Tracking Container" />}
+          </section>
+
+          {/* ═══ SAFETY STOCK & ROP ═══ */}
           <section>
             <SectionHeader title="Safety Stock & ROP" icon={ShieldCheck} href="/scm-analytic/safety-stock" timestamp={data.safetyStock?.processed_at} />
             {safetyStockSnapshot ? (
