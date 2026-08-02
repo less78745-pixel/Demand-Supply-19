@@ -17,6 +17,13 @@ import { parseDynamicCSV, findColumn, ParsedData } from '@/lib/csvParser';
 
 const COLORS = ['#f97316', '#3b82f6', '#22c55e', '#ef4444', '#a855f7', '#eab308', '#06b6d4', '#ec4899'];
 
+const DISTINCT_PALETTE = [
+  '#10B981', '#3B82F6', '#F97316', '#A855F7', '#06B6D4', '#EC4899', '#EAB308', '#EF4444', 
+  '#84CC16', '#6366F1', '#14B8A6', '#D97706', '#8B5CF6', '#F43F5E', '#0EA5E9', '#1E40AF', 
+  '#991B1B', '#065F46', '#4C1D95', '#854D0E', '#34D399', '#FBBF24', '#F87171', '#60A5FA', 
+  '#C084FC', '#2DD4BF', '#F472B6', '#A3E635', '#38BDF8', '#FB923C'
+];
+
 const getPillarCategory = (colName: string): 'On Hand' | 'VESSEL' | 'TO' | 'PLAN LOADING' | 'READY' | 'Lainnya' => {
   const lower = colName.toLowerCase().trim();
   if (lower.includes('on hand') || lower === 'soh' || lower.includes('stock on hand')) return 'On Hand';
@@ -41,7 +48,7 @@ const PILLAR_ORDER = ['On Hand', 'VESSEL', 'TO', 'PLAN LOADING', 'READY'];
 export default function SOHAnalysisPage() {
   const [parsed, setParsed] = useState<ParsedData | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [chartMode, setChartMode] = useState<'summary' | 'detail'>('summary');
+  const [chartMode, setChartMode] = useState<'summary' | 'stock' | 'to' | 'vessel' | 'all_detail'>('summary');
   const [expandedPivot, setExpandedPivot] = useState(false);
   
   useEffect(() => {
@@ -81,7 +88,7 @@ export default function SOHAnalysisPage() {
   };
 
   // Identify column names dynamically
-  const colCabang = useMemo(() => parsed ? findColumn(parsed.headers, ['cabang', 'cab', 'region']) : undefined, [parsed]);
+  const colCabang = useMemo(() => parsed ? findColumn(parsed.headers, ['cabang', 'branch_name', 'branch', 'cab', 'regional', 'region']) : undefined, [parsed]);
   const colCategory = useMemo(() => parsed ? findColumn(parsed.headers, ['grup', 'category', 'kategori item', 'kategori']) : undefined, [parsed]);
   const colInsentif = useMemo(() => parsed ? findColumn(parsed.headers, ['insentif', 'kategori insentif']) : undefined, [parsed]);
 
@@ -263,22 +270,46 @@ export default function SOHAnalysisPage() {
                   Menampilkan perbandingan 5 pilar inbound (On Hand, Vessel, TO, Plan Loading, Ready) di tiap cabang.
                 </p>
               </div>
-              <div className="flex bg-muted/50 p-1 rounded-lg border border-border shrink-0">
+              <div className="flex flex-wrap gap-1.5 bg-muted/50 p-1.5 rounded-xl border border-border shrink-0">
                 <button
                   onClick={() => setChartMode('summary')}
-                  className={`px-3 py-1.5 rounded text-xs font-bold transition-all flex items-center gap-1.5 ${
-                    chartMode === 'summary' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                  className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 ${
+                    chartMode === 'summary' ? 'bg-primary text-primary-foreground shadow-md scale-105' : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   <Layers className="w-3.5 h-3.5" /> 5 Pilar Utama
                 </button>
                 <button
-                  onClick={() => setChartMode('detail')}
-                  className={`px-3 py-1.5 rounded text-xs font-bold transition-all flex items-center gap-1.5 ${
-                    chartMode === 'detail' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                  onClick={() => setChartMode('stock')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 ${
+                    chartMode === 'stock' ? 'bg-emerald-600 text-white shadow-md scale-105' : 'text-muted-foreground hover:text-emerald-500'
                   }`}
                 >
-                  <BarChart3 className="w-3.5 h-3.5" /> Detail Per Week
+                  📦 On Hand & Produksi
+                </button>
+                <button
+                  onClick={() => setChartMode('to')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 ${
+                    chartMode === 'to' ? 'bg-orange-600 text-white shadow-md scale-105' : 'text-muted-foreground hover:text-orange-500'
+                  }`}
+                >
+                  🚚 Transfer Order (TO)
+                </button>
+                <button
+                  onClick={() => setChartMode('vessel')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 ${
+                    chartMode === 'vessel' ? 'bg-blue-600 text-white shadow-md scale-105' : 'text-muted-foreground hover:text-blue-500'
+                  }`}
+                >
+                  🚢 On Vessel
+                </button>
+                <button
+                  onClick={() => setChartMode('all_detail')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 ${
+                    chartMode === 'all_detail' ? 'bg-purple-600 text-white shadow-md scale-105' : 'text-muted-foreground hover:text-purple-500'
+                  }`}
+                >
+                  🌟 Semua Detail Week
                 </button>
               </div>
             </div>
@@ -293,19 +324,32 @@ export default function SOHAnalysisPage() {
                   <Legend verticalAlign="top" height={36} />
                   {chartMode === 'summary' ? (
                     PILLAR_ORDER.map((pillar, idx) => (
-                      <Bar key={pillar} dataKey={pillar} name={`${idx + 1}. ${pillar}`} fill={PILLAR_COLORS[pillar]} radius={[3, 3, 0, 0]} maxBarSize={40} />
+                      <Bar key={pillar} dataKey={pillar} name={`${idx + 1}. ${pillar}`} fill={PILLAR_COLORS[pillar]} radius={[3, 3, 0, 0]} maxBarSize={45} />
                     ))
                   ) : (
-                    PILLAR_ORDER.flatMap((pillar) => (pillarColumnsMap[pillar] || []).map((colName, cIdx) => (
-                      <Bar
-                        key={colName}
-                        dataKey={`details.${colName}`}
-                        name={`[${pillar}] ${colName.replace(/to |vessel /gi, '')}`}
-                        fill={cIdx === 0 ? PILLAR_COLORS[pillar] : COLORS[(cIdx + PILLAR_ORDER.indexOf(pillar)) % COLORS.length]}
-                        radius={[2, 2, 0, 0]}
-                        maxBarSize={25}
-                      />
-                    )))
+                    (() => {
+                      const activePillars = 
+                        chartMode === 'stock' ? ['On Hand', 'PLAN LOADING', 'READY'] :
+                        chartMode === 'to' ? ['TO'] :
+                        chartMode === 'vessel' ? ['VESSEL'] :
+                        PILLAR_ORDER;
+
+                      let globalColorIndex = 0;
+                      return activePillars.flatMap((pillar) => (pillarColumnsMap[pillar] || []).map((colName) => {
+                        const assignedColor = DISTINCT_PALETTE[globalColorIndex % DISTINCT_PALETTE.length];
+                        globalColorIndex++;
+                        return (
+                          <Bar
+                            key={colName}
+                            dataKey={`details.${colName}`}
+                            name={`[${pillar}] ${colName.replace(/to |vessel |on hand |plan loading |ready /gi, '').trim() || colName}`}
+                            fill={assignedColor}
+                            radius={[3, 3, 0, 0]}
+                            maxBarSize={30}
+                          />
+                        );
+                      }));
+                    })()
                   )}
                 </BarChart>
               </ResponsiveContainer>

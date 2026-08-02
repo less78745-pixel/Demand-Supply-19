@@ -6,7 +6,7 @@ import { FileUploader } from '@/components/ui/FileUploader';
 import { KPICard } from '@/components/ui/KPICard';
 import { MultiSelect } from '@/components/ui/MultiSelect';
 import { TimestampBadge } from '@/components/ui/TimestampBadge';
-import { TrendingUp, Info, DollarSign, BarChart3, Table as TableIcon, Download } from 'lucide-react';
+import { TrendingUp, Info, DollarSign, BarChart3, Table as TableIcon, Download, Sparkles, CheckCircle2, AlertCircle, Award, Layers } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -17,9 +17,16 @@ import { parseDynamicCSV, findColumn, ParsedData } from '@/lib/csvParser';
 
 const COLORS = ['#3b82f6', '#f97316', '#22c55e', '#ef4444', '#a855f7', '#eab308'];
 
+const DISTINCT_PALETTE = [
+  '#10B981', '#3B82F6', '#F97316', '#A855F7', '#06B6D4', '#EC4899', '#EAB308', '#EF4444', 
+  '#84CC16', '#6366F1', '#14B8A6', '#D97706', '#8B5CF6', '#F43F5E', '#0EA5E9', '#1E40AF', 
+  '#991B1B', '#065F46', '#4C1D95', '#854D0E', '#34D399', '#FBBF24', '#F87171', '#60A5FA'
+];
+
 export default function HistorySalesPage() {
   const [parsed, setParsed] = useState<ParsedData | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [chartFilter, setChartFilter] = useState<'all' | 'sales' | 'outstanding'>('all');
 
   useEffect(() => {
     get('last_history_sales').then(saved => {
@@ -51,7 +58,7 @@ export default function HistorySalesPage() {
   };
 
   // Identify column names dynamically
-  const colCabang = useMemo(() => parsed ? findColumn(parsed.headers, ['cabang', 'cab', 'region']) : undefined, [parsed]);
+  const colCabang = useMemo(() => parsed ? findColumn(parsed.headers, ['cabang', 'branch_name', 'branch', 'cab', 'regional', 'region']) : undefined, [parsed]);
   const colCategory = useMemo(() => parsed ? findColumn(parsed.headers, ['category', 'grup', 'kategori item', 'kategori']) : undefined, [parsed]);
 
   // Linked Filter options
@@ -132,6 +139,67 @@ export default function HistorySalesPage() {
     return Object.values(map);
   }, [parsed, filtered, colCabang]);
 
+  // Executive Summary Insights Computation
+  const executiveSummary = useMemo(() => {
+    if (!parsed || filtered.length === 0) return null;
+
+    let totalSales = 0;
+    let totalOutstanding = 0;
+    const salesCols: string[] = [];
+    const outstandingCols: string[] = [];
+
+    parsed.targetColumns.forEach(tc => {
+      const lower = tc.name.toLowerCase();
+      if (lower.includes('sales') || lower.includes('jual') || lower.includes('avg')) {
+        salesCols.push(tc.name);
+      } else {
+        outstandingCols.push(tc.name);
+      }
+    });
+
+    const cabangVol: Record<string, { sales: number; outstanding: number; total: number }> = {};
+
+    for (const row of filtered) {
+      const cbg = colCabang ? (String(row[colCabang] || 'Unknown')) : 'All';
+      if (!cabangVol[cbg]) cabangVol[cbg] = { sales: 0, outstanding: 0, total: 0 };
+
+      salesCols.forEach(col => {
+        const val = Number(row[col]) || 0;
+        totalSales += val;
+        cabangVol[cbg].sales += val;
+        cabangVol[cbg].total += val;
+      });
+
+      outstandingCols.forEach(col => {
+        const val = Number(row[col]) || 0;
+        totalOutstanding += val;
+        cabangVol[cbg].outstanding += val;
+        cabangVol[cbg].total += val;
+      });
+    }
+
+    const sortedCabang = Object.entries(cabangVol).sort((a, b) => b[1].total - a[1].total);
+    const topCabang = sortedCabang.length > 0 ? { name: sortedCabang[0][0], ...sortedCabang[0][1] } : null;
+    const ratio = totalSales > 0 ? ((totalOutstanding / totalSales) * 100).toFixed(1) : "N/A";
+
+    return {
+      totalSales,
+      totalOutstanding,
+      topCabang,
+      ratio,
+      salesCols,
+      outstandingCols,
+      totalRows: filtered.length
+    };
+  }, [parsed, filtered, colCabang]);
+
+  const displayedChartColumns = useMemo(() => {
+    if (!parsed) return [];
+    if (!executiveSummary || chartFilter === 'all') return parsed.targetColumns;
+    const targetSet = new Set(chartFilter === 'sales' ? executiveSummary.salesCols : executiveSummary.outstandingCols);
+    return parsed.targetColumns.filter(tc => targetSet.has(tc.name));
+  }, [parsed, executiveSummary, chartFilter]);
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-10">
       <header className="mb-8 border-b border-border pb-6">
@@ -207,19 +275,154 @@ export default function HistorySalesPage() {
             </div>
           </GlassCard>
 
+          {/* ═══ EXECUTIVE SUMMARY BANNER & KPI INSIGHTS ═══ */}
+          {executiveSummary && (
+            <div className="space-y-6">
+              <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-card via-card/95 to-card border border-primary/40 p-6 sm:p-8 shadow-2xl text-foreground">
+                <div className="absolute top-0 right-0 -mr-20 -mt-20 w-96 h-96 bg-gradient-to-bl from-primary/20 via-sky-500/10 to-transparent rounded-full blur-3xl pointer-events-none"></div>
+                
+                <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 pb-6 border-b border-border/80">
+                  <div>
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/20 text-primary text-xs font-black uppercase tracking-wider mb-3 border border-primary/30 shadow-xs">
+                      <Sparkles className="w-3.5 h-3.5" /> Executive Summary & Analytics
+                    </span>
+                    <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground uppercase">
+                      Ringkasan <span className="text-primary">Performa & Outstanding</span>
+                    </h2>
+                    <p className="text-xs sm:text-sm text-muted-foreground mt-1 font-medium">
+                      Intisari analitis tingkat tinggi untuk percepat pemantauan suplai barang dan pencapaian target penjualan cabang.
+                    </p>
+                  </div>
+
+                  {executiveSummary.topCabang && (
+                    <div className="bg-background/80 backdrop-blur border border-amber-500/40 rounded-xl p-4 shrink-0 flex items-center gap-4 shadow-md max-w-sm w-full md:w-auto">
+                      <div className="p-3 bg-amber-500/15 text-amber-500 rounded-xl border border-amber-500/30">
+                        <Award className="w-7 h-7 animate-pulse" />
+                      </div>
+                      <div>
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-amber-500">Cabang Dominan (Terbesar)</span>
+                        <h3 className="text-lg font-black text-foreground font-mono">{executiveSummary.topCabang.name}</h3>
+                        <p className="text-[11px] text-muted-foreground font-medium">
+                          Kontribusi: <b>{executiveSummary.topCabang.total.toLocaleString('id-ID')}</b> unit
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
+                  <div className="p-5 rounded-xl bg-background/60 border border-border/80 flex flex-col justify-between hover:border-primary/50 transition-all shadow-xs">
+                    <div className="flex justify-between items-start">
+                      <span className="text-xs text-muted-foreground font-extrabold uppercase tracking-wider">Total Volume Sales</span>
+                      <TrendingUp className="w-5 h-5 text-emerald-500 shrink-0" />
+                    </div>
+                    <div className="mt-4">
+                      <span className="text-2xl sm:text-3xl font-black text-emerald-500 font-mono">
+                        {executiveSummary.totalSales.toLocaleString('id-ID')}
+                      </span>
+                      <p className="text-[11px] text-muted-foreground mt-1 font-medium">Akumulasi seluruh kolom penjualan</p>
+                    </div>
+                  </div>
+
+                  <div className="p-5 rounded-xl bg-background/60 border border-border/80 flex flex-col justify-between hover:border-primary/50 transition-all shadow-xs">
+                    <div className="flex justify-between items-start">
+                      <span className="text-xs text-muted-foreground font-extrabold uppercase tracking-wider">Total Outstanding & SOH</span>
+                      <AlertCircle className="w-5 h-5 text-sky-500 shrink-0" />
+                    </div>
+                    <div className="mt-4">
+                      <span className="text-2xl sm:text-3xl font-black text-sky-500 font-mono">
+                        {executiveSummary.totalOutstanding.toLocaleString('id-ID')}
+                      </span>
+                      <p className="text-[11px] text-muted-foreground mt-1 font-medium">Akumulasi SOH, Vessel, TO, & Plan Loading</p>
+                    </div>
+                  </div>
+
+                  <div className="p-5 rounded-xl bg-background/60 border border-border/80 flex flex-col justify-between hover:border-primary/50 transition-all shadow-xs">
+                    <div className="flex justify-between items-start">
+                      <span className="text-xs text-muted-foreground font-extrabold uppercase tracking-wider">Rasio Stok vs Sales</span>
+                      <CheckCircle2 className="w-5 h-5 text-purple-500 shrink-0" />
+                    </div>
+                    <div className="mt-4">
+                      <span className="text-2xl sm:text-3xl font-black text-purple-500 font-mono">
+                        {executiveSummary.ratio}%
+                      </span>
+                      <p className="text-[11px] text-muted-foreground mt-1 font-medium">Proporsi persediaan berbanding volume sales</p>
+                    </div>
+                  </div>
+
+                  <div className="p-5 rounded-xl bg-background/60 border border-border/80 flex flex-col justify-between hover:border-primary/50 transition-all shadow-xs">
+                    <div className="flex justify-between items-start">
+                      <span className="text-xs text-muted-foreground font-extrabold uppercase tracking-wider">Total Baris Aktif</span>
+                      <BarChart3 className="w-5 h-5 text-amber-500 shrink-0" />
+                    </div>
+                    <div className="mt-4">
+                      <span className="text-2xl sm:text-3xl font-black text-foreground font-mono">
+                        {executiveSummary.totalRows.toLocaleString('id-ID')}
+                      </span>
+                      <p className="text-[11px] text-muted-foreground mt-1 font-medium">Jumlah SKU / rekor sesuai filter</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-6 p-4 rounded-xl bg-primary/10 border border-primary/30 flex items-center gap-3.5 shadow-xs">
+                  <div className="w-2.5 h-2.5 rounded-full bg-primary animate-ping shrink-0" />
+                  <p className="text-xs sm:text-sm font-semibold text-foreground leading-relaxed">
+                    <b>💡 Rekomendasi Strategis Eksekutif:</b> Cabang <span className="text-primary font-extrabold underline">{executiveSummary.topCabang?.name || "Utama"}</span> memiliki volume aktivitas terpadat. Disarankan memantau ketat pergerakan TO dan bongkar muat On Vessel di cabang ini agar suplai barang tidak mengalami bottleneck dan target sales tercapai maksimal.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Dynamic Bar Chart per Cabang */}
           <GlassCard>
-            <h3 className="text-sm font-bold text-foreground mb-4 uppercase tracking-wide">Summary Metrik per Cabang</h3>
-            <div className="h-[400px]">
+            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-6 border-b border-border pb-4">
+              <div>
+                <h3 className="text-lg font-bold text-foreground uppercase tracking-wide flex items-center gap-2">
+                  <BarChart3 className="w-5 h-5 text-primary" />
+                  Summary Metrik per Cabang
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Visualisasi komparasi metrik di tiap kantor cabang secara terpusat.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-1.5 bg-muted/50 p-1.5 rounded-xl border border-border shrink-0">
+                <button
+                  onClick={() => setChartFilter('all')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 ${
+                    chartFilter === 'all' ? 'bg-primary text-primary-foreground shadow-md' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <Layers className="w-3.5 h-3.5" /> Semua Metrik
+                </button>
+                <button
+                  onClick={() => setChartFilter('sales')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 ${
+                    chartFilter === 'sales' ? 'bg-emerald-600 text-white shadow-md' : 'text-muted-foreground hover:text-emerald-500'
+                  }`}
+                >
+                  📈 Fokus Sales
+                </button>
+                <button
+                  onClick={() => setChartFilter('outstanding')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 ${
+                    chartFilter === 'outstanding' ? 'bg-sky-600 text-white shadow-md' : 'text-muted-foreground hover:text-sky-500'
+                  }`}
+                >
+                  📦 Fokus Outstanding & SOH
+                </button>
+              </div>
+            </div>
+            <div className="h-[420px]">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
+                <BarChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 25 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                  <XAxis dataKey="cabang" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} tickLine={false} axisLine={false} />
-                  <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} tickLine={false} axisLine={false} />
-                  <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--popover))', borderColor: 'hsl(var(--border))', color: 'hsl(var(--popover-foreground))' }} />
-                  <Legend />
-                  {parsed.targetColumns.map((tc, idx) => (
-                    <Bar key={tc.name} dataKey={tc.name} fill={COLORS[idx % COLORS.length]} radius={[2, 2, 0, 0]} />
+                  <XAxis dataKey="cabang" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} tickLine={false} axisLine={false} interval={0} angle={-25} textAnchor="end" height={60} />
+                  <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} tickLine={false} axisLine={false} tickFormatter={(val) => val >= 1000 ? `${(val/1000).toFixed(0)}k` : val} />
+                  <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--popover))', borderColor: 'hsl(var(--border))', color: 'hsl(var(--popover-foreground))', borderRadius: '8px' }} />
+                  <Legend verticalAlign="top" height={36} />
+                  {displayedChartColumns.map((tc, idx) => (
+                    <Bar key={tc.name} dataKey={tc.name} fill={DISTINCT_PALETTE[idx % DISTINCT_PALETTE.length]} radius={[3, 3, 0, 0]} maxBarSize={35} />
                   ))}
                 </BarChart>
               </ResponsiveContainer>

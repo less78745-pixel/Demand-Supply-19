@@ -153,8 +153,13 @@ export default function DashboardOverview() {
   /* ─── Helper: find cabang column in dynamic CSV ─── */
   function findCabangColumn(headers: string[] | undefined): string | undefined {
     if (!headers) return undefined;
-    const candidates = ['cabang', 'cab', 'region', 'branch_name', 'regional'];
-    return headers.find(h => candidates.includes(h.toLowerCase()));
+    const candidates = ['cabang', 'branch_name', 'branch', 'cab', 'regional', 'region'];
+    const hLower = headers.map(h => h.toLowerCase().trim());
+    for (const cand of candidates) {
+      const idx = hLower.findIndex(h => h.includes(cand));
+      if (idx !== -1) return headers[idx];
+    }
+    return undefined;
   }
 
   function isGarbage(val: any): boolean {

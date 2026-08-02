@@ -228,10 +228,6 @@ export default function TrackingContainerPage() {
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Auto-Tracking Batch Engine States
-  const [isAutoTracking, setIsAutoTracking] = useState(false);
-  const [trackProgress, setTrackProgress] = useState({ current: 0, total: 0, activeNo: "", activeCarrier: "" });
-
   // Web Tracker Portal States (All-in-One Live Viewer)
   const [isPortalOpen, setIsPortalOpen] = useState(false);
   const [activePortalIndex, setActivePortalIndex] = useState(0);
@@ -403,89 +399,6 @@ export default function TrackingContainerPage() {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  /* ─── 🚀 ENGINE AUTO-TRACK MASSAL (BATCH AUTO-CHECK) ─── */
-  const handleRunAutoTrackingEngine = async () => {
-    if (containers.length === 0) {
-      toast.error("Belum ada kontainer untuk di-track!");
-      return;
-    }
-
-    setIsAutoTracking(true);
-    const total = containers.length;
-    setTrackProgress({ current: 0, total, activeNo: "", activeCarrier: "" });
-    toast.loading("⚡ Mengoperasikan Mesin Auto-Tracking ke server pelayaran...", { id: "auto-engine" });
-
-    const updatedList: ContainerItem[] = [...containers];
-
-    for (let i = 0; i < total; i++) {
-      const item = updatedList[i];
-      setTrackProgress({ current: i + 1, total, activeNo: item.no, activeCarrier: item.carrier });
-
-      // Simulate sequential smart tracking check delay (200-350ms)
-      await new Promise(r => setTimeout(r, 280));
-
-      // Automatic intelligent route assignment based on branch if empty
-      let pol = item.pol;
-      let pod = item.pod;
-      const cbgLower = item.cabang.toLowerCase();
-      if (!pol || !pod) {
-        pol = pol || "Tanjung Priok, Jakarta";
-        if (cbgLower.includes("surabaya") || cbgLower.includes("perak")) pod = "Tanjung Perak, Surabaya";
-        else if (cbgLower.includes("makassar")) pod = "Soekarno-Hatta, Makassar";
-        else if (cbgLower.includes("medan") || cbgLower.includes("belawan")) pod = "Belawan, Medan";
-        else if (cbgLower.includes("semarang") || cbgLower.includes("emas")) pod = "Tanjung Emas, Semarang";
-        else if (cbgLower.includes("banjarmasin")) pod = "Trisakti, Banjarmasin";
-        else if (cbgLower.includes("pontianak")) pod = "Dwi Kora, Pontianak";
-        else if (cbgLower.includes("bitung") || cbgLower.includes("manado")) pod = "Bitung, Sulawesi Utara";
-        else pod = `Pelabuhan Tujuan (${item.cabang})`;
-      }
-
-      // Automatic dates & shipping progress determination
-      let etd = item.etd;
-      let eta = item.eta;
-      if (!etd || !eta) {
-        const pastDays = (i % 5) + 2; // 2 to 6 days ago
-        const futureDays = (i % 4) - 1; // -1 (arrived/delay) to +2 days future
-        const dtEtd = new Date(Date.now() - pastDays * 86400000);
-        const dtEta = new Date(Date.now() + futureDays * 86400000);
-        etd = dtEtd.toISOString().slice(0, 10);
-        eta = dtEta.toISOString().slice(0, 10);
-      }
-
-      // Determine new status if currently untracked
-      let newStatus = item.status;
-      if (item.status === "Siap Di-track" || !item.lastChecked) {
-        const etaDate = new Date(eta).getTime();
-        const now = Date.now();
-        if (etaDate < now - 86400000) {
-          newStatus = "Estimasi Delay";
-        } else if (Math.abs(etaDate - now) < 86400000) {
-          newStatus = "Tiba di Pelabuhan";
-        } else {
-          newStatus = "Sedang Berlayar";
-        }
-      }
-
-      const directUrlInfo = getDirectTrackingUrl(item.carrier, item.no);
-
-      updatedList[i] = {
-        ...item,
-        pol,
-        pod,
-        etd,
-        eta,
-        status: newStatus,
-        lastChecked: todayISO(),
-        notes: item.notes && !item.notes.includes("Raw") ? item.notes : `⚡ Terverifikasi via ${directUrlInfo.source}`
-      };
-    }
-
-    setContainers(updatedList);
-    await saveToStorage(updatedList);
-    setIsAutoTracking(false);
-    toast.success(`⚡ Auto-Tracking selesai! ${total} kontainer telah diverifikasi dan diperbarui secara otomatis.`, { id: "auto-engine", duration: 5000 });
   };
 
   /* ─── Open All-in-One Web Portal ─── */
@@ -776,25 +689,8 @@ export default function TrackingContainerPage() {
               <TimestampBadge timestamp={lastUpdated} label="Tanggal Olahan Terakhir" />
             </div>
             <p className="text-xs sm:text-sm text-muted-foreground max-w-3xl leading-relaxed font-medium">
-              Modul pelacakan otomatis berdaya tinggi. Cukup impor <b>3 kolom raw data</b> (<code>no_kontainer, pelayaran, cabang</code>), lalu klik tombol <b>Auto-Track Semua</b> atau <b>Portal Web Tracker</b> untuk memantau status langsung tanpa harus membuka web pelayaran satu per satu secara manual.
+              Modul pelacakan otomatis berdaya tinggi. Cukup impor <b>3 kolom raw data</b> (<code>no_kontainer, pelayaran, cabang</code>), lalu klik tombol <b>Direct Track URL</b> pada tabel di bawah untuk memantau status kontainer di web resmi pelayaran secara langsung.
             </p>
-          </div>
-
-          <div className="flex flex-wrap gap-2.5 items-center shrink-0 w-full xl:w-auto">
-            <button
-              onClick={() => handleOpenWebPortal()}
-              className="w-full sm:w-auto px-4 py-3 bg-secondary hover:bg-secondary/80 text-foreground font-extrabold text-xs rounded-xl border border-border shadow-md transition-all flex items-center justify-center gap-2 active:scale-95 min-h-[44px]"
-            >
-              <Monitor className="w-4 h-4 text-primary animate-pulse" /> 🖥️ Portal Web Tracker
-            </button>
-            <button
-              onClick={handleRunAutoTrackingEngine}
-              disabled={isAutoTracking || containers.length === 0}
-              className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-primary via-orange-500 to-amber-500 hover:opacity-95 text-primary-foreground font-black text-xs sm:text-sm rounded-xl shadow-[0_0_20px_rgba(249,115,22,0.4)] transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50 min-h-[44px]"
-            >
-              <Zap className="w-5 h-5 fill-current animate-bounce" /> 
-              {isAutoTracking ? "⚡ Mengecek..." : "⚡ Auto-Track Semua (Batch)"}
-            </button>
           </div>
         </div>
 
@@ -1010,43 +906,6 @@ export default function TrackingContainerPage() {
               );
             })
           )}
-        </div>
-      )}
-
-      {/* ═══ AUTO-TRACKING ENGINE PROGRESS MODAL ═══ */}
-      {isAutoTracking && (
-        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-          <div className="bg-card border border-primary/40 rounded-2xl w-full max-w-md shadow-2xl p-6 text-center space-y-4 relative overflow-hidden">
-            <div className="w-16 h-16 bg-primary/15 text-primary rounded-full flex items-center justify-center mx-auto shadow-inner border border-primary/30 animate-pulse">
-              <Ship className="w-8 h-8 animate-bounce" />
-            </div>
-            <h3 className="text-lg font-black uppercase tracking-wide text-foreground">
-              ⚡ Mesin Auto-Tracking Beroperasi
-            </h3>
-            <p className="text-xs text-muted-foreground font-medium">
-              Menghubungi gateway pelayaran dan meresolusikan status, rute, serta estimasi tanggal secara realtime tanpa buka web satu per satu...
-            </p>
-            
-            <div className="p-3.5 rounded-xl bg-background/80 border border-border font-mono text-xs text-left space-y-1">
-              <div className="flex justify-between font-bold text-foreground">
-                <span>Kontainer: <span className="text-primary">{trackProgress.activeNo}</span></span>
-                <span>[{trackProgress.current} / {trackProgress.total}]</span>
-              </div>
-              <div className="text-[11px] text-muted-foreground">
-                Maskapai: <span className="text-foreground font-semibold">{trackProgress.activeCarrier || "Universal"}</span>
-              </div>
-            </div>
-
-            <div className="w-full bg-muted h-3 rounded-full overflow-hidden border border-border/60">
-              <div
-                className="bg-gradient-to-r from-primary via-orange-500 to-amber-400 h-full transition-all duration-300"
-                style={{ width: `${Math.round((trackProgress.current / trackProgress.total) * 100)}%` }}
-              />
-            </div>
-            <p className="text-[11px] text-primary font-bold font-mono">
-              Progres: {Math.round((trackProgress.current / trackProgress.total) * 100)}%
-            </p>
-          </div>
         </div>
       )}
 

@@ -53,7 +53,7 @@ export default function PRUpdatePage() {
   };
 
   // Identify column names dynamically
-  const colCabang = useMemo(() => parsed ? findColumn(parsed.headers, ['branch_name', 'regional', 'cabang']) : undefined, [parsed]);
+  const colCabang = useMemo(() => parsed ? findColumn(parsed.headers, ['cabang', 'branch_name', 'branch', 'cab', 'regional', 'region']) : undefined, [parsed]);
   const colCategory = useMemo(() => parsed ? findColumn(parsed.headers, ['item category', 'grup', 'category']) : undefined, [parsed]);
   const colEta = useMemo(() => parsed ? findColumn(parsed.headers, ['week eta', 'eta fix', 'tanggal eta']) : undefined, [parsed]);
   const colStatus = useMemo(() => parsed ? findColumn(parsed.headers, ['status compile', 'status']) : undefined, [parsed]);
