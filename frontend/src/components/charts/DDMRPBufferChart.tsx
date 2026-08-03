@@ -23,22 +23,30 @@ interface DDMRPBufferChartProps {
 }
 
 export function DDMRPBufferChart({ bufferZones, netFlowPosition, label }: DDMRPBufferChartProps) {
+  const safeRed = Number(bufferZones?.red_zone) || 0;
+  const safeYellow = Number(bufferZones?.yellow_zone) || 0;
+  const safeGreen = Number(bufferZones?.green_zone) || 0;
+  const safeTopRed = Number(bufferZones?.top_of_red) || safeRed;
+  const safeTopYellow = Number(bufferZones?.top_of_yellow) || (safeRed + safeYellow);
+  const safeTopGreen = Number(bufferZones?.top_of_green) || (safeRed + safeYellow + safeGreen);
+  const safeNFP = Number(netFlowPosition) || 0;
+
   const data = [
     {
       name: label || 'Buffer',
-      red: bufferZones.red_zone,
-      yellow: bufferZones.yellow_zone,
-      green: bufferZones.green_zone,
+      red: safeRed,
+      yellow: safeYellow,
+      green: safeGreen,
     },
   ];
 
   // Determine NFP zone color
   let nfpColor = '#22c55e'; // green
   let nfpZone = 'Green';
-  if (netFlowPosition < bufferZones.top_of_red) {
+  if (safeNFP < safeTopRed) {
     nfpColor = '#ef4444';
     nfpZone = 'RED — URGENT';
-  } else if (netFlowPosition < bufferZones.top_of_yellow) {
+  } else if (safeNFP < safeTopYellow) {
     nfpColor = '#f59e0b';
     nfpZone = 'Yellow — Order';
   }
@@ -54,30 +62,30 @@ export function DDMRPBufferChart({ bufferZones, netFlowPosition, label }: DDMRPB
               <span className="w-2.5 h-2.5 rounded-sm" style={{ background: '#ef4444' }} />
               Red Zone
             </span>
-            <span className="font-mono font-semibold">{bufferZones.red_zone.toLocaleString()}</span>
+            <span className="font-mono font-semibold">{safeRed.toLocaleString()}</span>
           </div>
           <div className="flex justify-between gap-6">
             <span className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-sm" style={{ background: '#f59e0b' }} />
               Yellow Zone
             </span>
-            <span className="font-mono font-semibold">{bufferZones.yellow_zone.toLocaleString()}</span>
+            <span className="font-mono font-semibold">{safeYellow.toLocaleString()}</span>
           </div>
           <div className="flex justify-between gap-6">
             <span className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-sm" style={{ background: '#22c55e' }} />
               Green Zone
             </span>
-            <span className="font-mono font-semibold">{bufferZones.green_zone.toLocaleString()}</span>
+            <span className="font-mono font-semibold">{safeGreen.toLocaleString()}</span>
           </div>
           <hr className="border-border my-1" />
           <div className="flex justify-between gap-6">
             <span className="font-semibold">TOG (Top of Green)</span>
-            <span className="font-mono font-bold">{bufferZones.top_of_green.toLocaleString()}</span>
+            <span className="font-mono font-bold">{safeTopGreen.toLocaleString()}</span>
           </div>
           <div className="flex justify-between gap-6">
             <span className="font-semibold" style={{ color: nfpColor }}>NFP</span>
-            <span className="font-mono font-bold" style={{ color: nfpColor }}>{netFlowPosition.toLocaleString()}</span>
+            <span className="font-mono font-bold" style={{ color: nfpColor }}>{safeNFP.toLocaleString()}</span>
           </div>
         </div>
       </div>
@@ -90,7 +98,7 @@ export function DDMRPBufferChart({ bufferZones, netFlowPosition, label }: DDMRPB
         <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Buffer Zone Visualization</h4>
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-card/50">
           <span className="w-2 h-2 rounded-full animate-pulse" style={{ background: nfpColor }} />
-          <span className="text-xs font-semibold" style={{ color: nfpColor }}>NFP: {netFlowPosition.toLocaleString()} ({nfpZone})</span>
+          <span className="text-xs font-semibold" style={{ color: nfpColor }}>NFP: {safeNFP.toLocaleString()} ({nfpZone})</span>
         </div>
       </div>
 

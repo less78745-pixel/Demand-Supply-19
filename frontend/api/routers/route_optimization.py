@@ -112,12 +112,23 @@ async def analyze_route_optimization_file(
         contents = await file.read()
         
         # Determine file type
-        if file.filename.endswith(".csv"):
-            df = pd.read_csv(io.BytesIO(contents))
-        elif file.filename.endswith((".xls", ".xlsx")):
+        filename_lower = file.filename.lower() if file.filename else ""
+        if filename_lower.endswith(".csv"):
+            try:
+                df = pd.read_csv(io.BytesIO(contents), sep=None, engine='python', encoding='utf-8')
+            except UnicodeDecodeError:
+                try:
+                    df = pd.read_csv(io.BytesIO(contents), sep=None, engine='python', encoding='cp1252')
+                except Exception:
+                    df = pd.read_csv(io.BytesIO(contents), encoding='cp1252')
+            except Exception:
+                df = pd.read_csv(io.BytesIO(contents))
+        elif filename_lower.endswith((".xls", ".xlsx", ".xlsm", ".xlsb")):
             df = pd.read_excel(io.BytesIO(contents))
         else:
             raise HTTPException(status_code=400, detail="Hanya mendukung file CSV atau Excel (.xls, .xlsx)")
+
+        df.columns = df.columns.str.strip()
 
         cost_params = {
             "fuel_price_per_liter": fuel_price_per_liter,

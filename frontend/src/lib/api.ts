@@ -141,7 +141,16 @@ export const uploadRouteOptimizationFile = async (
   formData.append('file', file);
   Object.entries(params).forEach(([k, v]) => {
     if (v !== undefined && v !== null) {
-      formData.append(k, String(v));
+      if (typeof v === 'object' && !Array.isArray(v)) {
+        Object.entries(v).forEach(([subKey, subVal]) => {
+          if (subVal !== undefined && subVal !== null) {
+            formData.append(subKey, String(subVal));
+          }
+        });
+        formData.append(k, JSON.stringify(v));
+      } else {
+        formData.append(k, String(v));
+      }
     }
   });
   const response = await api.post('/analyze/route-optimization/file', formData);

@@ -303,8 +303,31 @@ def analyze_ddmrp_manual(params: dict) -> dict:
 # ══════════════════════════════════════════════════════════════
 
 def _safe_float(v) -> float:
+    if v is None:
+        return 0.0
+    if isinstance(v, (int, float)):
+        if math.isnan(v) or math.isinf(v):
+            return 0.0
+        return float(v)
     try:
-        val = float(v)
+        s = str(v).strip()
+        if s in ('', '-', ' - ', 'nan', 'null', 'None', 'NaN'):
+            return 0.0
+        import re
+        s = re.sub(r'[^\d.,+-]', '', s)
+        if not s:
+            return 0.0
+        if '.' in s and ',' in s:
+            if s.rfind(',') > s.rfind('.'):
+                s = s.replace('.', '').replace(',', '.')
+            else:
+                s = s.replace(',', '')
+        elif ',' in s and '.' not in s:
+            s = s.replace(',', '.')
+        elif '.' in s and ',' not in s:
+            if s.count('.') > 1:
+                s = s.replace('.', '')
+        val = float(s)
         if math.isnan(val) or math.isinf(val):
             return 0.0
         return val
@@ -333,33 +356,43 @@ def analyze_ddmrp_from_file(
     col_map = {}
     for c in df.columns:
         cl = str(c).strip().lower()
-        if cl in ("sku", "item", "product", "nama barang"):
+        if cl in ("sku", "item", "product", "nama barang", "kode barang", "part number", "material"):
             col_map[c] = "sku"
-        elif cl in ("cabang", "nama cabang", "branch", "lokasi"):
+        elif cl in ("cabang", "nama cabang", "branch", "lokasi", "gudang", "site", "store", "regional"):
             col_map[c] = "cabang"
-        elif cl in ("kategori", "category", "category product", "jenis"):
+        elif cl in ("kategori", "category", "category product", "jenis", "group", "grup", "kategori item"):
             col_map[c] = "category"
-        elif cl in ("date", "tanggal", "waktu", "bulan"):
+        elif cl in ("date", "tanggal", "waktu", "bulan", "periode", "period", "week", "minggu"):
             col_map[c] = "date"
-        elif cl in ("sales", "penjualan", "qty", "demand"):
+        elif cl in ("sales", "penjualan", "qty", "demand", "usage", "pemakaian", "keluar", "outbound", "qty penjualan", "total qty", "jumlah", "volume", "konsumsi", "adu"):
             col_map[c] = "sales"
-        elif cl in ("on_hand", "on hand", "stok", "inventory", "on-hand"):
+        elif cl in ("on_hand", "on hand", "stok", "inventory", "on-hand", "stok akhir", "current stock", "stock", "sisa stok", "saldo awal"):
             col_map[c] = "on_hand"
-        elif cl in ("on_order", "on order", "pesanan", "on-order"):
+        elif cl in ("on_order", "on order", "pesanan", "on-order", "in transit", "po active", "open order", "order"):
             col_map[c] = "on_order"
-        elif cl in ("qualified_demand", "qualified demand", "kebutuhan"):
+        elif cl in ("qualified_demand", "qualified demand", "kebutuhan", "backorder", "pending order"):
             col_map[c] = "qualified_demand"
-        elif cl in ("lead time", "lead time (hari)", "dlt"):
+        elif cl in ("lead time", "lead time (hari)", "dlt", "dlt (days)", "leadtime", "waktu kirim"):
             col_map[c] = "dlt"
-        elif cl in ("moq", "moq (unit)"):
+        elif cl in ("moq", "moq (unit)", "min order", "minimum order", "min order qty"):
             col_map[c] = "moq"
-        elif cl in ("order cycle", "order cycle (hari)", "oc"):
+        elif cl in ("order cycle", "order cycle (hari)", "oc", "cycle", "siklus order"):
             col_map[c] = "oc"
+        elif cl in ("cov", "coefficient of variation", "variabilitas"):
+            col_map[c] = "cov"
 
     df = df.rename(columns=col_map)
 
     if "sales" not in df.columns:
-        return {"error": "Kolom 'Penjualan' atau 'Sales' tidak ditemukan."}
+        # Fallback: cari kolom numerik yang mungkin adalah sales/qty
+        possible_cols = [c for c in df.columns if any(kw in str(c).lower() for kw in ["qty", "sales", "jual", "demand", "usage", "total", "jumlah", "stok", "unit"])]
+        if possible_cols:
+            df["sales"] = df[possible_cols[0]]
+        elif len(df.columns) >= 2:
+            # Jika ada min 2 kolom, asumsi kolom 2 adalah nilai quantitas
+            df["sales"] = df.iloc[:, 1]
+        else:
+            return {"error": f"Kolom 'Penjualan', 'Sales', atau kuantitas barang tidak ditemukan. Kolom terdeteksi: {', '.join([str(c) for c in df.columns])}"}
 
     df["sales"] = df["sales"].apply(_safe_float)
 
@@ -391,8 +424,8 @@ def analyze_ddmrp_from_file(
         else:
             label = " — ".join(str(k) for k in group_key)
 
-        sales_list = group_df["sales"].tolist()
-        if len(sales_list) < 2:
+        sales_list = [s for s in group_df["sales"].tolist() if s >= 0]
+        if len(sales_list) < 1:
             continue
             
         # Get latest inventory data if available
@@ -406,15 +439,21 @@ def analyze_ddmrp_from_file(
         oc_val = _safe_float(group_df.iloc[-1]["oc"]) if "oc" in group_df.columns else order_cycle_days
 
         # Standard ADU vs XGBoost ADU
-        adu = calc_adu(sales_list, period_days=30)
-        
-        xgb_preds = _gb_forecast(sales_list, 30)
-        xgb_adu = float(np.mean(xgb_preds)) if xgb_preds else adu
+        if len(sales_list) == 1:
+            # Jika tabel adalah rekap per barang (1 baris per SKU), cek apakah angkanya harian atau bulanan
+            adu = sales_list[0] if "adu" in [str(c).lower() for c in df.columns] else calc_adu(sales_list, period_days=30)
+            if adu <= 0 and sales_list[0] > 0:
+                adu = sales_list[0] / 30.0
+            xgb_adu = adu
+            cov = _safe_float(group_df.iloc[-1]["cov"]) if "cov" in group_df.columns else 0.35
+        else:
+            adu = calc_adu(sales_list, period_days=30)
+            xgb_preds = _gb_forecast(sales_list, 30)
+            xgb_adu = float(np.mean(xgb_preds)) if xgb_preds else adu
+            cov = calc_cov(sales_list)
         
         # Use XGBoost ADU if it's reasonable, otherwise fallback to historical ADU
-        final_adu = xgb_adu if xgb_adu > 0 else adu
-
-        cov = calc_cov(sales_list)
+        final_adu = xgb_adu if xgb_adu > 0 else (adu if adu > 0 else 1.0)
         vf_info = classify_variability_factor(cov)
         ltf_info = classify_lead_time_factor(dlt_val)
         

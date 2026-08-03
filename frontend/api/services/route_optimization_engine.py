@@ -628,6 +628,39 @@ def generate_demo_data(n_customers: int = 20, num_dedicated_vehicles: int = 2) -
         })
     return {"depot": depot, "customers": customers}
 
+def _safe_float(v, default=0.0) -> float:
+    if v is None:
+        return default
+    if isinstance(v, (int, float)):
+        if math.isnan(v) or math.isinf(v):
+            return default
+        return float(v)
+    try:
+        s = str(v).strip()
+        if s in ('', '-', ' - ', 'nan', 'null', 'None', 'NaN'):
+            return default
+        import re
+        s = re.sub(r'[^\d.,+-]', '', s)
+        if not s:
+            return default
+        if '.' in s and ',' in s:
+            if s.rfind(',') > s.rfind('.'):
+                s = s.replace('.', '').replace(',', '.')
+            else:
+                s = s.replace(',', '')
+        elif ',' in s and '.' not in s:
+            s = s.replace(',', '.')
+        elif '.' in s and ',' not in s:
+            if s.count('.') > 1:
+                s = s.replace('.', '')
+        val = float(s)
+        if math.isnan(val) or math.isinf(val):
+            return default
+        return val
+    except Exception:
+        return default
+
+
 def analyze_routes_from_file(df: pd.DataFrame, params: dict) -> dict:
     """
     Parse a DataFrame into depot and customers, then run optimization per Cabang.
@@ -644,50 +677,67 @@ def analyze_routes_from_file(df: pd.DataFrame, params: dict) -> dict:
     col_map = {}
     for c in df.columns:
         cl = str(c).strip().lower()
-        if cl in ("tipe", "type", "tipe lokasi", "jenis"):
+        if cl in ("tipe", "type", "tipe lokasi", "jenis", "peran", "role", "kategori lokasi"):
             col_map[c] = "type"
-        elif cl in ("nama", "name", "nama lokasi", "customer"):
+        elif cl in ("nama", "name", "nama lokasi", "customer", "pelanggan", "nama pelanggan", "tujuan", "stop", "titik", "toko", "store"):
             col_map[c] = "name"
-        elif cl in ("lat", "latitude"):
+        elif cl in ("lat", "latitude", "lintang", "koordinat x", "y", "lat (y)"):
             col_map[c] = "lat"
-        elif cl in ("lon", "longitude", "long"):
+        elif cl in ("lon", "longitude", "long", "bujur", "koordinat y", "x", "lon (x)", "lng"):
             col_map[c] = "lon"
-        elif cl in ("demand", "permintaan", "qty", "quantity"):
+        elif cl in ("demand", "permintaan", "qty", "quantity", "muatan", "berat", "volume", "pesanan", "unit"):
             col_map[c] = "demand"
-        elif cl in ("cabang", "branch", "lokasi"):
+        elif cl in ("cabang", "branch", "lokasi", "gudang", "site", "regional", "area"):
             col_map[c] = "cabang"
-        elif cl in ("bulan", "date", "tanggal", "waktu", "bulan-tahun"):
+        elif cl in ("bulan", "date", "tanggal", "waktu", "bulan-tahun", "periode"):
             col_map[c] = "date"
-        elif cl in ("kapasitas kendaraan", "kapasitas kendaraan (unit)", "vehicle_capacity"):
+        elif cl in ("kapasitas kendaraan", "kapasitas kendaraan (unit)", "vehicle_capacity", "kapasitas", "capacity"):
             col_map[c] = "vehicle_capacity"
-        elif cl in ("harga bbm", "harga bbm (rp/l)", "fuel_price"):
+        elif cl in ("harga bbm", "harga bbm (rp/l)", "fuel_price", "bbm"):
             col_map[c] = "fuel_price"
-        elif cl in ("efisiensi bbm", "efisiensi bbm (km/l)", "fuel_efficiency"):
+        elif cl in ("efisiensi bbm", "efisiensi bbm (km/l)", "fuel_efficiency", "konsumsi bbm"):
             col_map[c] = "fuel_efficiency"
-        elif cl in ("upah sopir", "upah sopir (rp/hari)", "driver_cost"):
+        elif cl in ("upah sopir", "upah sopir (rp/hari)", "driver_cost", "upah driver", "biaya sopir"):
             col_map[c] = "driver_cost"
-        elif cl in ("fixed cost", "fixed cost (rp/trip)"):
+        elif cl in ("fixed cost", "fixed cost (rp/trip)", "biaya tetap", "biaya kendaraan"):
             col_map[c] = "fixed_cost"
-        elif cl in ("maintenance", "maintenance (rp/km)"):
+        elif cl in ("maintenance", "maintenance (rp/km)", "perawatan", "biaya servis"):
             col_map[c] = "maintenance"
-        elif cl in ("traffic factor", "traffic factor (1.0-1.5)"):
+        elif cl in ("traffic factor", "traffic factor (1.0-1.5)", "faktor macet", "macet"):
             col_map[c] = "traffic_factor"
-        elif cl in ("ga generasi", "generasi ga", "ga_generations"):
+        elif cl in ("ga generasi", "generasi ga", "ga_generations", "generasi"):
             col_map[c] = "ga_generations"
-        elif cl in ("dedicated", "is_dedicated", "rute dedicated", "tetap"):
+        elif cl in ("dedicated", "is_dedicated", "rute dedicated", "tetap", "khusus"):
             col_map[c] = "is_dedicated"
-        elif cl in ("jumlah kendaraan", "total armada", "num_vehicles", "n_vehicles"):
+        elif cl in ("jumlah kendaraan", "total armada", "num_vehicles", "n_vehicles", "armada"):
             col_map[c] = "num_vehicles"
-        elif cl in ("kendaraan dedicated", "num_dedicated_vehicles"):
+        elif cl in ("kendaraan dedicated", "num_dedicated_vehicles", "armada dedicated"):
             col_map[c] = "num_dedicated_vehicles"
             
     df = df.rename(columns=col_map)
     
-    req_cols = {"type", "name", "lat", "lon", "demand"}
-    missing = req_cols - set(df.columns)
-    if missing:
-        if "lat" not in df.columns or "lon" not in df.columns:
-            return {"error": f"Kolom GPS tidak lengkap. Kurang: {', '.join(missing)}"}
+    # Fallback jika nama kolom tidak sesuai standard: cek apakah kolom ke 2/3/4 adalah angka float untuk koordinat
+    if "lat" not in df.columns or "lon" not in df.columns:
+        # Cari kolom numerik yang memiliki nilai representatif koordinat (mis. lat di Indonesia -11 s/d 6, lon 95 s/d 141)
+        for col in df.columns:
+            if col not in ("lat", "lon", "demand", "type", "name", "cabang", "date"):
+                try:
+                    sample_vals = [_safe_float(x, default=-999) for x in df[col].dropna().head(10)]
+                    valid_vals = [v for v in sample_vals if v != -999]
+                    if valid_vals:
+                        avg_v = np.mean(valid_vals)
+                        if -15 <= avg_v <= 10 and "lat" not in df.columns:
+                            df["lat"] = df[col]
+                        elif 90 <= avg_v <= 145 and "lon" not in df.columns:
+                            df["lon"] = df[col]
+                except Exception:
+                    pass
+                    
+    if "lat" not in df.columns or "lon" not in df.columns:
+        return {"error": f"Kolom koordinat GPS (Latitude/Longitude) tidak tertangkap di file Anda. Kolom terdeteksi: {', '.join([str(c) for c in df.columns])}"}
+
+    if "demand" not in df.columns:
+        df["demand"] = 10.0 # default demand per stop bila kolom tidak ada
 
     group_cols = []
     if "cabang" in df.columns:
@@ -713,47 +763,59 @@ def analyze_routes_from_file(df: pd.DataFrame, params: dict) -> dict:
         
         first_row = group_df.iloc[0]
         if "vehicle_capacity" in group_df.columns and not pd.isna(first_row["vehicle_capacity"]):
-            group_params["vehicle_capacity"] = float(first_row["vehicle_capacity"])
+            group_params["vehicle_capacity"] = _safe_float(first_row["vehicle_capacity"], default=group_params.get("vehicle_capacity", 100))
         if "fuel_price" in group_df.columns and not pd.isna(first_row["fuel_price"]):
-            group_cost_params["fuel_price_per_liter"] = float(first_row["fuel_price"])
+            group_cost_params["fuel_price_per_liter"] = _safe_float(first_row["fuel_price"], default=13500)
         if "fuel_efficiency" in group_df.columns and not pd.isna(first_row["fuel_efficiency"]):
-            group_cost_params["fuel_efficiency_km_per_liter"] = float(first_row["fuel_efficiency"])
+            group_cost_params["fuel_efficiency_km_per_liter"] = _safe_float(first_row["fuel_efficiency"], default=8)
         if "driver_cost" in group_df.columns and not pd.isna(first_row["driver_cost"]):
-            group_cost_params["driver_cost_per_day"] = float(first_row["driver_cost"])
+            group_cost_params["driver_cost_per_day"] = _safe_float(first_row["driver_cost"], default=250000)
         if "fixed_cost" in group_df.columns and not pd.isna(first_row["fixed_cost"]):
-            group_cost_params["fixed_cost_per_vehicle"] = float(first_row["fixed_cost"])
+            group_cost_params["fixed_cost_per_vehicle"] = _safe_float(first_row["fixed_cost"], default=150000)
         if "maintenance" in group_df.columns and not pd.isna(first_row["maintenance"]):
-            group_cost_params["maintenance_per_km"] = float(first_row["maintenance"])
+            group_cost_params["maintenance_per_km"] = _safe_float(first_row["maintenance"], default=500)
         if "traffic_factor" in group_df.columns and not pd.isna(first_row["traffic_factor"]):
-            group_cost_params["traffic_factor"] = float(first_row["traffic_factor"])
+            group_cost_params["traffic_factor"] = _safe_float(first_row["traffic_factor"], default=1.0)
         if "ga_generations" in group_df.columns and not pd.isna(first_row["ga_generations"]):
-            group_params["ga_generations"] = int(first_row["ga_generations"])
+            group_params["ga_generations"] = int(_safe_float(first_row["ga_generations"], default=100))
         if "num_vehicles" in group_df.columns and not pd.isna(first_row["num_vehicles"]):
-            group_params["num_vehicles"] = int(first_row["num_vehicles"])
+            group_params["num_vehicles"] = int(_safe_float(first_row["num_vehicles"], default=8))
         if "num_dedicated_vehicles" in group_df.columns and not pd.isna(first_row["num_dedicated_vehicles"]):
-            group_params["num_dedicated_vehicles"] = int(first_row["num_dedicated_vehicles"])
+            group_params["num_dedicated_vehicles"] = int(_safe_float(first_row["num_dedicated_vehicles"], default=2))
             
         group_params["cost_params"] = group_cost_params
         
         for _, row in group_df.iterrows():
             t = str(row.get("type", "")).strip().lower()
             name = str(row.get("name", "Unknown"))
-            try:
-                lat, lon, demand = float(row.get("lat", 0)), float(row.get("lon", 0)), float(row.get("demand", 0))
-            except (ValueError, TypeError):
+            lat = _safe_float(row.get("lat", 0), default=0.0)
+            lon = _safe_float(row.get("lon", 0), default=0.0)
+            demand = _safe_float(row.get("demand", 0), default=10.0)
+            
+            if abs(lat) < 0.0001 and abs(lon) < 0.0001:
                 continue
                 
             is_dedicated = bool(row.get("is_dedicated", False)) if "is_dedicated" in row and not pd.isna(row["is_dedicated"]) else False
-            if t == "depot" or "depot" in t:
+            if t == "depot" or "depot" in t or "gudang" in t or "pusat" in t:
                 depot = {"name": name, "lat": lat, "lon": lon, "demand": 0}
             else:
                 customers.append({"name": name, "lat": lat, "lon": lon, "demand": demand, "is_dedicated": is_dedicated})
                 
         if not depot:
-            if not results: return {"error": f"Tidak ditemukan 'Depot' di grup {label}."}
-            continue
-        if not customers:
-            if not results: return {"error": f"Tidak ditemukan 'Pelanggan' di grup {label}."}
+            # Jika tidak ada baris berlabel Depot, cari dari daftar yang demand == 0 atau namanya mengandung depot/gudang/dc
+            for i, c in enumerate(customers):
+                c_name_lower = str(c["name"]).lower()
+                if c["demand"] == 0 or any(w in c_name_lower for w in ["depot", "gudang", "dc", "pusat", "office", "kantor", "wh"]):
+                    depot = {"name": c["name"], "lat": c["lat"], "lon": c["lon"], "demand": 0}
+                    customers.pop(i)
+                    break
+            # Jika masih tidak ada, ambil baris pertama sebagai Depot dan sisanya sebagai Pelanggan
+            if not depot and len(customers) >= 2:
+                first_c = customers.pop(0)
+                depot = {"name": f"Depot ({first_c['name']})", "lat": first_c["lat"], "lon": first_c["lon"], "demand": 0}
+
+        if not depot or not customers:
+            if not results: return {"error": f"Data lokasi di grup {label} tidak cukup. Pastikan minimal ada 1 Depot dan 1 Pelanggan dengan koordinat GPS valid."}
             continue
             
         group_params["depot"] = depot

@@ -38,66 +38,81 @@ const ROUTE_COLORS = [
   '#ec4899', '#06b6d4', '#f97316', '#14b8a6', '#6366f1',
 ];
 
-export function RouteMapChart({ locations, routes, methodName }: RouteMapChartProps) {
-  const depot = locations.find(l => l.is_depot);
-  const customers = locations.filter(l => !l.is_depot);
+export function RouteMapChart({ locations = [], routes = [], methodName }: RouteMapChartProps) {
+  const safeLocations = useMemo(() => locations.map(l => ({
+    ...l,
+    lat: Number(l?.lat || 0),
+    lon: Number(l?.lon || 0),
+    demand: Number(l?.demand || 0),
+  })), [locations]);
+
+  const depot = safeLocations.find(l => l.is_depot);
+  const customers = safeLocations.filter(l => !l.is_depot);
 
   // Build route lines as segments
   const routeLines = useMemo(() => {
     const lines: { lat1: number; lon1: number; lat2: number; lon2: number; routeId: number; color: string }[] = [];
+    if (!routes || !Array.isArray(routes)) return lines;
 
     routes.forEach((route, idx) => {
       const color = ROUTE_COLORS[idx % ROUTE_COLORS.length];
-      const stops = route.stops;
+      const stops = route.stops || [];
       if (!depot || stops.length === 0) return;
 
       // Depot → first stop
-      const firstStop = locations.find(l => l.index === stops[0].index);
+      const firstStop = safeLocations.find(l => l.index === stops[0].index);
       if (firstStop) {
         lines.push({ lat1: depot.lat, lon1: depot.lon, lat2: firstStop.lat, lon2: firstStop.lon, routeId: route.route_id, color });
       }
 
       // Between stops
       for (let i = 0; i < stops.length - 1; i++) {
-        const from = locations.find(l => l.index === stops[i].index);
-        const to = locations.find(l => l.index === stops[i + 1].index);
+        const from = safeLocations.find(l => l.index === stops[i].index);
+        const to = safeLocations.find(l => l.index === stops[i + 1].index);
         if (from && to) {
           lines.push({ lat1: from.lat, lon1: from.lon, lat2: to.lat, lon2: to.lon, routeId: route.route_id, color });
         }
       }
 
       // Last stop → depot
-      const lastStop = locations.find(l => l.index === stops[stops.length - 1].index);
+      const lastStop = safeLocations.find(l => l.index === stops[stops.length - 1].index);
       if (lastStop) {
         lines.push({ lat1: lastStop.lat, lon1: lastStop.lon, lat2: depot.lat, lon2: depot.lon, routeId: route.route_id, color });
       }
     });
 
     return lines;
-  }, [locations, routes, depot]);
+  }, [safeLocations, routes, depot]);
+
+  if (safeLocations.length === 0) {
+    return <div className="text-center py-8 text-muted-foreground text-sm">Tidak ada data koordinat untuk ditampilkan</div>;
+  }
 
   const CustomTooltip = ({ active, payload }: any) => {
     if (!active || !payload?.length) return null;
-    const data = payload[0]?.payload;
-    if (!data) return null;
+    const data = payload[0].payload;
     return (
       <div className="glass-card rounded-lg px-3 py-2 text-xs shadow-lg border border-border">
-        <p className="font-bold text-foreground">{data.name}</p>
+        <p className="font-bold text-foreground">{data.name || 'Titik'}</p>
         <p className="text-muted-foreground">
-          {data.is_depot ? '📍 Depot' : `Demand: ${data.demand} unit`}
+          {data.is_depot ? '📍 Depot' : `Demand: ${data.demand || 0} unit`}
         </p>
         <p className="text-muted-foreground font-mono">
-          ({data.lat.toFixed(4)}, {data.lon.toFixed(4)})
+          ({Number(data?.lat || 0).toFixed(4)}, {Number(data?.lon || 0).toFixed(4)})
         </p>
       </div>
     );
   };
 
   // Calculate bounds for axes
-  const allLats = locations.map(l => l.lat);
-  const allLons = locations.map(l => l.lon);
-  const latPad = (Math.max(...allLats) - Math.min(...allLats)) * 0.1 || 0.01;
-  const lonPad = (Math.max(...allLons) - Math.min(...allLons)) * 0.1 || 0.01;
+  const allLats = safeLocations.map(l => l.lat);
+  const allLons = safeLocations.map(l => l.lon);
+  const minLat = allLats.length ? Math.min(...allLats) : 0;
+  const maxLat = allLats.length ? Math.max(...allLats) : 0;
+  const minLon = allLons.length ? Math.min(...allLons) : 0;
+  const maxLon = allLons.length ? Math.max(...allLons) : 0;
+  const latPad = (maxLat - minLat) * 0.1 || 0.01;
+  const lonPad = (maxLon - minLon) * 0.1 || 0.01;
 
   return (
     <div>
@@ -109,7 +124,7 @@ export function RouteMapChart({ locations, routes, methodName }: RouteMapChartPr
         {/* SVG overlay for route lines */}
         <svg
           className="absolute inset-0 w-full h-full pointer-events-none"
-          viewBox={`${Math.min(...allLons) - lonPad} ${Math.min(...allLats) - latPad} ${Math.max(...allLons) - Math.min(...allLons) + lonPad * 2} ${Math.max(...allLats) - Math.min(...allLats) + latPad * 2}`}
+          viewBox={`${minLon - lonPad} ${minLat - latPad} ${maxLon - minLon + lonPad * 2} ${maxLat - minLat + latPad * 2}`}
           preserveAspectRatio="none"
           style={{ zIndex: 5 }}
         >
