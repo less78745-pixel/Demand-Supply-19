@@ -74,11 +74,32 @@ const SCENARIOS = [
   }
 ];
 
+const getRouteStopsList = (r: any): any[] => {
+  if (Array.isArray(r?.stops)) return r.stops;
+  if (Array.isArray(r?.path)) return r.path.map((name: string, idx: number) => ({ index: idx, name, demand: idx === 0 ? 0 : 10 }));
+  return [];
+};
+
+const getRouteStopNames = (r: any): string[] => {
+  if (Array.isArray(r?.stops)) return r.stops.map((s: any) => typeof s === 'string' ? s : s?.name || 'Titik');
+  if (Array.isArray(r?.path)) return r.path.map((s: any) => typeof s === 'string' ? s : s?.name || 'Titik');
+  return [];
+};
+
+const getRouteStopsCount = (r: any): number => {
+  if (typeof r?.n_stops === 'number') return r.n_stops;
+  if (typeof r?.stops === 'number') return r.stops;
+  if (Array.isArray(r?.stops)) return r.stops.length;
+  if (Array.isArray(r?.path)) return r.path.length;
+  return 0;
+};
+
 function generateDemoRoute() {
+  const makeStops = (names: string[]) => names.map((name, idx) => ({ index: idx, name, demand: idx === 0 ? 0 : 10 }));
   const sampleRoutes = [
-    { vehicle_id: 1, type: 'Dedicated Rute', stops: 5, distance_km: 45.8, cost_idr: 420000, duration_mins: 120, load_percent: 92, path: ['Gudang Pusat (Jakarta)', 'Kelapa Gading', 'Sunter', 'Kemayoran', 'Ancol'] },
-    { vehicle_id: 2, type: 'Milk-Run Rute', stops: 8, distance_km: 68.2, cost_idr: 580000, duration_mins: 185, load_percent: 88, path: ['Gudang Pusat (Jakarta)', 'Slipi', 'Kebon Jeruk', 'Puri Indah', 'Cengkareng', 'Kalideres'] },
-    { vehicle_id: 3, type: 'Dynamic VRP', stops: 6, distance_km: 52.1, cost_idr: 485000, duration_mins: 140, load_percent: 95, path: ['Gudang Pusat (Jakarta)', 'Tebet', 'Pancoran', 'Pasar Minggu', 'Lenteng Agung'] },
+    { vehicle_id: 1, type: 'Dedicated Rute', n_stops: 5, stops: makeStops(['Gudang Pusat (Jakarta)', 'Kelapa Gading', 'Sunter', 'Kemayoran', 'Ancol']), distance_km: 45.8, cost_idr: 420000, duration_mins: 120, load_percent: 92, path: ['Gudang Pusat (Jakarta)', 'Kelapa Gading', 'Sunter', 'Kemayoran', 'Ancol'] },
+    { vehicle_id: 2, type: 'Milk-Run Rute', n_stops: 8, stops: makeStops(['Gudang Pusat (Jakarta)', 'Slipi', 'Kebon Jeruk', 'Puri Indah', 'Cengkareng', 'Kalideres']), distance_km: 68.2, cost_idr: 580000, duration_mins: 185, load_percent: 88, path: ['Gudang Pusat (Jakarta)', 'Slipi', 'Kebon Jeruk', 'Puri Indah', 'Cengkareng', 'Kalideres'] },
+    { vehicle_id: 3, type: 'Dynamic VRP', n_stops: 6, stops: makeStops(['Gudang Pusat (Jakarta)', 'Tebet', 'Pancoran', 'Pasar Minggu', 'Lenteng Agung']), distance_km: 52.1, cost_idr: 485000, duration_mins: 140, load_percent: 95, path: ['Gudang Pusat (Jakarta)', 'Tebet', 'Pancoran', 'Pasar Minggu', 'Lenteng Agung'] },
   ];
 
   const methods = [
@@ -489,17 +510,18 @@ Pelanggan,Toko A,-6.210000,106.820000,15,08:00-12:00,30`}
                   const methodData = groupData.methods?.find((m: any) => m.method === bestMethod);
                   if (!methodData || !methodData.routes) return;
                   
-                  const groupExport = methodData.routes.flatMap((route: any, routeIdx: number) => 
-                    route.stops.map((stop: any, stopIdx: number) => ({
+                  const groupExport = (Array.isArray(methodData.routes) ? methodData.routes : []).flatMap((route: any, routeIdx: number) => {
+                    const stopsList = getRouteStopsList(route);
+                    return stopsList.map((stop: any, stopIdx: number) => ({
                       'Cabang': groupData.label || `Grup ${groupIdx + 1}`,
                       'Metode': methodData.method,
                       'Vehicle': `Kendaraan ${routeIdx + 1}`,
                       'Urutan': stopIdx + 1,
-                      'Lokasi': stop.name,
+                      'Lokasi': typeof stop === 'string' ? stop : (stop?.name || 'Lokasi'),
                       'Total Jarak Rute (KM)': routeIdx === 0 && stopIdx === 0 ? methodData.total_distance_km : '',
                       'Total Cost Rute (Rp)': routeIdx === 0 && stopIdx === 0 ? methodData.cost?.total_cost : ''
-                    }))
-                  );
+                    }));
+                  });
                   allExportData = [...allExportData, ...groupExport];
                 });
                 
@@ -544,7 +566,7 @@ Pelanggan,Toko A,-6.210000,106.820000,15,08:00-12:00,30`}
                 <label className="text-sm font-medium text-muted-foreground mb-1.5 block">Cari Titik Pemberhentian</label>
                 <MultiSelect
                   options={['All', ...(Array.from(new Set(
-                    results[selectedGroup]?.methods?.[selectedMethod]?.routes?.flatMap((r: any) => r.stops?.map((s: any) => s.name) || []) || []
+                    (Array.isArray(results[selectedGroup]?.methods?.[selectedMethod]?.routes) ? results[selectedGroup].methods[selectedMethod].routes : []).flatMap((r: any) => getRouteStopNames(r))
                   )) as string[]).sort()]}
                   selected={filterSearchStop}
                   onChange={setFilterSearchStop}
@@ -663,13 +685,13 @@ Pelanggan,Toko A,-6.210000,106.820000,15,08:00-12:00,30`}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border/50">
-                      {results[selectedGroup].methods[selectedMethod].routes?.filter((r: any) => {
+                      {(Array.isArray(results[selectedGroup]?.methods?.[selectedMethod]?.routes) ? results[selectedGroup].methods[selectedMethod].routes : []).filter((r: any) => {
                         if (!filterTipeRute.includes('All')) {
                           const routeType = r.is_dedicated ? 'Dedicated' : 'Optimasi';
                           if (!filterTipeRute.includes(routeType)) return false;
                         }
                         if (!filterSearchStop.includes('All')) {
-                          const stopNames = r.stops?.map((s: any) => s.name) || [];
+                          const stopNames = getRouteStopNames(r);
                           const matchesStop = stopNames.some((name: string) => filterSearchStop.includes(name));
                           if (!matchesStop) return false;
                         }
@@ -677,7 +699,7 @@ Pelanggan,Toko A,-6.210000,106.820000,15,08:00-12:00,30`}
                       }).map((r: any, idx: number) => (
                         <tr key={idx} className="hover:bg-muted/30">
                           <td className="py-3 px-3 font-bold text-foreground">
-                            {r.vehicle_name || `Kendaraan #${r.route_id}`}
+                            {r.vehicle_name || `Kendaraan #${r.route_id || idx + 1}`}
                           </td>
                           <td className="py-3 px-3 text-center">
                             {r.is_dedicated ? (
@@ -690,19 +712,19 @@ Pelanggan,Toko A,-6.210000,106.820000,15,08:00-12:00,30`}
                               </span>
                             )}
                           </td>
-                          <td className="py-3 px-3 text-right font-mono">{r.n_stops} stop</td>
+                          <td className="py-3 px-3 text-right font-mono">{getRouteStopsCount(r)} stop</td>
                           <td className="py-3 px-3 text-right font-mono">{r.load ?? '—'} unit</td>
                           <td className="py-3 px-3 text-right">
                             <div className="flex items-center justify-end gap-2">
                               <div className="w-16 bg-muted rounded-full h-1.5 overflow-hidden">
-                                <div className={`h-full ${r.capacity_pct > 90 ? 'bg-orange-500' : 'bg-primary'}`} style={{ width: `${Math.min(100, r.capacity_pct || 0)}%` }} />
+                                <div className={`h-full ${Number(r.capacity_pct) > 90 ? 'bg-orange-500' : 'bg-primary'}`} style={{ width: `${Math.min(100, Number(r.capacity_pct) || 0)}%` }} />
                               </div>
                               <span className="font-mono text-xs">{r.capacity_pct ?? '—'}%</span>
                             </div>
                           </td>
                           <td className="py-3 px-3 text-right font-mono font-semibold">{r.distance_km ?? '—'} km</td>
                           <td className="py-3 px-3 text-xs text-muted-foreground max-w-xs truncate">
-                            {r.stops?.map((s: any) => s.name).join(' ➔ ')}
+                            {getRouteStopNames(r).join(' ➔ ')}
                           </td>
                         </tr>
                       ))}

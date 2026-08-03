@@ -8,12 +8,15 @@ import {
 } from 'recharts';
 
 interface BufferZone {
-  red_zone: number;
-  yellow_zone: number;
-  green_zone: number;
-  top_of_red: number;
-  top_of_yellow: number;
-  top_of_green: number;
+  red_zone?: number;
+  yellow_zone?: number;
+  green_zone?: number;
+  red?: number;
+  yellow?: number;
+  green?: number;
+  top_of_red?: number;
+  top_of_yellow?: number;
+  top_of_green?: number;
 }
 
 interface DDMRPBufferChartProps {
@@ -23,12 +26,13 @@ interface DDMRPBufferChartProps {
 }
 
 export function DDMRPBufferChart({ bufferZones, netFlowPosition, label }: DDMRPBufferChartProps) {
-  const safeRed = Number(bufferZones?.red_zone) || 0;
-  const safeYellow = Number(bufferZones?.yellow_zone) || 0;
-  const safeGreen = Number(bufferZones?.green_zone) || 0;
-  const safeTopRed = Number(bufferZones?.top_of_red) || safeRed;
-  const safeTopYellow = Number(bufferZones?.top_of_yellow) || (safeRed + safeYellow);
-  const safeTopGreen = Number(bufferZones?.top_of_green) || (safeRed + safeYellow + safeGreen);
+  const bz = (bufferZones || {}) as any;
+  const safeRed = Number(bz.red_zone ?? bz.red) || 0;
+  const safeYellow = Number(bz.yellow_zone ?? bz.yellow) || 0;
+  const safeGreen = Number(bz.green_zone ?? bz.green) || 0;
+  const safeTopRed = Number(bz.top_of_red) || safeRed;
+  const safeTopYellow = Number(bz.top_of_yellow) || (safeRed + safeYellow);
+  const safeTopGreen = Number(bz.top_of_green) || (safeRed + safeYellow + safeGreen);
   const safeNFP = Number(netFlowPosition) || 0;
 
   const data = [
@@ -125,13 +129,13 @@ export function DDMRPBufferChart({ bufferZones, netFlowPosition, label }: DDMRPB
             }}
           />
           <ReferenceLine
-            x={bufferZones.top_of_yellow}
+            x={safeTopYellow}
             stroke="#f59e0b"
             strokeWidth={1}
             strokeDasharray="4 4"
           />
           <ReferenceLine
-            x={bufferZones.top_of_red}
+            x={safeTopRed}
             stroke="#ef4444"
             strokeWidth={1}
             strokeDasharray="4 4"
@@ -141,9 +145,9 @@ export function DDMRPBufferChart({ bufferZones, netFlowPosition, label }: DDMRPB
 
       {/* Zone thresholds legend */}
       <div className="flex flex-wrap gap-4 mt-3 text-xs text-muted-foreground">
-        <span>TOR: <strong className="text-destructive">{bufferZones.top_of_red.toLocaleString()}</strong></span>
-        <span>TOY: <strong className="text-amber-500">{bufferZones.top_of_yellow.toLocaleString()}</strong></span>
-        <span>TOG: <strong className="text-emerald-500">{bufferZones.top_of_green.toLocaleString()}</strong></span>
+        <span>TOR: <strong className="text-destructive">{safeTopRed.toLocaleString()}</strong></span>
+        <span>TOY: <strong className="text-amber-500">{safeTopYellow.toLocaleString()}</strong></span>
+        <span>TOG: <strong className="text-emerald-500">{safeTopGreen.toLocaleString()}</strong></span>
       </div>
     </div>
   );

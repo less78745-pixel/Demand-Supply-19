@@ -448,7 +448,7 @@ export default function DDMRPPhase2Page() {
   }, [filteredData, selectedItemForChart]);
 
   const chartSeries = useMemo(() => {
-    if (!currentChartItem) return [];
+    if (!currentChartItem || !Array.isArray(currentChartItem.months)) return [];
     return currentChartItem.months.map(m => ({
       month: m.monthLabel,
       'Net Flow Position (NFP)': m.nfp,
@@ -798,7 +798,7 @@ export default function DDMRPPhase2Page() {
                   </td>
 
                   {/* 4 Rolling Months Display */}
-                  {item.months.map((m, idxM) => (
+                  {(Array.isArray(item?.months) ? item.months : []).map((m, idxM) => (
                     <td key={idxM} className="py-3 px-3.5 border-l border-slate-800 align-top text-xs space-y-1.5">
                       <div className="flex items-center justify-between font-medium">
                         <span className="text-slate-400">Saldo Awal:</span>

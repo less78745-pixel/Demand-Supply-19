@@ -96,7 +96,8 @@ function generateDemoDDMRP() {
       qualified_demand: s.qd,
       net_flow_position: nfp,
       lead_time: { value: s.dlt },
-      zones: { red, yellow, green, top_of_red: red, top_of_yellow: red + yellow, top_of_green: red + yellow + green },
+      zones: { red, yellow, green, red_zone: red, yellow_zone: yellow, green_zone: green, top_of_red: red, top_of_yellow: red + yellow, top_of_green: red + yellow + green },
+      buffer_zones: { red, yellow, green, red_zone: red, yellow_zone: yellow, green_zone: green, top_of_red: red, top_of_yellow: red + yellow, top_of_green: red + yellow + green },
       replenishment: { status, urgency, suggested_order_qty: Math.max(0, red + yellow + green - nfp) }
     };
   });
@@ -621,7 +622,7 @@ export default function DDMRPPage() {
               {/* Buffer Chart */}
               <GlassCard>
                 <DDMRPBufferChart
-                  bufferZones={res.buffer_zones}
+                  bufferZones={res.buffer_zones || res.zones || {}}
                   netFlowPosition={res.net_flow_position}
                 />
               </GlassCard>
