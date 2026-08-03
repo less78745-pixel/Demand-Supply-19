@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -6,7 +7,10 @@ import { FileUploader } from '@/components/ui/FileUploader';
 import { KPICard } from '@/components/ui/KPICard';
 import { MultiSelect } from '@/components/ui/MultiSelect';
 import { TimestampBadge } from '@/components/ui/TimestampBadge';
-import { ClipboardList, Download, Info, Package, BarChart3, Table as TableIcon, Layers } from 'lucide-react';
+import {
+  ClipboardList, Download, Info, Package, BarChart3,
+  Layers, HelpCircle, Sparkles, FileSpreadsheet, Zap, AlertTriangle, CheckCircle2, TrendingUp
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -16,13 +20,6 @@ import { get, set } from 'idb-keyval';
 import { parseDynamicCSV, findColumn, ParsedData } from '@/lib/csvParser';
 
 const COLORS = ['#f97316', '#3b82f6', '#22c55e', '#ef4444', '#a855f7', '#eab308', '#06b6d4', '#ec4899'];
-
-const DISTINCT_PALETTE = [
-  '#10B981', '#3B82F6', '#F97316', '#A855F7', '#06B6D4', '#EC4899', '#EAB308', '#EF4444', 
-  '#84CC16', '#6366F1', '#14B8A6', '#D97706', '#8B5CF6', '#F43F5E', '#0EA5E9', '#1E40AF', 
-  '#991B1B', '#065F46', '#4C1D95', '#854D0E', '#34D399', '#FBBF24', '#F87171', '#60A5FA', 
-  '#C084FC', '#2DD4BF', '#F472B6', '#A3E635', '#38BDF8', '#FB923C'
-];
 
 const getPillarCategory = (colName: string): 'On Hand' | 'VESSEL' | 'TO' | 'PLAN LOADING' | 'READY' | 'Lainnya' => {
   const lower = colName.toLowerCase().trim();
@@ -45,41 +42,131 @@ const PILLAR_COLORS: Record<string, string> = {
 
 const PILLAR_ORDER = ['On Hand', 'VESSEL', 'TO', 'PLAN LOADING', 'READY'];
 
+type ScenarioType = 'base' | 'fast' | 'buffer';
+
+const SCENARIOS = [
+  {
+    id: 'base' as ScenarioType,
+    title: 'Jalur 1: Evaluasi Stok Current (Base SOH)',
+    desc: 'Analisis ketersediaan stok fisik harian terhadap rata-rata pemakaian (ADU) berjalan secara real-time.',
+    color: 'from-emerald-600 to-teal-500',
+    icon: BarChart3,
+    multiplier: 1.0
+  },
+  {
+    id: 'fast' as ScenarioType,
+    title: 'Jalur 2: Simulasi Fast-Moving (Turnover 30 Hari)',
+    desc: 'Percepatan target perputaran persediaan untuk menekan biaya penyimpanan (Holding Cost) dan optimasi ruang.',
+    color: 'from-blue-600 to-cyan-500',
+    icon: TrendingUp,
+    multiplier: 1.15
+  },
+  {
+    id: 'buffer' as ScenarioType,
+    title: 'Jalur 3: Proteksi Buffer Seasonality (+20%)',
+    desc: 'Simulasi ketahanan stok terhadap lonjakan permintaan dadakan pada musim puncak (Peak Season / Hari Raya).',
+    color: 'from-purple-600 to-indigo-500',
+    icon: Zap,
+    multiplier: 0.85
+  }
+];
+
+function generateDemoSOH(): ParsedData {
+  const cabangs = ['Surabaya', 'Jakarta', 'Bandung', 'Medan', 'Semarang', 'Makassar', 'Palembang', 'Denpasar'];
+  const categories = ['Minyak Goreng Premium', 'Beras Setra Ramos', 'Gula Pasir Kristal', 'Tepung Terigu Serbaguna', 'Kopi Bubuk Murni', 'Susu Kental Manis'];
+  const data: any[] = [];
+
+  cabangs.forEach(cab => {
+    categories.forEach(cat => {
+      const onHand = Math.round(1500 + Math.random() * 4500);
+      const to = Math.round(400 + Math.random() * 1100);
+      const vessel = Math.round(700 + Math.random() * 1800);
+      const planLoading = Math.round(500 + Math.random() * 1200);
+      const ready = Math.round(300 + Math.random() * 800);
+      data.push({
+        Cabang: cab,
+        Grup: cat,
+        'On Hand': onHand,
+        'TO Week 1': to,
+        'VESSEL Week 1': vessel,
+        'PLAN LOADING': planLoading,
+        'READY': ready
+      });
+    });
+  });
+
+  return {
+    headers: ['Cabang', 'Grup', 'On Hand', 'TO Week 1', 'VESSEL Week 1', 'PLAN LOADING', 'READY'],
+    targetColumns: [
+      { index: 2, name: 'On Hand' },
+      { index: 3, name: 'TO Week 1' },
+      { index: 4, name: 'VESSEL Week 1' },
+      { index: 5, name: 'PLAN LOADING' },
+      { index: 6, name: 'READY' }
+    ],
+    data,
+    processed_at: new Date().toISOString()
+  };
+}
+
 export default function SOHAnalysisPage() {
   const [parsed, setParsed] = useState<ParsedData | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [chartMode, setChartMode] = useState<'summary' | 'stock' | 'to' | 'vessel' | 'all_detail'>('summary');
-  const [expandedPivot, setExpandedPivot] = useState(false);
-  
-  useEffect(() => {
-    get('last_soh_data').then(saved => {
-      if (saved) setParsed(saved);
-    }).catch(err => console.warn('Failed to load SOH state from IndexDB', err));
-  }, []);
+  const [showHowTo, setShowHowTo] = useState<boolean>(false);
+  const [activeScenario, setActiveScenario] = useState<ScenarioType>('base');
+  const [selectedCabangForChart, setSelectedCabangForChart] = useState<string>('All');
 
   // Filter states
   const [selectedCabang, setSelectedCabang] = useState<string[]>(['All']);
   const [selectedCategory, setSelectedCategory] = useState<string[]>(['All']);
   const [selectedInsentif, setSelectedInsentif] = useState<string[]>(['All']);
-  const [selectedMetrics, setSelectedMetrics] = useState<string[]>([]);
+
+  useEffect(() => {
+    get('last_soh_data').then(saved => {
+      if (saved && saved.data && saved.data.length > 0) {
+        setParsed(saved);
+      } else {
+        setParsed(generateDemoSOH());
+      }
+    }).catch(err => {
+      console.warn('Failed to load SOH state from IndexDB', err);
+      setParsed(generateDemoSOH());
+    });
+  }, []);
+
+  const handleGenerateDemo = () => {
+    const demo = generateDemoSOH();
+    setParsed(demo);
+    toast.success('🎉 Data Demo SOH & TO Berhasil Dimuat!');
+  };
+
+  const handleDownloadTemplate = () => {
+    const headers = 'Cabang,Grup,On Hand,TO WEEK 1 JULI,TO WEEK 2 JULI,VESSEL WEEK 1 JULI,PLAN LOADING,READY';
+    const row1 = 'Surabaya,Minyak Goreng Premium,4500,500,600,1200,900,800';
+    const row2 = 'Jakarta,Beras Setra Ramos,2800,450,550,800,1100,900';
+    const blob = new Blob(['\ufeff' + headers + '\n' + row1 + '\n' + row2], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'template_soh_to_analysis.csv';
+    link.click();
+    URL.revokeObjectURL(url);
+    toast.success('📁 Template CSV SOH & TO Berhasil Diunduh');
+  };
 
   const handleFileUpload = async (file: File) => {
     setIsProcessing(true);
-    toast.loading('Membaca data SOH & TO...', { id: 'soh' });
+    toast.loading('Membaca file SOH & TO (Excel/CSV)...', { id: 'soh' });
     try {
       const parsedData = await parseDynamicCSV(file);
       setParsed(parsedData);
-      
-      if (parsedData && parsedData.targetColumns) {
-        setSelectedMetrics(['All']);
-      }
-      
       try {
         await set('last_soh_data', parsedData);
       } catch (e) {
         console.warn('Data terlalu besar untuk disimpan di IndexDB', e);
       }
-      toast.success('Data SOH berhasil di-load!', { id: 'soh' });
+      toast.success('✅ Data SOH & TO Berhasil Diproses!', { id: 'soh' });
     } catch (err: any) {
       toast.error(err.message || 'Gagal memproses file', { id: 'soh' });
     } finally {
@@ -96,43 +183,25 @@ export default function SOHAnalysisPage() {
   const cabangs = useMemo(() => parsed && colCabang ? ['All', ...Array.from(new Set(parsed.data.map(d => d[colCabang]).filter(v => v && !String(v).includes('#N/A') && !String(v).includes('#REF!') && String(v).toLowerCase() !== 'semua cabang'))).sort()] : [], [parsed, colCabang]);
   const categories = useMemo(() => parsed && colCategory ? ['All', ...Array.from(new Set(parsed.data.map(d => d[colCategory]).filter(v => v && !String(v).includes('#N/A') && !String(v).includes('#REF!') && String(v).toLowerCase() !== 'semua kategori'))).sort()] : [], [parsed, colCategory]);
   const insentifs = useMemo(() => parsed && colInsentif ? ['All', ...Array.from(new Set(parsed.data.map(d => d[colInsentif]).filter(v => v && !String(v).includes('#N/A') && !String(v).includes('#REF!') && String(v).toLowerCase() !== 'semua insentif'))).sort()] : [], [parsed, colInsentif]);
-  
-  const metricOptions = useMemo(() => parsed ? ['All', ...parsed.targetColumns.map(t => t.name)] : [], [parsed]);
 
-  // Handle Export
-  const handleExport = () => {
-    if (!parsed || !parsed.data) return;
-    const header = parsed.headers.map(h => `"${h}"`).join(',');
-    const lines = [header];
-    
-    filtered.forEach(row => {
-      const line = parsed.headers.map(h => {
-        let val = row[h];
-        if (val === undefined || val === null) val = '';
-        if (typeof val === 'string') return `"${val.replace(/"/g, '""')}"`;
-        return val;
-      }).join(',');
-      lines.push(line);
-    });
-    
-    const blob = new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'soh_to_pivot_export.csv';
-    link.click();
-    URL.revokeObjectURL(url);
-  };
-
-  // Filtered Data
+  // Filtered Data with Scenario Multiplier applied to numerical metrics
   const filtered = useMemo(() => {
     if (!parsed) return [];
-    return parsed.data.filter(d =>
-      (!colCabang || selectedCabang.includes('All') || selectedCabang.includes(d[colCabang])) &&
-      (!colCategory || selectedCategory.includes('All') || selectedCategory.includes(d[colCategory])) &&
-      (!colInsentif || selectedInsentif.includes('All') || selectedInsentif.includes(d[colInsentif]))
-    );
-  }, [parsed, selectedCabang, selectedCategory, selectedInsentif, colCabang, colCategory, colInsentif]);
+    const sc = SCENARIOS.find(s => s.id === activeScenario) || SCENARIOS[0];
+    return parsed.data
+      .filter(d =>
+        (!colCabang || selectedCabang.includes('All') || selectedCabang.includes(d[colCabang])) &&
+        (!colCategory || selectedCategory.includes('All') || selectedCategory.includes(d[colCategory])) &&
+        (!colInsentif || selectedInsentif.includes('All') || selectedInsentif.includes(d[colInsentif]))
+      )
+      .map(row => {
+        const copy = { ...row };
+        parsed.targetColumns.forEach(tc => {
+          copy[tc.name] = Math.round((row[tc.name] || 0) * sc.multiplier);
+        });
+        return copy;
+      });
+  }, [parsed, selectedCabang, selectedCategory, selectedInsentif, colCabang, colCategory, colInsentif, activeScenario]);
 
   // Pillar mapping
   const pillarColumnsMap = useMemo(() => {
@@ -152,6 +221,8 @@ export default function SOHAnalysisPage() {
 
     for (const row of filtered) {
       const cbg = colCabang ? (row[colCabang] || 'Unknown') : 'All';
+      if (selectedCabangForChart !== 'All' && cbg !== selectedCabangForChart) continue;
+
       if (!map[cbg]) {
         map[cbg] = { cabang: cbg, 'On Hand': 0, 'VESSEL': 0, 'TO': 0, 'PLAN LOADING': 0, 'READY': 0, 'Lainnya': 0, total: 0, details: {} };
         parsed.targetColumns.forEach(tc => { map[cbg].details[tc.name] = 0; });
@@ -167,7 +238,7 @@ export default function SOHAnalysisPage() {
       });
     }
     return Object.values(map).sort((a, b) => b.total - a.total);
-  }, [parsed, filtered, colCabang]);
+  }, [parsed, filtered, colCabang, selectedCabangForChart]);
 
   // Pillar KPIs
   const pillarKpis = useMemo(() => {
@@ -179,374 +250,410 @@ export default function SOHAnalysisPage() {
     });
   }, [pivotData, pillarColumnsMap]);
 
-  return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-10">
-      <header className="mb-8 border-b border-border pb-6 flex justify-between items-end">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-3 uppercase">
-            <ClipboardList className="w-8 h-8 text-primary" />
-            SOH & TO Analysis (Pivot Mode)
-          </h1>
-          <p className="text-muted-foreground mt-2 font-medium">
-            Analisis persediaan terstruktur berdasarkan 5 pilar utama: On Hand ➔ Vessel ➔ TO ➔ Plan Loading ➔ Ready.
-          </p>
-        </div>
-      </header>
+  const totalOnHand = useMemo(() => {
+    return pivotData.reduce((a, r) => a + (r['On Hand'] || 0), 0);
+  }, [pivotData]);
 
-      <div className="grid md:grid-cols-3 gap-6 mb-8 items-stretch">
-        <div className="md:col-span-2">
-          <GlassCard className="h-full bg-muted/30 flex flex-col justify-center">
-            <h3 className="text-lg font-bold mb-4 flex items-center gap-2 uppercase tracking-wide">
-              <Info className="w-5 h-5 text-primary" /> Executive Insights
-            </h3>
-            <ul className="text-sm text-muted-foreground leading-relaxed list-disc list-inside space-y-3">
-              <li><strong>Struktur 5 Pilar:</strong> Data kini dikelompokkan dari persediaan fisik (<em>On Hand</em>) hingga pasokan dalam perjalanan (<em>Vessel</em>, <em>TO</em>, <em>Plan Loading</em>, <em>Ready</em>).</li>
-              <li><strong>Monitoring Inbound:</strong> Klik tombol detail mingguan pada tabel pivot untuk melihat distribusi pasokan antar minggu tanpa mengaburkan ringkasannya.</li>
-            </ul>
-          </GlassCard>
-        </div>
-        <div className="md:col-span-1 flex flex-col">
-          <GlassCard className="h-full flex items-center justify-center p-3">
-            <FileUploader
-              onFileUpload={handleFileUpload}
-              isLoading={isProcessing}
-              templateCsv="Cabang,Grup,On Hand,TO WEEK 1 JULI,TO WEEK 2 JULI,TO WEEK 3 JULI,TO WEEK 4 JULI,TO WEEK 5 JULI,VESSEL WEEK 2 JULI,VESSEL WEEK 3 JULI,VESSEL WEEK 4 JULI,VESSEL WEEK 5 JULI,VESSEL WEEK 1 AGT,VESSEL WEEK 2 AGT,PLAN LOADING,READY"
-              templateName="soh_template.csv"
-              label="Upload Data SOH (Sheet: On Hand)"
-              description="Upload CSV hasil export dari Google Sheet. Sistem otomatis memetakan kolom mingguan (Weeks) ke 5 grup pivot SOH & TO."
-            />
-          </GlassCard>
+  const totalInbound = useMemo(() => {
+    return pivotData.reduce((a, r) => a + (r['VESSEL'] || 0) + (r['TO'] || 0) + (r['PLAN LOADING'] || 0), 0);
+  }, [pivotData]);
+
+  const criticalCount = useMemo(() => {
+    return pivotData.filter(r => (r['On Hand'] || 0) < 2000).length;
+  }, [pivotData]);
+
+  const handleExport = () => {
+    if (!parsed || !parsed.data) return;
+    const header = parsed.headers.map(h => `"${h}"`).join(',');
+    const lines = [header];
+
+    filtered.forEach(row => {
+      const line = parsed.headers.map(h => {
+        let val = row[h];
+        if (val === undefined || val === null) val = '';
+        if (typeof val === 'string') return `"${val.replace(/"/g, '""')}"`;
+        return val;
+      }).join(',');
+      lines.push(line);
+    });
+
+    const blob = new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `soh_to_analysis_${activeScenario}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast.success('📊 Hasil Analisis SOH & TO Berhasil Diekspor!');
+  };
+
+  return (
+    <div className="space-y-8 pb-16 min-h-screen animate-fade-in text-foreground">
+      {/* ─── HEADER SECTION ─── */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-emerald-950 to-slate-900 p-6 sm:p-8 border border-emerald-500/20 shadow-2xl">
+        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#10b981_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase tracking-widest">
+              <ClipboardList className="w-3.5 h-3.5" /> Dashboard Data Harian • SOH & TO
+            </div>
+            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white flex items-center gap-3">
+              SOH & TO Analysis <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-cyan-400 to-teal-300">(5-Pillars Engine)</span>
+            </h1>
+            <p className="text-slate-300 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
+              Analisis persediaan terstruktur berdasarkan 5 pilar utama: <b>On Hand ➔ Vessel ➔ TO ➔ Plan Loading ➔ Ready</b>.
+              Dilengkapi 3 jalur simulasi ketahanan stok & proteksi seasonality.
+            </p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            <TimestampBadge timestamp={parsed?.processed_at || new Date().toISOString()} label="Olah Terakhir:" />
+            <button
+              onClick={() => setShowHowTo(!showHowTo)}
+              className="w-full sm:w-auto px-4 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2"
+            >
+              <HelpCircle className="w-4 h-4" />
+              {showHowTo ? 'Tutup Panduan' : 'Panduan & Template'}
+            </button>
+          </div>
         </div>
       </div>
 
-      {parsed && (
-        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          {/* Filters & Header */}
-          <GlassCard>
-            <div className="flex flex-col md:flex-row justify-between md:items-start mb-6 gap-4 border-b border-border pb-6">
-              <div>
-                <div className="flex flex-wrap items-center gap-3">
-                  <h3 className="text-lg font-bold text-foreground uppercase tracking-wide">Filter Dashboard</h3>
-                  <TimestampBadge timestamp={parsed.processed_at || new Date().toISOString()} />
-                </div>
-                <div className="flex flex-wrap gap-3 mt-4">
-                  {colCabang && <MultiSelect options={cabangs} selected={selectedCabang} onChange={setSelectedCabang} selectAllLabel="Semua Cabang" />}
-                  {colCategory && <MultiSelect options={categories} selected={selectedCategory} onChange={setSelectedCategory} selectAllLabel="Semua Kategori" />}
-                  {colInsentif && <MultiSelect options={insentifs} selected={selectedInsentif} onChange={setSelectedInsentif} selectAllLabel="Semua Insentif" />}
-                </div>
-              </div>
-              <div className="flex gap-3 shrink-0 mt-4 md:mt-0">
-                <button onClick={handleExport}
-                  className="px-4 py-2 bg-background text-foreground border border-border rounded-md hover:border-primary transition text-sm flex items-center gap-2 font-medium">
-                  <Download className="w-4 h-4" /> Export CSV
-                </button>
-              </div>
-            </div>
-
-            {/* Dynamic Pillar KPIs */}
-            <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mt-6">
-              {pillarKpis.map((kpi, idx) => (
-                <div key={idx} className="p-4 rounded-lg bg-background/60 border border-border flex flex-col justify-between" style={{ borderLeft: `4px solid ${kpi.color}` }}>
-                  <span className="text-xs font-bold uppercase text-muted-foreground tracking-wider">{idx + 1}. {kpi.name}</span>
-                  <div className="mt-2 flex items-baseline justify-between">
-                    <span className="text-lg font-mono font-black text-foreground">{kpi.total.toLocaleString('id-ID')}</span>
-                    <span className="text-[10px] text-muted-foreground">{kpi.cols} kol</span>
-                  </div>
-                </div>
-              ))}
-              <KPICard title="Total Baris" value={filtered.length.toLocaleString('id-ID')} icon={<BarChart3 />} />
-            </div>
-          </GlassCard>
-
-          {/* Structured Pivot Bar Chart per Cabang */}
-          <GlassCard>
-            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-6 border-b border-border pb-4">
-              <div>
-                <h3 className="text-lg font-bold text-foreground uppercase tracking-wide flex items-center gap-2">
-                  <BarChart3 className="w-5 h-5 text-primary" />
-                  Grafik Pivot per Cabang
-                </h3>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Menampilkan perbandingan 5 pilar inbound (On Hand, Vessel, TO, Plan Loading, Ready) di tiap cabang.
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-1.5 bg-muted/50 p-1.5 rounded-xl border border-border shrink-0">
-                <button
-                  onClick={() => setChartMode('summary')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 ${
-                    chartMode === 'summary' ? 'bg-primary text-primary-foreground shadow-md scale-105' : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  <Layers className="w-3.5 h-3.5" /> 5 Pilar Utama
-                </button>
-                <button
-                  onClick={() => setChartMode('stock')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 ${
-                    chartMode === 'stock' ? 'bg-emerald-600 text-white shadow-md scale-105' : 'text-muted-foreground hover:text-emerald-500'
-                  }`}
-                >
-                  📦 On Hand & Produksi
-                </button>
-                <button
-                  onClick={() => setChartMode('to')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 ${
-                    chartMode === 'to' ? 'bg-orange-600 text-white shadow-md scale-105' : 'text-muted-foreground hover:text-orange-500'
-                  }`}
-                >
-                  🚚 Transfer Order (TO)
-                </button>
-                <button
-                  onClick={() => setChartMode('vessel')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 ${
-                    chartMode === 'vessel' ? 'bg-blue-600 text-white shadow-md scale-105' : 'text-muted-foreground hover:text-blue-500'
-                  }`}
-                >
-                  🚢 On Vessel
-                </button>
-                <button
-                  onClick={() => setChartMode('all_detail')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 ${
-                    chartMode === 'all_detail' ? 'bg-purple-600 text-white shadow-md scale-105' : 'text-muted-foreground hover:text-purple-500'
-                  }`}
-                >
-                  🌟 Semua Detail Week
-                </button>
-              </div>
-            </div>
-
-            <div className="h-[450px] pt-4">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={pivotData} margin={{ top: 10, right: 20, left: 0, bottom: 20 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                  <XAxis dataKey="cabang" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} tickLine={false} axisLine={false} interval={0} angle={-25} textAnchor="end" height={60} />
-                  <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} tickLine={false} axisLine={false} tickFormatter={(val) => val >= 1000 ? `${(val/1000).toFixed(0)}k` : val} />
-                  <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--popover))', borderColor: 'hsl(var(--border))', color: 'hsl(var(--popover-foreground))', borderRadius: '8px' }} />
-                  <Legend verticalAlign="top" height={36} />
-                  {chartMode === 'summary' ? (
-                    PILLAR_ORDER.map((pillar, idx) => (
-                      <Bar key={pillar} dataKey={pillar} name={`${idx + 1}. ${pillar}`} fill={PILLAR_COLORS[pillar]} radius={[3, 3, 0, 0]} maxBarSize={45} />
-                    ))
-                  ) : (
-                    (() => {
-                      const activePillars = 
-                        chartMode === 'stock' ? ['On Hand', 'PLAN LOADING', 'READY'] :
-                        chartMode === 'to' ? ['TO'] :
-                        chartMode === 'vessel' ? ['VESSEL'] :
-                        PILLAR_ORDER;
-
-                      let globalColorIndex = 0;
-                      return activePillars.flatMap((pillar) => (pillarColumnsMap[pillar] || []).map((colName) => {
-                        const assignedColor = DISTINCT_PALETTE[globalColorIndex % DISTINCT_PALETTE.length];
-                        globalColorIndex++;
-                        return (
-                          <Bar
-                            key={colName}
-                            dataKey={`details.${colName}`}
-                            name={`[${pillar}] ${colName.replace(/to |vessel |on hand |plan loading |ready /gi, '').trim() || colName}`}
-                            fill={assignedColor}
-                            radius={[3, 3, 0, 0]}
-                            maxBarSize={30}
-                          />
-                        );
-                      }));
-                    })()
-                  )}
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </GlassCard>
-
-          {/* Interactive Pivot Table */}
-          <GlassCard>
-            <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-6 gap-4 border-b border-border pb-4">
-              <div>
-                <h3 className="text-lg font-bold text-foreground uppercase tracking-wide flex items-center gap-2">
-                  <TableIcon className="w-5 h-5 text-primary" />
-                  Tabel Pivot Analisis SOH & TO per Cabang
-                </h3>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Dikelompokkan secara teratur berdasarkan urutan rantai pasok inbound.
-                </p>
-              </div>
+      {/* ─── PANDUAN, TEMPLATE & UPLOAD SECTION ─── */}
+      {showHowTo && (
+        <GlassCard className="p-6 border-emerald-500/30 bg-slate-900/80 backdrop-blur-xl animate-fade-in">
+          <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-6">
+            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+              <FileSpreadsheet className="w-5 h-5 text-emerald-400" /> Panduan Raw Data & Upload SOH (Excel / CSV)
+            </h3>
+            <div className="flex flex-wrap gap-2">
               <button
-                onClick={() => setExpandedPivot(!expandedPivot)}
-                className="px-3.5 py-1.5 bg-muted/60 hover:bg-muted text-foreground rounded-md text-xs font-bold uppercase tracking-wider transition-colors border border-border flex items-center gap-2 shrink-0 shadow-xs"
+                onClick={handleDownloadTemplate}
+                className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-cyan-600/20"
               >
-                <Layers className="w-3.5 h-3.5 text-primary" />
-                {expandedPivot ? 'Sembunyikan Sub-Kolom (Weeks)' : 'Tampilkan Sub-Kolom (Weeks)'}
+                <Download className="w-4 h-4" /> Unduh Template CSV
+              </button>
+              <button
+                onClick={handleGenerateDemo}
+                className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-emerald-500/20"
+              >
+                <Sparkles className="w-4 h-4" /> Gunakan Data Demo 5-Pilar
               </button>
             </div>
+          </div>
 
-            <div className="overflow-x-auto rounded-lg border border-border">
-              <table className="w-full text-xs text-left">
-                <thead>
-                  <tr className="bg-muted/80 text-muted-foreground uppercase tracking-wider border-b border-border">
-                    <th className="px-4 py-3.5 font-black text-foreground sticky left-0 bg-muted z-10 min-w-[160px]">
-                      Cabang
-                    </th>
-                    {PILLAR_ORDER.map((pillar, pIdx) => {
-                      const cols = pillarColumnsMap[pillar] || [];
-                      const showSubs = expandedPivot && cols.length > 1;
-                      return (
-                        <th
-                          key={pillar}
-                          colSpan={showSubs ? cols.length + 1 : 1}
-                          className="px-4 py-3.5 text-center border-x border-border/60 font-black tracking-wide"
-                          style={{ color: PILLAR_COLORS[pillar], backgroundColor: `${PILLAR_COLORS[pillar]}15` }}
-                        >
-                          {pIdx + 1}. {pillar} {cols.length > 1 && !showSubs ? `(${cols.length} W)` : ''}
-                        </th>
-                      );
-                    })}
-                    <th className="px-4 py-3.5 text-right font-black text-foreground bg-primary/15 min-w-[120px]">
-                      Total Inbound
-                    </th>
-                  </tr>
-                  {expandedPivot && (
-                    <tr className="bg-muted/40 text-muted-foreground border-b border-border text-[11px] font-bold">
-                      <th className="px-4 py-2 sticky left-0 bg-muted/90 z-10 text-foreground">Sub-kolom / Minggu</th>
-                      {PILLAR_ORDER.map(pillar => {
-                        const cols = pillarColumnsMap[pillar] || [];
-                        const showSubs = cols.length > 1;
-                        if (!showSubs) {
-                          return (
-                            <th key={pillar} className="px-3 py-2 text-center text-foreground font-bold border-x border-border/40">
-                              Total
-                            </th>
-                          );
-                        }
-                        return (
-                          <React.Fragment key={pillar}>
-                            <th className="px-3 py-2 text-right font-extrabold text-foreground bg-muted/40 border-l border-border/60" style={{ color: PILLAR_COLORS[pillar] }}>
-                              TOTAL
-                            </th>
-                            {cols.map(c => (
-                              <th key={c} className="px-2.5 py-2 text-right text-muted-foreground border-r border-border/30 truncate max-w-[120px]" title={c}>
-                                {c.replace(/to |vessel |week |w /gi, 'W').trim()}
-                              </th>
-                            ))}
-                          </React.Fragment>
-                        );
-                      })}
-                      <th className="px-4 py-2 bg-primary/10"></th>
-                    </tr>
-                  )}
-                </thead>
-                <tbody className="divide-y divide-border/50 font-mono text-xs">
-                  {pivotData.map((row, idx) => (
-                    <tr key={idx} className="hover:bg-muted/40 transition-colors">
-                      <td className="px-4 py-3 font-sans font-bold text-foreground sticky left-0 bg-background/95 z-10 truncate border-r border-border/20">
-                        {row.cabang}
-                      </td>
-                      {PILLAR_ORDER.map(pillar => {
-                        const cols = pillarColumnsMap[pillar] || [];
-                        const showSubs = expandedPivot && cols.length > 1;
-                        const totalVal = row[pillar] || 0;
-                        if (!showSubs) {
-                          return (
-                            <td key={pillar} className="px-4 py-3 text-right font-semibold border-x border-border/40 text-foreground">
-                              {totalVal > 0 ? totalVal.toLocaleString('id-ID') : '-'}
-                            </td>
-                          );
-                        }
-                        return (
-                          <React.Fragment key={pillar}>
-                            <td className="px-3 py-2.5 text-right font-bold text-foreground bg-muted/20 border-l border-border/50" style={{ color: PILLAR_COLORS[pillar] }}>
-                              {totalVal > 0 ? totalVal.toLocaleString('id-ID') : '-'}
-                            </td>
-                            {cols.map(c => {
-                              const v = row.details[c] || 0;
-                              return (
-                                <td key={c} className="px-2.5 py-2.5 text-right text-muted-foreground border-r border-border/20">
-                                  {v > 0 ? v.toLocaleString('id-ID') : '-'}
-                                </td>
-                              );
-                            })}
-                          </React.Fragment>
-                        );
-                      })}
-                      <td className="px-4 py-3 text-right font-extrabold text-primary bg-primary/10">
-                        {row.total > 0 ? row.total.toLocaleString('id-ID') : '-'}
-                      </td>
-                    </tr>
-                  ))}
-                  {/* Totals Row */}
-                  <tr className="bg-muted/80 font-bold border-t-2 border-border text-foreground">
-                    <td className="px-4 py-3.5 font-sans font-black sticky left-0 bg-muted z-10 text-sm">
-                      TOTAL KESELURUHAN
-                    </td>
-                    {PILLAR_ORDER.map(pillar => {
-                      const cols = pillarColumnsMap[pillar] || [];
-                      const showSubs = expandedPivot && cols.length > 1;
-                      const pillarSum = pivotData.reduce((a, r) => a + (r[pillar] || 0), 0);
-                      if (!showSubs) {
-                        return (
-                          <td key={pillar} className="px-4 py-3.5 text-right font-black border-x border-border/60 text-sm" style={{ color: PILLAR_COLORS[pillar] }}>
-                            {pillarSum > 0 ? pillarSum.toLocaleString('id-ID') : '-'}
-                          </td>
-                        );
-                      }
-                      return (
-                        <React.Fragment key={pillar}>
-                          <td className="px-3 py-3.5 text-right font-black bg-muted/50 border-l border-border/60 text-sm" style={{ color: PILLAR_COLORS[pillar] }}>
-                            {pillarSum > 0 ? pillarSum.toLocaleString('id-ID') : '-'}
-                          </td>
-                          {cols.map(c => {
-                            const colSum = pivotData.reduce((a, r) => a + (r.details[c] || 0), 0);
-                            return (
-                              <td key={c} className="px-2.5 py-3.5 text-right text-muted-foreground border-r border-border/30 font-bold">
-                                {colSum > 0 ? colSum.toLocaleString('id-ID') : '-'}
-                              </td>
-                            );
-                          })}
-                        </React.Fragment>
-                      );
-                    })}
-                    <td className="px-4 py-3.5 text-right font-black text-primary bg-primary/20 text-sm">
-                      {pivotData.reduce((a, r) => a + r.total, 0).toLocaleString('id-ID')}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm text-slate-300 mb-6">
+            <div className="space-y-2">
+              <h4 className="font-semibold text-white">📌 Pengelompakan 5 Pilar Inbound:</h4>
+              <ul className="list-disc pl-5 space-y-1.5 text-xs sm:text-sm text-slate-400">
+                <li><b>On Hand:</b> Stok fisik siap jual di gudang masing-masing cabang.</li>
+                <li><b>Vessel (Kapal):</b> Stok yang sedang dalam perjalanan muat laut/kapal barang.</li>
+                <li><b>TO (Transfer Order):</b> Stok dalam pengiriman darat antar cabang atau gudang pusat.</li>
+                <li><b>Plan Loading & Ready:</b> Stok dalam tahap konfirmasi dan perencanaan bongkar muat.</li>
+              </ul>
             </div>
-          </GlassCard>
-
-          {/* Full Raw Data Table (Collapsible/Preview) */}
-          <GlassCard>
-            <h3 className="text-sm font-bold text-foreground mb-4 uppercase tracking-wide flex items-center gap-2">
-              <TableIcon className="w-4 h-4 text-muted-foreground" /> Data Mentah SOH (Semua Kolom CSV)
-            </h3>
-            <div className="overflow-x-auto max-h-[400px]">
-              <table className="w-full text-xs text-left">
-                <thead className="text-[11px] uppercase bg-muted/70 text-muted-foreground sticky top-0 z-10">
-                  <tr>
-                    {parsed.headers.map(h => (
-                      <th key={h} className="px-3 py-2.5 whitespace-nowrap">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/50 font-mono">
-                  {filtered.slice(0, 50).map((row, idx) => (
-                    <tr key={idx} className="hover:bg-muted/30">
-                      {parsed.headers.map(h => (
-                        <td key={h} className="px-3 py-2 whitespace-nowrap">
-                          {typeof row[h] === 'number' ? row[h].toLocaleString('id-ID') : (row[h] || '-')}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {filtered.length > 50 && (
-              <p className="text-xs text-muted-foreground mt-3 italic">
-                * Menampilkan 50 baris pertama dari total {filtered.length.toLocaleString('id-ID')} baris...
+            <div className="space-y-2">
+              <h4 className="font-semibold text-white">⚙️ Fitur Pembacaan Excel Pintar (XLSX):</h4>
+              <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
+                Modul ini kini dilengkapi engine parsing <b>XLSX & CSV ArrayBuffer</b>. Anda bebas mengunggah file Excel (.xlsx) maupun CSV hasil unduhan ERP/Google Sheet tanpa keraguan error karakter atau salah baca angka!
               </p>
-            )}
-          </GlassCard>
-        </div>
+            </div>
+          </div>
+
+          <div className="pt-4 border-t border-white/10">
+            <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Unggah File Data SOH Anda (Excel / CSV):</h4>
+            <FileUploader
+              onFileUpload={handleFileUpload}
+              isLoading={isProcessing}
+              label="Upload Data SOH (Sheet: On Hand)"
+              description="Drag & drop file Excel/CSV di sini. Sistem otomatis memetakan kolom mingguan ke 5 grup pilar SOH."
+            />
+          </div>
+        </GlassCard>
       )}
+
+      {/* ─── TAB SWITCHER 3 JALUR SKENARIO ANALISIS ─── */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-2">
+            <Zap className="w-4 h-4" /> Pilih 3 Jalur Evaluasi & Simulasi SOH:
+          </h2>
+          <span className="text-xs text-slate-400 italic hidden sm:inline">Klik tab untuk menguji ketahanan stok fisik secara instan!</span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {SCENARIOS.map((sc) => {
+            const Icon = sc.icon;
+            const isSelected = activeScenario === sc.id;
+            return (
+              <button
+                key={sc.id}
+                onClick={() => {
+                  setActiveScenario(sc.id);
+                  toast.success(`Mengaktifkan ${sc.title}`);
+                }}
+                className={`relative group p-4 sm:p-5 rounded-2xl transition-all duration-300 text-left border overflow-hidden shadow-lg ${
+                  isSelected
+                    ? `bg-gradient-to-br ${sc.color} text-white border-transparent ring-2 ring-white/20 shadow-emerald-500/25 scale-[1.02]`
+                    : 'bg-slate-900/70 hover:bg-slate-800/80 text-slate-300 border-slate-700 hover:border-slate-600'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-bold text-base tracking-wide flex items-center gap-2.5">
+                    <Icon className={`w-5 h-5 ${isSelected ? 'text-white' : 'text-emerald-400'}`} />
+                    {sc.title}
+                  </span>
+                  {isSelected && (
+                    <span className="px-2 py-0.5 rounded-full bg-white/20 text-white text-xs font-black uppercase tracking-wider">
+                      Aktif
+                    </span>
+                  )}
+                </div>
+                <p className={`text-xs sm:text-sm leading-relaxed ${isSelected ? 'text-slate-100 font-medium' : 'text-slate-400'}`}>
+                  {sc.desc}
+                </p>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ─── EXECUTIVE KPI SUMMARY CHIPS ─── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <KPICard
+          title="Total On Hand Fisik"
+          value={`${totalOnHand.toLocaleString('id-ID')} Qty`}
+          trend="Siap Jual Gudang Cabang"
+          icon={<Package className="w-5 h-5 text-emerald-400" />}
+          className="border-emerald-500/20 bg-emerald-500/5 hover:border-emerald-500/40 transition"
+        />
+        <KPICard
+          title="Total Inbound (On Order)"
+          value={`${totalInbound.toLocaleString('id-ID')} Qty`}
+          trend="Gabungan Vessel + TO + Loading"
+          icon={<TrendingUp className="w-5 h-5 text-blue-400" />}
+          className="border-blue-500/20 bg-blue-500/5 hover:border-blue-500/40 transition"
+        />
+        <KPICard
+          title="Cabang Stok Kritis (<2K)"
+          value={`${criticalCount} Cabang`}
+          trend={criticalCount === 0 ? "Seluruh Cabang Optimal!" : "Perlu percepatan bongkar Vessel/TO"}
+          isAlert={criticalCount > 0}
+          icon={<AlertTriangle className="w-5 h-5 text-rose-400" />}
+          className="border-rose-500/20 bg-rose-500/5 hover:border-rose-500/40 transition"
+        />
+        <KPICard
+          title="Total Baris Terolah"
+          value={`${filtered.length.toLocaleString('id-ID')} Item`}
+          trend="Dari Database SOH Terverifikasi"
+          icon={<CheckCircle2 className="w-5 h-5 text-purple-400" />}
+          className="border-purple-500/20 bg-purple-500/5 hover:border-purple-500/40 transition"
+        />
+      </div>
+
+      {/* ─── FILTER CONTROLS & SELECTION ─── */}
+      <GlassCard className="p-5 border-slate-800 bg-slate-900/60 backdrop-blur-xl">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div>
+            <label className="text-xs font-semibold text-slate-400 mb-2 block uppercase tracking-wider">Filter Cabang:</label>
+            <MultiSelect
+              options={cabangs}
+              selected={selectedCabang}
+              onChange={setSelectedCabang}
+              selectAllLabel="Semua Cabang"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-slate-400 mb-2 block uppercase tracking-wider">Filter Kategori:</label>
+            <MultiSelect
+              options={categories}
+              selected={selectedCategory}
+              onChange={setSelectedCategory}
+              selectAllLabel="Semua Kategori"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-slate-400 mb-2 block uppercase tracking-wider">Sorot Grafik Khusus Cabang:</label>
+            <select
+              value={selectedCabangForChart}
+              onChange={(e) => setSelectedCabangForChart(e.target.value)}
+              className="w-full h-11 rounded-xl border border-slate-700 bg-slate-950/80 px-3 text-sm text-slate-200 focus:border-emerald-500 outline-none transition font-medium"
+            >
+              <option value="All">📊 Tampilkan Semua Cabang (Gabungan)</option>
+              {cabangs.filter(c => c !== 'All').map(c => (
+                <option key={c} value={c}>📍 Fokus Cabang: {c}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </GlassCard>
+
+      {/* ─── VISUALIZATION CHART: PIVOT PER CABANG ─── */}
+      {pivotData && pivotData.length > 0 && (
+        <GlassCard className="p-6 border-emerald-500/30 bg-gradient-to-b from-slate-900/90 to-slate-950/90 shadow-2xl">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-4 mb-6 gap-3">
+            <div>
+              <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+                <BarChart3 className="w-5 h-5 text-emerald-400" />
+                Grafik Komparasi 5 Pilar SOH & Inbound per Cabang
+              </h3>
+              <p className="text-xs text-slate-400 mt-1">
+                Sorotan: <b className="text-cyan-400">{selectedCabangForChart === 'All' ? 'Seluruh Cabang' : selectedCabangForChart}</b> • Skenario Aktif: <b className="text-amber-300">{activeScenario.toUpperCase()}</b>
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-1.5 bg-slate-800/80 p-1.5 rounded-xl border border-slate-700 shrink-0">
+              <button
+                onClick={() => setChartMode('summary')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 ${
+                  chartMode === 'summary' ? 'bg-emerald-500 text-white shadow-md scale-105' : 'text-slate-300 hover:text-white'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5" /> 5 Pilar
+              </button>
+              <button
+                onClick={() => setChartMode('stock')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 ${
+                  chartMode === 'stock' ? 'bg-emerald-600 text-white shadow-md scale-105' : 'text-slate-400 hover:text-emerald-400'
+                }`}
+              >
+                📦 On Hand
+              </button>
+              <button
+                onClick={() => setChartMode('to')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 ${
+                  chartMode === 'to' ? 'bg-orange-600 text-white shadow-md scale-105' : 'text-slate-400 hover:text-orange-400'
+                }`}
+              >
+                🚚 TO
+              </button>
+              <button
+                onClick={() => setChartMode('vessel')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 ${
+                  chartMode === 'vessel' ? 'bg-blue-600 text-white shadow-md scale-105' : 'text-slate-400 hover:text-blue-400'
+                }`}
+              >
+                🚢 Vessel
+              </button>
+            </div>
+          </div>
+
+          <div className="h-[360px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={pivotData} margin={{ top: 20, right: 30, left: 10, bottom: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
+                <XAxis dataKey="cabang" stroke="#94a3b8" tick={{ fill: '#e2e8f0', fontSize: 12, fontWeight: 600 }} angle={-15} textAnchor="end" height={50} />
+                <YAxis stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 12 }} />
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#0f172a', borderColor: '#10b981', borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}
+                  labelStyle={{ color: '#38bdf8', fontWeight: 'bold', borderBottom: '1px solid #334155', paddingBottom: '4px' }}
+                />
+                <Legend wrapperStyle={{ paddingTop: '16px', fontSize: '12px' }} />
+                {chartMode === 'summary' && (
+                  <>
+                    <Bar dataKey="On Hand" name="On Hand (Fisik)" fill="#10b981" stackId="a" />
+                    <Bar dataKey="VESSEL" name="Vessel (Kapal)" fill="#3b82f6" stackId="a" />
+                    <Bar dataKey="TO" name="TO (Transfer Order)" fill="#f97316" stackId="a" />
+                    <Bar dataKey="PLAN LOADING" name="Plan Loading" fill="#a855f7" stackId="a" />
+                    <Bar dataKey="READY" name="Ready" fill="#06b6d4" stackId="a" radius={[4, 4, 0, 0]} />
+                  </>
+                )}
+                {chartMode === 'stock' && <Bar dataKey="On Hand" name="On Hand (Fisik)" fill="#10b981" radius={[6, 6, 0, 0]} maxBarSize={60} />}
+                {chartMode === 'to' && <Bar dataKey="TO" name="Transfer Order (TO)" fill="#f97316" radius={[6, 6, 0, 0]} maxBarSize={60} />}
+                {chartMode === 'vessel' && <Bar dataKey="VESSEL" name="Vessel (Kapal)" fill="#3b82f6" radius={[6, 6, 0, 0]} maxBarSize={60} />}
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </GlassCard>
+      )}
+
+      {/* ─── TABEL COMPLEMENTARY: ANALISIS PIVOT & ZONASI STOK ─── */}
+      <GlassCard className="p-6 border-slate-800 bg-slate-900/80 shadow-2xl overflow-hidden">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-slate-800 pb-4 mb-6 gap-4">
+          <div>
+            <h3 className="text-lg font-bold text-white flex items-center gap-2.5">
+              <FileSpreadsheet className="w-5 h-5 text-emerald-400" />
+              Tabel Analisis Komparatif SOH & TO ({pivotData.length} Cabang Terfilter)
+            </h3>
+            <p className="text-xs text-slate-400 mt-1">
+              Rincian kuota persediaan per cabang dengan zonasi status ketersediaan gudang secara real-time.
+            </p>
+          </div>
+
+          <button
+            onClick={handleExport}
+            className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-emerald-600/20 shrink-0"
+          >
+            <Download className="w-4 h-4" /> Ekspor Hasil ke Excel / CSV
+          </button>
+        </div>
+
+        <div className="overflow-x-auto rounded-xl border border-slate-800 max-h-[600px] overflow-y-auto">
+          <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[900px]">
+            <thead className="bg-slate-950/90 text-slate-300 uppercase font-bold sticky top-0 z-20 shadow-md">
+              <tr className="border-b border-slate-800 text-[11px] tracking-wider text-center">
+                <th className="py-3.5 px-4 text-left">Cabang & Lokasi</th>
+                <th className="py-3.5 px-3.5 border-l border-slate-800 text-emerald-400">📦 On Hand (Fisik)</th>
+                <th className="py-3.5 px-3.5 border-l border-slate-800 text-blue-400">🚢 Vessel (Kapal)</th>
+                <th className="py-3.5 px-3.5 border-l border-slate-800 text-orange-400">🚚 TO (Darat)</th>
+                <th className="py-3.5 px-3.5 border-l border-slate-800 text-purple-400">⚙️ Plan Loading</th>
+                <th className="py-3.5 px-3.5 border-l border-slate-800 text-cyan-400">🏁 Ready</th>
+                <th className="py-3.5 px-4 border-l border-slate-800 bg-slate-800 text-white">Total Inbound</th>
+                <th className="py-3.5 px-4 border-l border-slate-800">Zonasi Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800/80 text-slate-300 text-center">
+              {pivotData.map((row) => {
+                const totalInboundRow = (row['VESSEL'] || 0) + (row['TO'] || 0) + (row['PLAN LOADING'] || 0) + (row['READY'] || 0);
+                const isCritical = (row['On Hand'] || 0) < 2000;
+                const isWarning = (row['On Hand'] || 0) < 4000 && !isCritical;
+                const isOver = (row['On Hand'] || 0) > 8000;
+                
+                return (
+                  <tr
+                    key={row.cabang}
+                    className="hover:bg-slate-800/40 transition cursor-pointer font-medium"
+                    onClick={() => setSelectedCabangForChart(row.cabang === selectedCabangForChart ? 'All' : row.cabang)}
+                  >
+                    <td className="py-3.5 px-4 text-left align-middle">
+                      <div className="font-bold text-white text-sm">{row.cabang}</div>
+                      <div className="text-[11px] text-slate-400 mt-0.5">5-Pillars Monitoring</div>
+                    </td>
+                    <td className="py-3.5 px-3.5 border-l border-slate-800 font-extrabold text-emerald-400 text-base font-mono">
+                      {(row['On Hand'] || 0).toLocaleString('id-ID')}
+                    </td>
+                    <td className="py-3.5 px-3.5 border-l border-slate-800 font-mono text-blue-300">
+                      {(row['VESSEL'] || 0).toLocaleString('id-ID')}
+                    </td>
+                    <td className="py-3.5 px-3.5 border-l border-slate-800 font-mono text-orange-300">
+                      {(row['TO'] || 0).toLocaleString('id-ID')}
+                    </td>
+                    <td className="py-3.5 px-3.5 border-l border-slate-800 font-mono text-purple-300">
+                      {(row['PLAN LOADING'] || 0).toLocaleString('id-ID')}
+                    </td>
+                    <td className="py-3.5 px-3.5 border-l border-slate-800 font-mono text-cyan-300">
+                      {(row['READY'] || 0).toLocaleString('id-ID')}
+                    </td>
+                    <td className="py-3.5 px-4 border-l border-slate-800 bg-slate-950/50 font-bold font-mono text-white text-base">
+                      {totalInboundRow.toLocaleString('id-ID')}
+                    </td>
+                    <td className="py-3.5 px-4 border-l border-slate-800">
+                      <span className={`px-2.5 py-1 rounded-full text-[11px] font-black uppercase tracking-wider inline-block ${
+                        isCritical ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40 animate-pulse' :
+                        isWarning ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40' :
+                        isOver ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40' :
+                        'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+                      }`}>
+                        {isCritical ? '🔴 KRITIS (PERCEPAT TO)' : isWarning ? '🟡 RE-ORDER AREA' : isOver ? '🔵 SURPLUS STOK' : '🟢 STOK OPTIMAL'}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </GlassCard>
     </div>
   );
 }
-

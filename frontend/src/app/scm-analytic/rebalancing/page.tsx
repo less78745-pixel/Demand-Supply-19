@@ -6,7 +6,7 @@ import { KPICard } from '@/components/ui/KPICard';
 import { MultiSelect } from '@/components/ui/MultiSelect';
 import {
   ArrowLeftRight, Download, Truck, DollarSign, AlertTriangle,
-  Package, CheckCircle, Info, UploadCloud, FileSpreadsheet, X
+  Package, CheckCircle, Info, UploadCloud, FileSpreadsheet, X, Zap, HelpCircle, FastForward, ShieldAlert
 } from 'lucide-react';
 import { uploadRebalancingFiles } from '@/lib/api';
 import toast from 'react-hot-toast';
@@ -15,6 +15,59 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   Legend, ResponsiveContainer, Cell,
 } from 'recharts';
+
+type ScenarioType = 'cost' | 'speed' | 'shortage';
+
+const SCENARIOS = [
+  {
+    id: 'cost' as ScenarioType,
+    title: 'Jalur 1: Prioritas Biaya Terendah (Lowest Cost Freight)',
+    desc: 'Alokasi transfer antar-cabang diprioritaskan pada jalur laut & darat ekonomis untuk meminimalkan total biaya pengiriman logistik.',
+    color: 'from-emerald-600 to-teal-500',
+    icon: DollarSign,
+    modifier: 'cost'
+  },
+  {
+    id: 'speed' as ScenarioType,
+    title: 'Jalur 2: Prioritas Kecepatan (Express Air Cargo)',
+    desc: 'Simulasi alokasi darurat menggunakan jalur kargo udara/express untuk menekan lead time pengiriman drastis ke bawah 3 hari.',
+    color: 'from-blue-600 to-indigo-500',
+    icon: FastForward,
+    modifier: 'speed'
+  },
+  {
+    id: 'shortage' as ScenarioType,
+    title: 'Jalur 3: Simulasi Kelangkaan Stok (+40% Deficit Demand)',
+    desc: 'Simulasi tekanan tinggi jika terjadi defisit stok mendadak di cabang Indonesia Timur, memicu transfer silang intensif dari gudang regional.',
+    color: 'from-amber-600 to-red-500',
+    icon: ShieldAlert,
+    modifier: 'shortage'
+  }
+];
+
+function generateDemoRebalancing() {
+  const recs = [
+    { origin: 'Jakarta (Central)', destination: 'Manado', entity: 'PT Alpha', sku: 'SKU-001 (Mainboard)', qty: 500, mode: 'Laut (Pelni)', cost_per_ton: 8500, total_cost: 4250000, lead_time: 12, cost_if_central: 4250000, savings: 0 },
+    { origin: 'Surabaya', destination: 'Kupang', entity: 'PT Alpha', sku: 'SKU-001 (Mainboard)', qty: 200, mode: 'Laut (Roro)', cost_per_ton: 7500, total_cost: 1500000, lead_time: 15, cost_if_central: 1800000, savings: 300000 },
+    { origin: 'Makassar', destination: 'Palu', entity: 'PT Beta', sku: 'SKU-001 (Mainboard)', qty: 250, mode: 'Darat (Trucking)', cost_per_ton: 3500, total_cost: 875000, lead_time: 2, cost_if_central: 2000000, savings: 1125000 },
+    { origin: 'Denpasar', destination: 'Mataram', entity: 'PT Beta', sku: 'SKU-002 (Power Supply)', qty: 300, mode: 'Roro Ferry', cost_per_ton: 3000, total_cost: 900000, lead_time: 1, cost_if_central: 1500000, savings: 600000 },
+    { origin: 'Surabaya', destination: 'Kendari', entity: 'PT Alpha', sku: 'SKU-003 (Display Screen)', qty: 400, mode: 'Laut (Container)', cost_per_ton: 6500, total_cost: 2600000, lead_time: 8, cost_if_central: 3400000, savings: 800000 },
+  ];
+
+  return {
+    processed_at: new Date().toISOString(),
+    recommendations: recs,
+    infeasible: [],
+    kpi: {
+      total_transfers: 5,
+      total_cost: 10125000,
+      total_cost_central: 12950000,
+      savings: 2825000,
+      savings_pct: 21.8,
+      infeasible_count: 0
+    }
+  };
+}
 
 const TEMPLATE_STOCK = `Cabang,SKU,Qty_Available
 Jakarta,SKU-001,5000
@@ -113,12 +166,27 @@ export default function RebalancingPage() {
   const [demandFile, setDemandFile] = useState<File | null>(null);
   const [freightFile, setFreightFile] = useState<File | null>(null);
   const [selectedEntity, setSelectedEntity] = useState<string[]>(['All']);
+  const [activeScenario, setActiveScenario] = useState<ScenarioType>('cost');
+  const [showHowTo, setShowHowTo] = useState(false);
+
+  const handleGenerateDemo = () => {
+    const demo = generateDemoRebalancing();
+    setResults(demo);
+    try { localStorage.setItem('lastRebalancing', JSON.stringify(demo)); } catch {}
+    toast.success('🎉 Data Demo Stock Rebalancing Berhasil Dimuat!');
+  };
 
   useEffect(() => {
     try {
       const saved = localStorage.getItem('lastRebalancing');
-      if (saved) setResults(JSON.parse(saved));
-    } catch { /* ignore */ }
+      if (saved) {
+        setResults(JSON.parse(saved));
+      } else {
+        setResults(generateDemoRebalancing());
+      }
+    } catch {
+      setResults(generateDemoRebalancing());
+    }
   }, []);
 
   const handleAnalyze = async () => {
@@ -151,10 +219,17 @@ export default function RebalancingPage() {
 
   const filtered = useMemo(() => {
     if (!results?.recommendations) return [];
-    return results.recommendations.filter((r: any) =>
+    const base = results.recommendations.filter((r: any) =>
       selectedEntity.includes('All') || selectedEntity.includes(r.entity)
     );
-  }, [results, selectedEntity]);
+    if (activeScenario === 'speed') {
+      return base.map((r: any) => ({ ...r, mode: 'Udara (Express Air Cargo)', lead_time: Math.min(2, r.lead_time), total_cost: Math.round(r.total_cost * 1.8) }));
+    }
+    if (activeScenario === 'shortage') {
+      return base.map((r: any) => ({ ...r, qty: Math.round(r.qty * 1.4), total_cost: Math.round(r.total_cost * 1.35) }));
+    }
+    return base;
+  }, [results, selectedEntity, activeScenario]);
 
   const handleExportSTO = () => {
     if (!filtered.length) { toast.error('Tidak ada data untuk di-export'); return; }
@@ -172,31 +247,53 @@ export default function RebalancingPage() {
   };
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto pb-10">
-      <header className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-border pb-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-3 uppercase">
-            <ArrowLeftRight className="w-8 h-8 text-primary" />
-            Stock Rebalancing Optimizer
-          </h1>
-          <p className="text-muted-foreground mt-2 font-medium">
-            Optimasi pemindahan stok antar-cabang dengan biaya logistik terendah. Perhitungan dipartisi ketat per entitas perusahaan tujuan.
-          </p>
-        </div>
-        {results && (
-          <div className="flex flex-wrap items-center gap-3">
-            <MultiSelect options={entityOptions} selected={selectedEntity} onChange={setSelectedEntity} selectAllLabel="Semua Entity" />
-            <button onClick={handleExportSTO} className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition text-sm font-bold flex items-center gap-2 uppercase tracking-wide">
-              <Download className="w-4 h-4" /> Download Draft STO
+    <div className="space-y-8 max-w-[1550px] mx-auto pb-16 animate-in fade-in duration-500 text-foreground">
+
+      {/* ─── COMMAND TOWER HERO BANNER ─── */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-emerald-950 to-slate-900 p-6 sm:p-8 border border-emerald-500/20 shadow-2xl">
+        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#10b981_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
+        <div className="relative z-10 flex flex-col xl:flex-row xl:items-center justify-between gap-6">
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase tracking-widest">
+              <ArrowLeftRight className="w-3.5 h-3.5" /> SCM Analytic • Multi-Echelon Logistics
+            </div>
+            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white flex items-center gap-3">
+              Stock Rebalancing <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-300">Optimizer</span>
+            </h1>
+            <p className="text-slate-300 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
+              Optimasi pemindahan stok silang antar-cabang dengan biaya logistik terendah dan waktu kirim tercepat. Perhitungan dipartisi ketat per entitas perusahaan tujuan.
+            </p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 shrink-0">
+            <TimestampBadge timestamp={results?.processed_at || new Date().toISOString()} label="Olah Terakhir:" />
+            <button
+              onClick={() => setShowHowTo(!showHowTo)}
+              className="w-full sm:w-auto px-4 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2"
+            >
+              <Info className="w-4 h-4" />
+              {showHowTo ? 'Tutup Panduan & File' : 'Panduan & Upload File'}
             </button>
           </div>
-        )}
-      </header>
+        </div>
+      </div>
 
-      {/* Upload Section */}
-      {!results && (
-        <GlassCard>
-          <h3 className="text-sm font-bold text-foreground mb-6 uppercase tracking-wide">Upload 3 File Data</h3>
+      {/* ─── PANDUAN & UPLOAD SECTION ─── */}
+      {showHowTo && (
+        <GlassCard className="p-6 border-emerald-500/30 bg-slate-900/80 backdrop-blur-xl animate-fade-in">
+          <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-6">
+            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+              <FileSpreadsheet className="w-5 h-5 text-emerald-400" /> Upload 3 File Matriks & Panduan Rebalancing
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={handleGenerateDemo}
+                className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-emerald-500/20"
+              >
+                <Zap className="w-4 h-4" /> Gunakan Data Demo
+              </button>
+            </div>
+          </div>
           <div className="grid md:grid-cols-3 gap-4 mb-6">
             <FileDropZone label="1. Stock Saat Ini" file={stockFile} onFile={setStockFile} onClear={() => setStockFile(null)}
               templateCsv={TEMPLATE_STOCK} templateName="template_stock_current.csv" />
@@ -207,26 +304,81 @@ export default function RebalancingPage() {
           </div>
           <div className="flex justify-center">
             <button onClick={handleAnalyze} disabled={isProcessing || !stockFile || !demandFile || !freightFile}
-              className="px-8 py-3 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50 transition text-sm font-bold uppercase tracking-wide flex items-center gap-2">
+              className="px-8 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-500 disabled:opacity-50 transition text-sm font-bold uppercase tracking-wide flex items-center gap-2 shadow-lg shadow-emerald-600/20">
               {isProcessing ? (
                 <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Memproses...</>
               ) : (
-                <><ArrowLeftRight className="w-4 h-4" /> Jalankan Optimasi</>
+                <><ArrowLeftRight className="w-4 h-4" /> Jalankan Optimasi dari 3 File</>
               )}
             </button>
           </div>
-          <div className="mt-6 p-4 bg-muted/30 rounded-lg border border-border">
-            <div className="flex items-start gap-2">
-              <Info className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-              <div className="text-xs text-muted-foreground space-y-1">
-                <p><strong>Constraint Entity:</strong> Perhitungan kebutuhan dan alokasi per perusahaan tujuan dipisah ketat, tidak digabung.</p>
-                <p><strong>Pre-filter Lead Time:</strong> Opsi pengiriman yang melebihi target waktu otomatis didiskualifikasi.</p>
-                <p><strong>Infeasible:</strong> Jika stok tidak cukup, sistem menampilkan status, bukan error.</p>
-              </div>
-            </div>
+          <div className="mt-6 p-4 bg-emerald-500/10 rounded-xl border border-emerald-500/20 text-xs text-slate-300">
+            <p><strong>💡 Catatan Sistem:</strong> Pembatasan hak entitas dipatuhi secara ketat (stok PT Alpha hanya dialokasikan untuk demand PT Alpha). Opsi pengiriman yang melebihi Max Lead Time otomatis tereliminasi.</p>
           </div>
         </GlassCard>
       )}
+
+      {/* ─── TAB SWITCHER 3 JALUR SKENARIO ANALISIS ─── */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-2">
+            <Zap className="w-4 h-4" /> Pilih 3 Jalur Simulasi Alokasi & Mode Logistik:
+          </h2>
+          <span className="text-xs text-slate-400 italic hidden sm:inline">Klik tab untuk membandingkan ongkir termurah vs kecepatan kargo udara!</span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {SCENARIOS.map((sc) => {
+            const Icon = sc.icon;
+            const isSelected = activeScenario === sc.id;
+            return (
+              <button
+                key={sc.id}
+                onClick={() => {
+                  setActiveScenario(sc.id);
+                  toast.success(`Mengaktifkan ${sc.title}`);
+                }}
+                className={`relative group p-4 sm:p-5 rounded-2xl transition-all duration-300 text-left border overflow-hidden shadow-lg ${
+                  isSelected
+                    ? `bg-gradient-to-br ${sc.color} text-white border-transparent ring-2 ring-white/20 shadow-emerald-500/25 scale-[1.02]`
+                    : 'bg-slate-900/70 hover:bg-slate-800/80 text-slate-300 border-slate-700 hover:border-slate-600'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-bold text-base tracking-wide flex items-center gap-2.5">
+                    <Icon className={`w-5 h-5 ${isSelected ? 'text-white' : 'text-emerald-400'}`} />
+                    {sc.title}
+                  </span>
+                  {isSelected && (
+                    <span className="px-2 py-0.5 rounded-full bg-white/20 text-white text-xs font-black uppercase tracking-wider">
+                      Aktif
+                    </span>
+                  )}
+                </div>
+                <p className={`text-xs sm:text-sm leading-relaxed ${isSelected ? 'text-slate-100 font-medium' : 'text-slate-400'}`}>
+                  {sc.desc}
+                </p>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ─── ACTION BAR KETIKA RESULTS ADA ─── */}
+      <div className="flex flex-wrap items-center justify-between gap-4 bg-slate-900/40 p-4 rounded-2xl border border-slate-800">
+        <div className="flex flex-wrap items-center gap-3">
+          <MultiSelect options={entityOptions} selected={selectedEntity} onChange={setSelectedEntity} selectAllLabel="Semua Entity" />
+          <button onClick={handleExportSTO} className="px-4 py-2 bg-emerald-600 text-white rounded-xl hover:bg-emerald-500 transition text-sm font-bold flex items-center gap-2 uppercase tracking-wide shadow-md">
+            <Download className="w-4 h-4" /> Download Draft STO (Excel)
+          </button>
+        </div>
+        <button
+          onClick={handleGenerateDemo}
+          className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-bold rounded-xl shadow-lg transition flex items-center gap-2 text-xs sm:text-sm"
+        >
+          <Zap className="w-4 h-4" /> Gunakan Data Demo
+        </button>
+      </div>
 
       {/* Results */}
       {results && (

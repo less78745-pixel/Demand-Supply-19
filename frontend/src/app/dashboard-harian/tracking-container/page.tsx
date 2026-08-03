@@ -223,10 +223,47 @@ function getStatusStyle(status: string): string {
   }
 }
 
+type ScenarioType = 'actual' | 'expedite' | 'delay';
+
+const SCENARIOS = [
+  {
+    id: 'actual' as ScenarioType,
+    title: 'Jalur 1: Evaluasi Aktual Status Kontainer',
+    desc: 'Pemantauan status pengapalan riil, nomor kontainer, dan estimasi waktu sandar secara aktual di pelbagai carrier.',
+    color: 'from-emerald-600 to-teal-500',
+    icon: Anchor,
+    modifier: 'actual'
+  },
+  {
+    id: 'expedite' as ScenarioType,
+    title: 'Jalur 2: Simulasi Percepatan Bongkar Muat (Green Port)',
+    desc: 'Simulasi jika seluruh kontainer berstatus Delay/Transit diprioritaskan bersandar lebih awal guna pengisian buffer stok gudang.',
+    color: 'from-blue-600 to-cyan-500',
+    icon: Zap,
+    modifier: 'expedite'
+  },
+  {
+    id: 'delay' as ScenarioType,
+    title: 'Jalur 3: Simulasi Kongesti Pelabuhan (Red Alert Delay)',
+    desc: 'Uji ketahanan stok rantai pasok jika terjadi kemacetan pelabuhan muat/bongkar atau hold bea cukai selama +7 hingga +14 hari.',
+    color: 'from-rose-600 to-orange-500',
+    icon: AlertTriangle,
+    modifier: 'delay'
+  }
+];
+
 export default function TrackingContainerPage() {
   const [containers, setContainers] = useState<ContainerItem[]>([]);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [activeScenario, setActiveScenario] = useState<ScenarioType>('actual');
+  const [showHowTo, setShowHowTo] = useState<boolean>(false);
+
+  const handleGenerateDemo = () => {
+    setContainers(DEFAULT_CONTAINERS);
+    saveToStorage(DEFAULT_CONTAINERS);
+    toast.success('🎉 Data Demo Kontainer Berhasil Dimuat!');
+  };
 
   // Web Tracker Portal States (All-in-One Live Viewer)
   const [isPortalOpen, setIsPortalOpen] = useState(false);
@@ -447,7 +484,7 @@ export default function TrackingContainerPage() {
     return Array.from(new Set(containers.map(c => c.carrier).filter(Boolean))).sort();
   }, [containers]);
 
-  /* ─── Filtered Containers ─── */
+  /* ─── Filtered Containers with Scenario Simulation ─── */
   const filteredContainers = useMemo(() => {
     return containers.filter(c => {
       if (filterCabang && c.cabang !== filterCabang) return false;
@@ -458,6 +495,14 @@ export default function TrackingContainerPage() {
         if (!hay.includes(searchQuery.toLowerCase())) return false;
       }
       return true;
+    }).map(c => {
+      if (activeScenario === 'expedite' && (c.status === 'Estimasi Delay' || c.status === 'Sedang Berlayar')) {
+        return { ...c, status: 'Tiba di Pelabuhan', notes: `⚡ [Simulasi Green Port] ${c.notes}` };
+      }
+      if (activeScenario === 'delay' && (c.status === 'Sedang Berlayar' || c.status === 'Siap Di-track')) {
+        return { ...c, status: 'Estimasi Delay', notes: `🚨 [Simulasi Kongesti Port +14 Hari] ${c.notes}` };
+      }
+      return c;
     }).sort((a, b) => {
       if (a.status === "Siap Di-track" && b.status !== "Siap Di-track") return -1;
       if (!a.eta && !b.eta) return 0;
@@ -465,7 +510,7 @@ export default function TrackingContainerPage() {
       if (!b.eta) return -1;
       return new Date(a.eta).getTime() - new Date(b.eta).getTime();
     });
-  }, [containers, filterCabang, filterCarrier, filterStatus, searchQuery]);
+  }, [containers, filterCabang, filterCarrier, filterStatus, searchQuery, activeScenario]);
 
   /* ─── Grouped by Cabang ─── */
   const groupedContainers = useMemo(() => {
@@ -674,52 +719,141 @@ export default function TrackingContainerPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-[1550px] mx-auto pb-12 animate-in fade-in duration-500">
+    <div className="space-y-8 max-w-[1550px] mx-auto pb-16 animate-in fade-in duration-500 text-foreground">
       
-      {/* ═══ COMMAND TOWER HEADER BANNER (HARMONIZED THEME) ═══ */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-card via-card/95 to-card border border-primary/30 p-6 sm:p-8 shadow-xl text-foreground">
-        <div className="absolute top-0 right-0 -mr-20 -mt-20 w-96 h-96 bg-gradient-to-bl from-primary/20 via-amber-500/10 to-transparent rounded-full blur-3xl pointer-events-none"></div>
-        
+      {/* ─── COMMAND TOWER HERO BANNER ─── */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-emerald-950 to-slate-900 p-6 sm:p-8 border border-emerald-500/20 shadow-2xl">
+        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#10b981_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
         <div className="relative z-10 flex flex-col xl:flex-row xl:items-center justify-between gap-6">
-          <div className="space-y-2.5">
-            <div className="flex flex-wrap items-center gap-3">
-              <span className="text-2xl sm:text-3xl font-black tracking-tight uppercase flex items-center gap-2.5">
-                🗼 Menara Kendali <span className="gradient-text">Kontainer Auto-Track</span>
-              </span>
-              <TimestampBadge timestamp={lastUpdated} label="Tanggal Olahan Terakhir" />
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase tracking-widest">
+              <Anchor className="w-3.5 h-3.5" /> Dashboard Data Harian • Container Tracker
             </div>
-            <p className="text-xs sm:text-sm text-muted-foreground max-w-3xl leading-relaxed font-medium">
-              Modul pelacakan otomatis berdaya tinggi. Cukup impor <b>3 kolom raw data</b> (<code>no_kontainer, pelayaran, cabang</code>), lalu klik tombol <b>Direct Track URL</b> pada tabel di bawah untuk memantau status kontainer di web resmi pelayaran secara langsung.
+            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white flex items-center gap-3">
+              Menara Kendali <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-300">Kontainer Auto-Track</span>
+            </h1>
+            <p className="text-slate-300 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
+              Modul pelacakan otomatis berdaya tinggi. Cukup impor <b>3 kolom raw data</b> (<code>no_kontainer, pelayaran, cabang</code>), lalu pantau status kontainer langsung di portal resmi atau via 3 jalur simulasi ketahanan stok.
             </p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 shrink-0">
+            <TimestampBadge timestamp={lastUpdated || new Date().toISOString()} label="Olah Terakhir:" />
+            <button
+              onClick={() => setShowHowTo(!showHowTo)}
+              className="w-full sm:w-auto px-4 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2"
+            >
+              <HelpCircle className="w-4 h-4" />
+              {showHowTo ? 'Tutup Panduan' : 'Panduan & Template'}
+            </button>
           </div>
         </div>
 
         {/* ═══ STATS STRIP ═══ */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mt-8 pt-6 border-t border-border/80">
-          <div className="p-4 rounded-xl bg-background/60 border border-border/80 flex flex-col justify-between hover:border-primary/40 transition">
-            <span className="text-[11px] text-muted-foreground font-bold uppercase tracking-wider">Total Kontainer</span>
-            <span className="text-2xl sm:text-3xl font-black text-foreground font-mono mt-1">{stats.total}</span>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mt-8 pt-6 border-t border-emerald-500/20">
+          <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 flex flex-col justify-between hover:border-emerald-500/40 transition shadow">
+            <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Total Kontainer</span>
+            <span className="text-2xl sm:text-3xl font-black text-white font-mono mt-1">{stats.total}</span>
           </div>
-          <div className="p-4 rounded-xl bg-background/60 border border-border/80 flex flex-col justify-between hover:border-amber-500/40 transition">
-            <span className="text-[11px] text-amber-500 font-bold uppercase tracking-wider flex items-center gap-1">
+          <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 flex flex-col justify-between hover:border-amber-500/40 transition shadow">
+            <span className="text-[11px] text-amber-400 font-bold uppercase tracking-wider flex items-center gap-1">
               Siap Di-track / Baru {stats.ready > 0 && <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />}
             </span>
-            <span className="text-2xl sm:text-3xl font-black text-amber-500 dark:text-amber-400 font-mono mt-1">{stats.ready}</span>
+            <span className="text-2xl sm:text-3xl font-black text-amber-400 font-mono mt-1">{stats.ready}</span>
           </div>
-          <div className="p-4 rounded-xl bg-background/60 border border-border/80 flex flex-col justify-between hover:border-sky-500/40 transition">
-            <span className="text-[11px] text-sky-500 font-bold uppercase tracking-wider">Sedang Berlayar</span>
-            <span className="text-2xl sm:text-3xl font-black text-sky-500 dark:text-sky-400 font-mono mt-1">{stats.transit}</span>
+          <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 flex flex-col justify-between hover:border-sky-500/40 transition shadow">
+            <span className="text-[11px] text-sky-400 font-bold uppercase tracking-wider">Sedang Berlayar</span>
+            <span className="text-2xl sm:text-3xl font-black text-sky-400 font-mono mt-1">{stats.transit}</span>
           </div>
-          <div className="p-4 rounded-xl bg-background/60 border border-border/80 flex flex-col justify-between hover:border-orange-500/40 transition">
-            <span className="text-[11px] text-orange-500 font-bold uppercase tracking-wider flex items-center gap-1">
-              Delay / Lewat ETA {stats.delay > 0 && <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />}
+          <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 flex flex-col justify-between hover:border-rose-500/40 transition shadow">
+            <span className="text-[11px] text-rose-400 font-bold uppercase tracking-wider flex items-center gap-1">
+              Delay / Lewat ETA {stats.delay > 0 && <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />}
             </span>
-            <span className="text-2xl sm:text-3xl font-black text-orange-500 dark:text-orange-400 font-mono mt-1">{stats.delay}</span>
+            <span className="text-2xl sm:text-3xl font-black text-rose-400 font-mono mt-1">{stats.delay}</span>
           </div>
-          <div className="p-4 rounded-xl bg-background/60 border border-border/80 flex flex-col justify-between hover:border-emerald-500/40 transition col-span-2 sm:col-span-1">
-            <span className="text-[11px] text-emerald-500 font-bold uppercase tracking-wider">Tiba / Selesai</span>
-            <span className="text-2xl sm:text-3xl font-black text-emerald-500 dark:text-emerald-400 font-mono mt-1">{stats.arrived}</span>
+          <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 flex flex-col justify-between hover:border-emerald-500/40 transition shadow col-span-2 sm:col-span-1">
+            <span className="text-[11px] text-emerald-400 font-bold uppercase tracking-wider">Tiba / Selesai</span>
+            <span className="text-2xl sm:text-3xl font-black text-emerald-400 font-mono mt-1">{stats.arrived}</span>
           </div>
+        </div>
+      </div>
+
+      {/* ─── PANDUAN, TEMPLATE & DEMO DATA SECTION ─── */}
+      {showHowTo && (
+        <GlassCard className="p-6 border-emerald-500/30 bg-slate-900/80 backdrop-blur-xl animate-fade-in">
+          <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-6">
+            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+              <FileSpreadsheet className="w-5 h-5 text-emerald-400" /> Panduan Upload & Auto-Track Kontainer (Excel / CSV)
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={handleGenerateDemo}
+                className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-emerald-500/20"
+              >
+                <Zap className="w-4 h-4" /> Gunakan Data Demo
+              </button>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm text-slate-300">
+            <div>
+              <h4 className="font-semibold text-white mb-1">📌 Aturan 3 Kolom Raw Data:</h4>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Anda hanya butuh 3 kolom wajib: <code>no_kontainer</code>, <code>pelayaran</code> (misal: Meratus, Temas, Maersk), dan <code>cabang</code> tujuan. Sistem akan menggenerasikan tautan pelacakan langsung ke portal resmi maskapai pelayaran.
+              </p>
+            </div>
+            <div>
+              <h4 className="font-semibold text-white mb-1">⚙️ Dukungan File Excel Native (XLSX):</h4>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Ditenagai parser ArrayBuffer modern, upload file Excel atau CSV berlangsung stabil tanpa kendala kerusakan karakter atau korupsi string.
+              </p>
+            </div>
+          </div>
+        </GlassCard>
+      )}
+
+      {/* ─── TAB SWITCHER 3 JALUR SKENARIO ANALISIS ─── */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-2">
+            <Zap className="w-4 h-4" /> Pilih 3 Jalur Evaluasi & Simulasi Kontainer:
+          </h2>
+          <span className="text-xs text-slate-400 italic hidden sm:inline">Klik tab untuk mengaktifkan simulasi percepatan atau delay sandar!</span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {SCENARIOS.map((sc) => {
+            const Icon = sc.icon;
+            const isSelected = activeScenario === sc.id;
+            return (
+              <button
+                key={sc.id}
+                onClick={() => {
+                  setActiveScenario(sc.id);
+                  toast.success(`Mengaktifkan ${sc.title}`);
+                }}
+                className={`relative group p-4 sm:p-5 rounded-2xl transition-all duration-300 text-left border overflow-hidden shadow-lg ${
+                  isSelected
+                    ? `bg-gradient-to-br ${sc.color} text-white border-transparent ring-2 ring-white/20 shadow-emerald-500/25 scale-[1.02]`
+                    : 'bg-slate-900/70 hover:bg-slate-800/80 text-slate-300 border-slate-700 hover:border-slate-600'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-bold text-base tracking-wide flex items-center gap-2.5">
+                    <Icon className={`w-5 h-5 ${isSelected ? 'text-white' : 'text-emerald-400'}`} />
+                    {sc.title}
+                  </span>
+                  {isSelected && (
+                    <span className="px-2 py-0.5 rounded-full bg-white/20 text-white text-xs font-black uppercase tracking-wider">
+                      Aktif
+                    </span>
+                  )}
+                </div>
+                <p className={`text-xs sm:text-sm leading-relaxed ${isSelected ? 'text-slate-100 font-medium' : 'text-slate-400'}`}>
+                  {sc.desc}
+                </p>
+              </button>
+            );
+          })}
         </div>
       </div>
 

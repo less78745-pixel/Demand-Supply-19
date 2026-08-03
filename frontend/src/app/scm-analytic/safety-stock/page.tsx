@@ -8,7 +8,7 @@ import { MultiSelect } from '@/components/ui/MultiSelect';
 import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import {
   ShieldCheck, AlertTriangle, TrendingUp, Package,
-  Download, Activity, Layers, CheckCircle, XCircle, Info
+  Download, Activity, Layers, CheckCircle, XCircle, Info, Zap, HelpCircle, FileSpreadsheet, Clock
 } from 'lucide-react';
 import { uploadSafetyStockFile } from '@/lib/api';
 import toast from 'react-hot-toast';
@@ -16,6 +16,77 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   Legend, ResponsiveContainer, Cell, ReferenceLine,
 } from 'recharts';
+
+type ScenarioType = 'actual' | 'surge' | 'delay';
+
+const SCENARIOS = [
+  {
+    id: 'actual' as ScenarioType,
+    title: 'Jalur 1: Evaluasi Safety Stock Aktual & ROP (95% Service Level)',
+    desc: 'Kalkulasi safety stock dan reorder point standar berdasarkan variasi demand historis dan lead time pengiriman reguler.',
+    color: 'from-indigo-600 to-blue-500',
+    icon: ShieldCheck,
+    modifier: 1.0
+  },
+  {
+    id: 'surge' as ScenarioType,
+    title: 'Jalur 2: Simulasi Lonjakan Demand (+30% Safety Buffer)',
+    desc: 'Meningkatkan cadangan pengaman (Safety Stock) untuk mengantisipasi musim puncak atau promosi masif di cabang strategis.',
+    color: 'from-amber-600 to-orange-500',
+    icon: TrendingUp,
+    modifier: 1.3
+  },
+  {
+    id: 'delay' as ScenarioType,
+    title: 'Jalur 3: Simulasi Disrupsi Lead Time Vendor (+50% Safety Buffer)',
+    desc: 'Simulasi stress-test jika waktu kirim vendor memanjang akibat hambatan impor, kendala pelabuhan, atau cuaca buruk.',
+    color: 'from-rose-600 to-red-500',
+    icon: Clock,
+    modifier: 1.5
+  }
+];
+
+function generateDemoSafetyStock() {
+  const sampleData = [
+    { cabang: 'Jakarta', sku: 'SKU-001 (Mainboard)', adu: 150, std_usage: 25, lead_time: 7, safety_stock: 120, rop: 1170, current_stock: 800, net_flow: 950, dos: 6.3, status: 'WARNING', needs_reorder: true },
+    { cabang: 'Surabaya', sku: 'SKU-002 (Power Supply)', adu: 120, std_usage: 18, lead_time: 10, safety_stock: 145, rop: 1345, current_stock: 1600, net_flow: 1750, dos: 14.5, status: 'SAFE', needs_reorder: false },
+    { cabang: 'Medan', sku: 'SKU-003 (Display Screen)', adu: 100, std_usage: 22, lead_time: 14, safety_stock: 180, rop: 1580, current_stock: 450, net_flow: 650, dos: 6.5, status: 'CRITICAL', needs_reorder: true },
+    { cabang: 'Makassar', sku: 'SKU-001 (Mainboard)', adu: 70, std_usage: 15, lead_time: 18, safety_stock: 160, rop: 1420, current_stock: 2200, net_flow: 2300, dos: 32.8, status: 'OVERSTOCK', needs_reorder: false },
+    { cabang: 'Bali', sku: 'SKU-004 (Audio Module)', adu: 95, std_usage: 14, lead_time: 8, safety_stock: 90, rop: 850, current_stock: 920, net_flow: 1040, dos: 10.9, status: 'SAFE', needs_reorder: false }
+  ];
+
+  const z_data = [
+    { cabang: 'Jakarta', red_zone: 450, yellow_zone: 600, green_zone: 400, net_flow: 950 },
+    { cabang: 'Surabaya', red_zone: 550, yellow_zone: 800, green_zone: 600, net_flow: 1750 },
+    { cabang: 'Medan', red_zone: 620, yellow_zone: 900, green_zone: 500, net_flow: 650 },
+    { cabang: 'Makassar', red_zone: 500, yellow_zone: 700, green_zone: 500, net_flow: 2300 },
+    { cabang: 'Bali', red_zone: 350, yellow_zone: 500, green_zone: 380, net_flow: 1040 }
+  ];
+
+  const lt_matrix = [
+    { cabang: 'Makassar', avg_lead_time: 18, max_lead_time: 25 },
+    { cabang: 'Medan', avg_lead_time: 14, max_lead_time: 21 },
+    { cabang: 'Surabaya', avg_lead_time: 10, max_lead_time: 14 },
+    { cabang: 'Bali', avg_lead_time: 8, max_lead_time: 12 },
+    { cabang: 'Jakarta', avg_lead_time: 7, max_lead_time: 10 },
+  ];
+
+  const sl_sims = [
+    { service_level: '90%', total_safety_stock: 510 },
+    { service_level: '95%', total_safety_stock: 695 },
+    { service_level: '98%', total_safety_stock: 980 },
+    { service_level: '99%', total_safety_stock: 1310 },
+  ];
+
+  return {
+    processed_at: new Date().toISOString(),
+    results: sampleData,
+    zone_data: z_data,
+    lead_time_matrix: lt_matrix,
+    service_level_simulations: sl_sims,
+    kpi: { total_skus: 5, critical_count: 1, warning_count: 1, safe_count: 2, avg_safety_stock: 139, service_level: '95%' }
+  };
+}
 
 const STATUS_COLORS: Record<string, string> = {
   CRITICAL: '#ef4444',
@@ -68,12 +139,27 @@ export default function SafetyStockPage() {
   const [serviceLevel, setServiceLevel] = useState(0.95);
   const [selectedCabang, setSelectedCabang] = useState<string[]>(['All']);
   const [selectedStatus, setSelectedStatus] = useState<string[]>(['All']);
+  const [activeScenario, setActiveScenario] = useState<ScenarioType>('actual');
+  const [showHowTo, setShowHowTo] = useState(false);
+
+  const handleGenerateDemo = () => {
+    const demo = generateDemoSafetyStock();
+    setResults(demo);
+    try { localStorage.setItem('lastSafetyStock', JSON.stringify(demo)); } catch {}
+    toast.success('🎉 Data Demo Safety Stock & ROP Berhasil Dimuat!');
+  };
 
   useEffect(() => {
     try {
       const saved = localStorage.getItem('lastSafetyStock');
-      if (saved) setResults(JSON.parse(saved));
-    } catch { /* ignore */ }
+      if (saved) {
+        setResults(JSON.parse(saved));
+      } else {
+        setResults(generateDemoSafetyStock());
+      }
+    } catch {
+      setResults(generateDemoSafetyStock());
+    }
   }, []);
 
   const handleFileUpload = async (file: File) => {
@@ -105,11 +191,16 @@ export default function SafetyStockPage() {
 
   const filtered = useMemo(() => {
     if (!results?.results) return [];
+    const mod = SCENARIOS.find(s => s.id === activeScenario)?.modifier || 1.0;
     return results.results.filter((r: any) =>
       (selectedCabang.includes('All') || selectedCabang.includes(r.cabang)) &&
       (selectedStatus.includes('All') || selectedStatus.includes(r.status))
-    );
-  }, [results, selectedCabang, selectedStatus]);
+    ).map((r: any) => ({
+      ...r,
+      safety_stock: Math.round(Number(r.safety_stock || 0) * mod),
+      rop: Math.round(Number(r.rop || 0) * mod)
+    }));
+  }, [results, selectedCabang, selectedStatus, activeScenario]);
 
   // ── DDMRP Zone chart data ──
   const zoneChartData = useMemo(() => {
@@ -161,58 +252,146 @@ export default function SafetyStockPage() {
   };
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto pb-10">
-      {/* Header */}
-      <header className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-border pb-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-3 uppercase">
-            <ShieldCheck className="w-8 h-8 text-primary" />
-            Dynamic Safety Stock & ROP
-          </h1>
-          <p className="text-muted-foreground mt-2 font-medium">
-            Kalkulasi Safety Stock, Reorder Point, dan DDMRP Zones secara dinamis per SKU per Cabang.
-          </p>
-        </div>
-        {results && (
-          <div className="flex flex-wrap items-center gap-3">
-            <MultiSelect options={allCabangs} selected={selectedCabang} onChange={setSelectedCabang} selectAllLabel="Semua Cabang" />
-            <MultiSelect options={statusOptions} selected={selectedStatus} onChange={setSelectedStatus} selectAllLabel="Semua Status" />
-            <button onClick={handleExport} className="px-4 py-2 bg-background text-foreground border border-border rounded-md hover:border-primary transition text-sm font-medium flex items-center gap-2">
-              <Download className="w-4 h-4" /> Export CSV
+    <div className="space-y-8 max-w-[1550px] mx-auto pb-16 animate-in fade-in duration-500 text-foreground">
+
+      {/* ─── COMMAND TOWER HERO BANNER ─── */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-6 sm:p-8 border border-indigo-500/20 shadow-2xl">
+        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#6366f1_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
+        <div className="relative z-10 flex flex-col xl:flex-row xl:items-center justify-between gap-6">
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 uppercase tracking-widest">
+              <ShieldCheck className="w-3.5 h-3.5" /> SCM Analytic • Inventory Protection
+            </div>
+            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white flex items-center gap-3">
+              Dynamic <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-blue-300 to-cyan-300">Safety Stock & ROP</span>
+            </h1>
+            <p className="text-slate-300 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
+              Kalkulasi cadangan pengaman (Safety Stock) dan titik pemesanan ulang (Reorder Point) secara dinamis memadukan variabilitas demand dan fluktuasi lead time pengiriman per SKU per Cabang.
+            </p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 shrink-0">
+            <TimestampBadge timestamp={results?.processed_at || new Date().toISOString()} label="Olah Terakhir:" />
+            <button
+              onClick={() => setShowHowTo(!showHowTo)}
+              className="w-full sm:w-auto px-4 py-2 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2"
+            >
+              <Info className="w-4 h-4" />
+              {showHowTo ? 'Tutup Panduan' : 'Panduan & Template'}
             </button>
           </div>
-        )}
-      </header>
-
-      {/* Upload Section */}
-      {!results && (
-        <div className="grid md:grid-cols-3 gap-6 items-stretch">
-          <div className="md:col-span-2 flex flex-col justify-center">
-            <GlassCard className="h-full flex flex-col justify-center bg-muted/30 p-6">
-              <h3 className="text-lg font-bold mb-4 flex items-center gap-2 uppercase tracking-wide text-foreground">
-                <Info className="w-5 h-5 text-primary" /> Panduan & Parameter Safety Stock
-              </h3>
-              <div className="text-sm text-muted-foreground space-y-3 leading-relaxed">
-                <p><strong>Service Level Target:</strong> Secara default diset 95%. Sistem akan menghitung nilai Z-score secara otomatis berdasarkan distribusi normal standar.</p>
-                <p><strong>DDMRP Zones:</strong> Pembagian zona secara dinamis ke dalam Red (Safety Buffer), Yellow (Primary Coverage), dan Green (Order Generation & Cycle Buffer).</p>
-                <p><strong>Net Flow Position:</strong> Dihitung melalui rumus <em>Stock + In_Transit - Backorder</em>. Sistem akan memberikan alert otomatis jika posisi ini ≤ ROP.</p>
-              </div>
-            </GlassCard>
-          </div>
-          <div className="md:col-span-1 flex flex-col">
-            <GlassCard className="h-full flex items-center justify-center p-3">
-              <FileUploader
-                onFileUpload={handleFileUpload}
-                isLoading={isProcessing}
-                label="Upload Safety Stock"
-                description="CSV/Excel: Cabang, SKU, Daily_Usage, Lead_Time_Days."
-                templateCsv={TEMPLATE_CSV}
-                templateName="template_safety_stock.csv"
-              />
-            </GlassCard>
-          </div>
         </div>
+      </div>
+
+      {/* ─── PANDUAN & DEMO DATA SECTION ─── */}
+      {showHowTo && (
+        <GlassCard className="p-6 border-indigo-500/30 bg-slate-900/80 backdrop-blur-xl animate-fade-in">
+          <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-6">
+            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+              <FileSpreadsheet className="w-5 h-5 text-indigo-400" /> Panduan Upload & Parameter Safety Stock
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={handleGenerateDemo}
+                className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-blue-600 hover:from-indigo-600 hover:to-blue-700 text-white font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-indigo-500/20"
+              >
+                <Zap className="w-4 h-4" /> Gunakan Data Demo
+              </button>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm text-slate-300">
+            <div>
+              <h4 className="font-semibold text-white mb-2">📌 Skema Kolom Upload (Excel / CSV):</h4>
+              <ul className="grid grid-cols-2 gap-2 text-xs text-slate-300">
+                {['Cabang','SKU','Daily_Usage','Lead_Time_Days','Current_Stock','In_Transit','Backorder','MOQ','Order_Cycle_Days'].map(col => (
+                  <li key={col} className="flex items-center gap-2 font-mono bg-white/5 p-2 rounded border border-white/10">
+                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0" />
+                    <span>{col}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="space-y-3">
+              <h4 className="font-semibold text-white">⚙️ Z-Score & Net Flow Position:</h4>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Secara default diset untuk Service Level 95% (Z = 1.65). Net Flow Position dihitung melalui rumus <code>Current Stock + In Transit - Backorder</code>. Sistem memberikan alert otomatis jika Net Flow ≤ ROP.
+              </p>
+              <div className="p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-xl text-xs text-indigo-300 flex items-center gap-2">
+                <Info className="w-4 h-4 shrink-0 text-indigo-400" />
+                <span>Diproses menggunakan ArrayBuffer parser agar pembacaan Excel (XLSX) 100% stabil.</span>
+              </div>
+            </div>
+          </div>
+        </GlassCard>
       )}
+
+      {/* ─── TAB SWITCHER 3 JALUR SKENARIO ANALISIS ─── */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-2">
+            <Zap className="w-4 h-4" /> Pilih 3 Jalur Simulasi Variabilitas Demand & Lead Time:
+          </h2>
+          <span className="text-xs text-slate-400 italic hidden sm:inline">Klik tab untuk memproyeksikan lonjakan permintaan atau keterlambatan suplai!</span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {SCENARIOS.map((sc) => {
+            const Icon = sc.icon;
+            const isSelected = activeScenario === sc.id;
+            return (
+              <button
+                key={sc.id}
+                onClick={() => {
+                  setActiveScenario(sc.id);
+                  toast.success(`Mengaktifkan ${sc.title}`);
+                }}
+                className={`relative group p-4 sm:p-5 rounded-2xl transition-all duration-300 text-left border overflow-hidden shadow-lg ${
+                  isSelected
+                    ? `bg-gradient-to-br ${sc.color} text-white border-transparent ring-2 ring-white/20 shadow-indigo-500/25 scale-[1.02]`
+                    : 'bg-slate-900/70 hover:bg-slate-800/80 text-slate-300 border-slate-700 hover:border-slate-600'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-bold text-base tracking-wide flex items-center gap-2.5">
+                    <Icon className={`w-5 h-5 ${isSelected ? 'text-white' : 'text-indigo-400'}`} />
+                    {sc.title}
+                  </span>
+                  {isSelected && (
+                    <span className="px-2 py-0.5 rounded-full bg-white/20 text-white text-xs font-black uppercase tracking-wider">
+                      Aktif
+                    </span>
+                  )}
+                </div>
+                <p className={`text-xs sm:text-sm leading-relaxed ${isSelected ? 'text-slate-100 font-medium' : 'text-slate-400'}`}>
+                  {sc.desc}
+                </p>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ─── UPLOAD BOX WHEN RESULTS PRESENT OR HIDDEN ─── */}
+      <GlassCard className="p-4 bg-slate-900/40 border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="flex-1 w-full">
+          <FileUploader
+            onFileUpload={handleFileUpload}
+            isLoading={isProcessing}
+            label="Upload Dataset Safety Stock (Excel / CSV)"
+            description="File Excel atau CSV: Cabang, SKU, Daily_Usage, Lead_Time_Days, Current_Stock, In_Transit, Backorder."
+            templateCsv={TEMPLATE_CSV}
+            templateName="template_safety_stock.csv"
+          />
+        </div>
+        <div className="sm:border-l border-slate-800 sm:pl-4 flex flex-col justify-center items-center shrink-0">
+          <button
+            onClick={handleGenerateDemo}
+            className="w-full sm:w-auto px-5 py-3 bg-gradient-to-r from-indigo-500 to-blue-600 hover:from-indigo-600 hover:to-blue-700 text-white font-bold rounded-xl shadow-lg transition flex items-center justify-center gap-2 text-sm"
+          >
+            <Zap className="w-4 h-4" /> Gunakan Data Demo
+          </button>
+        </div>
+      </GlassCard>
 
       {/* Results */}
       {results && (

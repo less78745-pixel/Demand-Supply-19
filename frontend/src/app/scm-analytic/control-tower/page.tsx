@@ -7,7 +7,7 @@ import { KPICard } from '@/components/ui/KPICard';
 import { MultiSelect } from '@/components/ui/MultiSelect';
 import {
   Radar, Download, AlertTriangle, Activity, Shield,
-  Package, XCircle, CheckCircle, Info, TrendingUp
+  Package, XCircle, CheckCircle, Info, TrendingUp, Zap, HelpCircle, FileSpreadsheet, ShieldAlert
 } from 'lucide-react';
 import { uploadControlTowerFile } from '@/lib/api';
 import { TimestampBadge } from '@/components/ui/TimestampBadge';
@@ -16,6 +16,89 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   Legend, ResponsiveContainer, Cell,
 } from 'recharts';
+
+type ScenarioType = 'normal' | 'peak' | 'shortage';
+
+const SCENARIOS = [
+  {
+    id: 'normal' as ScenarioType,
+    title: 'Jalur 1: Evaluasi Real-Time & Health Score Aktual',
+    desc: 'Pantauan kondisi suplai dan pergerakan stok 28 cabang secara real-time berdasarkan skor OTIF dan In-Stock Rate reguler.',
+    color: 'from-indigo-600 to-blue-500',
+    icon: Radar,
+    modifier: 1.0
+  },
+  {
+    id: 'peak' as ScenarioType,
+    title: 'Jalur 2: Simulasi Tekanan Peak Season (-15% OTIF Score)',
+    desc: 'Simulasi stress-test jika armada logistik mengalami kepadatan dan keterlambatan pengiriman saat musim puncak liburan.',
+    color: 'from-amber-600 to-orange-500',
+    icon: TrendingUp,
+    modifier: 0.85
+  },
+  {
+    id: 'shortage' as ScenarioType,
+    title: 'Jalur 3: Simulasi Kelangkaan Suplai Nasional (Critical Alert)',
+    desc: 'Simulasi pengetatan pasokan dari supplier pusat yang menyebabkan penurunan persentase In-Stock drastis di cabang luar Jawa.',
+    color: 'from-rose-600 to-red-500',
+    icon: ShieldAlert,
+    modifier: 0.7
+  }
+];
+
+function generateDemoControlTower() {
+  const branches = [
+    { cabang: 'Jakarta', region: 'Jawa & Bali', in_stock_rate: 96, days_of_supply: 18, otif_score: 94, health_score: 95, zone: 'GREEN', total_stock: 80000, color: '#22c55e', description: 'Stok optimal dan jadwal pengiriman lancar.' },
+    { cabang: 'Surabaya', region: 'Jawa & Bali', in_stock_rate: 92, days_of_supply: 15, otif_score: 90, health_score: 91, zone: 'GREEN', total_stock: 65000, color: '#22c55e', description: 'Kondisi suplai stabil untuk Jawa Timur.' },
+    { cabang: 'Medan', region: 'Sumatera', in_stock_rate: 78, days_of_supply: 6, otif_score: 75, health_score: 76, zone: 'YELLOW', total_stock: 20000, color: '#f59e0b', description: 'Perlu pengiriman tambahan dari gudang pusat.' },
+    { cabang: 'Makassar', region: 'Sulawesi', in_stock_rate: 82, days_of_supply: 9, otif_score: 80, health_score: 81, zone: 'YELLOW', total_stock: 24500, color: '#f59e0b', description: 'Stok penyangga batas aman.' },
+    { cabang: 'Jayapura', region: 'Indonesia Timur', in_stock_rate: 55, days_of_supply: 3, otif_score: 52, health_score: 53, zone: 'RED', total_stock: 5500, color: '#ef4444', description: 'CRITICAL: Risiko putus stok tinggi, percepat clearance kapal.' },
+    { cabang: 'Kupang', region: 'Indonesia Timur', in_stock_rate: 60, days_of_supply: 4, otif_score: 58, health_score: 59, zone: 'RED', total_stock: 7200, color: '#ef4444', description: 'CRITICAL: Diperlukan rebalancing dari Bali atau Surabaya.' }
+  ];
+
+  const region_summary = [
+    { region: 'Jawa & Bali', avg_in_stock: 94, avg_otif: 92, health_score: 93 },
+    { region: 'Sumatera', avg_in_stock: 81, avg_otif: 78, health_score: 79 },
+    { region: 'Sulawesi', avg_in_stock: 82, avg_otif: 80, health_score: 81 },
+    { region: 'Indonesia Timur', avg_in_stock: 57, avg_otif: 55, health_score: 56 }
+  ];
+
+  const ddmrp_distribution = [
+    { zone: 'GREEN', count: 2, color: '#22c55e' },
+    { zone: 'YELLOW', count: 2, color: '#f59e0b' },
+    { zone: 'RED', count: 2, color: '#ef4444' },
+    { zone: 'BLUE', count: 0, color: '#3b82f6' }
+  ];
+
+  const weekly_actions = [
+    '⚡ Alokasikan 3,000 unit SKU fast-moving ke Jayapura dan Kupang sebelum H-5 akhir minggu.',
+    '🚚 Koordinasikan dengan vendor trucking Medan guna menaikkan skor OTIF dari 75% ke atas 85%.',
+    '✅ Monitor penyerapan stok di Jakarta & Surabaya yang berjalan optimal di batas aman (Green Zone).'
+  ];
+
+  const alerts = [
+    { region: 'Indonesia Timur', severity: 'CRITICAL', message: 'Jayapura & Kupang: Days of Supply di bawah 5 hari (Zone RED).' },
+    { region: 'Sumatera', severity: 'WARNING', message: 'Medan: Skor OTIF menurun menjadi 75% akibat kendala bongkar muat pelabuhan.' },
+    { region: 'Sulawesi', severity: 'WARNING', message: 'Makassar: Stok mendekati batas Reorder Point (ROP Level).' }
+  ];
+
+  return {
+    processed_at: new Date().toISOString(),
+    branches,
+    region_summary,
+    ddmrp_distribution,
+    weekly_actions,
+    alerts,
+    kpi: {
+      avg_health: 76,
+      avg_in_stock: 77,
+      avg_dos: 9,
+      critical_count: 2,
+      avg_otif: 75,
+      total_branches: 6
+    }
+  };
+}
 
 const ZONE_COLORS: Record<string, string> = {
   RED: '#ef4444', YELLOW: '#f59e0b', GREEN: '#22c55e', BLUE: '#3b82f6',
@@ -59,12 +142,27 @@ export default function ControlTowerPage() {
   const [results, setResults] = useState<any>(null);
   const [selectedRegion, setSelectedRegion] = useState<string[]>(['All']);
   const [selectedZone, setSelectedZone] = useState<string[]>(['All']);
+  const [activeScenario, setActiveScenario] = useState<ScenarioType>('normal');
+  const [showHowTo, setShowHowTo] = useState(false);
+
+  const handleGenerateDemo = () => {
+    const demo = generateDemoControlTower();
+    setResults(demo);
+    try { localStorage.setItem('lastControlTower', JSON.stringify(demo)); } catch {}
+    toast.success('🎉 Data Demo SCM Control Tower Berhasil Dimuat!');
+  };
 
   useEffect(() => {
     try {
       const saved = localStorage.getItem('lastControlTower');
-      if (saved) setResults(JSON.parse(saved));
-    } catch { /* ignore */ }
+      if (saved) {
+        setResults(JSON.parse(saved));
+      } else {
+        setResults(generateDemoControlTower());
+      }
+    } catch {
+      setResults(generateDemoControlTower());
+    }
   }, []);
 
   const handleFileUpload = async (file: File) => {
@@ -95,11 +193,28 @@ export default function ControlTowerPage() {
 
   const filtered = useMemo(() => {
     if (!results?.branches) return [];
+    const mod = SCENARIOS.find(s => s.id === activeScenario)?.modifier || 1.0;
     return results.branches.filter((b: any) =>
       (selectedRegion.includes('All') || selectedRegion.includes(b.region)) &&
       (selectedZone.includes('All') || selectedZone.includes(b.zone))
-    );
-  }, [results, selectedRegion, selectedZone]);
+    ).map((b: any) => {
+      const newOtif = Math.min(100, Math.round(b.otif_score * mod));
+      const newInStock = Math.min(100, Math.round(b.in_stock_rate * mod));
+      const newHealth = Math.min(100, Math.round((newOtif + newInStock) / 2));
+      const newZone = newHealth < 65 ? 'RED' : newHealth < 85 ? 'YELLOW' : 'GREEN';
+      const color = newZone === 'RED' ? '#ef4444' : newZone === 'YELLOW' ? '#f59e0b' : '#22c55e';
+      return {
+        ...b,
+        otif_score: newOtif,
+        in_stock_rate: newInStock,
+        health_score: newHealth,
+        zone: newZone,
+        color: color,
+        zone_color: color,
+        zone_label: newZone === 'RED' ? 'CRITICAL (RED)' : newZone === 'YELLOW' ? 'WARNING (YELLOW)' : 'SAFE (GREEN)'
+      };
+    });
+  }, [results, selectedRegion, selectedZone, activeScenario]);
 
   const handleExport = () => {
     if (!filtered.length) { toast.error('Tidak ada data'); return; }
@@ -120,63 +235,170 @@ export default function ControlTowerPage() {
   };
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto pb-10">
-      <header className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-border pb-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-3 uppercase">
-            <Radar className="w-8 h-8 text-primary" />
-            SCM Control Tower
-          </h1>
-          <p className="text-muted-foreground mt-2 font-medium">
-            Dashboard eksekutif untuk memantau health score supply chain 28 cabang secara real-time.
-          </p>
-        </div>
-        {results && (
-          <div className="flex flex-wrap items-center gap-3">
-            <MultiSelect options={regionOptions} selected={selectedRegion} onChange={setSelectedRegion} selectAllLabel="Semua Region" />
-            <MultiSelect options={zoneOptions} selected={selectedZone} onChange={setSelectedZone} selectAllLabel="Semua Zone" />
-            <button onClick={handleExport} className="px-4 py-2 bg-background text-foreground border border-border rounded-md hover:border-primary transition text-sm font-medium flex items-center gap-2">
-              <Download className="w-4 h-4" /> Export Report
+    <div className="space-y-8 max-w-[1550px] mx-auto pb-16 animate-in fade-in duration-500 text-foreground">
+
+      {/* ─── COMMAND TOWER HERO BANNER ─── */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-6 sm:p-8 border border-indigo-500/20 shadow-2xl">
+        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#6366f1_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
+        <div className="relative z-10 flex flex-col xl:flex-row xl:items-center justify-between gap-6">
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 uppercase tracking-widest">
+              <Radar className="w-3.5 h-3.5" /> SCM Analytic • Executive Supply Chain Surveillance
+            </div>
+            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white flex items-center gap-3">
+              SCM Control <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-blue-300 to-cyan-300">Tower</span>
+            </h1>
+            <p className="text-slate-300 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
+              Dashboard eksekutif terpadu untuk memantau health score supply chain 28 kantor cabang secara real-time, mendeteksi krisis stok cepat, serta merekomendasikan aksi mitigasi mingguan.
+            </p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 shrink-0">
+            <TimestampBadge timestamp={results?.processed_at || new Date().toISOString()} label="Olah Terakhir:" />
+            <button
+              onClick={() => setShowHowTo(!showHowTo)}
+              className="w-full sm:w-auto px-4 py-2 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2"
+            >
+              <Info className="w-4 h-4" />
+              {showHowTo ? 'Tutup Panduan' : 'Panduan & Template'}
             </button>
           </div>
-        )}
-      </header>
-
-      {!results && (
-        <div className="grid md:grid-cols-3 gap-6 items-stretch mb-8">
-          <div className="md:col-span-2 flex flex-col justify-center">
-            <GlassCard className="h-full flex flex-col justify-center bg-muted/30 p-6">
-              <h3 className="text-lg font-bold mb-4 uppercase tracking-wide text-foreground flex items-center gap-2">
-                📡 Supply Chain Control Tower Insights
-              </h3>
-              <div className="text-sm text-muted-foreground space-y-3 leading-relaxed">
-                <p><strong>Monitoring Holistik:</strong> Pantau kesehatan pasokan dan pergerakan stok seluruh kantor cabang secara langsung dari satu layar eksekutif terpusat.</p>
-                <p><strong>Metrik Kunci (KPI):</strong> Analisa secara real-time <em>In-Stock Rate</em>, <em>Days of Supply (DOS)</em>, dan skor <em>OTIF (On-Time In-Full)</em> guna mendeteksi risiko putus stok maupun kelebihan stok sedini mungkin.</p>
-              </div>
-            </GlassCard>
-          </div>
-          <div className="md:col-span-1 flex flex-col">
-            <GlassCard className="h-full flex items-center justify-center p-3">
-              <FileUploader
-                onFileUpload={handleFileUpload}
-                isLoading={isProcessing}
-                label="Upload Branch Health"
-                description="CSV/Excel: Cabang, In_Stock_Rate, Days_of_Supply, OTIF_Score."
-                templateCsv={TEMPLATE_CSV}
-                templateName="template_branch_health.csv"
-              />
-            </GlassCard>
-          </div>
         </div>
+      </div>
+
+      {/* ─── PANDUAN & DEMO DATA SECTION ─── */}
+      {showHowTo && (
+        <GlassCard className="p-6 border-indigo-500/30 bg-slate-900/80 backdrop-blur-xl animate-fade-in">
+          <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-6">
+            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+              <FileSpreadsheet className="w-5 h-5 text-indigo-400" /> Panduan Upload & Parameter Control Tower
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={handleGenerateDemo}
+                className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-blue-600 hover:from-indigo-600 hover:to-blue-700 text-white font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-indigo-500/20"
+              >
+                <Zap className="w-4 h-4" /> Gunakan Data Demo
+              </button>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm text-slate-300">
+            <div>
+              <h4 className="font-semibold text-white mb-2">📌 Skema Kolom Upload (Excel / CSV):</h4>
+              <ul className="grid grid-cols-2 gap-2 text-xs text-slate-300">
+                {['Cabang','In_Stock_Rate','Days_of_Supply','OTIF_Score','Current_Stock','ROP_Level','Category'].map(col => (
+                  <li key={col} className="flex items-center gap-2 font-mono bg-white/5 p-2 rounded border border-white/10">
+                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0" />
+                    <span>{col}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="space-y-3">
+              <h4 className="font-semibold text-white">⚙️ Kalkulasi Health Score:</h4>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Health score merupakan rata-rata berbobot dari In-Stock Rate dan skor pengiriman tepat waktu (OTIF). Cabang dengan health score &lt; 65 otomatis ditandai sebagai zona RED (Critical).
+              </p>
+              <div className="p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-xl text-xs text-indigo-300 flex items-center gap-2">
+                <Info className="w-4 h-4 shrink-0 text-indigo-400" />
+                <span>Diproses dengan sistem parser stabil untuk memantau performa regional se-Indonesia.</span>
+              </div>
+            </div>
+          </div>
+        </GlassCard>
       )}
+
+      {/* ─── TAB SWITCHER 3 JALUR SKENARIO ANALISIS ─── */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-2">
+            <Zap className="w-4 h-4" /> Pilih 3 Jalur Simulasi Ketahanan Suplai Nasional:
+          </h2>
+          <span className="text-xs text-slate-400 italic hidden sm:inline">Klik tab untuk menguji ketahanan stok saat musim puncak atau krisis nasional!</span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {SCENARIOS.map((sc) => {
+            const Icon = sc.icon;
+            const isSelected = activeScenario === sc.id;
+            return (
+              <button
+                key={sc.id}
+                onClick={() => {
+                  setActiveScenario(sc.id);
+                  toast.success(`Mengaktifkan ${sc.title}`);
+                }}
+                className={`relative group p-4 sm:p-5 rounded-2xl transition-all duration-300 text-left border overflow-hidden shadow-lg ${
+                  isSelected
+                    ? `bg-gradient-to-br ${sc.color} text-white border-transparent ring-2 ring-white/20 shadow-indigo-500/25 scale-[1.02]`
+                    : 'bg-slate-900/70 hover:bg-slate-800/80 text-slate-300 border-slate-700 hover:border-slate-600'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-bold text-base tracking-wide flex items-center gap-2.5">
+                    <Icon className={`w-5 h-5 ${isSelected ? 'text-white' : 'text-indigo-400'}`} />
+                    {sc.title}
+                  </span>
+                  {isSelected && (
+                    <span className="px-2 py-0.5 rounded-full bg-white/20 text-white text-xs font-black uppercase tracking-wider">
+                      Aktif
+                    </span>
+                  )}
+                </div>
+                <p className={`text-xs sm:text-sm leading-relaxed ${isSelected ? 'text-slate-100 font-medium' : 'text-slate-400'}`}>
+                  {sc.desc}
+                </p>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ─── UPLOAD BOX WHEN RESULTS PRESENT OR HIDDEN ─── */}
+      <GlassCard className="p-4 bg-slate-900/40 border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="flex-1 w-full">
+          <FileUploader
+            onFileUpload={handleFileUpload}
+            isLoading={isProcessing}
+            label="Upload Dataset Branch Health (Excel / CSV)"
+            description="File Excel atau CSV: Cabang, In_Stock_Rate, Days_of_Supply, OTIF_Score, Current_Stock, ROP_Level."
+            templateCsv={TEMPLATE_CSV}
+            templateName="template_branch_health.csv"
+          />
+        </div>
+        <div className="sm:border-l border-slate-800 sm:pl-4 flex flex-col justify-center items-center shrink-0">
+          <button
+            onClick={handleGenerateDemo}
+            className="w-full sm:w-auto px-5 py-3 bg-gradient-to-r from-indigo-500 to-blue-600 hover:from-indigo-600 hover:to-blue-700 text-white font-bold rounded-xl shadow-lg transition flex items-center justify-center gap-2 text-sm"
+          >
+            <Zap className="w-4 h-4" /> Gunakan Data Demo
+          </button>
+        </div>
+      </GlassCard>
 
       {results && (
         <div className="space-y-8 animate-in fade-in duration-700">
+          {/* ─── FILTER & EXPORT ACTION BAR ─── */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900/50 p-4 rounded-2xl border border-slate-800">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-indigo-400 uppercase tracking-wider">Filter Cabang:</span>
+              <div className="flex flex-wrap items-center gap-2">
+                <MultiSelect options={regionOptions} selected={selectedRegion} onChange={setSelectedRegion} selectAllLabel="Semua Region" />
+                <MultiSelect options={zoneOptions} selected={selectedZone} onChange={setSelectedZone} selectAllLabel="Semua Zone" />
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <TimestampBadge timestamp={results.processed_at} />
+              <button onClick={handleExport} className="px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-500 transition text-xs sm:text-sm font-bold flex items-center gap-2 uppercase tracking-wide shadow-md">
+                <Download className="w-4 h-4" /> Export Report (CSV)
+              </button>
+            </div>
+          </div>
+
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-border/60 pb-4">
             <h2 className="text-xl font-bold uppercase tracking-wide text-foreground flex items-center gap-2">
               📡 Hasil Monitoring Control Tower 28 Cabang
             </h2>
-            <TimestampBadge timestamp={results.processed_at} />
           </div>
           {/* KPI Cards */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
@@ -331,15 +553,15 @@ export default function ControlTowerPage() {
                       <td className="px-3 py-2.5 font-semibold text-foreground">{b.cabang}</td>
                       <td className="px-3 py-2.5">{b.region}</td>
                       <td className="px-3 py-2.5 text-right">{b.in_stock_rate}%</td>
-                      <td className="px-3 py-2.5 text-right font-medium">{b.days_of_supply}</td>
+                      <td className="px-3 py-2.5 text-right font-medium">{b.days_of_supply} hr</td>
                       <td className="px-3 py-2.5 text-right">{b.otif_score}%</td>
                       <td className="px-3 py-2.5 text-right font-bold">{b.health_score}%</td>
                       <td className="px-3 py-2.5">
                         <span className="px-2 py-0.5 rounded text-xs font-bold uppercase" style={{
-                          backgroundColor: `${b.zone_color}20`,
-                          color: b.zone_color,
+                          backgroundColor: `${b.zone_color || '#22c55e'}20`,
+                          color: b.zone_color || '#22c55e',
                         }}>
-                          {b.zone_label}
+                          {b.zone_label || b.zone}
                         </span>
                       </td>
                     </tr>
@@ -348,22 +570,6 @@ export default function ControlTowerPage() {
               </table>
             </div>
           </GlassCard>
-
-          {/* Re-upload */}
-          <div className="flex justify-end pt-4">
-            <div className="w-full max-w-sm ml-auto">
-              <GlassCard className="p-3">
-                <FileUploader
-                  onFileUpload={handleFileUpload}
-                  isLoading={isProcessing}
-                  label="Upload Ulang Data"
-                  description="Upload file baru untuk refresh."
-                  templateCsv={TEMPLATE_CSV}
-                  templateName="template_branch_health.csv"
-                />
-              </GlassCard>
-            </div>
-          </div>
         </div>
       )}
     </div>

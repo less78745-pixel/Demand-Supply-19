@@ -39,6 +39,75 @@ const DDMRP_LITERATURE = [
   'Buffer dibagi 3 zona (Red/Yellow/Green) ditentukan oleh ADU, Lead Time Factor, dan Variability Factor.',
 ];
 
+type ScenarioType = 'actual' | 'surge' | 'disruption';
+
+const SCENARIOS = [
+  {
+    id: 'actual' as ScenarioType,
+    title: 'Jalur 1: Evaluasi Buffer Aktual (Net Flow Position)',
+    desc: 'Perhitungan status zona Red/Yellow/Green riil berdasarkan posisi stok on-hand, on-order, dan qualified demand saat ini.',
+    color: 'from-blue-600 to-indigo-500',
+    icon: Layers,
+    modifier: 'actual'
+  },
+  {
+    id: 'surge' as ScenarioType,
+    title: 'Jalur 2: Simulasi Lonjakan Demand (+30% ADU)',
+    desc: 'Uji ketahanan buffer apabila terjadi lonjakan konsumsi harian (ADU) atau pesanan prioritas masif secara tiba-tiba.',
+    color: 'from-amber-600 to-orange-500',
+    icon: TrendingUp,
+    modifier: 'surge'
+  },
+  {
+    id: 'disruption' as ScenarioType,
+    title: 'Jalur 3: Simulasi Keterlambatan Suplai (+5 Hari DLT)',
+    desc: 'Simulasi dampak keterlambatan kedatangan barang dari vendor atau pengiriman ekspedisi terhadap penetrasi Red Zone.',
+    color: 'from-rose-600 to-red-500',
+    icon: AlertTriangle,
+    modifier: 'disruption'
+  }
+];
+
+function generateDemoDDMRP() {
+  const skus = [
+    { label: 'SKU-ELC-001 (Microprocessor)', cabang: 'Jakarta', kategori: 'Electronics', adu: 120, dlt: 14, oh: 1800, oo: 500, qd: 400 },
+    { label: 'SKU-APP-009 (Cotton Denim)', cabang: 'Surabaya', kategori: 'Apparel', adu: 85, dlt: 10, oh: 450, oo: 200, qd: 600 },
+    { label: 'SKU-AUT-042 (Brake Pad Set)', cabang: 'Bali', kategori: 'Automotive', adu: 40, dlt: 21, oh: 1200, oo: 0, qd: 150 },
+    { label: 'SKU-BLD-015 (Ceramic Tiles)', cabang: 'Medan', kategori: 'Building', adu: 210, dlt: 7, oh: 3500, oo: 1500, qd: 800 },
+  ];
+
+  const resultsArray = skus.map(s => {
+    const red = Math.round(s.adu * s.dlt * 0.5);
+    const yellow = Math.round(s.adu * s.dlt);
+    const green = Math.round(s.adu * 7);
+    const nfp = s.oh + s.oo - s.qd;
+    let urgency = 'normal';
+    let status = 'YELLOW (Reorder)';
+    if (nfp <= red) { urgency = 'high'; status = 'RED (Critical Order)'; }
+    else if (nfp >= red + yellow) { urgency = 'low'; status = 'GREEN (Stock OK)'; }
+
+    return {
+      label: s.label,
+      cabang: s.cabang,
+      kategori: s.kategori,
+      adu: s.adu,
+      on_hand: s.oh,
+      on_order: s.oo,
+      qualified_demand: s.qd,
+      net_flow_position: nfp,
+      lead_time: { value: s.dlt },
+      zones: { red, yellow, green, top_of_red: red, top_of_yellow: red + yellow, top_of_green: red + yellow + green },
+      replenishment: { status, urgency, suggested_order_qty: Math.max(0, red + yellow + green - nfp) }
+    };
+  });
+
+  return {
+    processed_at: new Date().toISOString(),
+    results: resultsArray,
+    summary: { total_skus: 4, critical: 1, reorder: 2, ok: 1 }
+  };
+}
+
 export default function DDMRPPage() {
   const [results, setResults] = useState<any>(null);
   const [filterCabang, setFilterCabang] = useState<string[]>(['All']);
@@ -48,13 +117,27 @@ export default function DDMRPPage() {
   const [showFormulas, setShowFormulas] = useState(false);
   const [showLiterature, setShowLiterature] = useState(false);
   const [activeMode, setActiveMode] = useState<'manual' | 'file'>('file');
+  const [activeScenario, setActiveScenario] = useState<ScenarioType>('actual');
+  const [showHowTo, setShowHowTo] = useState(false);
+
+  const handleGenerateDemo = () => {
+    const demo = generateDemoDDMRP();
+    setResults(demo);
+    try { set('last_ddmrp_result', demo); } catch(e){}
+    toast.success('🎉 Data Demo DDMRP Klasik Berhasil Dimuat!');
+  };
 
   useEffect(() => {
     get('last_ddmrp_result').then(saved => {
       if (saved) {
         setResults(saved);
+      } else {
+        setResults(generateDemoDDMRP());
       }
-    }).catch(err => console.warn('Failed to load DDMRP state from IndexDB', err));
+    }).catch(err => {
+      console.warn('Failed to load DDMRP state from IndexDB', err);
+      setResults(generateDemoDDMRP());
+    });
   }, []);
 
   // Form state
@@ -119,16 +202,124 @@ export default function DDMRPPage() {
   };
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto pb-10">
-      <header className="mb-8 border-b border-border pb-6">
-        <h1 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-3 uppercase">
-          <Layers className="w-8 h-8 text-primary" />
-          DDMRP — Demand Driven MRP
-        </h1>
-        <p className="text-muted-foreground mt-2 font-medium">
-          Buffer positioning & replenishment cerdas berbasis Net Flow Position.
-        </p>
-      </header>
+    <div className="space-y-8 max-w-[1550px] mx-auto pb-16 animate-in fade-in duration-500 text-foreground">
+
+      {/* ─── COMMAND TOWER HERO BANNER ─── */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 p-6 sm:p-8 border border-blue-500/20 shadow-2xl">
+        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#3b82f6_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
+        <div className="relative z-10 flex flex-col xl:flex-row xl:items-center justify-between gap-6">
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20 uppercase tracking-widest">
+              <Layers className="w-3.5 h-3.5" /> Kalkulator DSP • Demand Driven MRP (Phase 1)
+            </div>
+            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white flex items-center gap-3">
+              DDMRP — <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-cyan-300 to-indigo-300">Demand Driven MRP</span>
+            </h1>
+            <p className="text-slate-300 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
+              Buffer positioning & replenishment cerdas berbasis Net Flow Position. Mencegah bullwhip effect melalui penempatan buffer inventaris strategis (Red, Yellow, Green).
+            </p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 shrink-0">
+            <TimestampBadge timestamp={results?.processed_at || new Date().toISOString()} label="Olah Terakhir:" />
+            <button
+              onClick={() => setShowHowTo(!showHowTo)}
+              className="w-full sm:w-auto px-4 py-2 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2"
+            >
+              <Info className="w-4 h-4" />
+              {showHowTo ? 'Tutup Panduan' : 'Panduan & Template'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ─── PANDUAN & DEMO DATA SECTION ─── */}
+      {showHowTo && (
+        <GlassCard className="p-6 border-blue-500/30 bg-slate-900/80 backdrop-blur-xl animate-fade-in">
+          <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-6">
+            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+              <FileSpreadsheet className="w-5 h-5 text-blue-400" /> Panduan Upload & Rumus DDMRP
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={handleGenerateDemo}
+                className="px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-blue-500/20"
+              >
+                <Cpu className="w-4 h-4" /> Gunakan Data Demo
+              </button>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm text-slate-300">
+            <div>
+              <h4 className="font-semibold text-white mb-2">📌 Skema Kolom Upload File:</h4>
+              <ul className="grid grid-cols-2 gap-2 text-xs text-slate-300">
+                {['Bulan','Deskripsi','Cabang','Kategori','Penjualan','Lead Time (Hari)','MOQ','Order Cycle (Hari)','On-Hand','On-Order','Qualified Demand'].map(col => (
+                  <li key={col} className="flex items-center gap-2 font-mono bg-white/5 p-2 rounded border border-white/10">
+                    <div className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />
+                    <span>{col}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="space-y-3">
+              <h4 className="font-semibold text-white">⚙️ Net Flow Position & Buffer Sizing:</h4>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Persamaan Net Flow (<code>On-Hand + On-Order - Qualified Demand</code>) menentukan status pemesanan. Bila turun ke zona Merah atau Kuning, sistem menghasilkan rekomendasi order kuantitas cerdas.
+              </p>
+              <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl text-xs text-blue-300 flex items-center gap-2">
+                <Info className="w-4 h-4 shrink-0 text-blue-400" />
+                <span>Mendukung upload format Excel (XLSX) dengan parser modern.</span>
+              </div>
+            </div>
+          </div>
+        </GlassCard>
+      )}
+
+      {/* ─── TAB SWITCHER 3 JALUR SKENARIO ANALISIS ─── */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-bold uppercase tracking-wider text-blue-400 flex items-center gap-2">
+            <Cpu className="w-4 h-4" /> Pilih 3 Jalur Evaluasi & Simulasi Stress-Test Buffer:
+          </h2>
+          <span className="text-xs text-slate-400 italic hidden sm:inline">Klik tab untuk memproyeksikan lonjakan ADU atau delay lead time!</span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {SCENARIOS.map((sc) => {
+            const Icon = sc.icon;
+            const isSelected = activeScenario === sc.id;
+            return (
+              <button
+                key={sc.id}
+                onClick={() => {
+                  setActiveScenario(sc.id);
+                  toast.success(`Mengaktifkan ${sc.title}`);
+                }}
+                className={`relative group p-4 sm:p-5 rounded-2xl transition-all duration-300 text-left border overflow-hidden shadow-lg ${
+                  isSelected
+                    ? `bg-gradient-to-br ${sc.color} text-white border-transparent ring-2 ring-white/20 shadow-blue-500/25 scale-[1.02]`
+                    : 'bg-slate-900/70 hover:bg-slate-800/80 text-slate-300 border-slate-700 hover:border-slate-600'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-bold text-base tracking-wide flex items-center gap-2.5">
+                    <Icon className={`w-5 h-5 ${isSelected ? 'text-white' : 'text-blue-400'}`} />
+                    {sc.title}
+                  </span>
+                  {isSelected && (
+                    <span className="px-2 py-0.5 rounded-full bg-white/20 text-white text-xs font-black uppercase tracking-wider">
+                      Aktif
+                    </span>
+                  )}
+                </div>
+                <p className={`text-xs sm:text-sm leading-relaxed ${isSelected ? 'text-slate-100 font-medium' : 'text-slate-400'}`}>
+                  {sc.desc}
+                </p>
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
       <div className="grid md:grid-cols-3 gap-6 items-stretch">
         <div className="md:col-span-2 flex flex-col">

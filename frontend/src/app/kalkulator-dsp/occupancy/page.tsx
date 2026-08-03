@@ -6,15 +6,100 @@ import { FileUploader } from '@/components/ui/FileUploader';
 import { KPICard } from '@/components/ui/KPICard';
 import { OccupancyChart } from '@/components/charts/OccupancyChart';
 import { InventoryChart } from '@/components/charts/InventoryChart';
-import { Activity, AlertTriangle, Info, TrendingUp, TrendingDown, AlertOctagon, Layers, Download, PackageSearch, LayoutGrid, CheckCircle } from 'lucide-react';
+import { Activity, AlertTriangle, Info, TrendingUp, TrendingDown, AlertOctagon, Layers, Download, PackageSearch, LayoutGrid, CheckCircle, Sparkles, HelpCircle, FileSpreadsheet, Zap, ShieldAlert } from 'lucide-react';
 import { uploadOccupancyFile } from '@/lib/api';
 import { MultiSelect } from '@/components/ui/MultiSelect';
 import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import toast from 'react-hot-toast';
 
+type ScenarioType = 'actual' | 'surge' | 'expansion';
+
+const SCENARIOS = [
+  {
+    id: 'actual' as ScenarioType,
+    title: 'Jalur 1: Kapasitas Aktual Gudang (Current Base)',
+    desc: 'Pemantauan rasio pemanfaatan gudang aktual (Occupancy Pct) terhadap batas kapasitas resmi tiap cabang saat ini.',
+    color: 'from-indigo-600 to-violet-500',
+    icon: Activity,
+    modifier: 1.0
+  },
+  {
+    id: 'surge' as ScenarioType,
+    title: 'Jalur 2: Simulasi Lonjakan Stok (+25% Inflow)',
+    desc: 'Uji stress gudang saat terjadi lonjakan kedatangan kontainer atau penumpukan stok akhir tahun maupun seasonal import.',
+    color: 'from-rose-600 to-orange-500',
+    icon: AlertTriangle,
+    modifier: 1.25
+  },
+  {
+    id: 'expansion' as ScenarioType,
+    title: 'Jalur 3: Simulasi Ekspansi Gudang (+30% Kapasitas)',
+    desc: 'Evaluasi kelonggaran ruang simpan dan penurunan persentase over-occupancy paska penambahan pallet space di cabang.',
+    color: 'from-emerald-600 to-teal-500',
+    icon: Layers,
+    modifier: 0.77
+  }
+];
+
+function generateDemoOccupancy() {
+  const dates = ['2026-08-01', '2026-08-02', '2026-08-03'];
+  const branches = [
+    { name: 'DC Jakarta', capacity: 10000, hand: 8500 },
+    { name: 'DC Surabaya', capacity: 6000, hand: 6300 },
+    { name: 'DC Medan', capacity: 4500, hand: 2200 },
+    { name: 'DC Makassar', capacity: 5000, hand: 4800 },
+  ];
+  const daily_data: any[] = [];
+  branches.forEach(b => {
+    dates.forEach(dt => {
+      const pct = Math.round((b.hand / b.capacity) * 100 * 10) / 10;
+      daily_data.push({
+        date: dt,
+        cabang: b.name,
+        total_on_hand: b.hand,
+        capacity: b.capacity,
+        occupancy_pct: pct
+      });
+    });
+  });
+
+  return {
+    processed_at: new Date().toISOString(),
+    daily_data,
+    kpi_summary: { avg_occupancy: 82.3, max_occupancy: 105.0, categories_at_risk: 2 },
+    shortage_alerts: [
+      { cabang: 'DC Surabaya', category: 'Fast Moving Consumer', date: '2026-08-03', deficit: 350 },
+      { cabang: 'DC Jakarta', category: 'Electronics & Spareparts', date: '2026-08-03', deficit: 120 }
+    ],
+    inventory_analysis: {
+      matrix_data: [
+        { cabang: 'DC Jakarta', category: 'Electronics & Spareparts', class: 'A-X', volume: 5200, mean_sales: 140, cv: 0.2, doh: 22, on_hand: 3080, trend_pct: 5, stockout_risk: true, strategy: 'Continuous Replenishment' },
+        { cabang: 'DC Surabaya', category: 'Fast Moving Consumer', class: 'A-Z', volume: 3800, mean_sales: 110, cv: 0.75, doh: 12, on_hand: 1320, trend_pct: -2, stockout_risk: true, strategy: 'Dynamic Buffer & Fast Track' },
+        { cabang: 'DC Medan', category: 'Apparel & Textiles', class: 'C-Z', volume: 800, mean_sales: 5, cv: 1.2, doh: 115, on_hand: 575, trend_pct: -15, stockout_risk: false, strategy: 'Clearance & Markdown' }
+      ],
+      dead_stock: [
+        { cabang: 'DC Medan', category: 'Apparel & Textiles', doh: 115, on_hand: 575, class: 'C-Z' }
+      ]
+    },
+    over_occupancy_insights: ['DC Surabaya mendeteksi Over Capacity (105.0%) pada periode Agustus 2026. Disarankan realokasi ke depo terdekat atau ekspansi rak simpan.']
+  };
+}
+
 export default function OccupancyPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [results, setResults]           = useState<any>(null);
+  const [activeScenario, setActiveScenario] = useState<ScenarioType>('actual');
+  const [showHowTo, setShowHowTo] = useState(false);
+
+  const handleGenerateDemo = () => {
+    const demo = generateDemoOccupancy();
+    setResults(demo);
+    try {
+      localStorage.setItem('lastOccupancy', JSON.stringify(demo));
+      if (demo.inventory_analysis) localStorage.setItem('lastInventory', JSON.stringify(demo.inventory_analysis));
+    } catch(e){}
+    toast.success('🎉 Data Demo Occupancy & Inventory Berhasil Dimuat!');
+  };
 
   // ── Restore previous results from localStorage ──
   useEffect(() => {
@@ -22,8 +107,12 @@ export default function OccupancyPage() {
       const saved = localStorage.getItem('lastOccupancy');
       if (saved) {
         setResults(JSON.parse(saved));
+      } else {
+        setResults(generateDemoOccupancy());
       }
-    } catch { /* ignore corrupt data */ }
+    } catch {
+      setResults(generateDemoOccupancy());
+    }
   }, []);
 
   const [selectedCabang,   setSelectedCabang]   = useState<string[]>(['All']);
@@ -169,11 +258,17 @@ export default function OccupancyPage() {
 
   const filteredData = useMemo(() => {
     if (!results?.daily_data) return [];
+    const mod = SCENARIOS.find(s => s.id === activeScenario)?.modifier || 1.0;
     return results.daily_data.filter((d: any) =>
       (selectedCabang.includes('All') || selectedCabang.includes(d.cabang)) &&
       (selectedDate.includes('All') || selectedDate.includes(d.date))
-    );
-  }, [results, selectedCabang, selectedDate]);
+    ).map((d: any) => ({
+      ...d,
+      occupancy_pct: Math.round(Number(d.occupancy_pct || 0) * mod * 10) / 10,
+      total_on_hand: activeScenario === 'surge' ? Math.round(d.total_on_hand * 1.25) : d.total_on_hand,
+      capacity: activeScenario === 'expansion' ? Math.round(d.capacity * 1.3) : d.capacity,
+    }));
+  }, [results, selectedCabang, selectedDate, activeScenario]);
 
   const insights = useMemo(() => {
     if (!filteredData || filteredData.length === 0) return { over: [], lower: [] };
@@ -279,59 +374,150 @@ export default function OccupancyPage() {
   }, [filteredData, filteredShortageAlerts, filteredInvData, results]);
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto pb-10">
+    <div className="space-y-8 max-w-[1550px] mx-auto pb-16 animate-in fade-in duration-500 text-foreground">
 
-      {/* Header */}
-      <header className="mb-8 border-b border-border pb-6">
-        <h1 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-3 uppercase">
-          <Activity className="w-8 h-8 text-primary" />
-          Occupancy & Inventory Projector
-        </h1>
-        <p className="text-muted-foreground mt-2 font-medium">
-          Balance (On Hand + In − Out) per category per tanggal ÷ kapasitas warehouse cabang + ABC-XYZ Classification.
-        </p>
-      </header>
-
-      <div className="grid md:grid-cols-3 gap-6 mb-8 items-stretch">
-        <div className="md:col-span-2">
-          <GlassCard className="h-full bg-muted/30 flex flex-col justify-center">
-            <h3 className="text-lg font-bold mb-4 flex items-center gap-2 uppercase tracking-wide">
-              <Info className="w-5 h-5 text-primary" /> Required Schema
-            </h3>
-            <ul className="grid grid-cols-2 gap-2 text-sm text-muted-foreground">
-              {['Cabang','Category','On Hand (stok awal)','In (masuk)','Out (keluar / penjualan)',
-                'Capacity (total kapasitas warehouse per cabang)','Date'].map(col => (
-                <li key={col} className="flex items-start gap-2">
-                  <div className="w-1.5 h-1.5 rounded-none bg-primary mt-1.5 shrink-0" />
-                  <span className="font-mono text-foreground font-semibold text-xs">{col}</span>
-                </li>
-              ))}
-            </ul>
-            <div className="mt-6 p-4 bg-primary/10 border border-primary/20 rounded-md">
-              <p className="text-xs text-foreground flex items-start gap-2 leading-relaxed">
-                <AlertTriangle className="w-4 h-4 shrink-0 text-primary" />
-                <span><b>Out</b> akan digunakan sebagai proxy <b>Penjualan</b> untuk analisa ABC-XYZ Inventory.</span>
-              </p>
+      {/* ─── COMMAND TOWER HERO BANNER ─── */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-6 sm:p-8 border border-indigo-500/20 shadow-2xl">
+        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#6366f1_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
+        <div className="relative z-10 flex flex-col xl:flex-row xl:items-center justify-between gap-6">
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 uppercase tracking-widest">
+              <Activity className="w-3.5 h-3.5" /> Kalkulator DSP • Warehouse & Inventory Projector
             </div>
-          </GlassCard>
-        </div>
-        <div className="md:col-span-1 flex flex-col">
-          <GlassCard className="h-full flex items-center justify-center p-3">
-            <FileUploader
-              onFileUpload={handleFileUpload}
-              isLoading={isProcessing}
-              templateCsv={
-                'Cabang,Category,On Hand,In,Out,Capacity,Date\n' +
-                'Jakarta,Electronics,200,150,120,5000,2024-01-01\n' +
-                'Surabaya,Apparel,300,180,190,4000,2024-01-01'
-              }
-              templateName="occupancy_template.csv"
-              label="Upload Occupancy Data"
-              description="File Excel dengan kolom: Cabang, Category, On Hand, In, Out, Capacity, Date."
-            />
-          </GlassCard>
+            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white flex items-center gap-3">
+              Occupancy & <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-violet-300 to-purple-300">Inventory Projector</span>
+            </h1>
+            <p className="text-slate-300 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
+              Analisis utilitas ruang simpan gudang per cabang, mitigasi kekurangan kapasitas, dan klasifikasi ABC-XYZ Inventory untuk pengoptimalan rantai pasok Anda.
+            </p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 shrink-0">
+            <TimestampBadge timestamp={results?.processed_at || new Date().toISOString()} label="Olah Terakhir:" />
+            <button
+              onClick={() => setShowHowTo(!showHowTo)}
+              className="w-full sm:w-auto px-4 py-2 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2"
+            >
+              <HelpCircle className="w-4 h-4" />
+              {showHowTo ? 'Tutup Panduan' : 'Panduan & Template'}
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* ─── PANDUAN & DEMO DATA SECTION ─── */}
+      {showHowTo && (
+        <GlassCard className="p-6 border-indigo-500/30 bg-slate-900/80 backdrop-blur-xl animate-fade-in">
+          <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-6">
+            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+              <FileSpreadsheet className="w-5 h-5 text-indigo-400" /> Panduan & Skema File Excel Occupancy
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={handleGenerateDemo}
+                className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-indigo-500/20"
+              >
+                <Zap className="w-4 h-4" /> Gunakan Data Demo
+              </button>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm text-slate-300">
+            <div>
+              <h4 className="font-semibold text-white mb-2">📌 Skema Kolom Diperlukan:</h4>
+              <ul className="grid grid-cols-2 gap-2 text-xs text-slate-300">
+                {['Cabang','Category','On Hand (stok awal)','In (masuk)','Out (keluar / penjualan)','Capacity (kapasitas cabang)','Date'].map(col => (
+                  <li key={col} className="flex items-center gap-2 font-mono bg-white/5 p-2 rounded border border-white/10">
+                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0" />
+                    <span>{col}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="space-y-3">
+              <h4 className="font-semibold text-white">⚙️ Proxy Penjualan & Klasifikasi ABC-XYZ:</h4>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Kolom <code>Out</code> diproses sebagai proxy <b>Penjualan</b> untuk memetakan inventory ke kelas ABC (Volume) dan XYZ (Variabilitas/Coefficient of Variation), sehingga Anda mengetahui risiko Stockout dan Dead Stock.
+              </p>
+              <div className="p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-xl text-xs text-indigo-300 flex items-center gap-2">
+                <Info className="w-4 h-4 shrink-0 text-indigo-400" />
+                <span>Mendukung upload format native XLSX berkat engine ArrayBuffer.</span>
+              </div>
+            </div>
+          </div>
+        </GlassCard>
+      )}
+
+      {/* ─── TAB SWITCHER 3 JALUR SKENARIO ANALISIS ─── */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-2">
+            <Zap className="w-4 h-4" /> Pilih 3 Jalur Simulasi & Uji Ketahanan Gudang:
+          </h2>
+          <span className="text-xs text-slate-400 italic hidden sm:inline">Klik tab untuk memproyeksikan lonjakan inflow atau ekspansi gudang!</span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {SCENARIOS.map((sc) => {
+            const Icon = sc.icon;
+            const isSelected = activeScenario === sc.id;
+            return (
+              <button
+                key={sc.id}
+                onClick={() => {
+                  setActiveScenario(sc.id);
+                  toast.success(`Mengaktifkan ${sc.title}`);
+                }}
+                className={`relative group p-4 sm:p-5 rounded-2xl transition-all duration-300 text-left border overflow-hidden shadow-lg ${
+                  isSelected
+                    ? `bg-gradient-to-br ${sc.color} text-white border-transparent ring-2 ring-white/20 shadow-indigo-500/25 scale-[1.02]`
+                    : 'bg-slate-900/70 hover:bg-slate-800/80 text-slate-300 border-slate-700 hover:border-slate-600'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-bold text-base tracking-wide flex items-center gap-2.5">
+                    <Icon className={`w-5 h-5 ${isSelected ? 'text-white' : 'text-indigo-400'}`} />
+                    {sc.title}
+                  </span>
+                  {isSelected && (
+                    <span className="px-2 py-0.5 rounded-full bg-white/20 text-white text-xs font-black uppercase tracking-wider">
+                      Aktif
+                    </span>
+                  )}
+                </div>
+                <p className={`text-xs sm:text-sm leading-relaxed ${isSelected ? 'text-slate-100 font-medium' : 'text-slate-400'}`}>
+                  {sc.desc}
+                </p>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ─── UPLOAD BOX WHEN RESULTS PRESENT OR HIDDEN ─── */}
+      <GlassCard className="p-4 bg-slate-900/40 border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="flex-1 w-full">
+          <FileUploader
+            onFileUpload={handleFileUpload}
+            isLoading={isProcessing}
+            templateCsv={
+              'Cabang,Category,On Hand,In,Out,Capacity,Date\n' +
+              'DC Jakarta,Electronics,200,150,120,5000,2026-08-01\n' +
+              'DC Surabaya,Apparel,300,180,190,4000,2026-08-01'
+            }
+            templateName="occupancy_template.csv"
+            label="Upload Dataset Occupancy (Excel/CSV)"
+            description="File Excel atau CSV dengan kolom: Cabang, Category, On Hand, In, Out, Capacity, Date."
+          />
+        </div>
+        <div className="sm:border-l border-slate-800 sm:pl-4 flex flex-col justify-center items-center shrink-0">
+          <button
+            onClick={handleGenerateDemo}
+            className="w-full sm:w-auto px-5 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-bold rounded-xl shadow-lg transition flex items-center justify-center gap-2 text-sm"
+          >
+            <Zap className="w-4 h-4" /> Gunakan Data Demo
+          </button>
+        </div>
+      </GlassCard>
 
       {results && (
         /* ── Result state ── */
@@ -340,7 +526,7 @@ export default function OccupancyPage() {
             <h2 className="text-xl font-bold uppercase tracking-wide text-foreground flex items-center gap-2">
               📈 Hasil Analisa Occupancy & Shortage
             </h2>
-            <TimestampBadge timestamp={results.processed_at} />
+            <TimestampBadge timestamp={results.processed_at || new Date().toISOString()} />
           </div>
 
           {/* ═══ OCCUPANCY SECTION ═══ */}
