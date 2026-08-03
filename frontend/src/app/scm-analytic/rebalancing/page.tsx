@@ -160,6 +160,18 @@ function FileDropZone({ label, file, onFile, onClear, templateCsv, templateName 
   );
 }
 
+const normalizeData = (data: any) => {
+  if (!data) return null;
+  return {
+    ...data,
+    recommendations: Array.isArray(data.recommendations) ? data.recommendations : [],
+    infeasible: Array.isArray(data.infeasible) ? data.infeasible : [],
+    route_summary: Array.isArray(data.route_summary) ? data.route_summary : [],
+    kpi: data.kpi || { total_transfers: 0, total_cost: 0, savings: 0, savings_pct: 0, infeasible_count: 0, total_cost_central: 0 },
+    processed_at: data.processed_at || new Date().toISOString()
+  };
+};
+
 export default function RebalancingPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [results, setResults] = useState<any>(null);
@@ -171,7 +183,7 @@ export default function RebalancingPage() {
   const [showHowTo, setShowHowTo] = useState(false);
 
   const handleGenerateDemo = () => {
-    const demo = generateDemoRebalancing();
+    const demo = normalizeData(generateDemoRebalancing());
     setResults(demo);
     try { localStorage.setItem('lastRebalancing', JSON.stringify(demo)); } catch {}
     toast.success('🎉 Data Demo Stock Rebalancing Berhasil Dimuat!');
@@ -181,12 +193,12 @@ export default function RebalancingPage() {
     try {
       const saved = localStorage.getItem('lastRebalancing');
       if (saved) {
-        setResults(JSON.parse(saved));
+        setResults(normalizeData(JSON.parse(saved)));
       } else {
-        setResults(generateDemoRebalancing());
+        setResults(normalizeData(generateDemoRebalancing()));
       }
     } catch {
-      setResults(generateDemoRebalancing());
+      setResults(normalizeData(generateDemoRebalancing()));
     }
   }, []);
 
@@ -198,8 +210,8 @@ export default function RebalancingPage() {
     setIsProcessing(true);
     toast.loading('Mengoptimasi distribusi stok antar-cabang...', { id: 'rb' });
     try {
-      const data = await uploadRebalancingFiles(stockFile, demandFile, freightFile);
-      data.processed_at = data.processed_at || new Date().toISOString();
+      const data = normalizeData(await uploadRebalancingFiles(stockFile, demandFile, freightFile));
+      if (data) data.processed_at = data.processed_at || new Date().toISOString();
       setResults(data);
       try { localStorage.setItem('lastRebalancing', JSON.stringify(data)); } catch {}
       toast.success('Optimasi selesai!', { id: 'rb' });
@@ -212,14 +224,14 @@ export default function RebalancingPage() {
   };
 
   const entityOptions = useMemo(() => {
-    if (!results?.recommendations) return ['All'];
+    if (!Array.isArray(results?.recommendations)) return ['All'];
     const s = new Set<string>();
     results.recommendations.forEach((r: any) => s.add(r.entity));
     return ['All', ...Array.from(s).sort()];
   }, [results]);
 
   const filtered = useMemo(() => {
-    if (!results?.recommendations) return [];
+    if (!Array.isArray(results?.recommendations)) return [];
     const base = results.recommendations.filter((r: any) =>
       selectedEntity.includes('All') || selectedEntity.includes(r.entity)
     );
@@ -416,14 +428,14 @@ export default function RebalancingPage() {
           )}
 
           {/* Route Summary Chart */}
-          {results.route_summary.length > 0 && (
+          {(results.route_summary || []).length > 0 && (
             <GlassCard>
               <h3 className="text-sm font-bold text-foreground mb-4 uppercase tracking-wide">
                 Ringkasan Biaya per Rute Distribusi
               </h3>
               <div className="h-[350px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={results.route_summary} layout="vertical" margin={{ top: 10, right: 20, left: 100, bottom: 5 }}>
+                  <BarChart data={results.route_summary || []} layout="vertical" margin={{ top: 10, right: 20, left: 100, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
                     <XAxis type="number" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} tickLine={false} axisLine={false} />
                     <YAxis type="category" dataKey="route" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} tickLine={false} axisLine={false} width={95} />
@@ -483,7 +495,7 @@ export default function RebalancingPage() {
           </GlassCard>
 
           {/* Infeasible */}
-          {results.infeasible.length > 0 && (
+          {(results.infeasible || []).length > 0 && (
             <GlassCard className="border-destructive/30 bg-destructive/5">
               <h3 className="text-sm font-bold text-destructive mb-4 uppercase tracking-wide flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4" /> Infeasible — Tidak Dapat Dipenuhi
@@ -500,7 +512,7 @@ export default function RebalancingPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {results.infeasible.map((inf: any, i: number) => (
+                    {(results.infeasible || []).map((inf: any, i: number) => (
                       <tr key={i} className="border-b border-border/50">
                         <td className="px-4 py-3 font-medium text-primary">{inf.entity}</td>
                         <td className="px-4 py-3 font-semibold text-foreground">{inf.destination}</td>

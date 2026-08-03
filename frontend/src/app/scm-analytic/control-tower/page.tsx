@@ -138,6 +138,20 @@ Gorontalo,68,3,66,5500,4800,Filter
 Cirebon,89,14,87,26000,7200,Filter
 Yogyakarta,93,17,91,38000,9500,Filter`;
 
+const normalizeData = (data: any) => {
+  if (!data) return null;
+  return {
+    ...data,
+    branches: Array.isArray(data.branches) ? data.branches : [],
+    weekly_actions: Array.isArray(data.weekly_actions) ? data.weekly_actions : [],
+    ddmrp_distribution: Array.isArray(data.ddmrp_distribution) ? data.ddmrp_distribution : [],
+    region_summary: Array.isArray(data.region_summary) ? data.region_summary : [],
+    alerts: Array.isArray(data.alerts) ? data.alerts : [],
+    kpi: data.kpi || { avg_health: 0, avg_in_stock: 0, avg_dos: 0, critical_count: 0, avg_otif: 0, total_branches: 0 },
+    processed_at: data.processed_at || new Date().toISOString()
+  };
+};
+
 export default function ControlTowerPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [results, setResults] = useState<any>(null);
@@ -147,7 +161,7 @@ export default function ControlTowerPage() {
   const [showHowTo, setShowHowTo] = useState(false);
 
   const handleGenerateDemo = () => {
-    const demo = generateDemoControlTower();
+    const demo = normalizeData(generateDemoControlTower());
     setResults(demo);
     try { localStorage.setItem('lastControlTower', JSON.stringify(demo)); } catch {}
     toast.success('🎉 Data Demo SCM Control Tower Berhasil Dimuat!');
@@ -157,12 +171,12 @@ export default function ControlTowerPage() {
     try {
       const saved = localStorage.getItem('lastControlTower');
       if (saved) {
-        setResults(JSON.parse(saved));
+        setResults(normalizeData(JSON.parse(saved)));
       } else {
-        setResults(generateDemoControlTower());
+        setResults(normalizeData(generateDemoControlTower()));
       }
     } catch {
-      setResults(generateDemoControlTower());
+      setResults(normalizeData(generateDemoControlTower()));
     }
   }, []);
 
@@ -170,8 +184,8 @@ export default function ControlTowerPage() {
     setIsProcessing(true);
     toast.loading('Menganalisis health score 28 cabang...', { id: 'ct' });
     try {
-      const data = await uploadControlTowerFile(file);
-      data.processed_at = data.processed_at || new Date().toISOString();
+      const data = normalizeData(await uploadControlTowerFile(file));
+      if (data) data.processed_at = data.processed_at || new Date().toISOString();
       setResults(data);
       try { localStorage.setItem('lastControlTower', JSON.stringify(data)); } catch {}
       toast.success('Control Tower analysis selesai!', { id: 'ct' });
@@ -184,7 +198,7 @@ export default function ControlTowerPage() {
   };
 
   const regionOptions = useMemo(() => {
-    if (!results?.branches) return ['All'];
+    if (!Array.isArray(results?.branches)) return ['All'];
     const s = new Set<string>();
     results.branches.forEach((b: any) => s.add(b.region));
     return ['All', ...Array.from(s).sort()];
@@ -193,7 +207,7 @@ export default function ControlTowerPage() {
   const zoneOptions = ['All', 'RED', 'YELLOW', 'GREEN', 'BLUE'];
 
   const filtered = useMemo(() => {
-    if (!results?.branches) return [];
+    if (!Array.isArray(results?.branches)) return [];
     const mod = SCENARIOS.find(s => s.id === activeScenario)?.modifier || 1.0;
     return results.branches.filter((b: any) =>
       (selectedRegion.includes('All') || selectedRegion.includes(b.region)) &&
@@ -411,13 +425,13 @@ export default function ControlTowerPage() {
           </div>
 
           {/* Weekly Actions */}
-          {results.weekly_actions.length > 0 && (
+          {(results.weekly_actions || []).length > 0 && (
             <GlassCard className="border-primary/30 bg-primary/5">
               <h3 className="text-sm font-bold text-primary mb-3 uppercase tracking-wide">
                 Rekomendasi Aksi Mingguan
               </h3>
               <div className="space-y-2">
-                {results.weekly_actions.map((action: string, i: number) => (
+                {(results.weekly_actions || []).map((action: string, i: number) => (
                   <p key={i} className="text-sm text-foreground leading-relaxed">{action}</p>
                 ))}
               </div>
@@ -429,8 +443,8 @@ export default function ControlTowerPage() {
             <GlassCard className="lg:col-span-1">
               <h3 className="text-sm font-bold text-foreground mb-4 uppercase tracking-wide">Distribusi Zona DDMRP</h3>
               <div className="space-y-3">
-                {results.ddmrp_distribution.map((d: any) => {
-                  const pct = results.kpi.total_branches > 0 ? (d.count / results.kpi.total_branches * 100) : 0;
+                {(results.ddmrp_distribution || []).map((d: any) => {
+                  const pct = results.kpi?.total_branches > 0 ? (d.count / results.kpi.total_branches * 100) : 0;
                   return (
                     <div key={d.zone} className="flex items-center gap-3">
                       <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: d.color }} />
@@ -454,7 +468,7 @@ export default function ControlTowerPage() {
               <h3 className="text-sm font-bold text-foreground mb-4 uppercase tracking-wide">Performa per Wilayah</h3>
               <div className="h-[280px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={results.region_summary} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
+                  <BarChart data={results.region_summary || []} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                     <XAxis dataKey="region" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} tickLine={false} axisLine={false} />
                     <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} tickLine={false} axisLine={false} />
@@ -510,13 +524,13 @@ export default function ControlTowerPage() {
           </GlassCard>
 
           {/* Alerts */}
-          {results.alerts.length > 0 && (
+          {(results.alerts || []).length > 0 && (
             <GlassCard className="border-destructive/30 bg-destructive/5">
               <h3 className="text-sm font-bold text-destructive mb-4 uppercase tracking-wide flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4" /> Exception Alerts ({results.alerts.length})
+                <AlertTriangle className="w-4 h-4" /> Exception Alerts ({(results.alerts || []).length})
               </h3>
               <div className="space-y-2 max-h-80 overflow-y-auto custom-scrollbar">
-                {results.alerts
+                {(results.alerts || [])
                   .filter((a: any) => selectedRegion.includes('All') || selectedRegion.includes(a.region))
                   .map((a: any, i: number) => (
                   <div key={i} className="flex items-start gap-3 py-2 border-b border-border/30 last:border-0">

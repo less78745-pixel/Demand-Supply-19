@@ -135,6 +135,20 @@ Gorontalo,SKU-001,22,20,70,25,5,50,14
 Cirebon,SKU-001,75,5,320,100,20,100,14
 Yogyakarta,SKU-001,88,6,370,110,22,100,14`;
 
+const normalizeData = (data: any) => {
+  if (!data) return null;
+  return {
+    ...data,
+    results: Array.isArray(data.results) ? data.results : [],
+    alerts: Array.isArray(data.alerts) ? data.alerts : [],
+    service_level_simulations: Array.isArray(data.service_level_simulations) ? data.service_level_simulations : [],
+    zone_data: Array.isArray(data.zone_data) ? data.zone_data : [],
+    lead_time_matrix: Array.isArray(data.lead_time_matrix) ? data.lead_time_matrix : [],
+    kpi: data.kpi || { total_skus: 0, critical_count: 0, warning_count: 0, safe_count: 0, avg_safety_stock: 0, service_level: '95%' },
+    processed_at: data.processed_at || new Date().toISOString(),
+  };
+};
+
 export default function SafetyStockPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [results, setResults] = useState<any>(null);
@@ -145,7 +159,7 @@ export default function SafetyStockPage() {
   const [showHowTo, setShowHowTo] = useState(false);
 
   const handleGenerateDemo = () => {
-    const demo = generateDemoSafetyStock();
+    const demo = normalizeData(generateDemoSafetyStock());
     setResults(demo);
     try { localStorage.setItem('lastSafetyStock', JSON.stringify(demo)); } catch {}
     toast.success('🎉 Data Demo Safety Stock & ROP Berhasil Dimuat!');
@@ -155,12 +169,12 @@ export default function SafetyStockPage() {
     try {
       const saved = localStorage.getItem('lastSafetyStock');
       if (saved) {
-        setResults(JSON.parse(saved));
+        setResults(normalizeData(JSON.parse(saved)));
       } else {
-        setResults(generateDemoSafetyStock());
+        setResults(normalizeData(generateDemoSafetyStock()));
       }
     } catch {
-      setResults(generateDemoSafetyStock());
+      setResults(normalizeData(generateDemoSafetyStock()));
     }
   }, []);
 
@@ -168,8 +182,8 @@ export default function SafetyStockPage() {
     setIsProcessing(true);
     toast.loading('Menghitung Safety Stock & ROP...', { id: 'ss' });
     try {
-      const data = await uploadSafetyStockFile(file);
-      data.processed_at = data.processed_at || new Date().toISOString();
+      const data = normalizeData(await uploadSafetyStockFile(file));
+      if (data) data.processed_at = data.processed_at || new Date().toISOString();
       setResults(data);
       try { localStorage.setItem('lastSafetyStock', JSON.stringify(data)); } catch {}
       toast.success('Analisis Safety Stock selesai!', { id: 'ss' });
@@ -183,7 +197,7 @@ export default function SafetyStockPage() {
 
   // ── Filters ──
   const allCabangs = useMemo(() => {
-    if (!results?.results) return ['All'];
+    if (!Array.isArray(results?.results)) return ['All'];
     const s = new Set<string>();
     results.results.forEach((r: any) => s.add(r.cabang));
     return ['All', ...Array.from(s).sort()];
@@ -192,7 +206,7 @@ export default function SafetyStockPage() {
   const statusOptions = ['All', 'CRITICAL', 'WARNING', 'SAFE', 'OVERSTOCK'];
 
   const filtered = useMemo(() => {
-    if (!results?.results) return [];
+    if (!Array.isArray(results?.results)) return [];
     const mod = SCENARIOS.find(s => s.id === activeScenario)?.modifier || 1.0;
     return results.results.filter((r: any) =>
       (selectedCabang.includes('All') || selectedCabang.includes(r.cabang)) &&
@@ -200,21 +214,21 @@ export default function SafetyStockPage() {
     ).map((r: any) => ({
       ...r,
       safety_stock: Math.round(Number(r.safety_stock || 0) * mod),
-      rop: Math.round(Number(r.rop || 0) * mod)
+      rop: Math.round((Number(r.rop || 0) - Number(r.safety_stock || 0)) + (Number(r.safety_stock || 0) * mod)),
     }));
   }, [results, selectedCabang, selectedStatus, activeScenario]);
 
   // ── DDMRP Zone chart data ──
   const zoneChartData = useMemo(() => {
-    if (!results?.zone_data) return [];
+    if (!Array.isArray(results?.zone_data)) return [];
     const cabangMap: Record<string, { red: number; yellow: number; green: number; net_flow: number; count: number }> = {};
     for (const z of results.zone_data) {
       if (!selectedCabang.includes('All') && !selectedCabang.includes(z.cabang)) continue;
       if (!cabangMap[z.cabang]) cabangMap[z.cabang] = { red: 0, yellow: 0, green: 0, net_flow: 0, count: 0 };
-      cabangMap[z.cabang].red += z.red_zone;
-      cabangMap[z.cabang].yellow += z.yellow_zone;
-      cabangMap[z.cabang].green += z.green_zone;
-      cabangMap[z.cabang].net_flow += z.net_flow;
+      cabangMap[z.cabang].red += (Number(z.red_zone) || Number(z.red) || 0);
+      cabangMap[z.cabang].yellow += (Number(z.yellow_zone) || Number(z.yellow) || 0);
+      cabangMap[z.cabang].green += (Number(z.green_zone) || Number(z.green) || 0);
+      cabangMap[z.cabang].net_flow += (Number(z.net_flow) || 0);
       cabangMap[z.cabang].count++;
     }
     return Object.entries(cabangMap).map(([cab, v]) => ({
@@ -228,7 +242,7 @@ export default function SafetyStockPage() {
 
   // ── Lead Time Matrix chart ──
   const ltChartData = useMemo(() => {
-    if (!results?.lead_time_matrix) return [];
+    if (!Array.isArray(results?.lead_time_matrix)) return [];
     return results.lead_time_matrix
       .filter((lt: any) => selectedCabang.includes('All') || selectedCabang.includes(lt.cabang))
       .sort((a: any, b: any) => b.avg_lead_time - a.avg_lead_time);
@@ -421,13 +435,13 @@ export default function SafetyStockPage() {
             </h3>
             <div className="h-[280px]">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={results.service_level_simulations} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
+                <BarChart data={results.service_level_simulations || []} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                   <XAxis dataKey="service_level" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} tickLine={false} axisLine={false} />
                   <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} tickLine={false} axisLine={false} />
                   <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--popover))', borderColor: 'hsl(var(--border))', color: 'hsl(var(--popover-foreground))' }} />
                   <Bar dataKey="total_safety_stock" name="Total Safety Stock" radius={[4, 4, 0, 0]}>
-                    {results.service_level_simulations.map((entry: any, idx: number) => (
+                    {(results.service_level_simulations || []).map((entry: any, idx: number) => (
                       <Cell key={idx} fill={entry.service_level === results.kpi.service_level ? 'hsl(var(--primary))' : 'hsl(var(--muted-foreground))'} />
                     ))}
                   </Bar>
@@ -488,7 +502,7 @@ export default function SafetyStockPage() {
           )}
 
           {/* Alerts Table */}
-          {results.alerts.length > 0 && (
+          {(results.alerts || []).length > 0 && (
             <GlassCard className="border-destructive/30 bg-destructive/5">
               <h3 className="text-sm font-bold text-destructive mb-4 uppercase tracking-wide flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4" /> Reorder Alerts — Cabang Butuh Pengisian Segera
@@ -508,7 +522,7 @@ export default function SafetyStockPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {results.alerts
+                    {(results.alerts || [])
                       .filter((a: any) => selectedCabang.includes('All') || selectedCabang.includes(a.cabang))
                       .map((a: any, i: number) => (
                       <tr key={i} className="border-b border-border/50 hover:bg-destructive/10 transition-colors">

@@ -156,6 +156,20 @@ function FileDropZone({ label, file, onFile, onClear, templateCsv, templateName 
   );
 }
 
+const normalizeData = (data: any) => {
+  if (!data) return null;
+  return {
+    ...data,
+    demurrage_alerts: Array.isArray(data.demurrage_alerts) ? data.demurrage_alerts : [],
+    containers: Array.isArray(data.containers) ? data.containers : [],
+    sku_costs: Array.isArray(data.sku_costs) ? data.sku_costs : [],
+    currency_simulations: Array.isArray(data.currency_simulations) ? data.currency_simulations : [],
+    monte_carlo: data.monte_carlo || { histogram: [], p50: 0, p75: 0, p90: 0, p95: 0, p99: 0 },
+    kpi: data.kpi || { total_cost_usd: 0, avg_cost_per_unit: 0, demurrage_risk_count: 0, max_delay: 0 },
+    processed_at: data.processed_at || new Date().toISOString()
+  };
+};
+
 export default function LandedCostPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [results, setResults] = useState<any>(null);
@@ -166,7 +180,7 @@ export default function LandedCostPage() {
   const [showHowTo, setShowHowTo] = useState(false);
 
   const handleGenerateDemo = () => {
-    const demo = generateDemoLandedCost();
+    const demo = normalizeData(generateDemoLandedCost());
     setResults(demo);
     setExchangeRate(16000);
     try { localStorage.setItem('lastLandedCost', JSON.stringify(demo)); } catch {}
@@ -177,12 +191,12 @@ export default function LandedCostPage() {
     try {
       const saved = localStorage.getItem('lastLandedCost');
       if (saved) {
-        setResults(JSON.parse(saved));
+        setResults(normalizeData(JSON.parse(saved)));
       } else {
-        setResults(generateDemoLandedCost());
+        setResults(normalizeData(generateDemoLandedCost()));
       }
     } catch {
-      setResults(generateDemoLandedCost());
+      setResults(normalizeData(generateDemoLandedCost()));
     }
   }, []);
 
@@ -194,8 +208,8 @@ export default function LandedCostPage() {
     setIsProcessing(true);
     toast.loading('Menghitung Landed Cost & Demurrage...', { id: 'lc' });
     try {
-      const data = await uploadLandedCostFiles(trackingFile, allocationFile, exchangeRate);
-      data.processed_at = data.processed_at || new Date().toISOString();
+      const data = normalizeData(await uploadLandedCostFiles(trackingFile, allocationFile, exchangeRate));
+      if (data) data.processed_at = data.processed_at || new Date().toISOString();
       setResults(data);
       try { localStorage.setItem('lastLandedCost', JSON.stringify(data)); } catch {}
       toast.success('Analisis Landed Cost selesai!', { id: 'lc' });
@@ -213,13 +227,17 @@ export default function LandedCostPage() {
     const mod = sc.modifier;
     const currentRate = activeScenario === 'fx_surge' ? 17200 : exchangeRate;
     const rateRatio = currentRate / 16000;
+    const kpi = results.kpi || { total_cost_usd: 0, avg_cost_per_unit: 0, demurrage_risk_count: 0, max_delay: 0 };
 
     return {
       ...results,
+      demurrage_alerts: Array.isArray(results.demurrage_alerts) ? results.demurrage_alerts : [],
+      currency_simulations: Array.isArray(results.currency_simulations) ? results.currency_simulations : [],
+      monte_carlo: results.monte_carlo || { histogram: [] },
       kpi: {
-        ...results.kpi,
-        total_cost_usd: Math.round(results.kpi.total_cost_usd * mod),
-        avg_cost_per_unit: Math.round(results.kpi.avg_cost_per_unit * mod * rateRatio)
+        ...kpi,
+        total_cost_usd: Math.round(Number(kpi.total_cost_usd || 0) * mod),
+        avg_cost_per_unit: Math.round(Number(kpi.avg_cost_per_unit || 0) * mod * rateRatio)
       },
       sku_costs: (results.sku_costs || []).map((s: any) => ({
         ...s,
@@ -408,12 +426,12 @@ export default function LandedCostPage() {
           </div>
 
           {/* Demurrage Alerts */}
-          {modifiedResults.demurrage_alerts.length > 0 && (
+          {(modifiedResults.demurrage_alerts || []).length > 0 && (
             <GlassCard className="border-destructive/30 bg-destructive/5">
               <h3 className="text-sm font-bold text-destructive mb-4 uppercase tracking-wide flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4" /> Demurrage Risk Alert
               </h3>
-              {modifiedResults.demurrage_alerts.map((a: any, i: number) => (
+              {(modifiedResults.demurrage_alerts || []).map((a: any, i: number) => (
                 <div key={i} className="flex items-center gap-4 py-3 border-b border-border/30 last:border-0">
                   <div className={`px-3 py-1 rounded text-xs font-bold uppercase ${
                     a.urgency === 'CRITICAL' ? 'bg-destructive/20 text-destructive' : 'bg-yellow-500/20 text-yellow-500'
@@ -449,7 +467,7 @@ export default function LandedCostPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {modifiedResults.containers.map((c: any, i: number) => (
+                  {(modifiedResults.containers || []).map((c: any, i: number) => (
                     <tr key={i} className={`border-b border-border/50 hover:bg-muted/30 transition-colors ${c.is_demurrage_risk ? 'bg-destructive/5' : ''}`}>
                       <td className="px-3 py-2.5 font-semibold text-foreground">{c.no_bl}</td>
                       <td className="px-3 py-2.5 font-medium">{c.no_container}</td>
@@ -480,7 +498,7 @@ export default function LandedCostPage() {
           {/* Landed Cost per SKU */}
           <GlassCard>
             <h3 className="text-sm font-bold text-foreground mb-4 uppercase tracking-wide">
-              Landed Cost Breakdown per SKU ({modifiedResults.sku_costs.length} items)
+              Landed Cost Breakdown per SKU ({(modifiedResults.sku_costs || []).length} items)
             </h3>
             <div className="overflow-x-auto max-h-[400px] overflow-y-auto custom-scrollbar">
               <table className="w-full text-sm text-left text-muted-foreground">
@@ -497,7 +515,7 @@ export default function LandedCostPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {modifiedResults.sku_costs.map((s: any, i: number) => (
+                  {(modifiedResults.sku_costs || []).map((s: any, i: number) => (
                     <tr key={i} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
                       <td className="px-3 py-2.5">{s.no_bl}</td>
                       <td className="px-3 py-2.5 font-semibold text-foreground">{s.sku}</td>
@@ -515,14 +533,14 @@ export default function LandedCostPage() {
           </GlassCard>
 
           {/* Currency Simulation */}
-          {modifiedResults.currency_simulations.length > 0 && (
+          {(modifiedResults.currency_simulations || []).length > 0 && (
             <GlassCard>
               <h3 className="text-sm font-bold text-foreground mb-4 uppercase tracking-wide">
                 Simulasi Dampak Kurs Valas terhadap Total HPP
               </h3>
               <div className="h-[280px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={modifiedResults.currency_simulations} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
+                  <BarChart data={modifiedResults.currency_simulations || []} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                     <XAxis dataKey="rate" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} tickLine={false} axisLine={false} />
                     <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} tickLine={false} axisLine={false}
@@ -530,7 +548,7 @@ export default function LandedCostPage() {
                     <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--popover))', borderColor: 'hsl(var(--border))', color: 'hsl(var(--popover-foreground))' }}
                       formatter={(value: any) => [`Rp ${Number(value).toLocaleString('id-ID')}`]} />
                     <Bar dataKey="total_idr" name="Total HPP (IDR)" radius={[4, 4, 0, 0]}>
-                      {modifiedResults.currency_simulations.map((entry: any, idx: number) => (
+                      {(modifiedResults.currency_simulations || []).map((entry: any, idx: number) => (
                         <Cell key={idx} fill={entry.is_current ? 'hsl(var(--primary))' : 'hsl(var(--muted-foreground))'} />
                       ))}
                     </Bar>
