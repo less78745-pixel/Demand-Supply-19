@@ -18,6 +18,7 @@ import {
 } from 'recharts';
 import { get, set } from 'idb-keyval';
 import { parseDynamicCSV, findColumn, ParsedData } from '@/lib/csvParser';
+import { getStandardFilename } from '@/utils/export';
 
 const COLORS = ['#3b82f6', '#f97316', '#22c55e', '#ef4444', '#a855f7', '#eab308', '#06b6d4', '#ec4899'];
 
@@ -309,7 +310,7 @@ export default function HistorySalesPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `history_sales_analysis_${activeScenario}.csv`;
+    link.download = getStandardFilename(`History_Sales_${activeScenario}`, new Date().toISOString(), 'csv');
     link.click();
     URL.revokeObjectURL(url);
     toast.success('📊 Hasil Analisis History Sales Berhasil Diekspor!');

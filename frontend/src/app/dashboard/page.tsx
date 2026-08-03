@@ -13,6 +13,7 @@ import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { get } from 'idb-keyval';
 import { TimestampBadge } from '@/components/ui/TimestampBadge';
+import { getStandardFilename } from '@/utils/export';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   Legend, ResponsiveContainer, ReferenceLine, Cell,
@@ -427,7 +428,7 @@ export default function DashboardOverview() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `Dashboard_Report_${new Date().toISOString().split('T')[0]}_DSP.csv`;
+    link.download = getStandardFilename("Executive_Dashboard", new Date().toISOString(), "csv");
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

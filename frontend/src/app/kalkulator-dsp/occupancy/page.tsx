@@ -11,6 +11,7 @@ import { uploadOccupancyFile } from '@/lib/api';
 import { MultiSelect } from '@/components/ui/MultiSelect';
 import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import toast from 'react-hot-toast';
+import { getStandardFilename } from '@/utils/export';
 
 type ScenarioType = 'actual' | 'surge' | 'expansion';
 
@@ -228,8 +229,7 @@ export default function OccupancyPage() {
     const url = URL.createObjectURL(blob);
     const a    = document.createElement('a');
     a.href     = url;
-    const dateStr = new Date().toISOString().split('T')[0];
-    a.download = `Hasil Occupancy_Inventory_${dateStr}_DSP.csv`;
+    a.download = getStandardFilename("Occupancy_Capacity", results?.processed_at || new Date().toISOString(), "csv");
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(url);
     toast.success('Full report exported with DSP Insights!');

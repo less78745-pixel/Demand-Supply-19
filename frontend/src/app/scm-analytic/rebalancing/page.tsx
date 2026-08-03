@@ -11,6 +11,7 @@ import {
 import { uploadRebalancingFiles } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { TimestampBadge } from '@/components/ui/TimestampBadge';
+import { getStandardFilename } from '@/utils/export';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   Legend, ResponsiveContainer, Cell,
@@ -241,7 +242,7 @@ export default function RebalancingPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Draft_STO_Rebalancing_${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = getStandardFilename("Inventory_Rebalancing", results?.processed_at || new Date().toISOString(), "csv");
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     toast.success('Draft STO exported!');
   };

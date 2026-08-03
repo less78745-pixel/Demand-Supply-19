@@ -493,7 +493,7 @@ export default function DDMRPPage() {
                     'Urgency': res.replenishment?.urgency,
                     'Order Qty': res.replenishment?.suggested_order_qty,
                   }));
-                  exportToExcel(exportData, 'DDMRP_Analysis_Result');
+                  exportToExcel(exportData, 'DDMRP_Buffer', 'Buffer', results?.processed_at || new Date().toISOString());
                 }}
                 className="bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-md text-sm font-semibold flex items-center gap-2 transition-colors"
               >

@@ -11,6 +11,7 @@ import { uploadForecastFile } from '@/lib/api';
 import { MultiSelect } from '@/components/ui/MultiSelect';
 import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import toast from 'react-hot-toast';
+import { getStandardFilename } from '@/utils/export';
 
 type ScenarioType = 'actual' | 'promo' | 'recession';
 
@@ -207,8 +208,7 @@ export default function ForecastPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    const dateStr = new Date().toISOString().split('T')[0];
-    link.setAttribute("download", `Hasil Forecast_${dateStr}_DSP.csv`);
+    link.setAttribute("download", getStandardFilename("Demand_Forecast", results?.processed_at || new Date().toISOString(), "csv"));
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

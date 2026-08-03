@@ -12,6 +12,7 @@ import {
 import { uploadControlTowerFile } from '@/lib/api';
 import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import toast from 'react-hot-toast';
+import { getStandardFilename } from '@/utils/export';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   Legend, ResponsiveContainer, Cell,
@@ -229,7 +230,7 @@ export default function ControlTowerPage() {
     }
     const blob = new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob); const a = document.createElement('a');
-    a.href = url; a.download = `SCM_Control_Tower_${new Date().toISOString().split('T')[0]}.csv`;
+    a.href = url; a.download = getStandardFilename("Control_Tower", results?.processed_at || new Date().toISOString(), "csv");
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     toast.success('Control Tower report exported!');
   };

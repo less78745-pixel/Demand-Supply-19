@@ -14,6 +14,7 @@ import {
 import toast from 'react-hot-toast';
 import { get, set } from 'idb-keyval';
 import * as XLSX from 'xlsx';
+import { getStandardFilename } from '@/utils/export';
 
 /* ─── Carrier Catalogue & Direct URL Generator ─── */
 const CARRIERS = [
@@ -698,7 +699,7 @@ export default function TrackingContainerPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `hasil_tracking_kontainer_${todayISO()}.csv`;
+    a.download = getStandardFilename("Tracking_Container", new Date().toISOString(), "csv");
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

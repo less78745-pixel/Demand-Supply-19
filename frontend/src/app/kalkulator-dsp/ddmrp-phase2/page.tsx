@@ -20,6 +20,7 @@ import {
   CartesianGrid, Tooltip, Legend
 } from 'recharts';
 import * as XLSX from 'xlsx';
+import { getStandardFilename } from '@/utils/export';
 
 // ══════════════════════════════════════════════════════════════════════════════
 //  TYPES & DATA STRUCTURES
@@ -483,7 +484,7 @@ export default function DDMRPPhase2Page() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `ddmrp_phase2_rolling_4months_${activeScenario}.csv`;
+    link.download = getStandardFilename(`DDMRP_Phase2_${activeScenario}`, new Date().toISOString(), 'csv');
     link.click();
     URL.revokeObjectURL(url);
     toast.success('📊 Hasil Analisis Rolling DDMRP Berhasil Diekspor!');

@@ -12,6 +12,8 @@ import {
 } from 'lucide-react';
 import { uploadSafetyStockFile } from '@/lib/api';
 import toast from 'react-hot-toast';
+import { getStandardFilename } from '@/utils/export';
+
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   Legend, ResponsiveContainer, Cell, ReferenceLine,
@@ -244,7 +246,7 @@ export default function SafetyStockPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Safety_Stock_ROP_${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = getStandardFilename("Safety_Stock", results?.processed_at || new Date().toISOString(), "csv");
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

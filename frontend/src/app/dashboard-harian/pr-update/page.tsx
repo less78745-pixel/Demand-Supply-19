@@ -18,6 +18,7 @@ import {
 } from 'recharts';
 import { get, set } from 'idb-keyval';
 import { parseDynamicCSV, findColumn, ParsedData } from '@/lib/csvParser';
+import { getStandardFilename } from '@/utils/export';
 
 const COLORS = ['#a855f7', '#3b82f6', '#f97316', '#eab308', '#22c55e', '#ef4444', '#06b6d4', '#ec4899'];
 
@@ -296,7 +297,7 @@ export default function PRUpdatePage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `pr_update_analysis_${activeScenario}.csv`;
+    link.download = getStandardFilename(`PR_Update_${activeScenario}`, new Date().toISOString(), 'csv');
     link.click();
     URL.revokeObjectURL(url);
     toast.success('📊 Hasil Analisis PR Update Berhasil Diekspor!');
