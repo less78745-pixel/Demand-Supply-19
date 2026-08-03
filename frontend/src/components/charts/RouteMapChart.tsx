@@ -39,12 +39,15 @@ const ROUTE_COLORS = [
 ];
 
 export function RouteMapChart({ locations = [], routes = [], methodName }: RouteMapChartProps) {
-  const safeLocations = useMemo(() => locations.map(l => ({
-    ...l,
-    lat: Number(l?.lat || 0),
-    lon: Number(l?.lon || 0),
-    demand: Number(l?.demand || 0),
-  })), [locations]);
+  const safeLocations = useMemo(() => {
+    if (!Array.isArray(locations)) return [];
+    return locations.map(l => ({
+      ...l,
+      lat: Number(l?.lat) || 0,
+      lon: Number(l?.lon) || 0,
+      demand: Number(l?.demand) || 0,
+    }));
+  }, [locations]);
 
   const depot = safeLocations.find(l => l.is_depot);
   const customers = safeLocations.filter(l => !l.is_depot);
@@ -57,25 +60,25 @@ export function RouteMapChart({ locations = [], routes = [], methodName }: Route
     routes.forEach((route, idx) => {
       const color = ROUTE_COLORS[idx % ROUTE_COLORS.length];
       const stops = route.stops || [];
-      if (!depot || stops.length === 0) return;
+      if (!depot || !Array.isArray(stops) || stops.length === 0) return;
 
       // Depot → first stop
-      const firstStop = safeLocations.find(l => l.index === stops[0].index);
+      const firstStop = safeLocations.find(l => l.index === stops[0]?.index);
       if (firstStop) {
         lines.push({ lat1: depot.lat, lon1: depot.lon, lat2: firstStop.lat, lon2: firstStop.lon, routeId: route.route_id, color });
       }
 
       // Between stops
       for (let i = 0; i < stops.length - 1; i++) {
-        const from = safeLocations.find(l => l.index === stops[i].index);
-        const to = safeLocations.find(l => l.index === stops[i + 1].index);
+        const from = safeLocations.find(l => l.index === stops[i]?.index);
+        const to = safeLocations.find(l => l.index === stops[i + 1]?.index);
         if (from && to) {
           lines.push({ lat1: from.lat, lon1: from.lon, lat2: to.lat, lon2: to.lon, routeId: route.route_id, color });
         }
       }
 
       // Last stop → depot
-      const lastStop = safeLocations.find(l => l.index === stops[stops.length - 1].index);
+      const lastStop = safeLocations.find(l => l.index === stops[stops.length - 1]?.index);
       if (lastStop) {
         lines.push({ lat1: lastStop.lat, lon1: lastStop.lon, lat2: depot.lat, lon2: depot.lon, routeId: route.route_id, color });
       }
@@ -89,7 +92,7 @@ export function RouteMapChart({ locations = [], routes = [], methodName }: Route
   }
 
   const CustomTooltip = ({ active, payload }: any) => {
-    if (!active || !payload?.length) return null;
+    if (!active || !payload?.length || !payload[0]?.payload) return null;
     const data = payload[0].payload;
     return (
       <div className="glass-card rounded-lg px-3 py-2 text-xs shadow-lg border border-border">
@@ -104,13 +107,13 @@ export function RouteMapChart({ locations = [], routes = [], methodName }: Route
     );
   };
 
-  // Calculate bounds for axes
-  const allLats = safeLocations.map(l => l.lat);
-  const allLons = safeLocations.map(l => l.lon);
-  const minLat = allLats.length ? Math.min(...allLats) : 0;
-  const maxLat = allLats.length ? Math.max(...allLats) : 0;
-  const minLon = allLons.length ? Math.min(...allLons) : 0;
-  const maxLon = allLons.length ? Math.max(...allLons) : 0;
+  // Calculate bounds for axes safely
+  const validLats = safeLocations.map(l => l.lat).filter(val => !isNaN(val) && isFinite(val));
+  const validLons = safeLocations.map(l => l.lon).filter(val => !isNaN(val) && isFinite(val));
+  const minLat = validLats.length ? Math.min(...validLats) : 0;
+  const maxLat = validLats.length ? Math.max(...validLats) : 0;
+  const minLon = validLons.length ? Math.min(...validLons) : 0;
+  const maxLon = validLons.length ? Math.max(...validLons) : 0;
   const latPad = (maxLat - minLat) * 0.1 || 0.01;
   const lonPad = (maxLon - minLon) * 0.1 || 0.01;
 
@@ -147,12 +150,12 @@ export function RouteMapChart({ locations = [], routes = [], methodName }: Route
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis
               type="number" dataKey="lon" name="Longitude"
-              domain={[Math.min(...allLons) - lonPad, Math.max(...allLons) + lonPad]}
+              domain={[minLon - lonPad, maxLon + lonPad]}
               stroke="hsl(var(--muted-foreground))" fontSize={10} tickCount={6}
             />
             <YAxis
               type="number" dataKey="lat" name="Latitude"
-              domain={[Math.min(...allLats) - latPad, Math.max(...allLats) + latPad]}
+              domain={[minLat - latPad, maxLat + latPad]}
               stroke="hsl(var(--muted-foreground))" fontSize={10} tickCount={6}
             />
             <ZAxis type="number" dataKey="demand" range={[60, 300]} />

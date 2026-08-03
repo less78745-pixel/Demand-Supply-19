@@ -72,7 +72,7 @@ export function ForecastChart({ data, activeMethod }: ForecastChartProps) {
           <Tooltip 
             contentStyle={{ backgroundColor: 'hsl(var(--background))', borderColor: 'hsl(var(--border))', color: 'hsl(var(--foreground))' }}
             cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }}
-            formatter={(value: any, name: any) => [value?.toFixed(2) || value, name]}
+            formatter={(value: any, name: any) => [!isNaN(Number(value)) ? Number(value).toFixed(2) : value || '—', name]}
           />
           <Legend wrapperStyle={{ paddingTop: '20px' }} />
           

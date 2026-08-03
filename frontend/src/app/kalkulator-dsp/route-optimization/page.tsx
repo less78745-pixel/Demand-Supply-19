@@ -615,12 +615,12 @@ Pelanggan,Toko A,-6.210000,106.820000,15,08:00-12:00,30`}
                           {isBest && <span className="text-primary mr-1">★</span>}
                           {m.method}
                         </td>
-                        <td className="py-3 px-3 text-right font-mono">{m.total_distance_km?.toFixed(1)}</td>
-                        <td className="py-3 px-3 text-right font-mono">{m.n_vehicles}</td>
-                        <td className="py-3 px-3 text-right font-mono text-xs">{formatRp(m.cost?.fuel_cost)}</td>
-                        <td className="py-3 px-3 text-right font-mono text-xs">{formatRp(m.cost?.driver_cost)}</td>
-                        <td className="py-3 px-3 text-right font-mono font-bold">{formatRp(m.cost?.total_cost)}</td>
-                        <td className="py-3 px-3 text-right font-mono">{m.cost?.estimated_time_hours?.toFixed(1)}</td>
+                        <td className="py-3 px-3 text-right font-mono">{Number(m?.total_distance_km || 0).toFixed(1)}</td>
+                        <td className="py-3 px-3 text-right font-mono">{m?.n_vehicles || 0}</td>
+                        <td className="py-3 px-3 text-right font-mono text-xs">{formatRp(m?.cost?.fuel_cost)}</td>
+                        <td className="py-3 px-3 text-right font-mono text-xs">{formatRp(m?.cost?.driver_cost)}</td>
+                        <td className="py-3 px-3 text-right font-mono font-bold">{formatRp(m?.cost?.total_cost)}</td>
+                        <td className="py-3 px-3 text-right font-mono">{Number(m?.cost?.estimated_time_hours || 0).toFixed(1)}</td>
                       </tr>
                     );
                   })}

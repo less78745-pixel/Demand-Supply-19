@@ -27,20 +27,27 @@ export function ModelComparisonTable({ modelComparison }: ModelComparisonTablePr
             </tr>
           </thead>
           <tbody>
-            {modelComparison.map((model, index) => (
-              <tr key={model.model} className="border-b border-border/50 hover:bg-muted/30">
-                <td className="px-6 py-4 font-medium text-foreground flex items-center gap-2">
-                  {index === 0 && <span className="w-2 h-2 rounded-full bg-primary"></span>}
-                  {model.model} {index === 0 && <span className="text-xs text-primary ml-1">(Best)</span>}
-                </td>
-                <td className="px-6 py-4">{model.mape?.toFixed(2) || '0.00'}%</td>
-                <td className={`px-6 py-4 ${(model.bias || 0) > 0 ? 'text-destructive' : (model.bias || 0) < 0 ? 'text-amber-400' : 'text-muted-foreground'}`}>
-                  {model.bias > 0 ? '+' : ''}{model.bias?.toFixed(2) || '0.00'}
-                </td>
-                <td className="px-6 py-4">{model.mad?.toFixed(2) || '0.00'}</td>
-                <td className="px-6 py-4">{model.rmse?.toFixed(2) || '0.00'}</td>
-              </tr>
-            ))}
+            {modelComparison.map((model, index) => {
+              const safeMape = Number(model?.mape || 0);
+              const safeBias = Number(model?.bias || 0);
+              const safeMad = Number(model?.mad || 0);
+              const safeRmse = Number(model?.rmse || 0);
+
+              return (
+                <tr key={model.model || index} className="border-b border-border/50 hover:bg-muted/30">
+                  <td className="px-6 py-4 font-medium text-foreground flex items-center gap-2">
+                    {index === 0 && <span className="w-2 h-2 rounded-full bg-primary"></span>}
+                    {model.model || 'Unknown'} {index === 0 && <span className="text-xs text-primary ml-1">(Best)</span>}
+                  </td>
+                  <td className="px-6 py-4">{safeMape.toFixed(2)}%</td>
+                  <td className={`px-6 py-4 ${safeBias > 0 ? 'text-destructive' : safeBias < 0 ? 'text-amber-400' : 'text-muted-foreground'}`}>
+                    {safeBias > 0 ? '+' : ''}{safeBias.toFixed(2)}
+                  </td>
+                  <td className="px-6 py-4">{safeMad.toFixed(2)}</td>
+                  <td className="px-6 py-4">{safeRmse.toFixed(2)}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

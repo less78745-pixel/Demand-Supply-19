@@ -596,23 +596,23 @@ export default function DDMRPPage() {
               )}
               {/* KPI Cards */}
               <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                <KPICard title="ADU" value={`${res.adu?.toFixed(2)} /hari`} icon={<Activity className="w-5 h-5" />} />
-                <KPICard title="CoV" value={res.cov?.toFixed(3)} icon={<BarChart3 className="w-5 h-5" />} />
+                <KPICard title="ADU" value={`${Number(res.adu || 0).toFixed(2)} /hari`} icon={<Activity className="w-5 h-5" />} />
+                <KPICard title="CoV" value={Number(res.cov || 0).toFixed(3)} icon={<BarChart3 className="w-5 h-5" />} />
                 <KPICard
                   title="Variability"
-                  value={res.variability?.category}
+                  value={res.variability?.category || "Normal"}
                   icon={<AlertTriangle className="w-5 h-5" />}
-                  trend={`VF: ${res.variability?.factor}`}
+                  trend={`VF: ${res.variability?.factor || 0}`}
                 />
                 <KPICard
                   title="Lead Time"
-                  value={res.lead_time?.category}
+                  value={res.lead_time?.category || "Medium"}
                   icon={<Truck className="w-5 h-5" />}
-                  trend={`LTF: ${res.lead_time?.factor}`}
+                  trend={`LTF: ${res.lead_time?.factor || 0}`}
                 />
                 <KPICard
                   title="Net Flow"
-                  value={res.net_flow_position?.toLocaleString()}
+                  value={Number(res.net_flow_position || 0).toLocaleString('id-ID')}
                   icon={<TrendingUp className="w-5 h-5" />}
                   isAlert={res.replenishment?.urgency === 'high'}
                 />
