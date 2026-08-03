@@ -504,7 +504,7 @@ Pelanggan,Toko A,-6.210000,106.820000,15,08:00-12:00,30`}
                 });
                 
                 if (allExportData.length > 0) {
-                  exportToExcel(allExportData, 'Route_Optimization', 'Rute', results?.processed_at || new Date().toISOString());
+                  exportToExcel(allExportData, 'Route_Optimization', 'Rute', new Date().toISOString());
                 } else {
                   toast.error('Tidak ada data rute untuk diexport');
                 }
