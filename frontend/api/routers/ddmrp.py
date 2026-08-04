@@ -1,10 +1,11 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional
 import pandas as pd
 import io
 
-from services.ddmrp_engine import analyze_ddmrp_manual, analyze_ddmrp_from_file
+from services.ddmrp_engine import analyze_ddmrp_manual, analyze_ddmrp_from_file, project_ddmrp_inventory_occupancy
 
 router = APIRouter()
 
@@ -93,3 +94,61 @@ async def analyze_ddmrp_file_endpoint(
         if isinstance(e, HTTPException):
             raise e
         raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)}")
+
+
+@router.post("/analyze/ddmrp/phase2-projection")
+async def analyze_ddmrp_phase2_endpoint(file: UploadFile = File(...)):
+    """Run DDMRP Phase 2: Proyeksi Inventory & Occupancy (16 Weeks) from uploaded Excel file."""
+    if not file.filename.lower().endswith(('.xlsx', '.xls', '.csv')):
+        raise HTTPException(status_code=400, detail="Hanya file Excel (.xlsx, .xls) atau CSV yang didukung untuk simulasi ini.")
+    try:
+        contents = await file.read()
+        result = project_ddmrp_inventory_occupancy(contents)
+        if "error" in result:
+            raise HTTPException(status_code=400, detail=result["error"])
+        # Remove _df before returning JSON
+        result.pop("_df", None)
+        return result
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)}")
+
+
+@router.post("/analyze/ddmrp/phase2-projection/export")
+async def export_ddmrp_phase2_endpoint(file: UploadFile = File(...)):
+    """Run DDMRP Phase 2 Proyeksi and directly return 'Hasil_Proyeksi_DDMRP.xlsx' file."""
+    if not file.filename.lower().endswith(('.xlsx', '.xls', '.csv')):
+        raise HTTPException(status_code=400, detail="Hanya file Excel/CSV yang didukung untuk export ini.")
+    try:
+        contents = await file.read()
+        result = project_ddmrp_inventory_occupancy(contents)
+        if "error" in result:
+            raise HTTPException(status_code=400, detail=result["error"])
+        
+        df_master = result.get("_df")
+        if df_master is None:
+            raise HTTPException(status_code=500, detail="Gagal menghasilkan DataFrame proyeksi.")
+
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df_master.to_excel(writer, index=False, sheet_name="Proyeksi DDMRP")
+        output.seek(0)
+
+        headers = {
+            'Content-Disposition': 'attachment; filename="Hasil_Proyeksi_DDMRP.xlsx"'
+        }
+        return StreamingResponse(
+            output,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers=headers
+        )
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)}")
+

@@ -362,13 +362,14 @@ export default function PRUpdatePage() {
       });
   }, [parsed, selectedCabang, selectedCategory, selectedEta, selectedStatusCompile, colCabang, colCategory, colGrup, colEta, colQty, colStatus, activeScenario]);
 
-  // Chart data: Grouped by Cabang, Week ETA & by Category, Count by STATUS Compile
-  const { chartData, chartEtaData, chartCategoryData, statusList, totalQty, holdCount } = useMemo(() => {
-    if (!parsed || filtered.length === 0) return { chartData: [], chartEtaData: [], chartCategoryData: [], statusList: [], totalQty: 0, holdCount: 0 };
+  // Chart data: Grouped by Cabang, Week ETA & by Category, Count by STATUS Compile and Category
+  const { chartData, chartEtaData, chartCategoryData, statusList, categoryList, totalQty, holdCount } = useMemo(() => {
+    if (!parsed || filtered.length === 0) return { chartData: [], chartEtaData: [], chartCategoryData: [], statusList: [], categoryList: [], totalQty: 0, holdCount: 0 };
     const mapCabang: Record<string, any> = {};
     const mapEta: Record<string, any> = {};
     const mapCat: Record<string, any> = {};
     const statuses = new Set<string>();
+    const categories = new Set<string>();
     let qtySum = 0;
     let holdSum = 0;
 
@@ -376,7 +377,7 @@ export default function PRUpdatePage() {
 
     for (const row of filtered) {
       const cbg = colCabang ? (row[colCabang] || 'Unknown') : 'All';
-      const cat = colCatUse ? (row[colCatUse] || 'Umum / No Kategori') : 'Umum';
+      const cat = colCatUse ? (String(row[colCatUse] || 'Umum / No Kategori').trim()) : 'Umum';
       const eta = colEta ? (row[colEta] || 'Unscheduled / Tanpa ETA') : 'Unscheduled';
       
       if (selectedCabangForChart !== 'All' && cbg !== selectedCabangForChart) continue;
@@ -385,6 +386,7 @@ export default function PRUpdatePage() {
       const q = colQty && row[colQty] != null ? Math.round(Number(String(row[colQty]).replace(/[^0-9.-]+/g, '')) || 0) : 1;
       
       statuses.add(stat);
+      categories.add(cat);
       qtySum += q;
       if (stat.includes('HOLD') || stat.includes('DELAY') || stat.includes('TUNDA')) {
         holdSum += 1;
@@ -395,12 +397,14 @@ export default function PRUpdatePage() {
         mapCabang[cbg] = { cabang: cbg };
       }
       mapCabang[cbg][stat] = Math.round((mapCabang[cbg][stat] || 0) + q);
+      mapCabang[cbg][cat] = Math.round((mapCabang[cbg][cat] || 0) + q);
 
       // Group by Week ETA
       if (!mapEta[eta]) {
         mapEta[eta] = { eta: eta };
       }
       mapEta[eta][stat] = Math.round((mapEta[eta][stat] || 0) + q);
+      mapEta[eta][cat] = Math.round((mapEta[eta][cat] || 0) + q);
 
       // Group by Category
       if (!mapCat[cat]) {
@@ -414,6 +418,7 @@ export default function PRUpdatePage() {
       chartEtaData: Object.values(mapEta).sort((a, b) => String(a.eta).localeCompare(String(b.eta))),
       chartCategoryData: Object.values(mapCat), 
       statusList: Array.from(statuses), 
+      categoryList: Array.from(categories),
       totalQty: Math.round(qtySum), 
       holdCount: holdSum 
     };
@@ -754,17 +759,17 @@ export default function PRUpdatePage() {
         </div>
       </GlassCard>
 
-      {/* ─── VISUALIZATION CHART 1: STATUS COMPILE PER WEEK ETA / CABANG ─── */}
+      {/* ─── VISUALIZATION CHART: TERPADU WEEK ETA & STACKED CATEGORY ─── */}
       {((chartViewMode === 'eta' && chartEtaData.length > 0) || (chartViewMode === 'cabang' && chartData.length > 0)) && (
         <GlassCard className="p-6 border-purple-500/30 bg-gradient-to-b from-slate-900/90 to-slate-950/90 shadow-2xl">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-4 mb-6 gap-3">
             <div>
               <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
                 <BarChart3 className="w-5 h-5 text-purple-400" />
-                1. Grafik Distribusi Status Compile (Total Qty) {chartViewMode === 'eta' ? 'per Week ETA' : 'per Cabang'}
+                Grafik Distribusi Status Compile & Persebaran Category ({chartViewMode === 'eta' ? 'per Week ETA' : 'per Cabang'})
               </h3>
               <p className="text-xs text-slate-400 mt-1">
-                Sorotan: <b className="text-cyan-400">{selectedCabangForChart === 'All' ? 'Seluruh Cabang' : selectedCabangForChart}</b> • Skenario Aktif: <b className="text-amber-300">{activeScenario.toUpperCase()}</b> • Mode: <b className="text-emerald-400">{chartViewMode === 'eta' ? 'Persebaran Week ETA' : 'Persebaran Cabang'}</b>
+                Sumbu X: <b className="text-emerald-400">{chartViewMode === 'eta' ? 'Week ETA' : 'Cabang'}</b> • Batang bertingkat (Stacked Bar): <b className="text-sky-300">Category Barang</b> sesuai filter terpilih.
               </p>
             </div>
             
@@ -788,77 +793,30 @@ export default function PRUpdatePage() {
                 </button>
               </div>
               <div className="flex items-center gap-2 text-xs text-slate-400 bg-slate-800/50 px-3 py-1.5 rounded-xl border border-slate-700">
-                <span>📊 Menampilkan {statusList.length} status pada {chartViewMode === 'eta' ? `${chartEtaData.length} periode ETA` : `${chartData.length} cabang`}</span>
+                <span>🏷️ Menampilkan {categoryList.length} kategori pada {chartViewMode === 'eta' ? `${chartEtaData.length} periode ETA` : `${chartData.length} cabang`}</span>
               </div>
             </div>
           </div>
 
-          <div className="h-[360px] w-full">
+          <div className="h-[400px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartViewMode === 'eta' ? chartEtaData : chartData} margin={{ top: 20, right: 30, left: 10, bottom: 20 }}>
+              <BarChart data={chartViewMode === 'eta' ? chartEtaData : chartData} margin={{ top: 20, right: 30, left: 10, bottom: 25 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
                 <XAxis dataKey={chartViewMode === 'eta' ? 'eta' : 'cabang'} stroke="#94a3b8" tick={{ fill: '#e2e8f0', fontSize: 12, fontWeight: 600 }} angle={-15} textAnchor="end" height={50} />
-                <YAxis stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 12 }} />
+                <YAxis stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 12 }} tickFormatter={(val) => Number(val).toLocaleString('id-ID')} />
                 <Tooltip
                   contentStyle={{ backgroundColor: '#0f172a', borderColor: '#a855f7', borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}
                   labelStyle={{ color: '#38bdf8', fontWeight: 'bold', borderBottom: '1px solid #334155', paddingBottom: '4px' }}
+                  formatter={(val: any, name: any) => [Number(val).toLocaleString('id-ID') + ' Qty', name]}
                 />
                 <Legend wrapperStyle={{ paddingTop: '16px', fontSize: '12px' }} />
-                {statusList.map((stat, idx) => (
+                {categoryList.map((cat, idx) => (
                   <Bar
-                    key={stat}
-                    dataKey={stat}
-                    name={stat}
+                    key={cat}
+                    dataKey={cat}
+                    name={cat}
                     fill={COLORS[idx % COLORS.length]}
-                    stackId="pr"
-                    radius={idx === statusList.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
-                    maxBarSize={55}
-                  />
-                ))}
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </GlassCard>
-      )}
-
-      {/* ─── VISUALIZATION CHART 2: STATUS COMPILE PER CATEGORY (SUMBU X CATEGORY) ─── */}
-      {chartCategoryData && chartCategoryData.length > 0 && (
-        <GlassCard className="p-6 border-sky-500/30 bg-gradient-to-b from-slate-900/90 to-slate-950/90 shadow-2xl">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-4 mb-6 gap-3">
-            <div>
-              <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
-                <Layers className="w-5 h-5 text-sky-400" />
-                2. Grafik Persebaran Status Compile (Total Qty) per Category
-              </h3>
-              <p className="text-xs text-slate-400 mt-1">
-                Grafik bertingkat (Stacked Bar) dengan sumbu X adalah <b className="text-sky-300">Category / Kategori Produk</b> untuk mengidentifikasi kategori apa yang sedang On Vessel, Hold, atau SPJM.
-              </p>
-            </div>
-            
-            <div className="flex items-center gap-2 text-xs text-slate-400 bg-slate-800/50 px-3 py-1.5 rounded-xl border border-slate-700">
-              <span>🏷️ {chartCategoryData.length} Kategori Produk</span>
-            </div>
-          </div>
-
-          <div className="h-[360px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartCategoryData} margin={{ top: 20, right: 30, left: 10, bottom: 30 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
-                <XAxis dataKey="category" stroke="#94a3b8" tick={{ fill: '#e2e8f0', fontSize: 12, fontWeight: 600 }} angle={-15} textAnchor="end" height={60} />
-                <YAxis stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 12 }} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#0f172a', borderColor: '#38bdf8', borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}
-                  labelStyle={{ color: '#a855f7', fontWeight: 'bold', borderBottom: '1px solid #334155', paddingBottom: '4px' }}
-                />
-                <Legend wrapperStyle={{ paddingTop: '16px', fontSize: '12px' }} />
-                {statusList.map((stat, idx) => (
-                  <Bar
-                    key={stat}
-                    dataKey={stat}
-                    name={stat}
-                    fill={COLORS[(idx + 2) % COLORS.length]}
-                    stackId="cat"
-                    radius={idx === statusList.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
+                    stackId="pr_cat_stack"
                     maxBarSize={60}
                   />
                 ))}

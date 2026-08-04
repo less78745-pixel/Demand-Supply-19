@@ -506,6 +506,43 @@ export default function HistorySalesPage() {
     }).sort((a, b) => b.totalSales - a.totalSales);
   }, [parsed, filtered, colCabang, colCategoryInsentif, executiveSummary]);
 
+  const insentifChartData = useMemo(() => {
+    if (!parsed || !colCategoryInsentif || filtered.length === 0) return { data: [], categories: [] };
+    const periods = ['M', 'M-1', 'M-2', 'M-3', 'M-4', 'M-5'];
+    const catSet = new Set<string>();
+    const periodMap: Record<string, Record<string, number>> = {};
+    periods.forEach(p => { periodMap[p] = {}; });
+
+    const periodCols: Record<string, string | undefined> = {};
+    periods.forEach(p => {
+      const found = parsed.headers.find(h => h.trim().toUpperCase() === p.toUpperCase());
+      if (found) periodCols[p] = found;
+    });
+
+    for (const row of filtered) {
+      const cat = String(row[colCategoryInsentif] || 'Non-Insentif / Umum').trim();
+      catSet.add(cat);
+      periods.forEach(p => {
+        const colName = periodCols[p];
+        if (colName && row[colName] !== undefined) {
+          const val = Number(String(row[colName] || 0).replace(/[^0-9.-]+/g, '')) || 0;
+          periodMap[p][cat] = (periodMap[p][cat] || 0) + val;
+        }
+      });
+    }
+
+    const categories = Array.from(catSet);
+    const data = periods.map(p => {
+      const entry: any = { period: p };
+      categories.forEach(cat => {
+        entry[cat] = Math.round(periodMap[p][cat] || 0);
+      });
+      return entry;
+    });
+
+    return { data, categories };
+  }, [parsed, filtered, colCategoryInsentif]);
+
   const currentRawUniqueValues = useMemo(() => {
     if (!activeRawColModal || !parsed) return [];
     const set = new Set<string>();
@@ -838,7 +875,7 @@ export default function HistorySalesPage() {
                       key={tc.name}
                       dataKey={tc.name}
                       name={isSupplyOrOutstanding ? `📦 ${tc.name}` : `📊 ${tc.name} (Sales Vol)`}
-                      stackId={isSupplyOrOutstanding ? "supply_outstanding" : "sales_history"}
+                      stackId={isSupplyOrOutstanding ? "supply_outstanding" : undefined}
                       fill={barColor}
                       maxBarSize={60}
                     />
@@ -1036,24 +1073,26 @@ export default function HistorySalesPage() {
           </div>
 
           <div className="space-y-8">
-            {/* Grafik Bar Category Insentif */}
-            <div className="h-[360px] w-full bg-slate-950/60 p-5 rounded-2xl border border-slate-800 shadow-inner flex flex-col justify-between">
+            {/* Grafik Bar Category Insentif Stacked per Periode */}
+            <div className="h-[400px] w-full bg-slate-950/60 p-5 rounded-2xl border border-slate-800 shadow-inner flex flex-col justify-between">
               <h4 className="text-xs font-bold uppercase tracking-wider text-purple-300 mb-2 text-center flex items-center justify-center gap-2">
-                📊 Komparasi Volume: Sales vs Outstanding per Kombinasi Cabang & Insentif
+                📊 Persebaran Hasil Penjualan per Category Insentif (Sumbu X: M s/d M-5)
               </h4>
               <div className="flex-1 w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={insentifAnalysis.slice(0, 30)} margin={{ top: 15, right: 20, left: 10, bottom: 45 }}>
+                  <BarChart data={insentifChartData.data} margin={{ top: 15, right: 20, left: 10, bottom: 25 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.4} />
-                    <XAxis dataKey="labelKey" stroke="#94a3b8" tick={{ fill: '#e2e8f0', fontSize: 11, fontWeight: 700 }} interval={0} angle={-20} textAnchor="end" height={60} />
-                    <YAxis stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 11 }} />
+                    <XAxis dataKey="period" stroke="#94a3b8" tick={{ fill: '#ffffff', fontSize: 14, fontWeight: 800 }} />
+                    <YAxis stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 11 }} tickFormatter={(val) => Number(val).toLocaleString('id-ID')} />
                     <Tooltip
                       contentStyle={{ backgroundColor: '#0f172a', borderColor: '#a855f7', borderRadius: '12px', boxShadow: '0 15px 35px rgba(0,0,0,0.8)' }}
-                      labelStyle={{ color: '#d8b4fe', fontWeight: 'bold' }}
+                      labelStyle={{ color: '#d8b4fe', fontWeight: 'bold', borderBottom: '1px solid #334155', paddingBottom: '4px' }}
+                      formatter={(val: any, name: any) => [Number(val).toLocaleString('id-ID') + ' Unit', name]}
                     />
                     <Legend wrapperStyle={{ paddingTop: '15px', fontSize: '12px', fontWeight: 'bold' }} />
-                    <Bar dataKey="totalSales" name="📈 Total Volume Sales" fill="#a855f7" radius={[6, 6, 0, 0]} maxBarSize={50} />
-                    <Bar dataKey="totalOutstanding" name="⏳ Outstanding Order" fill="#fbbf24" radius={[6, 6, 0, 0]} maxBarSize={50} />
+                    {insentifChartData.categories.map((cat, idx) => (
+                      <Bar key={cat} dataKey={cat} name={cat} stackId="insentif_stack" fill={COLORS[idx % COLORS.length]} maxBarSize={70} />
+                    ))}
                   </BarChart>
                 </ResponsiveContainer>
               </div>

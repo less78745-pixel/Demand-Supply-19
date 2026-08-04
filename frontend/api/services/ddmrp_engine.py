@@ -542,3 +542,122 @@ def analyze_ddmrp_from_file(
         },
         "insights": insights,
     }
+
+
+# ══════════════════════════════════════════════════════════════
+#  8. DDMRP PHASE 2: PROYEKSI INVENTORY & OCCUPANCY (16 WEEKS)
+# ══════════════════════════════════════════════════════════════
+
+def project_ddmrp_inventory_occupancy(file_contents: bytes) -> dict:
+    """
+    PROYEKSI INVENTORY & OCCUPANCY (DDMRP LOGIC PHASE 2)
+    ===================================================
+    Prasyarat File Excel dengan 3 sheet:
+      - Sheet 1 ('Raw Data'): cabang, grup, Category, Kapasitas, On Hand, TO Week 1-16, Plan Loading 1-16.
+      - Sheet 2 ('Forecast'): cabang, grup, Category, Forecast W1 s/d W16.
+      - Sheet 3 ('Target'): cabang, grup, Category, Target W1 s/d W16.
+    """
+    import io
+    excel_file = io.BytesIO(file_contents)
+    excel_reader = pd.ExcelFile(excel_file)
+    
+    sheet_names = excel_reader.sheet_names
+    if len(sheet_names) == 0:
+        return {"error": "File Excel kosong atau tidak valid."}
+        
+    df_raw = pd.read_excel(excel_reader, sheet_name=0) # Sheet 1: Raw Data
+    df_fcst = pd.read_excel(excel_reader, sheet_name=1 if len(sheet_names) > 1 else 0) # Sheet 2: Forecast Sales
+    df_tgt = pd.read_excel(excel_reader, sheet_name=2 if len(sheet_names) > 2 else (1 if len(sheet_names) > 1 else 0))  # Sheet 3: Target Sales
+
+    # Bersihkan nama kolom
+    for df in [df_raw, df_fcst, df_tgt]:
+        df.columns = df.columns.astype(str).str.strip()
+
+    # Pastikan nama key penggabung sama di ketiga sheet (bersihkan spasi ekstra jika ada)
+    merge_keys = ['cabang', 'grup', 'Category']
+    for df in [df_raw, df_fcst, df_tgt]:
+        for col in merge_keys:
+            if col not in df.columns:
+                df[col] = "Umum"
+            df[col] = df[col].astype(str).str.strip()
+
+    # Hapus duplikat pada sheet forecast & target berdasarkan key penggabung untuk mencegah ledakan kombinasi
+    df_fcst = df_fcst.drop_duplicates(subset=merge_keys)
+    df_tgt = df_tgt.drop_duplicates(subset=merge_keys)
+
+    # GABUNGKAN KETIGA SHEET BERDASARKAN CABANG, GRUP, CATEGORY
+    df_master = df_raw.merge(df_fcst, on=merge_keys, how='left')
+    df_master = df_master.merge(df_tgt, on=merge_keys, how='left')
+
+    # Isi nilai kosong (NaN) dengan 0 agar perhitungan matematika tidak error
+    df_master = df_master.fillna(0)
+
+    # Pastikan kolom Kapasitas & On Hand berformat numerik
+    if 'On Hand' not in df_master.columns:
+        df_master['On Hand'] = 0
+    if 'Kapasitas' not in df_master.columns:
+        df_master['Kapasitas'] = 1000
+        
+    df_master['On Hand'] = pd.to_numeric(df_master['On Hand'], errors='coerce').fillna(0)
+    df_master['Kapasitas'] = pd.to_numeric(df_master['Kapasitas'], errors='coerce').fillna(1000)
+
+    # LAKUKAN ITERASI PERHITUNGAN SEQUENTIAL UNTUK WEEK 1 S/D 16
+    for w in range(1, 17):
+        # Menentukan On Hand Awal (Jika Week 1 pakai 'On Hand' dari raw data, sisanya pakai hasil akhir Week sebelumnya)
+        if w == 1:
+            prev_on_hand_fcst = df_master['On Hand']
+            prev_on_hand_tgt = df_master['On Hand']
+        else:
+            prev_on_hand_fcst = df_master[f'Akhir_FCST_W{w-1}']
+            prev_on_hand_tgt = df_master[f'Akhir_TGT_W{w-1}']
+            
+        # Kolom Dinamis per Minggu
+        col_to = f'TO Week {w}'
+        col_vessel = f'Plan Loading {w}'
+        col_fcst = f'Forecast W{w}'
+        col_tgt = f'Target W{w}'
+        
+        # Ambil nilai dengan default 0 jika kolom tidak terdapat di file
+        val_to = pd.to_numeric(df_master[col_to], errors='coerce').fillna(0) if col_to in df_master.columns else pd.Series(0, index=df_master.index)
+        val_vessel = pd.to_numeric(df_master[col_vessel], errors='coerce').fillna(0) if col_vessel in df_master.columns else pd.Series(0, index=df_master.index)
+        val_fcst = pd.to_numeric(df_master[col_fcst], errors='coerce').fillna(0) if col_fcst in df_master.columns else pd.Series(0, index=df_master.index)
+        val_tgt = pd.to_numeric(df_master[col_tgt], errors='coerce').fillna(0) if col_tgt in df_master.columns else pd.Series(0, index=df_master.index)
+        
+        # LOGIKA A: Simulasi berdasarkan Forecast
+        df_master[f'Akhir_FCST_W{w}'] = prev_on_hand_fcst + val_vessel + val_to - val_fcst
+        
+        # LOGIKA B: Simulasi berdasarkan Target
+        df_master[f'Akhir_TGT_W{w}'] = prev_on_hand_tgt + val_vessel + val_to - val_tgt
+        
+        # LOGIKA C: Hitung Persentase Occupancy
+        kapasitas = df_master['Kapasitas'].replace(0, 1) # Mencegah pembagian dengan 0
+        df_master[f'Occupancy_FCST_W{w} (%)'] = (df_master[f'Akhir_FCST_W{w}'] / kapasitas) * 100.0
+        df_master[f'Occupancy_TGT_W{w} (%)'] = (df_master[f'Akhir_TGT_W{w}'] / kapasitas) * 100.0
+
+    # Persiapkan hasil ekspor ke dict
+    records = df_master.to_dict(orient='records')
+    for r in records:
+        for k, v in list(r.items()):
+            if isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
+                r[k] = 0.0
+            elif isinstance(v, np.number):
+                r[k] = v.item()
+
+    # Hitung rata-rata occupancy untuk summary
+    fcst_cols = [f'Occupancy_FCST_W{w} (%)' for w in range(1, 17)]
+    tgt_cols = [f'Occupancy_TGT_W{w} (%)' for w in range(1, 17)]
+    avg_occ_fcst = float(df_master[fcst_cols].mean().mean()) if not df_master.empty else 0.0
+    avg_occ_tgt = float(df_master[tgt_cols].mean().mean()) if not df_master.empty else 0.0
+
+    return {
+        "status": "success",
+        "total_items": len(records),
+        "summary": {
+            "avg_occupancy_fcst": round(avg_occ_fcst, 2),
+            "avg_occupancy_tgt": round(avg_occ_tgt, 2),
+            "total_records": len(records)
+        },
+        "results": records,
+        "_df": df_master
+    }
+

@@ -96,24 +96,95 @@ const getRouteStopsCount = (r: any): number => {
 };
 
 function generateDemoRoute() {
-  const makeStops = (names: string[]) => names.map((name, idx) => ({ index: idx, name, demand: idx === 0 ? 0 : 10 }));
-  const sampleRoutes = [
-    { vehicle_id: 1, type: 'Dedicated Rute', n_stops: 5, stops: makeStops(['Gudang Pusat (Jakarta)', 'Kelapa Gading', 'Sunter', 'Kemayoran', 'Ancol']), distance_km: 45.8, cost_idr: 420000, duration_mins: 120, load_percent: 92, path: ['Gudang Pusat (Jakarta)', 'Kelapa Gading', 'Sunter', 'Kemayoran', 'Ancol'] },
-    { vehicle_id: 2, type: 'Milk-Run Rute', n_stops: 8, stops: makeStops(['Gudang Pusat (Jakarta)', 'Slipi', 'Kebon Jeruk', 'Puri Indah', 'Cengkareng', 'Kalideres']), distance_km: 68.2, cost_idr: 580000, duration_mins: 185, load_percent: 88, path: ['Gudang Pusat (Jakarta)', 'Slipi', 'Kebon Jeruk', 'Puri Indah', 'Cengkareng', 'Kalideres'] },
-    { vehicle_id: 3, type: 'Dynamic VRP', n_stops: 6, stops: makeStops(['Gudang Pusat (Jakarta)', 'Tebet', 'Pancoran', 'Pasar Minggu', 'Lenteng Agung']), distance_km: 52.1, cost_idr: 485000, duration_mins: 140, load_percent: 95, path: ['Gudang Pusat (Jakarta)', 'Tebet', 'Pancoran', 'Pasar Minggu', 'Lenteng Agung'] },
+  const demoLocations = [
+    { index: 0, name: 'Depot Pusat (Jakarta)', lat: -6.2088, lon: 106.8456, demand: 0, is_depot: true },
+    { index: 1, name: 'Kelapa Gading', lat: -6.1601, lon: 106.9048, demand: 25, is_depot: false },
+    { index: 2, name: 'Sunter', lat: -6.1432, lon: 106.8647, demand: 20, is_depot: false },
+    { index: 3, name: 'Ancol', lat: -6.1265, lon: 106.8322, demand: 30, is_depot: false },
+    { index: 4, name: 'Slipi', lat: -6.1912, lon: 106.8001, demand: 20, is_depot: false },
+    { index: 5, name: 'Kebon Jeruk', lat: -6.1925, lon: 106.7663, demand: 25, is_depot: false },
+    { index: 6, name: 'Puri Indah', lat: -6.1855, lon: 106.7368, demand: 30, is_depot: false },
+    { index: 7, name: 'Tebet', lat: -6.2268, lon: 106.8576, demand: 15, is_depot: false },
+    { index: 8, name: 'Pancoran', lat: -6.2505, lon: 106.8431, demand: 20, is_depot: false },
+    { index: 9, name: 'Pasar Minggu', lat: -6.2845, lon: 106.8428, demand: 25, is_depot: false },
+    { index: 10, name: 'Lenteng Agung', lat: -6.3268, lon: 106.8335, demand: 30, is_depot: false },
   ];
 
+  const createRoute = (id: number, vehicleName: string, stopIndices: number[], dist: number, isDed: boolean) => {
+    const routeStops = stopIndices.map(i => ({ index: i, name: demoLocations[i].name, demand: demoLocations[i].demand }));
+    const load = routeStops.reduce((acc, curr) => acc + curr.demand, 0);
+    return {
+      route_id: id,
+      vehicle_name: vehicleName,
+      is_dedicated: isDed,
+      n_stops: routeStops.length,
+      stops: routeStops,
+      load: load,
+      capacity_pct: Math.round((load / 100) * 100),
+      distance_km: Number(dist.toFixed(1)),
+      path: routeStops.map(s => s.name)
+    };
+  };
+
+  const dedRoute = createRoute(1, 'Armada Dedicated #1', [1, 2, 3], 32.5, true);
+
+  const nnRoutes = [
+    dedRoute,
+    createRoute(2, 'Armada Optimasi (NN) #2', [4, 7, 5], 42.1, false),
+    createRoute(3, 'Armada Optimasi (NN) #3', [6, 8, 9, 10], 58.4, false),
+  ];
+
+  const cwRoutes = [
+    dedRoute,
+    createRoute(2, 'Armada Optimasi (CW) #2', [4, 5, 6], 36.8, false),
+    createRoute(3, 'Armada Optimasi (CW) #3', [7, 8, 9, 10], 48.2, false),
+  ];
+
+  const gaRoutes = [
+    dedRoute,
+    createRoute(2, 'Armada Optimasi (GA) #2', [6, 5, 4], 35.2, false),
+    createRoute(3, 'Armada Optimasi (GA) #3', [7, 8, 9, 10], 46.5, false),
+  ];
+
+  const acoRoutes = [
+    dedRoute,
+    createRoute(2, 'Armada Optimasi (ACO) #2', [4, 5, 6], 33.9, false),
+    createRoute(3, 'Armada Optimasi (ACO) #3', [7, 8, 9, 10], 44.1, false),
+  ];
+
+  const createCost = (dist: number, vehicles: number, timeHours: number) => ({
+    fuel_cost: Math.round(dist * 13500 / 8),
+    driver_cost: Math.round((vehicles * 250000) + (timeHours * 35000)),
+    fixed_cost: vehicles * 150000,
+    maintenance_cost: Math.round(dist * 500),
+    emission_cost: Math.round(dist * 0.00027 * 50000),
+    total_cost: Math.round((dist * 13500 / 8) + (vehicles * 250000) + (timeHours * 35000) + (vehicles * 150000) + (dist * 500) + (dist * 0.00027 * 50000)),
+    estimated_time_hours: timeHours
+  });
+
   const methods = [
-    { method: 'Clarke-Wright Savings', total_distance: 166.1, total_cost: 1485000, avg_load_utilization: 91.6, vehicles_used: 3, carbon_emission_kg: 42.5, routes: sampleRoutes },
-    { method: 'Hybrid ACO (Ant Colony)', total_distance: 158.4, total_cost: 1410000, avg_load_utilization: 94.2, vehicles_used: 3, carbon_emission_kg: 39.1, routes: sampleRoutes.map(r => ({ ...r, distance_km: r.distance_km * 0.95, cost_idr: Math.round(r.cost_idr * 0.95) })) },
-    { method: 'Genetic Algorithm (GA)', total_distance: 162.0, total_cost: 1440000, avg_load_utilization: 92.8, vehicles_used: 3, carbon_emission_kg: 40.8, routes: sampleRoutes.map(r => ({ ...r, distance_km: r.distance_km * 0.97, cost_idr: Math.round(r.cost_idr * 0.97) })) },
+    { method: 'Nearest Neighbor', total_distance_km: 133.0, n_vehicles: 3, n_dedicated_vehicles: 1, n_optimized_vehicles: 2, cost: createCost(133.0, 3, 4.5), routes: nnRoutes },
+    { method: 'Clarke-Wright + 2-opt', total_distance_km: 117.5, n_vehicles: 3, n_dedicated_vehicles: 1, n_optimized_vehicles: 2, cost: createCost(117.5, 3, 4.0), routes: cwRoutes },
+    { method: 'Genetic Algorithm + 2-opt', total_distance_km: 114.2, n_vehicles: 3, n_dedicated_vehicles: 1, n_optimized_vehicles: 2, cost: createCost(114.2, 3, 3.8), routes: gaRoutes },
+    { method: 'Hybrid ACO + 2-opt', total_distance_km: 110.5, n_vehicles: 3, n_dedicated_vehicles: 1, n_optimized_vehicles: 2, cost: createCost(110.5, 3, 3.6), routes: acoRoutes },
   ];
 
   return [{
     label: 'Demo Dataset (Jabodetabek)',
     processed_at: new Date().toISOString(),
+    best_method: 'Hybrid ACO + 2-opt',
+    saving_vs_baseline_pct: 16.9,
+    num_vehicles: 8,
+    num_dedicated_vehicles: 1,
+    locations: demoLocations,
     methods: methods,
-    summary: { best_method: 'Hybrid ACO (Ant Colony)', savings_pct: 12.8, total_customers: 19 }
+    summary: { best_method: 'Hybrid ACO + 2-opt', savings_pct: 16.9, total_customers: 10 },
+    insights: [
+      'Metode terbaik: Hybrid ACO + 2-opt — total cost Rp 1.542.450.',
+      'Penghematan 16.9% dibanding baseline (Nearest Neighbor).',
+      'Penggunaan Armada: 3 unit digunakan dari total 8 kendaraan (Kapasitas per armada: 100 unit).',
+      'Rute Dedicated: 1 kendaraan bertugas pada rute tetap (32.5 km). Rute Selanjutnya (Optimasi): 2 kendaraan diatur oleh sistem.'
+    ]
   }];
 }
 
@@ -505,7 +576,7 @@ Pelanggan,Toko A,-6.210000,106.820000,15,08:00-12:00,30`}
                 let allExportData: any[] = [];
                 
                 results.forEach((groupData: any, groupIdx: number) => {
-                  const bestMethod = groupData.best_method;
+                  const bestMethod = groupData.best_method || groupData.summary?.best_method;
                   if (!bestMethod) return;
                   
                   const methodData = groupData.methods?.find((m: any) => m.method === bestMethod);
@@ -581,34 +652,44 @@ Pelanggan,Toko A,-6.210000,106.820000,15,08:00-12:00,30`}
           </GlassCard>
 
           {/* KPI Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <KPICard
-              title="Metode Terbaik"
-              value={results[selectedGroup].best_method?.split('+')[0]?.trim() || '—'}
-              icon={<Cpu className="w-5 h-5" />}
-            />
-            <KPICard
-              title="Penghematan vs Baseline"
-              value={`${results[selectedGroup].saving_vs_baseline_pct}%`}
-              icon={<TrendingDown className="w-5 h-5" />}
-              trend="vs Nearest Neighbor"
-            />
-            <KPICard
-              title="Total Cost (Best)"
-              value={formatRp(results[selectedGroup].methods?.find((m: any) => m.method === results[selectedGroup].best_method)?.cost?.total_cost || 0)}
-              icon={<DollarSign className="w-5 h-5" />}
-            />
-            <KPICard
-              title="Penggunaan Armada"
-              value={`${results[selectedGroup].methods?.find((m: any) => m.method === results[selectedGroup].best_method)?.n_vehicles || 0} / ${results[selectedGroup].num_vehicles || form.num_vehicles} Unit`}
-              trend={`Dedicated: ${results[selectedGroup].methods?.find((m: any) => m.method === results[selectedGroup].best_method)?.n_dedicated_vehicles ?? form.num_dedicated_vehicles} | Optimasi: ${results[selectedGroup].methods?.find((m: any) => m.method === results[selectedGroup].best_method)?.n_optimized_vehicles ?? 0}`}
-              icon={<Truck className="w-5 h-5" />}
-            />
-          </div>
+          {(() => {
+            const currentGroup = results[selectedGroup] || {};
+            const bestMethodName = currentGroup.best_method || currentGroup.summary?.best_method;
+            const savingsPct = currentGroup.saving_vs_baseline_pct ?? currentGroup.summary?.savings_pct ?? 0;
+            const bestObj = currentGroup.methods?.find((m: any) => m.method === bestMethodName) || currentGroup.methods?.[0];
+
+            return (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <KPICard
+                  title="Metode Terbaik"
+                  value={bestMethodName?.split('+')[0]?.trim() || '—'}
+                  icon={<Cpu className="w-5 h-5" />}
+                />
+                <KPICard
+                  title="Penghematan vs Baseline"
+                  value={`${savingsPct}%`}
+                  icon={<TrendingDown className="w-5 h-5" />}
+                  trend="vs Nearest Neighbor"
+                />
+                <KPICard
+                  title="Total Cost (Best)"
+                  value={formatRp(bestObj?.cost?.total_cost || 0)}
+                  icon={<DollarSign className="w-5 h-5" />}
+                />
+                <KPICard
+                  title="Penggunaan Armada"
+                  value={`${bestObj?.n_vehicles || 0} / ${currentGroup.num_vehicles || form.num_vehicles} Unit`}
+                  trend={`Dedicated: ${bestObj?.n_dedicated_vehicles ?? form.num_dedicated_vehicles} | Optimasi: ${bestObj?.n_optimized_vehicles ?? 0}`}
+                  icon={<Truck className="w-5 h-5" />}
+                />
+              </div>
+            );
+          })()}
 
           {/* 🏆 BANNER: REKOMENDASI RUTE PALING OK */}
           {(() => {
-            const bestMethodName = results[selectedGroup]?.best_method;
+            const bestMethodName = results[selectedGroup]?.best_method || results[selectedGroup]?.summary?.best_method;
+            const savingsPct = results[selectedGroup]?.saving_vs_baseline_pct ?? results[selectedGroup]?.summary?.savings_pct ?? 0;
             const bestObj = results[selectedGroup]?.methods?.find((m: any) => m.method === bestMethodName) || results[selectedGroup]?.methods?.[0];
             const bestIdx = results[selectedGroup]?.methods?.findIndex((m: any) => m.method === bestMethodName);
 
@@ -627,7 +708,7 @@ Pelanggan,Toko A,-6.210000,106.820000,15,08:00-12:00,30`}
                       <span>🏆 {bestMethodName}</span>
                     </h3>
                     <p className="text-slate-200 text-sm sm:text-base leading-relaxed">
-                      Berdasarkan analisis komputasi VRP (Vehicle Routing Problem), metode ini terbukti <b>Paling OK</b> dan optimal karena memberikan efisiensi tertinggi dengan penghematan biaya <b className="text-emerald-300 font-extrabold">{results[selectedGroup]?.saving_vs_baseline_pct}%</b> berbanding rute konvensional (Nearest Neighbor).
+                      Berdasarkan analisis komputasi VRP (Vehicle Routing Problem), metode ini terbukti <b>Paling OK</b> dan optimal karena memberikan efisiensi tertinggi dengan penghematan biaya <b className="text-emerald-300 font-extrabold">{savingsPct}%</b> berbanding rute konvensional (Nearest Neighbor).
                     </p>
                     <div className="flex flex-wrap items-center gap-3 text-xs font-bold pt-1 text-slate-300">
                       <span className="px-3.5 py-1.5 rounded-xl bg-slate-900/90 border border-slate-700 flex items-center gap-1.5 shadow">
@@ -682,7 +763,7 @@ Pelanggan,Toko A,-6.210000,106.820000,15,08:00-12:00,30`}
                 </thead>
                 <tbody className="divide-y divide-border/50">
                   {results[selectedGroup].methods?.map((m: any, idx: number) => {
-                    const isBest = m.method === results[selectedGroup].best_method;
+                    const isBest = m.method === (results[selectedGroup].best_method || results[selectedGroup].summary?.best_method);
                     return (
                       <tr
                         key={m.method}
@@ -829,7 +910,7 @@ Pelanggan,Toko A,-6.210000,106.820000,15,08:00-12:00,30`}
                     </thead>
                     <tbody className="divide-y divide-slate-800 text-slate-300 text-center font-medium">
                       {results[selectedGroup]?.methods?.flatMap((m: any, mIdx: number) => {
-                        const isBestMethod = m.method === results[selectedGroup].best_method;
+                        const isBestMethod = m.method === (results[selectedGroup].best_method || results[selectedGroup].summary?.best_method);
                         const routes = Array.isArray(m.routes) ? m.routes : [];
                         return routes.map((r: any, rIdx: number) => ({
                           ...r,

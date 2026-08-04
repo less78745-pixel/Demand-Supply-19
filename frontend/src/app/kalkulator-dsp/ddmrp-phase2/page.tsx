@@ -9,9 +9,9 @@ import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import { FileUploader } from '@/components/ui/FileUploader';
 import {
   Layers, Activity, TrendingUp, AlertTriangle, CheckCircle2,
-  Cpu, Sparkles, RefreshCw, FileSpreadsheet, Download,
+  Cpu, Sparkles, RefreshCw, FileSpreadsheet, Download, Upload,
   GitMerge, Calendar, ArrowRight, ShieldCheck, HelpCircle,
-  BarChart3, Box, Zap
+  BarChart3, Box, Zap, Filter, Search, Table as TableIcon
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { get, set } from 'idb-keyval';
@@ -259,6 +259,62 @@ function calculateDDMRPPhase2(rows: DDMRPPhase2Row[], activeScenario: ScenarioTy
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+//  PROYEKSI INVENTORY & OCCUPANCY (16 WEEKS - DDMRP LOGIC) HELPERS
+// ══════════════════════════════════════════════════════════════════════════════
+
+function run16WeekProjectionCalculation(items: any[]): any[] {
+  return items.map(row => {
+    const calculated: any = { ...row };
+    const kapasitas = Number(row.Kapasitas) || 1000;
+    const kapUse = kapasitas === 0 ? 1 : kapasitas;
+    
+    for (let w = 1; w <= 16; w++) {
+      const prevFcst = w === 1 ? (Number(row['On Hand']) || 0) : Number(calculated[`Akhir_FCST_W${w-1}`] || 0);
+      const prevTgt = w === 1 ? (Number(row['On Hand']) || 0) : Number(calculated[`Akhir_TGT_W${w-1}`] || 0);
+      
+      const toVal = Number(row[`TO Week ${w}`]) || 0;
+      const vesselVal = Number(row[`Plan Loading ${w}`]) || 0;
+      const fcstVal = Number(row[`Forecast W${w}`]) || 0;
+      const tgtVal = Number(row[`Target W${w}`]) || 0;
+      
+      // LOGIKA A: Simulasi berdasarkan Forecast
+      const akhirFcst = prevFcst + vesselVal + toVal - fcstVal;
+      calculated[`Akhir_FCST_W${w}`] = Math.round(akhirFcst);
+      
+      // LOGIKA B: Simulasi berdasarkan Target
+      const akhirTgt = prevTgt + vesselVal + toVal - tgtVal;
+      calculated[`Akhir_TGT_W${w}`] = Math.round(akhirTgt);
+      
+      // LOGIKA C: Hitung Persentase Occupancy
+      calculated[`Occupancy_FCST_W${w} (%)`] = Number(((akhirFcst / kapUse) * 100).toFixed(2));
+      calculated[`Occupancy_TGT_W${w} (%)`] = Number(((akhirTgt / kapUse) * 100).toFixed(2));
+    }
+    return calculated;
+  });
+}
+
+function generateDemoProjection(): any[] {
+  const sampleRaw = [
+    { cabang: 'Surabaya', grup: 'Minyak Goreng', Category: 'Minyak Premium 2L', Kapasitas: 10000, 'On Hand': 5200 },
+    { cabang: 'Jakarta', grup: 'Beras & Biji', Category: 'Beras Setra Ramos 5kg', Kapasitas: 15000, 'On Hand': 8400 },
+    { cabang: 'Medan', grup: 'Gula & Tepung', Category: 'Gula Pasir 1kg', Kapasitas: 8000, 'On Hand': 4100 },
+    { cabang: 'Semarang', grup: 'Minuman Ringan', Category: 'Teh Botol Kemasan', Kapasitas: 12000, 'On Hand': 6300 },
+    { cabang: 'Makassar', grup: 'Bumbu Dapur', Category: 'Kecap Manis Refill 520ml', Kapasitas: 6500, 'On Hand': 3100 },
+  ];
+  const items = sampleRaw.map((r: any, idx) => {
+    const row: any = { id: `PROJ-${idx+1}`, ...r };
+    for (let w = 1; w <= 16; w++) {
+      row[`TO Week ${w}`] = Math.round(400 + Math.sin(w)*100);
+      row[`Plan Loading ${w}`] = Math.round(800 + Math.cos(w)*200);
+      row[`Forecast W${w}`] = Math.round(1000 + Math.sin(w)*150);
+      row[`Target W${w}`] = Math.round(1050 + Math.cos(w)*120);
+    }
+    return row;
+  });
+  return run16WeekProjectionCalculation(items);
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 //  MAIN COMPONENT
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -270,6 +326,219 @@ export default function DDMRPPhase2Page() {
   const [selectedCategory, setSelectedCategory] = useState<string[]>(['All']);
   const [selectedItemForChart, setSelectedItemForChart] = useState<string>('');
   const [showHowTo, setShowHowTo] = useState<boolean>(false);
+
+  // State untuk Fitur Proyeksi Inventory & Occupancy (16 Weeks - 3 Sheet Excel)
+  const [activeTab, setActiveTab] = useState<'rolling' | 'projection'>('rolling');
+  const [projectionData, setProjectionData] = useState<any[]>([]);
+  const [projSelectedCabang, setProjSelectedCabang] = useState<string[]>(['All']);
+  const [projSelectedGrup, setProjSelectedGrup] = useState<string[]>(['All']);
+  const [projSelectedCategory, setProjSelectedCategory] = useState<string[]>(['All']);
+  
+  // State untuk filter ala Excel pada tabel Proyeksi
+  const [projFilterCabang, setProjFilterCabang] = useState<string>('');
+  const [projFilterGrup, setProjFilterGrup] = useState<string>('');
+  const [projFilterCategory, setProjFilterCategory] = useState<string>('');
+
+  useEffect(() => {
+    // Automount demo projection data if empty
+    if (projectionData.length === 0) {
+      setProjectionData(generateDemoProjection());
+    }
+  }, [projectionData.length]);
+
+  const handleGenerateDemoProjection = () => {
+    const demo = generateDemoProjection();
+    setProjectionData(demo);
+    toast.success('🎉 Data Demo Proyeksi Inventory & Occupancy 16-Weeks Berhasil Dimuat!');
+  };
+
+  const handleDownloadProjectionTemplate = () => {
+    const sampleRaw = [
+      { cabang: 'Surabaya', grup: 'Minyak Goreng', Category: 'Minyak Premium 2L', Kapasitas: 10000, 'On Hand': 5000 },
+      { cabang: 'Jakarta', grup: 'Beras & Biji', Category: 'Beras Setra Ramos 5kg', Kapasitas: 15000, 'On Hand': 7500 },
+      { cabang: 'Medan', grup: 'Gula & Tepung', Category: 'Gula Pasir 1kg', Kapasitas: 8000, 'On Hand': 3200 },
+    ];
+    sampleRaw.forEach((row: any) => {
+      for (let w = 1; w <= 16; w++) {
+        row[`TO Week ${w}`] = Math.round(500 + Math.random() * 300);
+        row[`Plan Loading ${w}`] = Math.round(800 + Math.random() * 400);
+      }
+    });
+
+    const sampleFcst = sampleRaw.map(r => {
+      const row: any = { cabang: r.cabang, grup: r.grup, Category: r.Category };
+      for (let w = 1; w <= 16; w++) {
+        row[`Forecast W${w}`] = Math.round(900 + Math.random() * 200);
+      }
+      return row;
+    });
+
+    const sampleTgt = sampleRaw.map(r => {
+      const row: any = { cabang: r.cabang, grup: r.grup, Category: r.Category };
+      for (let w = 1; w <= 16; w++) {
+        row[`Target W${w}`] = Math.round(950 + Math.random() * 250);
+      }
+      return row;
+    });
+
+    const wb = XLSX.utils.book_new();
+    const wsRaw = XLSX.utils.json_to_sheet(sampleRaw);
+    const wsFcst = XLSX.utils.json_to_sheet(sampleFcst);
+    const wsTgt = XLSX.utils.json_to_sheet(sampleTgt);
+
+    XLSX.utils.book_append_sheet(wb, wsRaw, "Raw Data");
+    XLSX.utils.book_append_sheet(wb, wsFcst, "Forecast");
+    XLSX.utils.book_append_sheet(wb, wsTgt, "Target");
+
+    XLSX.writeFile(wb, "Data_DDMRP.xlsx");
+    toast.success("📁 Template Data_DDMRP.xlsx (3 Sheet) Berhasil Diunduh!");
+  };
+
+  const handleProjectionFileUpload = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const buffer = e.target?.result;
+        if (!buffer) return;
+        const data = new Uint8Array(buffer as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        
+        if (workbook.SheetNames.length === 0) {
+          toast.error('File Excel tidak valid!');
+          return;
+        }
+        
+        const sheetRaw = workbook.Sheets[workbook.SheetNames[0]];
+        const sheetFcst = workbook.SheetNames.length > 1 ? workbook.Sheets[workbook.SheetNames[1]] : sheetRaw;
+        const sheetTgt = workbook.SheetNames.length > 2 ? workbook.Sheets[workbook.SheetNames[2]] : (workbook.SheetNames.length > 1 ? sheetFcst : sheetRaw);
+        
+        const rowsRaw = XLSX.utils.sheet_to_json(sheetRaw) as any[];
+        const rowsFcst = XLSX.utils.sheet_to_json(sheetFcst) as any[];
+        const rowsTgt = XLSX.utils.sheet_to_json(sheetTgt) as any[];
+        
+        if (!rowsRaw || rowsRaw.length === 0) {
+          toast.error('Sheet 1 (Raw Data) kosong!');
+          return;
+        }
+        
+        const getKey = (item: any) => `${String(item.cabang||item.Cabang||'Umum').trim()}_${String(item.grup||item.Grup||'Umum').trim()}_${String(item.Category||item.category||item.Kategori||'Umum').trim()}`;
+        
+        const fcstMap = new Map<string, any>();
+        rowsFcst.forEach(r => fcstMap.set(getKey(r), r));
+        
+        const tgtMap = new Map<string, any>();
+        rowsTgt.forEach(r => tgtMap.set(getKey(r), r));
+        
+        const mergedRows = rowsRaw.map((raw, idx) => {
+          const key = getKey(raw);
+          const fcst = fcstMap.get(key) || {};
+          const tgt = tgtMap.get(key) || {};
+          
+          return {
+            id: `UPL-${idx+1}`,
+            ...raw,
+            cabang: String(raw.cabang||raw.Cabang||'Umum').trim(),
+            grup: String(raw.grup||raw.Grup||'Umum').trim(),
+            Category: String(raw.Category||raw.category||raw.Kategori||'Umum').trim(),
+            Kapasitas: Number(raw.Kapasitas||raw.kapasitas||1000),
+            'On Hand': Number(raw['On Hand']||raw.onHand||raw['On_Hand']||0),
+            ...fcst,
+            ...tgt
+          };
+        });
+        
+        const processed = run16WeekProjectionCalculation(mergedRows);
+        setProjectionData(processed);
+        toast.success(`✅ Berhasil memproses 3 Sheet Excel (${processed.length} kombinasi) untuk Proyeksi DDMRP!`);
+      } catch (err) {
+        console.error('Error processing 3-sheet Excel:', err);
+        toast.error('Gagal memproses file Data_DDMRP.xlsx.');
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const handleDownloadHasilProyeksi = () => {
+    if (projectionData.length === 0) {
+      toast.error("Tidak ada data proyeksi untuk diekspor!");
+      return;
+    }
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(projectionData);
+    XLSX.utils.book_append_sheet(wb, ws, "Proyeksi DDMRP");
+    XLSX.writeFile(wb, "Hasil_Proyeksi_DDMRP.xlsx");
+    toast.success("📊 File Hasil_Proyeksi_DDMRP.xlsx Berhasil Disimpan!");
+  };
+
+  const projCabangs = useMemo(() => ['All', ...Array.from(new Set(projectionData.map(d => d.cabang))).sort()], [projectionData]);
+  const projGrups = useMemo(() => ['All', ...Array.from(new Set(projectionData.map(d => d.grup))).sort()], [projectionData]);
+  const projCategories = useMemo(() => ['All', ...Array.from(new Set(projectionData.map(d => d.Category || d.category))).sort()], [projectionData]);
+
+  const filteredProjectionData = useMemo(() => {
+    return projectionData.filter(item => {
+      const matchCbg = projSelectedCabang.includes('All') || projSelectedCabang.includes(item.cabang);
+      const matchGrup = projSelectedGrup.includes('All') || projSelectedGrup.includes(item.grup);
+      const matchCat = projSelectedCategory.includes('All') || projSelectedCategory.includes(item.Category || item.category);
+      
+      const txtCbg = projFilterCabang ? String(item.cabang||'').toLowerCase().includes(projFilterCabang.toLowerCase()) : true;
+      const txtGrup = projFilterGrup ? String(item.grup||'').toLowerCase().includes(projFilterGrup.toLowerCase()) : true;
+      const txtCat = projFilterCategory ? String(item.Category||item.category||'').toLowerCase().includes(projFilterCategory.toLowerCase()) : true;
+
+      return matchCbg && matchGrup && matchCat && txtCbg && txtGrup && txtCat;
+    });
+  }, [projectionData, projSelectedCabang, projSelectedGrup, projSelectedCategory, projFilterCabang, projFilterGrup, projFilterCategory]);
+
+  const projKpis = useMemo(() => {
+    if (filteredProjectionData.length === 0) return { count: 0, totalKapasitas: 0, avgFcstOcc: 0, avgTgtOcc: 0 };
+    let kapSum = 0;
+    let fcstOccSum = 0;
+    let tgtOccSum = 0;
+
+    filteredProjectionData.forEach(item => {
+      kapSum += Number(item.Kapasitas) || 0;
+      let fSum = 0;
+      let tSum = 0;
+      for (let w = 1; w <= 16; w++) {
+        fSum += Number(item[`Occupancy_FCST_W${w} (%)`]) || 0;
+        tSum += Number(item[`Occupancy_TGT_W${w} (%)`]) || 0;
+      }
+      fcstOccSum += fSum / 16;
+      tgtOccSum += tSum / 16;
+    });
+
+    return {
+      count: filteredProjectionData.length,
+      totalKapasitas: kapSum,
+      avgFcstOcc: Number((fcstOccSum / filteredProjectionData.length).toFixed(2)),
+      avgTgtOcc: Number((tgtOccSum / filteredProjectionData.length).toFixed(2))
+    };
+  }, [filteredProjectionData]);
+
+  const projChartSeries = useMemo(() => {
+    if (filteredProjectionData.length === 0) return [];
+    const series = [];
+    for (let w = 1; w <= 16; w++) {
+      let fcstOcc = 0;
+      let tgtOcc = 0;
+      let fcstStock = 0;
+      let tgtStock = 0;
+      filteredProjectionData.forEach(item => {
+        fcstOcc += Number(item[`Occupancy_FCST_W${w} (%)`]) || 0;
+        tgtOcc += Number(item[`Occupancy_TGT_W${w} (%)`]) || 0;
+        fcstStock += Number(item[`Akhir_FCST_W${w}`]) || 0;
+        tgtStock += Number(item[`Akhir_TGT_W${w}`]) || 0;
+      });
+      const n = filteredProjectionData.length;
+      series.push({
+        week: `W${w}`,
+        'Avg Occupancy Forecast (%)': Number((fcstOcc / n).toFixed(1)),
+        'Avg Occupancy Target (%)': Number((tgtOcc / n).toFixed(1)),
+        'Total Akhir Forecast Qty': Math.round(fcstStock),
+        'Total Akhir Target Qty': Math.round(tgtStock)
+      });
+    }
+    return series;
+  }, [filteredProjectionData]);
 
   useEffect(() => {
     get('last_ddmrp_phase2_state').then(saved => {
@@ -522,6 +791,37 @@ export default function DDMRPPhase2Page() {
         </div>
       </div>
 
+      {/* ─── TAB NAVIGATION: ROLLING VS PROYEKSI INVENTORY & OCCUPANCY ─── */}
+      <div className="flex flex-wrap gap-3 p-2 bg-slate-900/90 rounded-2xl border border-indigo-500/30 shadow-xl">
+        <button
+          onClick={() => setActiveTab('rolling')}
+          className={`flex-1 min-w-[240px] py-3 px-5 rounded-xl font-extrabold text-sm transition flex items-center justify-center gap-2.5 shadow-md ${
+            activeTab === 'rolling'
+              ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-indigo-500/30'
+              : 'bg-slate-800/50 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+          }`}
+        >
+          <Layers className="w-4 h-4 text-indigo-400" />
+          1. Simulasi Rolling 4-Month (3 Jalur Skenario)
+        </button>
+        <button
+          onClick={() => {
+            setActiveTab('projection');
+            if (projectionData.length === 0) handleGenerateDemoProjection();
+          }}
+          className={`flex-1 min-w-[240px] py-3 px-5 rounded-xl font-extrabold text-sm transition flex items-center justify-center gap-2.5 shadow-md ${
+            activeTab === 'projection'
+              ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-emerald-500/30'
+              : 'bg-slate-800/50 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+          }`}
+        >
+          <BarChart3 className="w-4 h-4 text-emerald-400" />
+          2. Proyeksi Inventory & Occupancy (16 Weeks - 3 Sheet Excel)
+        </button>
+      </div>
+
+      {activeTab === 'rolling' && (
+      <div className="space-y-8 animate-fade-in">
       {/* ─── PANDUAN, TEMPLATE & UPLOAD SECTION ─── */}
       {showHowTo && (
         <GlassCard className="p-6 border-indigo-500/30 bg-slate-900/80 backdrop-blur-xl animate-fade-in">
@@ -843,6 +1143,310 @@ export default function DDMRPPhase2Page() {
           </table>
         </div>
       </GlassCard>
+      </div>
+      )}
+
+      {/* ─── MODE 2: PROYEKSI INVENTORY & OCCUPANCY (16 WEEKS - 3 SHEET EXCEL) ─── */}
+      {activeTab === 'projection' && (
+        <div className="space-y-8 animate-fade-in">
+          {/* PANDUAN & UPLOAD SECTION FOR 3 SHEET EXCEL */}
+          <GlassCard className="p-6 border-emerald-500/30 bg-slate-900/80 backdrop-blur-xl">
+            <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-white/10 pb-4 mb-6 gap-4">
+              <div>
+                <h3 className="text-lg sm:text-xl font-extrabold text-white flex items-center gap-2">
+                  <FileSpreadsheet className="w-6 h-6 text-emerald-400" /> Proyeksi Inventory & Occupancy (DDMRP Logic - 16 Weeks)
+                </h3>
+                <p className="text-xs sm:text-sm text-slate-300 mt-1">
+                  Simulasi 16 minggu beruntun (W1 s/d W16) untuk mengevaluasi posisi stok dan rasio okupansi kapasitas gudang berdasarkan Forecast dan Target Sales.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={handleDownloadProjectionTemplate}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-emerald-600/20"
+                >
+                  <Download className="w-4 h-4" /> Unduh Template Data_DDMRP.xlsx (3 Sheet)
+                </button>
+                <button
+                  onClick={handleGenerateDemoProjection}
+                  className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-emerald-500/20"
+                >
+                  <Sparkles className="w-4 h-4" /> Gunakan Data Demo Proyeksi
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+              <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800 space-y-2 text-sm text-slate-300">
+                <h4 className="font-semibold text-emerald-400 flex items-center gap-1.5">
+                  <TableIcon className="w-4 h-4" /> Prasyarat Format File Excel (&apos;Data_DDMRP.xlsx&apos;):
+                </h4>
+                <ul className="list-disc pl-5 space-y-1.5 text-xs sm:text-sm text-slate-300">
+                  <li><b>Sheet 1 (&apos;Raw Data&apos;):</b> Kolom <code className="text-amber-300 bg-slate-800 px-1 rounded">cabang, grup, Category, Kapasitas, On Hand, TO Week 1 s/d TO Week 16, Plan Loading 1 s/d Plan Loading 16</code>.</li>
+                  <li><b>Sheet 2 (&apos;Forecast&apos;):</b> Kolom <code className="text-cyan-300 bg-slate-800 px-1 rounded">cabang, grup, Category, Forecast W1 s/d Forecast W16</code>.</li>
+                  <li><b>Sheet 3 (&apos;Target&apos;):</b> Kolom <code className="text-indigo-300 bg-slate-800 px-1 rounded">cabang, grup, Category, Target W1 s/d Target W16</code>.</li>
+                  <li>Sistem akan menggabungkan ke-3 sheet secara otomatis dan melakukan kalkulasi beruntun (sequential) dari W1 hingga W16 serta mencegah pembagian nol pada Occupancy.</li>
+                </ul>
+              </div>
+
+              <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800 flex flex-col justify-center">
+                <h4 className="text-sm font-semibold text-slate-200 mb-3 flex items-center gap-2">
+                  <Upload className="w-4 h-4 text-teal-400" /> Upload File Data_DDMRP.xlsx Anda
+                </h4>
+                <FileUploader
+                  onFileUpload={handleProjectionFileUpload}
+                  label="Upload Data_DDMRP.xlsx"
+                  description="Klik atau tarik file Data_DDMRP.xlsx (berisi 3 sheet) ke area ini"
+                />
+              </div>
+            </div>
+          </GlassCard>
+
+          {/* KPI CARDS PROYEKSI */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <KPICard
+              title="Total Kombinasi Item"
+              value={`${projKpis.count} Kombinasi`}
+              trend="Cabang - Grup - Category"
+              icon={<Box className="w-5 h-5 text-emerald-400" />}
+              className="border-emerald-500/20 bg-emerald-500/5 hover:border-emerald-500/40 transition"
+            />
+            <KPICard
+              title="Total Kapasitas Gudang"
+              value={`${projKpis.totalKapasitas.toLocaleString('id-ID')} Qty`}
+              trend="Kapasitas Maksimal"
+              icon={<Layers className="w-5 h-5 text-blue-400" />}
+              className="border-blue-500/20 bg-blue-500/5 hover:border-blue-500/40 transition"
+            />
+            <KPICard
+              title="Rata-rata Occupancy (FCST)"
+              value={`${projKpis.avgFcstOcc}%`}
+              trend="Proyeksi W1 - W16 (Forecast)"
+              icon={<TrendingUp className="w-5 h-5 text-cyan-400" />}
+              className="border-cyan-500/20 bg-cyan-500/5 hover:border-cyan-500/40 transition"
+            />
+            <KPICard
+              title="Rata-rata Occupancy (Target)"
+              value={`${projKpis.avgTgtOcc}%`}
+              trend="Proyeksi W1 - W16 (Target)"
+              icon={<Activity className="w-5 h-5 text-purple-400" />}
+              className="border-purple-500/20 bg-purple-500/5 hover:border-purple-500/40 transition"
+            />
+          </div>
+
+          {/* FILTER MULTI-SELECT PROYEKSI */}
+          <GlassCard className="p-5 border-emerald-500/20 bg-slate-900/60 backdrop-blur-md">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <span className="text-sm font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-2">
+                <Filter className="w-4 h-4" /> Filter Data Proyeksi:
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 w-full sm:w-auto flex-1">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-400 block uppercase tracking-wider">🏢 Filter Cabang:</label>
+                  <MultiSelect
+                    options={projCabangs}
+                    selected={projSelectedCabang}
+                    onChange={setProjSelectedCabang}
+                    placeholder="Pilih Cabang..."
+                    selectAllLabel="Semua Cabang"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-400 block uppercase tracking-wider">🏷️ Filter Grup:</label>
+                  <MultiSelect
+                    options={projGrups}
+                    selected={projSelectedGrup}
+                    onChange={setProjSelectedGrup}
+                    placeholder="Pilih Grup..."
+                    selectAllLabel="Semua Grup"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-400 block uppercase tracking-wider">📦 Filter Category:</label>
+                  <MultiSelect
+                    options={projCategories}
+                    selected={projSelectedCategory}
+                    onChange={setProjSelectedCategory}
+                    placeholder="Pilih Category..."
+                    selectAllLabel="Semua Category"
+                  />
+                </div>
+              </div>
+            </div>
+          </GlassCard>
+
+          {/* GRAFIK PROYEKSI OCCUPANCY W1-W16 */}
+          <GlassCard className="p-6 border-slate-800 bg-slate-900/80 shadow-2xl">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 mb-6 border-b border-white/10 gap-3">
+              <div>
+                <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+                  <TrendingUp className="w-5 h-5 text-emerald-400" /> Grafik Proyeksi Rata-rata Occupancy (%) & Ending Stock (W1 s/d W16)
+                </h3>
+                <p className="text-xs sm:text-sm text-slate-400">
+                  Perbandingan tren Occupancy berdasarkan jalur Forecast vs jalur Target selama 16 minggu ke depan.
+                </p>
+              </div>
+            </div>
+
+            <div className="h-[360px] w-full pt-2">
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={projChartSeries} margin={{ top: 10, right: 30, left: 10, bottom: 20 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
+                  <XAxis dataKey="week" stroke="#94a3b8" tick={{ fill: '#e2e8f0', fontSize: 12 }} />
+                  <YAxis yAxisId="left" stroke="#10b981" tick={{ fill: '#10b981', fontSize: 12 }} label={{ value: 'Occupancy (%)', angle: -90, position: 'insideLeft', fill: '#10b981', fontSize: 12 }} />
+                  <YAxis yAxisId="right" orientation="right" stroke="#38bdf8" tick={{ fill: '#38bdf8', fontSize: 12 }} label={{ value: 'Stock Qty', angle: 90, position: 'insideRight', fill: '#38bdf8', fontSize: 12 }} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '0.75rem', color: '#fff', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)' }}
+                    formatter={(value: any, name: any) => [typeof value === 'number' ? value.toLocaleString('id-ID') + (name.toString().includes('%') ? ' %' : ' Qty') : value, name]}
+                  />
+                  <Legend wrapperStyle={{ paddingTop: '16px' }} />
+                  <Bar yAxisId="right" dataKey="Total Akhir Forecast Qty" fill="#0284c7" fillOpacity={0.6} radius={[4, 4, 0, 0]} name="Total Stock Forecast (Qty)" />
+                  <Bar yAxisId="right" dataKey="Total Akhir Target Qty" fill="#0d9488" fillOpacity={0.6} radius={[4, 4, 0, 0]} name="Total Stock Target (Qty)" />
+                  <Line yAxisId="left" type="monotone" dataKey="Avg Occupancy Forecast (%)" stroke="#38bdf8" strokeWidth={3} dot={{ r: 4, fill: '#38bdf8' }} name="Avg Occupancy Forecast (%)" />
+                  <Line yAxisId="left" type="monotone" dataKey="Avg Occupancy Target (%)" stroke="#10b981" strokeWidth={3} dot={{ r: 4, fill: '#10b981' }} name="Avg Occupancy Target (%)" />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          </GlassCard>
+
+          {/* TABEL PROYEKSI 16 WEEKS DENGAN FILTER EXCEL */}
+          <GlassCard className="p-6 border-slate-800 bg-slate-900/80 shadow-2xl">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 mb-4 border-b border-white/10 gap-4">
+              <div>
+                <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+                  <FileSpreadsheet className="w-5 h-5 text-emerald-400" /> Tabel Detail Proyeksi Inventory & Occupancy W1 s/d W16
+                </h3>
+                <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
+                  Menampilkan {filteredProjectionData.length} Kombinasi Item dari hasil kalkulasi DDMRP beruntun.
+                </p>
+              </div>
+              <button
+                onClick={handleDownloadHasilProyeksi}
+                className="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-bold text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-emerald-500/20"
+              >
+                <Download className="w-4 h-4" /> Download Hasil_Proyeksi_DDMRP.xlsx
+              </button>
+            </div>
+
+            {/* AREA FILTER EXCEL UNTUK TABEL */}
+            <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800 mb-4 flex flex-wrap gap-3 items-center">
+              <span className="text-xs font-bold uppercase text-emerald-400 flex items-center gap-1.5">
+                <Filter className="w-3.5 h-3.5" /> Excel-Style Column Filters:
+              </span>
+              <div className="flex items-center gap-2 bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-700">
+                <Search className="w-3.5 h-3.5 text-slate-400" />
+                <input
+                  type="text"
+                  value={projFilterCabang}
+                  onChange={(e) => setProjFilterCabang(e.target.value)}
+                  placeholder="Filter kolom Cabang..."
+                  className="bg-transparent text-xs text-white placeholder-slate-500 focus:outline-none w-36"
+                />
+              </div>
+              <div className="flex items-center gap-2 bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-700">
+                <Search className="w-3.5 h-3.5 text-slate-400" />
+                <input
+                  type="text"
+                  value={projFilterGrup}
+                  onChange={(e) => setProjFilterGrup(e.target.value)}
+                  placeholder="Filter kolom Grup..."
+                  className="bg-transparent text-xs text-white placeholder-slate-500 focus:outline-none w-36"
+                />
+              </div>
+              <div className="flex items-center gap-2 bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-700">
+                <Search className="w-3.5 h-3.5 text-slate-400" />
+                <input
+                  type="text"
+                  value={projFilterCategory}
+                  onChange={(e) => setProjFilterCategory(e.target.value)}
+                  placeholder="Filter kolom Category..."
+                  className="bg-transparent text-xs text-white placeholder-slate-500 focus:outline-none w-40"
+                />
+              </div>
+              {(projFilterCabang || projFilterGrup || projFilterCategory) && (
+                <button
+                  onClick={() => { setProjFilterCabang(''); setProjFilterGrup(''); setProjFilterCategory(''); }}
+                  className="text-xs font-semibold text-rose-400 hover:text-rose-300 underline ml-2"
+                >
+                  Reset Filter
+                </button>
+              )}
+            </div>
+
+            <div className="overflow-x-auto rounded-xl border border-slate-800 max-h-[600px] shadow-inner">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead className="bg-slate-950 text-slate-300 font-bold uppercase tracking-wider sticky top-0 z-20 border-b border-slate-800">
+                  <tr>
+                    <th rowSpan={2} className="py-3 px-3 border-r border-slate-800 bg-slate-950/95 sticky left-0 z-30">Cabang</th>
+                    <th rowSpan={2} className="py-3 px-3 border-r border-slate-800 bg-slate-950/95">Grup</th>
+                    <th rowSpan={2} className="py-3 px-3 border-r border-slate-800 bg-slate-950/95">Category</th>
+                    <th rowSpan={2} className="py-3 px-3.5 border-r border-slate-800 bg-slate-950/95 text-right">Kapasitas</th>
+                    <th rowSpan={2} className="py-3 px-3.5 border-r border-slate-800 bg-slate-950/95 text-right">On Hand Awal</th>
+                    {Array.from({ length: 16 }, (_, i) => i + 1).map(w => (
+                      <th key={w} colSpan={4} className="py-2 px-2 text-center border-b border-r border-slate-800 bg-slate-900 text-indigo-300">
+                        Week {w}
+                      </th>
+                    ))}
+                  </tr>
+                  <tr>
+                    {Array.from({ length: 16 }, (_, i) => i + 1).map(w => (
+                      <React.Fragment key={w}>
+                        <th className="py-1.5 px-2 text-[10px] text-right text-slate-300 border-r border-slate-800 bg-slate-950/90" title="Stok Akhir berdasarkan Forecast">Akhir FCST</th>
+                        <th className="py-1.5 px-2 text-[10px] text-right text-cyan-400 border-r border-slate-800 bg-slate-950/90" title="Occupancy Forecast (%)">Occ FCST (%)</th>
+                        <th className="py-1.5 px-2 text-[10px] text-right text-slate-300 border-r border-slate-800 bg-slate-950/90" title="Stok Akhir berdasarkan Target">Akhir TGT</th>
+                        <th className="py-1.5 px-2 text-[10px] text-right text-emerald-400 border-r border-slate-800 bg-slate-950/90" title="Occupancy Target (%)">Occ TGT (%)</th>
+                      </React.Fragment>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800">
+                  {filteredProjectionData.length === 0 ? (
+                    <tr>
+                      <td colSpan={5 + 16 * 4} className="py-8 text-center text-slate-400 font-medium">
+                        Tidak ada data yang sesuai filter. Silakan gunakan Data Demo atau upload file Data_DDMRP.xlsx.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredProjectionData.map((row, idx) => (
+                      <tr key={idx} className="hover:bg-slate-800/50 transition">
+                        <td className="py-2.5 px-3 border-r border-slate-800 font-bold text-white bg-slate-900/80 sticky left-0 z-10 whitespace-nowrap">{row.cabang}</td>
+                        <td className="py-2.5 px-3 border-r border-slate-800 text-slate-300 whitespace-nowrap">{row.grup}</td>
+                        <td className="py-2.5 px-3 border-r border-slate-800 font-semibold text-slate-200 whitespace-nowrap">{row.Category || row.category}</td>
+                        <td className="py-2.5 px-3.5 border-r border-slate-800 text-right font-mono text-amber-300 font-semibold">{(Number(row.Kapasitas)||1000).toLocaleString('id-ID')}</td>
+                        <td className="py-2.5 px-3.5 border-r border-slate-800 text-right font-mono text-emerald-400 font-semibold">{(Number(row['On Hand'])||0).toLocaleString('id-ID')}</td>
+                        {Array.from({ length: 16 }, (_, i) => i + 1).map(w => {
+                          const occFcst = Number(row[`Occupancy_FCST_W${w} (%)`] || 0);
+                          const occTgt = Number(row[`Occupancy_TGT_W${w} (%)`] || 0);
+                          return (
+                            <React.Fragment key={w}>
+                              <td className="py-2 px-2 text-right font-mono text-slate-300 border-r border-slate-800/60">
+                                {Number(row[`Akhir_FCST_W${w}`] || 0).toLocaleString('id-ID')}
+                              </td>
+                              <td className={`py-2 px-2 text-right font-mono font-bold border-r border-slate-800/60 ${
+                                occFcst >= 90 ? 'text-rose-400 bg-rose-500/10' : occFcst >= 75 ? 'text-amber-300' : 'text-cyan-400'
+                              }`}>
+                                {occFcst}%
+                              </td>
+                              <td className="py-2 px-2 text-right font-mono text-slate-300 border-r border-slate-800/60">
+                                {Number(row[`Akhir_TGT_W${w}`] || 0).toLocaleString('id-ID')}
+                              </td>
+                              <td className={`py-2 px-2 text-right font-mono font-bold border-r border-slate-800/60 ${
+                                occTgt >= 90 ? 'text-rose-400 bg-rose-500/10' : occTgt >= 75 ? 'text-amber-300' : 'text-emerald-400'
+                              }`}>
+                                {occTgt}%
+                              </td>
+                            </React.Fragment>
+                          );
+                        })}
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </GlassCard>
+        </div>
+      )}
     </div>
   );
 }
