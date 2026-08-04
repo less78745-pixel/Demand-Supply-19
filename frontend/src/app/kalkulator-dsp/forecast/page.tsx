@@ -409,36 +409,47 @@ export default function ForecastPage() {
             <KPICard title="Total Datapoints" value={filteredData.length} icon={<Target />} />
           </div>
 
-          <GlassCard>
-            <div className="flex flex-col md:flex-row justify-between md:items-center mb-6 gap-4 border-b border-border pb-6">
-              <div>
+          <GlassCard allowOverflow={true} className="mb-10 p-6 bg-slate-900/90 border-slate-800 shadow-xl relative z-30">
+            <div className="flex flex-col lg:flex-row justify-between lg:items-center mb-6 gap-6 border-b border-slate-800 pb-6">
+              <div className="flex-1">
                 <h3 className="text-lg font-bold text-foreground uppercase tracking-wide">Actual vs Forecast</h3>
-                <div className="flex flex-wrap gap-3 mt-4">
-                  <MultiSelect
-                    options={cabangs}
-                    selected={selectedCabang}
-                    onChange={setSelectedCabang}
-                    selectAllLabel="Semua Cabang"
-                  />
-                  <MultiSelect
-                    options={categories}
-                    selected={selectedCategory}
-                    onChange={setSelectedCategory}
-                    selectAllLabel="Semua Kategori"
-                  />
-                  <select 
-                    value={selectedMethod} 
-                    onChange={e => setSelectedMethod(e.target.value)} 
-                    className="bg-background border border-border rounded-md px-3 py-2 text-sm text-primary font-bold focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary hover:border-primary/50 transition-colors"
-                  >
-                    {results.available_methods.map((m:string) => <option key={m} value={m}>{m}</option>)}
-                  </select>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4 max-w-3xl">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block">🏢 Filter Cabang:</label>
+                    <MultiSelect
+                      options={cabangs}
+                      selected={selectedCabang}
+                      onChange={setSelectedCabang}
+                      selectAllLabel="Semua Cabang"
+                      placeholder="Pilih Cabang..."
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block">📦 Filter Kategori:</label>
+                    <MultiSelect
+                      options={categories}
+                      selected={selectedCategory}
+                      onChange={setSelectedCategory}
+                      selectAllLabel="Semua Kategori"
+                      placeholder="Pilih Kategori..."
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block">⚙️ Metode Prediksi:</label>
+                    <select 
+                      value={selectedMethod} 
+                      onChange={e => setSelectedMethod(e.target.value)} 
+                      className="w-full min-h-[44px] rounded-xl border border-slate-700 bg-slate-950/90 px-3.5 py-2.5 text-sm text-sky-300 font-bold focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30 transition shadow-md"
+                    >
+                      {results.available_methods.map((m:string) => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                  </div>
                 </div>
               </div>
-              <div className="flex gap-3 shrink-0 mt-4 md:mt-0">
+              <div className="flex gap-3 shrink-0 mt-4 lg:mt-0">
                 <button onClick={handleExport}
-                  className="px-4 py-2 bg-background text-foreground border border-border rounded-md hover:border-primary transition text-sm flex items-center gap-2 font-medium">
-                  <Download className="w-4 h-4" /> Export CSV
+                  className="px-5 py-2.5 bg-slate-800 text-slate-100 border border-slate-700 rounded-xl hover:border-sky-500 hover:bg-slate-700 transition text-sm flex items-center gap-2 font-bold shadow-md">
+                  <Download className="w-4 h-4 text-sky-400" /> Export CSV
                 </button>
               </div>
             </div>

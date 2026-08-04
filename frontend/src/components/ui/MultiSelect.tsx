@@ -19,7 +19,7 @@ export function MultiSelect({
   onChange,
   placeholder = "Pilih Data",
   className,
-  selectAllLabel = "Select All",
+  selectAllLabel = "Semua / Select All",
 }: MultiSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -79,59 +79,59 @@ export function MultiSelect({
     if (selected.length === 1) {
       return selected[0];
     }
-    return `${selected.length} selected`;
+    return `${selected.length} item dipilih`;
   };
 
   return (
-    <div className={cn("relative inline-block min-w-[230px] max-w-[360px] w-auto text-sm", className)} ref={dropdownRef}>
+    <div className={cn("relative w-full min-w-[200px] text-sm font-medium", className)} ref={dropdownRef}>
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex w-full items-center justify-between gap-3 rounded-md border border-border bg-background px-3.5 py-2 text-foreground shadow-sm focus:outline-none focus:ring-1 focus:ring-primary transition-colors hover:border-primary/50"
+        className="flex w-full min-h-[44px] items-center justify-between gap-3 rounded-xl border border-slate-700 bg-slate-950/90 px-4 py-2.5 text-slate-200 shadow-lg hover:border-sky-500 hover:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500/50 transition-all font-semibold text-sm cursor-pointer"
       >
-        <span className="truncate text-left font-medium">{displayValue()}</span>
-        <ChevronDown className="h-4 w-4 opacity-50 shrink-0" />
+        <span className="truncate text-left text-white">{displayValue()}</span>
+        <ChevronDown className={cn("h-4 w-4 text-sky-400 shrink-0 transition-transform duration-200", isOpen ? "rotate-180 text-amber-300" : "")} />
       </button>
 
       {isOpen && (
-        <div className="absolute z-50 mt-1 max-h-80 min-w-[280px] w-max max-w-[450px] overflow-auto rounded-md border border-border bg-popover shadow-lg py-1">
+        <div className="absolute left-0 z-[9999] mt-2 max-h-[380px] min-w-full w-max max-w-[500px] overflow-auto rounded-xl border border-slate-700 bg-slate-900 text-slate-100 shadow-[0_25px_60px_rgba(0,0,0,0.9)] ring-1 ring-white/15 py-2 backdrop-blur-2xl">
           <div
             onClick={() => toggleOption("All")}
-            className="flex cursor-pointer items-center px-3.5 py-2.5 text-popover-foreground hover:bg-muted transition-colors"
+            className="flex cursor-pointer items-center px-4 py-2.5 text-slate-100 hover:bg-slate-800/90 hover:text-sky-300 transition-colors border-b border-slate-800/80 font-bold"
           >
             <div className={cn(
-              "flex h-4 w-4 items-center justify-center border rounded-sm mr-2.5 shrink-0 transition-colors",
-              selected.includes("All") ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/30"
+              "flex h-4 w-4 items-center justify-center border rounded mr-3 shrink-0 transition-all shadow-inner",
+              selected.includes("All") ? "border-sky-500 bg-sky-500 text-white shadow-sky-500/50" : "border-slate-600 bg-slate-950"
             )}>
-              {selected.includes("All") && <Check className="h-3 w-3" />}
+              {selected.includes("All") && <Check className="h-3 w-3 stroke-[3]" />}
             </div>
-            <span className="font-semibold">{selectAllLabel}</span>
+            <span>{selectAllLabel}</span>
           </div>
 
-          <div className="my-1 h-px bg-border" />
-
-          {filteredOptions.length > 0 ? (
-            filteredOptions.map((option) => {
-              const checked = isSelected(option);
-              return (
-                <div
-                  key={option}
-                  onClick={() => toggleOption(option)}
-                  className="flex cursor-pointer items-center px-3.5 py-2 text-popover-foreground hover:bg-muted transition-colors"
-                >
-                  <div className={cn(
-                    "flex h-4 w-4 items-center justify-center border rounded-sm mr-2.5 shrink-0 transition-colors",
-                    checked ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/30"
-                  )}>
-                    {checked && <Check className="h-3 w-3" />}
+          <div className="py-1">
+            {filteredOptions.length > 0 ? (
+              filteredOptions.map((option) => {
+                const checked = isSelected(option);
+                return (
+                  <div
+                    key={option}
+                    onClick={() => toggleOption(option)}
+                    className="flex cursor-pointer items-center px-4 py-2.5 text-slate-200 hover:bg-slate-800/80 hover:text-white transition-colors text-sm font-medium"
+                  >
+                    <div className={cn(
+                      "flex h-4 w-4 items-center justify-center border rounded mr-3 shrink-0 transition-all",
+                      checked ? "border-sky-500 bg-sky-600 text-white shadow-sm" : "border-slate-600 bg-slate-950"
+                    )}>
+                      {checked && <Check className="h-3 w-3 stroke-[3]" />}
+                    </div>
+                    <span className="break-words pr-2 whitespace-normal leading-snug">{option}</span>
                   </div>
-                  <span className="break-words pr-2 whitespace-normal leading-snug">{option}</span>
-                </div>
-              );
-            })
-          ) : (
-            <div className="px-3 py-2 text-muted-foreground text-xs">No options</div>
-          )}
+                );
+              })
+            ) : (
+              <div className="px-4 py-3 text-slate-400 text-xs italic text-center">Tidak ada opsi tersedia</div>
+            )}
+          </div>
         </div>
       )}
     </div>

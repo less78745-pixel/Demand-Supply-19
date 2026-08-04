@@ -677,9 +677,9 @@ export default function OccupancyPage() {
           )}
 
           {/* Chart Card */}
-          <GlassCard>
-            <div className="flex flex-col md:flex-row justify-between md:items-start mb-6 gap-4 border-b border-border pb-6">
-              <div>
+          <GlassCard allowOverflow={true} className="mb-10 p-6 bg-slate-900/90 border-slate-800 shadow-xl relative z-30">
+            <div className="flex flex-col md:flex-row justify-between md:items-center mb-6 gap-6 border-b border-slate-800 pb-6">
+              <div className="flex-1">
                 <h3 className="text-lg font-bold text-foreground uppercase tracking-wide">
                   Occupancy per Cabang per Tanggal
                 </h3>
@@ -687,25 +687,33 @@ export default function OccupancyPage() {
                   Total On Hand (All Categories) ÷ Kapasitas Cabang
                 </p>
                 {/* Filters */}
-                <div className="flex flex-wrap gap-3 mt-4">
-                  <MultiSelect
-                    options={cabangs}
-                    selected={selectedCabang}
-                    onChange={setSelectedCabang}
-                    selectAllLabel="Semua Cabang"
-                  />
-                  <MultiSelect
-                    options={dates}
-                    selected={selectedDate}
-                    onChange={setSelectedDate}
-                    selectAllLabel="Semua Tanggal"
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-5 max-w-2xl">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block">🏢 Filter Cabang:</label>
+                    <MultiSelect
+                      options={cabangs}
+                      selected={selectedCabang}
+                      onChange={setSelectedCabang}
+                      selectAllLabel="Semua Cabang"
+                      placeholder="Pilih Cabang..."
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block">📅 Filter Tanggal:</label>
+                    <MultiSelect
+                      options={dates}
+                      selected={selectedDate}
+                      onChange={setSelectedDate}
+                      selectAllLabel="Semua Tanggal"
+                      placeholder="Pilih Tanggal..."
+                    />
+                  </div>
                 </div>
               </div>
               <div className="flex gap-3 shrink-0">
                 <button onClick={handleExport}
-                  className="px-4 py-2 bg-background text-foreground border border-border rounded-md hover:border-primary transition text-sm flex items-center gap-2 font-medium">
-                  <Download className="w-4 h-4" /> Export CSV
+                  className="px-5 py-2.5 bg-slate-800 text-slate-100 border border-slate-700 rounded-xl hover:border-sky-500 hover:bg-slate-700 transition text-sm flex items-center gap-2 font-bold shadow-md">
+                  <Download className="w-4 h-4 text-sky-400" /> Export CSV
                 </button>
               </div>
             </div>
@@ -778,33 +786,45 @@ export default function OccupancyPage() {
                   </div>
                 )}
 
-                {/* Chart + filters */}
-                <GlassCard>
-                  <div className="flex flex-col md:flex-row justify-between md:items-start mb-6 gap-4 border-b border-border pb-6">
+                {/* Chart + filters (Overflow visible) */}
+                <GlassCard allowOverflow={true} className="mb-10 p-6 bg-slate-900/90 border-slate-800 shadow-xl relative z-30">
+                  <div className="flex flex-col justify-between mb-6 gap-6 border-b border-slate-800 pb-6">
                     <div>
                       <h3 className="text-lg font-bold text-foreground uppercase tracking-wide">ABC-XYZ Matrix Chart</h3>
-                      <div className="flex flex-wrap gap-3 mt-4">
-                        <MultiSelect
-                          options={cabangs}
-                          selected={selectedCabang}
-                          onChange={setSelectedCabang}
-                          selectAllLabel="Semua Cabang"
-                        />
-                        {invCategories.length > 1 && (
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-5 max-w-4xl">
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block">🏢 Filter Cabang:</label>
                           <MultiSelect
-                            options={invCategories}
-                            selected={selectedCategory}
-                            onChange={setSelectedCategory}
-                            selectAllLabel="Semua Kategori"
+                            options={cabangs}
+                            selected={selectedCabang}
+                            onChange={setSelectedCabang}
+                            selectAllLabel="Semua Cabang"
+                            placeholder="Pilih Cabang..."
                           />
+                        </div>
+                        {invCategories.length > 1 && (
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block">📦 Filter Kategori:</label>
+                            <MultiSelect
+                              options={invCategories}
+                              selected={selectedCategory}
+                              onChange={setSelectedCategory}
+                              selectAllLabel="Semua Kategori"
+                              placeholder="Pilih Kategori..."
+                            />
+                          </div>
                         )}
                         {invClasses.length > 1 && (
-                          <MultiSelect
-                            options={invClasses}
-                            selected={selectedClass}
-                            onChange={setSelectedClass}
-                            selectAllLabel="Semua Class"
-                          />
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block">🏷️ Filter Class ABC-XYZ:</label>
+                            <MultiSelect
+                              options={invClasses}
+                              selected={selectedClass}
+                              onChange={setSelectedClass}
+                              selectAllLabel="Semua Class"
+                              placeholder="Pilih Class..."
+                            />
+                          </div>
                         )}
                       </div>
                     </div>

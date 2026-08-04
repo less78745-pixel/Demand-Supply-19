@@ -537,33 +537,34 @@ Pelanggan,Toko A,-6.210000,106.820000,15,08:00-12:00,30`}
             </button>
           </div>
           
-          {/* Interactive Filters */}
-          <GlassCard className="!py-4 mb-6 border-primary/20">
-            <div className="grid md:grid-cols-3 gap-6">
-              <div>
-                <label className="text-sm font-medium text-muted-foreground mb-1.5 block">Filter Cabang / Grup</label>
+          {/* Interactive Filters (Expanded & Overflow Visible) */}
+          <GlassCard allowOverflow={true} className="p-6 mb-10 border-slate-800 bg-slate-900/90 shadow-xl relative z-30">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-300 mb-1 block uppercase tracking-wider">🏢 Filter Cabang / Grup:</label>
                 <select 
                   value={selectedGroup} 
                   onChange={e => { setSelectedGroup(Number(e.target.value)); setSelectedMethod(0); setFilterTipeRute(['All']); setFilterSearchStop(['All']); }}
-                  className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary"
+                  className="w-full min-h-[44px] rounded-xl border border-slate-700 bg-slate-950/90 px-3.5 py-2.5 text-sm text-slate-200 focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30 outline-none transition font-semibold cursor-pointer shadow-md"
                 >
                   {results.map((res: any, idx: number) => (
                     <option key={idx} value={idx}>{res.label || `Cabang ${idx + 1}`}</option>
                   ))}
                 </select>
               </div>
-              <div>
-                <label className="text-sm font-medium text-muted-foreground mb-1.5 block">Filter Tipe Armada / Rute</label>
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-300 mb-1 block uppercase tracking-wider">🚚 Filter Tipe Armada / Rute:</label>
                 <MultiSelect
                   options={['All', 'Dedicated', 'Optimasi']}
                   selected={filterTipeRute}
                   onChange={setFilterTipeRute}
                   selectAllLabel="Semua Tipe Rute"
+                  placeholder="Pilih Tipe Rute..."
                   className="w-full"
                 />
               </div>
-              <div>
-                <label className="text-sm font-medium text-muted-foreground mb-1.5 block">Cari Titik Pemberhentian</label>
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-300 mb-1 block uppercase tracking-wider">📍 Cari Titik Pemberhentian:</label>
                 <MultiSelect
                   options={['All', ...(Array.from(new Set(
                     (Array.isArray(results[selectedGroup]?.methods?.[selectedMethod]?.routes) ? results[selectedGroup].methods[selectedMethod].routes : []).flatMap((r: any) => getRouteStopNames(r))
@@ -571,6 +572,7 @@ Pelanggan,Toko A,-6.210000,106.820000,15,08:00-12:00,30`}
                   selected={filterSearchStop}
                   onChange={setFilterSearchStop}
                   selectAllLabel="Semua Titik Tujuan"
+                  placeholder="Pilih Titik Tujuan..."
                   className="w-full"
                 />
               </div>

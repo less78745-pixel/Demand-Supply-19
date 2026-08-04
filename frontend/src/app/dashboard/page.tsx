@@ -459,15 +459,19 @@ export default function DashboardOverview() {
           </p>
         </div>
         {hasAnyData && (
-          <div className="flex flex-wrap items-center gap-3">
-            <MultiSelect
-              options={allCabangs}
-              selected={globalCabang}
-              onChange={setGlobalCabang}
-              selectAllLabel="Semua Cabang"
-            />
-            <button onClick={handleExport} className="px-4 py-2 bg-background text-foreground border border-border rounded-md hover:border-primary transition text-sm font-medium flex items-center gap-2">
-              <Download className="w-4 h-4" /> Export Dashboard
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4 relative z-[100]">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">🏢 Filter Cabang:</span>
+              <MultiSelect
+                options={allCabangs}
+                selected={globalCabang}
+                onChange={setGlobalCabang}
+                selectAllLabel="Semua Cabang"
+                placeholder="Pilih Cabang..."
+              />
+            </div>
+            <button onClick={handleExport} className="px-5 py-2.5 bg-slate-800 text-slate-100 border border-slate-700 rounded-xl hover:border-sky-500 hover:bg-slate-700 transition text-sm font-bold flex items-center gap-2 shadow-md">
+              <Download className="w-4 h-4 text-sky-400" /> Export Dashboard
             </button>
           </div>
         )}

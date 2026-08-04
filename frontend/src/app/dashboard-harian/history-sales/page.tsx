@@ -34,6 +34,7 @@ function generateDemoHistorySales(): ParsedData {
     { cab: 'Denpasar', reg: 'Bali' }
   ];
   const categories = ['Minyak Goreng Premium', 'Beras Setra Ramos', 'Gula Pasir Kristal', 'Tepung Terigu Serbaguna', 'Kopi Bubuk Murni', 'Susu Kental Manis'];
+  const insentifTiers = ['Tier 1 (High Performance)', 'Tier 2 (Core Growth)', 'Tier 3 (Standard)', 'Non-Insentif'];
   const data: any[] = [];
 
   cabangs.forEach((item, idx) => {
@@ -47,6 +48,7 @@ function generateDemoHistorySales(): ParsedData {
       const hold = Math.round(100 + Math.random() * 500);
       const vessel = Math.round(200 + Math.random() * 800);
       const to = Math.round(150 + Math.random() * 600);
+      const tier = insentifTiers[(idx + cIdx) % insentifTiers.length];
 
       data.push({
         Cabang: item.cab,
@@ -80,7 +82,7 @@ function generateDemoHistorySales(): ParsedData {
         'Plan Loading': Math.round(300 + Math.random() * 700),
         Ready: Math.round(200 + Math.random() * 500),
         TO: to,
-        'Category Insentif': 'Tier 1'
+        'Category Insentif': tier
       });
     });
   });
@@ -123,6 +125,7 @@ export default function HistorySalesPage() {
   // Filter states
   const [selectedCabang, setSelectedCabang] = useState<string[]>(['All']);
   const [selectedCategory, setSelectedCategory] = useState<string[]>(['All']);
+  const [selectedCategoryInsentif, setSelectedCategoryInsentif] = useState<string[]>(['All']);
 
   useEffect(() => {
     get('last_history_sales').then(saved => {
@@ -179,32 +182,45 @@ export default function HistorySalesPage() {
   // Identify column names dynamically
   const colCabang = useMemo(() => parsed ? findColumn(parsed.headers, ['cabang', 'branch_name', 'branch', 'cab', 'regional', 'region']) : undefined, [parsed]);
   const colCategory = useMemo(() => parsed ? findColumn(parsed.headers, ['category', 'grup', 'kategori item', 'kategori']) : undefined, [parsed]);
+  const colCategoryInsentif = useMemo(() => parsed ? findColumn(parsed.headers, ['category insentif', 'category_insentif', 'kategori insentif', 'insentif', 'cat insentif']) : undefined, [parsed]);
 
   // Linked Filter options
   const cabangs = useMemo(() => {
     if (!parsed || !colCabang) return [];
     const source = parsed.data.filter(d =>
-      (!colCategory || selectedCategory.includes('All') || selectedCategory.includes(d[colCategory]))
+      (!colCategory || selectedCategory.includes('All') || selectedCategory.includes(d[colCategory])) &&
+      (!colCategoryInsentif || selectedCategoryInsentif.includes('All') || selectedCategoryInsentif.includes(d[colCategoryInsentif]))
     );
     return ['All', ...Array.from(new Set(source.map(d => d[colCabang]).filter(v => v && !String(v).includes('#N/A') && !String(v).includes('#REF!') && String(v).toLowerCase() !== 'semua cabang'))).sort()];
-  }, [parsed, colCabang, selectedCategory, colCategory]);
+  }, [parsed, colCabang, selectedCategory, selectedCategoryInsentif, colCategory, colCategoryInsentif]);
 
   const categories = useMemo(() => {
     if (!parsed || !colCategory) return [];
     const source = parsed.data.filter(d =>
-      (!colCabang || selectedCabang.includes('All') || selectedCabang.includes(d[colCabang]))
+      (!colCabang || selectedCabang.includes('All') || selectedCabang.includes(d[colCabang])) &&
+      (!colCategoryInsentif || selectedCategoryInsentif.includes('All') || selectedCategoryInsentif.includes(d[colCategoryInsentif]))
     );
     return ['All', ...Array.from(new Set(source.map(d => d[colCategory]).filter(v => v && !String(v).includes('#N/A') && !String(v).includes('#REF!') && String(v).toLowerCase() !== 'semua kategori'))).sort()];
-  }, [parsed, colCategory, selectedCabang, colCabang]);
+  }, [parsed, colCategory, selectedCabang, selectedCategoryInsentif, colCabang, colCategoryInsentif]);
+
+  const categoryInsentifs = useMemo(() => {
+    if (!parsed || !colCategoryInsentif) return [];
+    const source = parsed.data.filter(d =>
+      (!colCabang || selectedCabang.includes('All') || selectedCabang.includes(d[colCabang])) &&
+      (!colCategory || selectedCategory.includes('All') || selectedCategory.includes(d[colCategory]))
+    );
+    return ['All', ...Array.from(new Set(source.map(d => d[colCategoryInsentif]).filter(v => v && !String(v).includes('#N/A') && !String(v).includes('#REF!') && String(v).toLowerCase() !== 'semua insentif'))).sort()];
+  }, [parsed, colCategoryInsentif, selectedCabang, selectedCategory, colCabang, colCategory]);
 
   // Filtered Data (Pure historical actuals, without simulation alteration)
   const filtered = useMemo(() => {
     if (!parsed) return [];
     return parsed.data.filter(d =>
       (!colCabang || selectedCabang.includes('All') || selectedCabang.includes(d[colCabang])) &&
-      (!colCategory || selectedCategory.includes('All') || selectedCategory.includes(d[colCategory]))
+      (!colCategory || selectedCategory.includes('All') || selectedCategory.includes(d[colCategory])) &&
+      (!colCategoryInsentif || selectedCategoryInsentif.includes('All') || selectedCategoryInsentif.includes(d[colCategoryInsentif]))
     );
-  }, [parsed, selectedCabang, selectedCategory, colCabang, colCategory]);
+  }, [parsed, selectedCabang, selectedCategory, selectedCategoryInsentif, colCabang, colCategory, colCategoryInsentif]);
 
   // Executive Summary Insights Computation
   const executiveSummary = useMemo(() => {
@@ -303,6 +319,42 @@ export default function HistorySalesPage() {
       };
     }).sort((a, b) => b.sales - a.sales);
   }, [executiveSummary]);
+
+  // Insentif Analysis Grouping
+  const insentifAnalysis = useMemo(() => {
+    if (!parsed || !colCategoryInsentif || filtered.length === 0) return [];
+    const map: Record<string, { categoryInsentif: string; totalSales: number; totalOutstanding: number; itemCount: number }> = {};
+    
+    const salesSet = new Set(executiveSummary?.salesCols || []);
+    const outSet = new Set(executiveSummary?.outstandingCols || []);
+
+    for (const row of filtered) {
+      const cat = String(row[colCategoryInsentif] || 'Non-Insentif / Umum').trim();
+      if (!map[cat]) {
+        map[cat] = { categoryInsentif: cat, totalSales: 0, totalOutstanding: 0, itemCount: 0 };
+      }
+      map[cat].itemCount += 1;
+
+      let rowSales = 0;
+      let rowOut = 0;
+      parsed.targetColumns.forEach(tc => {
+        const val = Number(String(row[tc.name] || 0).replace(/[^0-9.-]+/g, '')) || 0;
+        if (salesSet.has(tc.name)) {
+          rowSales += val;
+        } else if (outSet.has(tc.name)) {
+          rowOut += val;
+        }
+      });
+
+      map[cat].totalSales += rowSales;
+      map[cat].totalOutstanding += rowOut;
+    }
+
+    return Object.values(map).map(item => {
+      const ratio = item.totalSales > 0 ? (item.totalOutstanding / item.totalSales) * 100 : 0;
+      return { ...item, ratio };
+    }).sort((a, b) => b.totalSales - a.totalSales);
+  }, [parsed, filtered, colCategoryInsentif, executiveSummary]);
 
   const handleExport = () => {
     if (!parsed || !parsed.data) return;
@@ -445,37 +497,49 @@ export default function HistorySalesPage() {
         </div>
       )}
 
-      {/* ─── FILTER CONTROLS & SELECTION ─── */}
-      <GlassCard className="p-5 border-slate-800 bg-slate-900/60 backdrop-blur-xl">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div>
-            <label className="text-xs font-semibold text-slate-400 mb-2 block uppercase tracking-wider">Filter Cabang:</label>
+      {/* ─── FILTER CONTROLS & SELECTION (EXPANDED & OVERFLOW-VISIBLE) ─── */}
+      <GlassCard allowOverflow={true} className="p-6 border-slate-800 bg-slate-900/90 backdrop-blur-xl mb-10 shadow-xl">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-300 block uppercase tracking-wider">🏢 Filter Cabang:</label>
             <MultiSelect
               options={cabangs}
               selected={selectedCabang}
               onChange={setSelectedCabang}
               selectAllLabel="Semua Cabang"
+              placeholder="Pilih Cabang..."
             />
           </div>
-          <div>
-            <label className="text-xs font-semibold text-slate-400 mb-2 block uppercase tracking-wider">Filter Kategori Item:</label>
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-300 block uppercase tracking-wider">📦 Filter Kategori Item:</label>
             <MultiSelect
               options={categories}
               selected={selectedCategory}
               onChange={setSelectedCategory}
-              selectAllLabel="Semua Kategori"
+              selectAllLabel="Semua Kategori Item"
+              placeholder="Pilih Kategori..."
             />
           </div>
-          <div>
-            <label className="text-xs font-semibold text-slate-400 mb-2 block uppercase tracking-wider">Sorot Grafik Khusus Cabang:</label>
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-purple-300 block uppercase tracking-wider">💎 Filter Category Insentif:</label>
+            <MultiSelect
+              options={categoryInsentifs.length > 0 ? categoryInsentifs : ['All', 'Tier 1 (High Performance)', 'Tier 2 (Core Growth)', 'Tier 3 (Standard)', 'Non-Insentif']}
+              selected={selectedCategoryInsentif}
+              onChange={setSelectedCategoryInsentif}
+              selectAllLabel="Semua Category Insentif"
+              placeholder="Pilih Insentif..."
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-300 block uppercase tracking-wider">📍 Sorot Grafik Cabang:</label>
             <select
               value={selectedCabangForChart}
               onChange={(e) => setSelectedCabangForChart(e.target.value)}
-              className="w-full h-11 rounded-xl border border-slate-700 bg-slate-950/80 px-3 text-sm text-slate-200 focus:border-blue-500 outline-none transition font-medium"
+              className="w-full min-h-[44px] rounded-xl border border-slate-700 bg-slate-950/90 px-3 py-2 text-sm text-slate-200 focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30 outline-none transition font-semibold cursor-pointer shadow-md"
             >
-              <option value="All">📊 Tampilkan Semua Cabang (Gabungan)</option>
+              <option value="All">📊 Semua Cabang (Gabungan)</option>
               {cabangs.filter(c => c !== 'All').map(c => (
-                <option key={c} value={c}>📍 Fokus Cabang: {c}</option>
+                <option key={c} value={c}>📍 Fokus: {c}</option>
               ))}
             </select>
           </div>
@@ -633,6 +697,93 @@ export default function HistorySalesPage() {
           </table>
         </div>
       </GlassCard>
+
+      {/* ─── ANALISIS TAMPILAN TAMBAHAN: GROUP BY CATEGORY INSENTIF ─── */}
+      {insentifAnalysis && insentifAnalysis.length > 0 && (
+        <GlassCard className="p-6 border-purple-500/40 bg-gradient-to-b from-slate-900/95 via-purple-950/30 to-slate-950/95 shadow-2xl overflow-hidden">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-4 mb-6 gap-3">
+            <div>
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[11px] font-black bg-purple-500/20 text-purple-300 border border-purple-500/40 uppercase tracking-widest mb-2 shadow-sm">
+                <Award className="w-3.5 h-3.5" /> Analisis Tambahan • Group by Category Insentif
+              </div>
+              <h3 className="text-lg sm:text-xl font-extrabold text-white flex items-center gap-2.5">
+                <BarChart3 className="w-5 h-5 text-purple-400" />
+                Performa Volume Sales & Outstanding per Category Insentif
+              </h3>
+              <p className="text-xs text-slate-300 mt-1">
+                Pengelompokan otomatis riwayat penjualan (M-12 s/d M) dan pesanan tertunggak berdasarkan tier/kategori insentif barang.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+            {/* Grafik Bar Category Insentif */}
+            <div className="lg:col-span-7 h-[360px] w-full bg-slate-950/60 p-5 rounded-2xl border border-slate-800 shadow-inner flex flex-col justify-between">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-purple-300 mb-2 text-center flex items-center justify-center gap-2">
+                📊 Komparasi Volume: Sales vs Outstanding per Insentif
+              </h4>
+              <div className="flex-1 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={insentifAnalysis} margin={{ top: 15, right: 20, left: 10, bottom: 25 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.4} />
+                    <XAxis dataKey="categoryInsentif" stroke="#94a3b8" tick={{ fill: '#e2e8f0', fontSize: 11, fontWeight: 700 }} interval={0} angle={-8} textAnchor="end" height={45} />
+                    <YAxis stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 11 }} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: '#0f172a', borderColor: '#a855f7', borderRadius: '12px', boxShadow: '0 15px 35px rgba(0,0,0,0.8)' }}
+                      labelStyle={{ color: '#d8b4fe', fontWeight: 'bold' }}
+                    />
+                    <Legend wrapperStyle={{ paddingTop: '10px', fontSize: '12px', fontWeight: 'bold' }} />
+                    <Bar dataKey="totalSales" name="📈 Total Volume Sales" fill="#a855f7" radius={[6, 6, 0, 0]} maxBarSize={50} />
+                    <Bar dataKey="totalOutstanding" name="⏳ Outstanding Order" fill="#fbbf24" radius={[6, 6, 0, 0]} maxBarSize={50} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Tabel Ringkasan Insentif */}
+            <div className="lg:col-span-5 overflow-x-auto rounded-2xl border border-slate-800 max-h-[360px] overflow-y-auto bg-slate-950/40 shadow-lg">
+              <table className="w-full text-left text-xs border-collapse min-w-[380px]">
+                <thead className="bg-slate-950 text-slate-300 uppercase font-extrabold sticky top-0 z-20 shadow-md border-b border-slate-800">
+                  <tr className="text-[11px] tracking-wider text-center">
+                    <th className="py-3.5 px-3.5 text-left">Category Insentif</th>
+                    <th className="py-3.5 px-3 border-l border-slate-800 text-purple-300">SKU Item</th>
+                    <th className="py-3.5 px-3 border-l border-slate-800 text-purple-400">📈 Sales Vol</th>
+                    <th className="py-3.5 px-3 border-l border-slate-800 text-amber-400">⏳ Out Vol</th>
+                    <th className="py-3.5 px-3 border-l border-slate-800">Rasio Out/Sales</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800 text-slate-200 text-center font-medium">
+                  {insentifAnalysis.map((item) => {
+                    const isAlert = item.ratio > 25;
+                    return (
+                      <tr key={item.categoryInsentif} className="hover:bg-slate-800/60 transition">
+                        <td className="py-3.5 px-3.5 text-left font-extrabold text-white flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-gradient-to-tr from-purple-500 to-pink-400 shrink-0 shadow-sm shadow-purple-500/50" />
+                          <span>{item.categoryInsentif}</span>
+                        </td>
+                        <td className="py-3.5 px-3 border-l border-slate-800 font-mono text-slate-300 font-bold">
+                          {item.itemCount.toLocaleString('id-ID')}
+                        </td>
+                        <td className="py-3.5 px-3 border-l border-slate-800 font-mono font-extrabold text-purple-300 text-sm">
+                          {item.totalSales.toLocaleString('id-ID')}
+                        </td>
+                        <td className="py-3.5 px-3 border-l border-slate-800 font-mono font-bold text-amber-400 text-sm">
+                          {item.totalOutstanding.toLocaleString('id-ID')}
+                        </td>
+                        <td className="py-3.5 px-3 border-l border-slate-800 font-mono font-bold">
+                          <span className={`px-2 py-1 rounded-md text-[11px] font-black uppercase ${isAlert ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'}`}>
+                            {item.ratio.toFixed(1)}%
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </GlassCard>
+      )}
 
       {/* ─── FULL DATA TABLE (SEMUA KOLOM RAW DATA) ─── */}
       {parsed && parsed.headers && (

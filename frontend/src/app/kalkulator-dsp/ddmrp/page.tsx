@@ -468,12 +468,12 @@ export default function DDMRPPage() {
       {results && (
         <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500 mt-10">
           
-          {/* Summary & Filters */}
-          <GlassCard className="mb-8 border-primary/20">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+          {/* Summary & Filters (Expanded & Overflow Visible) */}
+          <GlassCard allowOverflow={true} className="mb-12 p-6 border-slate-800 bg-slate-900/90 shadow-xl relative z-30">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 border-b border-slate-800 pb-5">
               <div className="flex flex-wrap items-center gap-3">
-                <h2 className="text-xl font-bold tracking-tight flex items-center gap-2">
-                  <BarChart3 className="w-6 h-6 text-primary" />
+                <h2 className="text-xl font-bold tracking-tight flex items-center gap-2 text-white">
+                  <BarChart3 className="w-6 h-6 text-sky-400" />
                   Ringkasan Analisis DDMRP
                 </h2>
                 <TimestampBadge timestamp={results.processed_at || new Date().toISOString()} />
@@ -496,36 +496,38 @@ export default function DDMRPPage() {
                   }));
                   exportToExcel(exportData, 'DDMRP_Buffer', 'Buffer', results?.processed_at || new Date().toISOString());
                 }}
-                className="bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-md text-sm font-semibold flex items-center gap-2 transition-colors"
+                className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-md"
               >
                 <FileSpreadsheet className="w-4 h-4" /> Export to Excel
               </button>
             </div>
             
             {results.results && (
-              <div className="grid md:grid-cols-3 gap-6 mb-6">
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground mb-1 block">Filter Cabang</label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 pt-2">
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-300 mb-1 block uppercase tracking-wider">🏢 Filter Cabang:</label>
                   <MultiSelect
                     options={['All', ...Array.from(new Set(results.results.map((r: any) => r.cabang || 'All'))).filter(x => x !== 'All') as string[]]}
                     selected={filterCabang}
                     onChange={val => { setFilterCabang(val); setFilterSku(['All']); }}
                     selectAllLabel="Semua Cabang"
+                    placeholder="Pilih Cabang..."
                     className="w-full"
                   />
                 </div>
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground mb-1 block">Filter Kategori</label>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-300 mb-1 block uppercase tracking-wider">📦 Filter Kategori:</label>
                   <MultiSelect
                     options={['All', ...Array.from(new Set(results.results.map((r: any) => r.kategori || 'All'))).filter(x => x !== 'All') as string[]]}
                     selected={filterKategori}
                     onChange={val => { setFilterKategori(val); setFilterSku(['All']); }}
                     selectAllLabel="Semua Kategori"
+                    placeholder="Pilih Kategori..."
                     className="w-full"
                   />
                 </div>
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground mb-1 block">Cari SKU</label>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-300 mb-1 block uppercase tracking-wider">🔍 Cari SKU Item:</label>
                   <MultiSelect
                     options={['All', ...results.results
                       .filter((r: any) => 
@@ -537,6 +539,7 @@ export default function DDMRPPage() {
                     selected={filterSku}
                     onChange={setFilterSku}
                     selectAllLabel="Semua SKU (Max 20 Tampil)"
+                    placeholder="Cari SKU..."
                     className="w-full"
                   />
                 </div>

@@ -655,33 +655,35 @@ export default function DDMRPPhase2Page() {
         />
       </div>
 
-      {/* ─── FILTER CONTROLS & SKU SELECTOR FOR CHART ─── */}
-      <GlassCard className="p-5 border-slate-800 bg-slate-900/60 backdrop-blur-xl">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div>
-            <label className="text-xs font-semibold text-slate-400 mb-2 block uppercase tracking-wider">Filter Cabang:</label>
+      {/* ─── FILTER CONTROLS & SKU SELECTOR (EXPANDED & OVERFLOW-VISIBLE) ─── */}
+      <GlassCard allowOverflow={true} className="p-6 border-slate-800 bg-slate-900/90 backdrop-blur-xl mb-10 shadow-xl relative z-30">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-300 block uppercase tracking-wider">🏢 Filter Cabang:</label>
             <MultiSelect
               options={cabangs}
               selected={selectedCabang}
               onChange={setSelectedCabang}
               selectAllLabel="Semua Cabang"
+              placeholder="Pilih Cabang..."
             />
           </div>
-          <div>
-            <label className="text-xs font-semibold text-slate-400 mb-2 block uppercase tracking-wider">Filter Kategori:</label>
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-300 block uppercase tracking-wider">📦 Filter Kategori:</label>
             <MultiSelect
               options={categories}
               selected={selectedCategory}
               onChange={setSelectedCategory}
               selectAllLabel="Semua Kategori"
+              placeholder="Pilih Kategori..."
             />
           </div>
-          <div>
-            <label className="text-xs font-semibold text-slate-400 mb-2 block uppercase tracking-wider">Sorot Grafik Kategori & Cabang:</label>
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-300 block uppercase tracking-wider">🎯 Sorot Grafik Kategori & Cabang:</label>
             <select
               value={currentChartItem?.raw.id || ''}
               onChange={(e) => setSelectedItemForChart(e.target.value)}
-              className="w-full h-11 rounded-xl border border-slate-700 bg-slate-950/80 px-3 text-sm text-slate-200 focus:border-indigo-500 outline-none transition font-medium"
+              className="w-full min-h-[44px] rounded-xl border border-slate-700 bg-slate-950/90 px-3.5 py-2.5 text-sm text-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 outline-none transition font-semibold cursor-pointer shadow-md"
             >
               {filteredData.map(item => (
                 <option key={item.raw.id} value={item.raw.id}>

@@ -394,17 +394,17 @@ export default function ControlTowerPage() {
       {results && (
         <div className="space-y-8 animate-in fade-in duration-700">
           {/* ─── FILTER & EXPORT ACTION BAR ─── */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900/50 p-4 rounded-2xl border border-slate-800">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-indigo-400 uppercase tracking-wider">Filter Cabang:</span>
-              <div className="flex flex-wrap items-center gap-2">
-                <MultiSelect options={regionOptions} selected={selectedRegion} onChange={setSelectedRegion} selectAllLabel="Semua Region" />
-                <MultiSelect options={zoneOptions} selected={selectedZone} onChange={setSelectedZone} selectAllLabel="Semua Zone" />
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-slate-900/90 p-6 rounded-2xl border border-slate-800 shadow-xl relative z-30 overflow-visible mb-10">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4 flex-1">
+              <span className="text-xs font-bold text-indigo-300 uppercase tracking-wider whitespace-nowrap">🏢 Filter Cabang & Zona:</span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-lg">
+                <MultiSelect options={regionOptions} selected={selectedRegion} onChange={setSelectedRegion} selectAllLabel="Semua Region" placeholder="Pilih Region..." />
+                <MultiSelect options={zoneOptions} selected={selectedZone} onChange={setSelectedZone} selectAllLabel="Semua Zone" placeholder="Pilih Zona..." />
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center justify-end gap-3 pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-800">
               <TimestampBadge timestamp={results.processed_at} />
-              <button onClick={handleExport} className="px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-500 transition text-xs sm:text-sm font-bold flex items-center gap-2 uppercase tracking-wide shadow-md">
+              <button onClick={handleExport} className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-500 transition text-xs sm:text-sm font-bold flex items-center gap-2 uppercase tracking-wide shadow-lg">
                 <Download className="w-4 h-4" /> Export Report (CSV)
               </button>
             </div>

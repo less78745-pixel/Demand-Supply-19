@@ -378,16 +378,19 @@ export default function RebalancingPage() {
       </div>
 
       {/* ─── ACTION BAR KETIKA RESULTS ADA ─── */}
-      <div className="flex flex-wrap items-center justify-between gap-4 bg-slate-900/40 p-4 rounded-2xl border border-slate-800">
-        <div className="flex flex-wrap items-center gap-3">
-          <MultiSelect options={entityOptions} selected={selectedEntity} onChange={setSelectedEntity} selectAllLabel="Semua Entity" />
-          <button onClick={handleExportSTO} className="px-4 py-2 bg-emerald-600 text-white rounded-xl hover:bg-emerald-500 transition text-sm font-bold flex items-center gap-2 uppercase tracking-wide shadow-md">
-            <Download className="w-4 h-4" /> Download Draft STO (Excel)
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-slate-900/90 p-6 rounded-2xl border border-slate-800 shadow-xl relative z-30 overflow-visible mb-10">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4 flex-1">
+          <span className="text-xs font-bold text-emerald-300 uppercase tracking-wider whitespace-nowrap">🏢 Filter Entity / Cabang:</span>
+          <div className="w-full max-w-xs">
+            <MultiSelect options={entityOptions} selected={selectedEntity} onChange={setSelectedEntity} selectAllLabel="Semua Entity" placeholder="Pilih Entity..." />
+          </div>
+          <button onClick={handleExportSTO} className="px-5 py-2.5 bg-emerald-600 text-white rounded-xl hover:bg-emerald-500 transition text-xs sm:text-sm font-bold flex items-center justify-center gap-2 uppercase tracking-wide shadow-lg">
+            <Download className="w-4 h-4" /> Download Draft STO
           </button>
         </div>
         <button
           onClick={handleGenerateDemo}
-          className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-bold rounded-xl shadow-lg transition flex items-center gap-2 text-xs sm:text-sm"
+          className="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-bold rounded-xl shadow-lg transition flex items-center justify-center gap-2 text-xs sm:text-sm"
         >
           <Zap className="w-4 h-4" /> Gunakan Data Demo
         </button>
