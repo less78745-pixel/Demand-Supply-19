@@ -11,6 +11,7 @@ import {
   Route, TrendingDown, Truck, DollarSign, Fuel,
   ChevronDown, ChevronUp, BookOpen, Cpu, Map,
   Info, Zap, BarChart3, Users, Clock, FileSpreadsheet,
+  Award, CheckCircle2, Layers,
 } from 'lucide-react';
 import { analyzeRouteOptimization, uploadRouteOptimizationFile } from '@/lib/api';
 import toast from 'react-hot-toast';
@@ -605,6 +606,61 @@ Pelanggan,Toko A,-6.210000,106.820000,15,08:00-12:00,30`}
             />
           </div>
 
+          {/* 🏆 BANNER: REKOMENDASI RUTE PALING OK */}
+          {(() => {
+            const bestMethodName = results[selectedGroup]?.best_method;
+            const bestObj = results[selectedGroup]?.methods?.find((m: any) => m.method === bestMethodName) || results[selectedGroup]?.methods?.[0];
+            const bestIdx = results[selectedGroup]?.methods?.findIndex((m: any) => m.method === bestMethodName);
+
+            if (!bestObj) return null;
+
+            return (
+              <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-emerald-950 via-teal-900 to-slate-900 p-6 sm:p-7 border-2 border-emerald-500/40 shadow-2xl animate-fade-in my-6">
+                <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#10b981_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
+                <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+                  <div className="space-y-2.5 max-w-3xl">
+                    <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full text-xs font-black bg-emerald-400 text-slate-950 uppercase tracking-wider shadow-md">
+                      <Award className="w-4 h-4 text-slate-950 fill-slate-950" />
+                      Rekomendasi Rute Paling OK (Best Optimization)
+                    </div>
+                    <h3 className="text-xl sm:text-3xl font-black text-white flex items-center gap-3">
+                      <span>🏆 {bestMethodName}</span>
+                    </h3>
+                    <p className="text-slate-200 text-sm sm:text-base leading-relaxed">
+                      Berdasarkan analisis komputasi VRP (Vehicle Routing Problem), metode ini terbukti <b>Paling OK</b> dan optimal karena memberikan efisiensi tertinggi dengan penghematan biaya <b className="text-emerald-300 font-extrabold">{results[selectedGroup]?.saving_vs_baseline_pct}%</b> berbanding rute konvensional (Nearest Neighbor).
+                    </p>
+                    <div className="flex flex-wrap items-center gap-3 text-xs font-bold pt-1 text-slate-300">
+                      <span className="px-3.5 py-1.5 rounded-xl bg-slate-900/90 border border-slate-700 flex items-center gap-1.5 shadow">
+                        💰 Total Cost: <b className="text-emerald-400 text-sm font-mono">{formatRp(bestObj.cost?.total_cost || 0)}</b>
+                      </span>
+                      <span className="px-3.5 py-1.5 rounded-xl bg-slate-900/90 border border-slate-700 flex items-center gap-1.5 shadow">
+                        🛣️ Jarak Rute: <b className="text-cyan-400 text-sm font-mono">{Number(bestObj.total_distance_km || 0).toFixed(1)} KM</b>
+                      </span>
+                      <span className="px-3.5 py-1.5 rounded-xl bg-slate-900/90 border border-slate-700 flex items-center gap-1.5 shadow">
+                        🚚 Armada Operasional: <b className="text-amber-400 text-sm font-mono">{bestObj.n_vehicles || 0} Unit</b>
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-2.5 shrink-0 w-full md:w-auto">
+                    <button
+                      onClick={() => {
+                        if (bestIdx !== undefined && bestIdx >= 0) {
+                          setSelectedMethod(bestIdx);
+                          toast.success(`Menyoroti rute dari metode terbaik: ${bestMethodName}`);
+                        }
+                      }}
+                      className="px-5 py-3 rounded-xl bg-gradient-to-r from-emerald-400 to-teal-400 hover:from-emerald-500 hover:to-teal-500 text-slate-950 font-black text-xs sm:text-sm transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 active:scale-95"
+                    >
+                      <CheckCircle2 className="w-5 h-5 stroke-[2.5]" />
+                      Sorot Peta Rute Terbaik Ini
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Method Comparison Table */}
           <GlassCard>
             <h3 className="text-lg font-bold mb-4 flex items-center gap-2 uppercase tracking-wide">
@@ -736,6 +792,128 @@ Pelanggan,Toko A,-6.210000,106.820000,15,08:00-12:00,30`}
                 <p className="text-xs text-muted-foreground mt-3">
                   Rute Dedicated dikunci sejak awal dan tidak diubah polanya oleh algoritma. Rute Optimasi adalah hasil perhitungan heuristik untuk sisa pesanan/pelanggan.
                 </p>
+              </GlassCard>
+
+              {/* MASTER CATALOG: ALL ROUTES FROM ALL METHODS WITH BEST BADGE */}
+              <GlassCard className="p-6 border-slate-800 bg-slate-900/95 shadow-2xl my-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-4 mb-6 gap-3">
+                  <div>
+                    <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2.5 uppercase tracking-wide">
+                      <Layers className="w-5 h-5 text-purple-400" />
+                      Semua Rute Optimasi & Indikator Paling OK (Seluruh Metode)
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Daftar lengkap seluruh rute komputasi dari berbagai algoritma untuk membandingkan mana konfigurasi stop dan kendaraan yang paling efektif.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs font-bold text-amber-300 bg-amber-500/10 border border-amber-500/30 px-3 py-1.5 rounded-xl">
+                    <Award className="w-4 h-4 text-amber-400" />
+                    <span>Rute berlabel RUTE PALING OK adalah hasil rekomendasi sistem terbaik!</span>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto rounded-xl border border-slate-800 max-h-[650px] overflow-y-auto">
+                  <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[1100px]">
+                    <thead className="bg-slate-950/95 text-slate-300 uppercase font-bold sticky top-0 z-20 shadow-md text-[11px] tracking-wider text-center">
+                      <tr className="border-b border-slate-800">
+                        <th className="py-3 px-4 text-left">Metode Optimasi</th>
+                        <th className="py-3 px-3 border-l border-slate-800 text-left">Armada / Rute</th>
+                        <th className="py-3 px-3 border-l border-slate-800">Tipe</th>
+                        <th className="py-3 px-3 border-l border-slate-800 text-right">Stop</th>
+                        <th className="py-3 px-3 border-l border-slate-800 text-right">Muatan</th>
+                        <th className="py-3 px-3 border-l border-slate-800 text-right">Utilisasi</th>
+                        <th className="py-3 px-3 border-l border-slate-800 text-right text-cyan-400">Jarak</th>
+                        <th className="py-3 px-4 border-l border-slate-800 text-left">Urutan Stop / Titik Tujuan</th>
+                        <th className="py-3 px-3 border-l border-slate-800 bg-slate-800 text-white">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800 text-slate-300 text-center font-medium">
+                      {results[selectedGroup]?.methods?.flatMap((m: any, mIdx: number) => {
+                        const isBestMethod = m.method === results[selectedGroup].best_method;
+                        const routes = Array.isArray(m.routes) ? m.routes : [];
+                        return routes.map((r: any, rIdx: number) => ({
+                          ...r,
+                          methodName: m.method,
+                          methodIndex: mIdx,
+                          isBestMethod,
+                          uniqueKey: `${mIdx}-${rIdx}`
+                        }));
+                      }).filter((r: any) => {
+                        if (!filterTipeRute.includes('All')) {
+                          const rType = r.is_dedicated ? 'Dedicated' : 'Optimasi';
+                          if (!filterTipeRute.includes(rType)) return false;
+                        }
+                        if (!filterSearchStop.includes('All')) {
+                          const stopNames = getRouteStopNames(r);
+                          const matches = stopNames.some((n: string) => filterSearchStop.includes(n));
+                          if (!matches) return false;
+                        }
+                        return true;
+                      }).map((item: any) => (
+                        <tr
+                          key={item.uniqueKey}
+                          className={`hover:bg-slate-800/60 transition ${item.isBestMethod ? 'bg-emerald-950/20 border-l-4 border-l-emerald-500' : ''}`}
+                        >
+                          <td className="py-3 px-4 text-left align-middle font-bold text-white">
+                            <div className="flex flex-col gap-1">
+                              <span className="flex items-center gap-1.5 text-sm">
+                                {item.isBestMethod && <span title="Paling OK (Best Method)">🏆</span>}
+                                {item.methodName}
+                              </span>
+                              {item.isBestMethod && (
+                                <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-extrabold px-2 py-0.5 rounded border border-emerald-500/40 w-fit">
+                                  ✨ RUTE PALING OK
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-3 px-3 border-l border-slate-800 text-left align-middle font-bold text-slate-200">
+                            {item.vehicle_name || `Kendaraan #${item.route_id || '—'}`}
+                          </td>
+                          <td className="py-3 px-3 border-l border-slate-800 align-middle">
+                            {item.is_dedicated ? (
+                              <span className="px-2 py-0.5 bg-orange-500/10 border border-orange-500/30 text-orange-400 font-bold rounded text-xs uppercase inline-block">
+                                Dedicated
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-bold rounded text-xs uppercase inline-block">
+                                Optimasi
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 border-l border-slate-800 align-middle font-mono text-right">
+                            {getRouteStopsCount(item)} stop
+                          </td>
+                          <td className="py-3 px-3 border-l border-slate-800 align-middle font-mono text-right">
+                            {item.load ?? '—'} unit
+                          </td>
+                          <td className="py-3 px-3 border-l border-slate-800 align-middle text-right font-mono text-xs">
+                            <span className={Number(item.capacity_pct) > 90 ? 'text-amber-400 font-bold' : 'text-emerald-400 font-bold'}>
+                              {item.capacity_pct ?? '—'}%
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 border-l border-slate-800 align-middle text-right font-mono font-black text-cyan-300 text-sm">
+                            {item.distance_km ?? '—'} km
+                          </td>
+                          <td className="py-3 px-4 border-l border-slate-800 text-left align-middle text-xs text-slate-300 max-w-sm truncate" title={getRouteStopNames(item).join(' ➔ ')}>
+                            {getRouteStopNames(item).join(' ➔ ')}
+                          </td>
+                          <td className="py-3 px-3 border-l border-slate-800 bg-slate-950/30 align-middle">
+                            <button
+                              onClick={() => {
+                                setSelectedMethod(item.methodIndex);
+                                toast.success(`Menyoroti di peta: ${item.methodName}`);
+                              }}
+                              className="px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white font-bold text-xs transition border border-slate-600 shadow-sm"
+                            >
+                              📍 Sorot Peta
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </GlassCard>
             </>
           )}
