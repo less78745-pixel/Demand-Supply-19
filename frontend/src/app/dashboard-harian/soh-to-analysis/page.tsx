@@ -9,7 +9,8 @@ import { MultiSelect } from '@/components/ui/MultiSelect';
 import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import {
   ClipboardList, Download, Info, Package, BarChart3,
-  Layers, HelpCircle, Sparkles, FileSpreadsheet, Zap, AlertTriangle, CheckCircle2, TrendingUp
+  Layers, HelpCircle, Sparkles, FileSpreadsheet, Zap, AlertTriangle, CheckCircle2, TrendingUp,
+  Filter, Search, X, RefreshCw
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
@@ -190,6 +191,11 @@ export default function SOHAnalysisPage() {
   const [selectedCabang, setSelectedCabang] = useState<string[]>(['All']);
   const [selectedCategory, setSelectedCategory] = useState<string[]>(['All']);
   const [selectedInsentif, setSelectedInsentif] = useState<string[]>(['All']);
+
+  // Excel AutoFilter state for SOH TO table
+  const [activeSohColModal, setActiveSohColModal] = useState<{ key: string; name: string } | null>(null);
+  const [sohModalSearchInput, setSohModalSearchInput] = useState<string>('');
+  const [sohColFilters, setSohColFilters] = useState<Record<string, { search?: string; selected?: string[] }>>({});
 
   useEffect(() => {
     get('last_soh_data').then(saved => {
@@ -435,6 +441,46 @@ export default function SOHAnalysisPage() {
     });
   }, [parsed, filtered, colCabang, colCategory, colTargetSales]);
 
+  const getSohColVal = (row: any, colKey: string): string => {
+    if (colKey === 'cabang') return String(row.cabang || '');
+    if (colKey === 'category') return String(row.category || '');
+    if (colKey === 'onHand') return String(Math.round(row['On Hand'] || 0).toLocaleString('id-ID'));
+    if (colKey === 'to') return String(Math.round(row['TO'] || 0).toLocaleString('id-ID'));
+    if (colKey === 'vessel') return String(Math.round(row['VESSEL'] || 0).toLocaleString('id-ID'));
+    if (colKey === 'totalSupply') return String(Math.round(row.totalSupply || (row['On Hand'] + row['TO'] + row['VESSEL']) || 0).toLocaleString('id-ID'));
+    if (colKey === 'planLoading') return String(Math.round(row['PLAN LOADING'] || 0).toLocaleString('id-ID'));
+    if (colKey === 'target') return row['Outstanding Target Sales'] > 0 ? String(Math.round(row['Outstanding Target Sales']).toLocaleString('id-ID')) : '-';
+    if (colKey === 'ratio') return row['Outstanding Target Sales'] > 0 ? `${row.ratio}x` : 'N/A';
+    if (colKey === 'badge') return String(row.badge || '');
+    return '';
+  };
+
+  const currentSohUniqueValues = useMemo(() => {
+    if (!activeSohColModal) return [];
+    const set = new Set<string>();
+    detailedTableData.forEach(r => {
+      const val = getSohColVal(r, activeSohColModal.key);
+      if (val) set.add(val);
+    });
+    return Array.from(set).sort();
+  }, [detailedTableData, activeSohColModal]);
+
+  const displayedSohTableData = useMemo(() => {
+    return detailedTableData.filter(row => {
+      for (const [key, filter] of Object.entries(sohColFilters)) {
+        if (!filter) continue;
+        const val = getSohColVal(row, key);
+        if (filter.selected && filter.selected.length > 0 && !filter.selected.includes(val)) {
+          return false;
+        }
+        if (filter.search && !val.toLowerCase().includes(filter.search.toLowerCase())) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [detailedTableData, sohColFilters]);
+
   // Pie Chart Data (% Category per Total On Hand + TO + Vessel) - Wajib mengikuti filter Cabang, Kategori & Sorot
   const pieCategoryData = useMemo(() => {
     if (!detailedTableData || detailedTableData.length === 0) return [];
@@ -538,7 +584,7 @@ export default function SOHAnalysisPage() {
   }, [detailedTableData]);
 
   const handleExport = () => {
-    if (!parsed || !parsed.data || detailedTableData.length === 0) return;
+    if (!parsed || !parsed.data || displayedSohTableData.length === 0) return;
     const header = [
       'Cabang',
       'Kategori Item',
@@ -553,7 +599,7 @@ export default function SOHAnalysisPage() {
     ].map(h => `"${h}"`).join(',');
     const lines = [header];
 
-    detailedTableData.forEach(row => {
+    displayedSohTableData.forEach(row => {
       const line = [
         `"${String(row.cabang).replace(/"/g, '""')}"`,
         `"${String(row.category).replace(/"/g, '""')}"`,
@@ -1017,12 +1063,22 @@ export default function SOHAnalysisPage() {
       <GlassCard className="p-6 border-slate-800 bg-slate-900/80 shadow-2xl overflow-hidden">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-slate-800 pb-4 mb-6 gap-4">
           <div>
-            <h3 className="text-lg sm:text-xl font-black text-white flex items-center gap-2.5">
-              <FileSpreadsheet className="w-6 h-6 text-emerald-400" />
-              Tabel Analisis Komparatif SOH & TO — Detail Cabang per Kategori
-            </h3>
+            <div className="flex items-center gap-3">
+              <h3 className="text-lg sm:text-xl font-black text-white flex items-center gap-2.5">
+                <FileSpreadsheet className="w-6 h-6 text-emerald-400" />
+                Tabel Analisis Komparatif SOH & TO — Detail Cabang per Kategori ({displayedSohTableData.length} dari {detailedTableData.length} baris)
+              </h3>
+              {Object.keys(sohColFilters).some(k => sohColFilters[k]?.search || (sohColFilters[k]?.selected && sohColFilters[k]?.selected.length > 0)) && (
+                <button
+                  onClick={() => { setSohColFilters({}); toast.success('Semua filter kolom dibersihkan!'); }}
+                  className="px-3 py-1 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" /> Reset Filter Kolom
+                </button>
+              )}
+            </div>
             <p className="text-xs text-slate-400 mt-1">
-              Menampilkan rincian kuota persediaan untuk <b>setiap kombinasi Cabang dan Kategori Barang ({detailedTableData.length} baris)</b> dengan kesimpulan hitungan rasio secara lengkap.
+              Dilengkapi <b className="text-emerald-400">Filter Kolom ala Excel</b> (klik ikon filter di setiap header untuk cari & pilih data) guna menganalisis rincian persediaan dan kesimpulan hitungan rasio secara mandiri.
             </p>
           </div>
 
@@ -1030,63 +1086,213 @@ export default function SOHAnalysisPage() {
             onClick={handleExport}
             className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-emerald-600/20 shrink-0"
           >
-            <Download className="w-4 h-4" /> Ekspor Hasil ke Excel / CSV
+            <Download className="w-4 h-4" /> Ekspor Hasil ke Excel / CSV ({displayedSohTableData.length} baris)
           </button>
         </div>
 
+        {/* Excel Filter Modal Popover */}
+        {activeSohColModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+            <div className="bg-slate-900 border border-slate-700 rounded-2xl p-5 max-w-sm w-full shadow-2xl text-slate-200">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
+                <h4 className="font-bold text-sm text-white flex items-center gap-2">
+                  <Filter className="w-4 h-4 text-emerald-400" /> Filter Kolom: <span className="text-emerald-400">{activeSohColModal.name}</span>
+                </h4>
+                <button onClick={() => setActiveSohColModal(null)} className="text-slate-400 hover:text-white transition">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div className="relative">
+                  <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+                  <input
+                    type="text"
+                    value={sohModalSearchInput}
+                    onChange={e => setSohModalSearchInput(e.target.value)}
+                    placeholder={`Cari dalam ${activeSohColModal.name}...`}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                  />
+                  {sohModalSearchInput && (
+                    <button onClick={() => setSohModalSearchInput('')} className="absolute right-3 top-2.5 text-slate-500 hover:text-white text-xs">
+                      Hapus
+                    </button>
+                  )}
+                </div>
+
+                <div className="max-h-48 overflow-y-auto border border-slate-800 rounded-xl bg-slate-950/50 p-2 space-y-1 text-xs">
+                  <div className="text-[11px] font-semibold text-slate-400 mb-1 px-1 flex justify-between">
+                    <span>Daftar Nilai Unik ({currentSohUniqueValues.length}):</span>
+                  </div>
+                  {currentSohUniqueValues.filter(val => !sohModalSearchInput || val.toLowerCase().includes(sohModalSearchInput.toLowerCase())).slice(0, 50).map((val, idx) => {
+                    const isChecked = !sohColFilters[activeSohColModal.key]?.selected?.length || sohColFilters[activeSohColModal.key]?.selected?.includes(val);
+                    return (
+                      <label
+                        key={idx}
+                        className="flex items-center gap-2 py-1 px-2 rounded hover:bg-slate-800/60 cursor-pointer text-slate-300 truncate"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => {
+                            const curSelected = sohColFilters[activeSohColModal.key]?.selected?.length ? [...(sohColFilters[activeSohColModal.key]?.selected || [])] : [...currentSohUniqueValues];
+                            let nextSelected: string[];
+                            if (curSelected.includes(val)) {
+                              nextSelected = curSelected.filter(item => item !== val);
+                            } else {
+                              nextSelected = [...curSelected, val];
+                            }
+                            if (nextSelected.length === currentSohUniqueValues.length) {
+                              nextSelected = [];
+                            }
+                            setSohColFilters({
+                              ...sohColFilters,
+                              [activeSohColModal.key]: { ...sohColFilters[activeSohColModal.key], selected: nextSelected }
+                            });
+                          }}
+                          className="rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-emerald-500/30"
+                        />
+                        <span className="truncate" title={val}>{val || '(Kosong)'}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+
+                <div className="flex items-center gap-2 pt-2 border-t border-slate-800">
+                  <button
+                    onClick={() => {
+                      const next = { ...sohColFilters };
+                      delete next[activeSohColModal.key];
+                      setSohColFilters(next);
+                      setSohModalSearchInput('');
+                      toast.success(`Filter kolom ${activeSohColModal.name} direset!`);
+                    }}
+                    className="flex-1 py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 font-bold text-xs text-slate-300 hover:text-white transition"
+                  >
+                    Reset
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSohColFilters({
+                        ...sohColFilters,
+                        [activeSohColModal.key]: { ...sohColFilters[activeSohColModal.key], search: sohModalSearchInput }
+                      });
+                      setActiveSohColModal(null);
+                      toast.success('Filter diterapkan!');
+                    }}
+                    className="flex-1 py-2 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 font-bold text-xs text-slate-950 transition shadow-lg shadow-emerald-500/20"
+                  >
+                    Terapkan
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="overflow-x-auto rounded-xl border border-slate-800 max-h-[650px] overflow-y-auto">
-          <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[1150px]">
+          <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[1250px]">
             <thead className="bg-slate-950/95 text-slate-300 uppercase font-bold sticky top-0 z-20 shadow-md">
               <tr className="border-b border-slate-800 text-[11px] tracking-wider text-center">
-                <th className="py-3.5 px-4 text-left">Cabang & Lokasi</th>
-                <th className="py-3.5 px-3.5 border-l border-slate-800 text-left text-cyan-400">🏷️ Kategori Item</th>
-                <th className="py-3.5 px-3 border-l border-slate-800 text-emerald-400">📦 On Hand</th>
-                <th className="py-3.5 px-3 border-l border-slate-800 text-orange-400">🚚 TO (W1-W4)</th>
-                <th className="py-3.5 px-3 border-l border-slate-800 text-blue-400">🚢 Vessel (W1-W4)</th>
-                <th className="py-3.5 px-3.5 border-l border-slate-800 bg-emerald-950/40 text-emerald-300 font-extrabold">🧮 Total Pasokan (OH+TO+Vessel)</th>
-                <th className="py-3.5 px-3 border-l border-slate-800 text-purple-400">⚙️ Plan Loading</th>
-                <th className="py-3.5 px-3.5 border-l border-slate-800 bg-slate-900 text-amber-300">🎯 Outstanding Target</th>
-                <th className="py-3.5 px-3.5 border-l border-slate-800 text-cyan-300">📈 Hasil Hitungan (Rasio)</th>
-                <th className="py-3.5 px-4 border-l border-slate-800 text-white">🛡️ Kesimpulan Kondisi</th>
+                <th className="py-3.5 px-3 text-left">
+                  <div className="flex items-center gap-1.5 justify-between">
+                    <span>Cabang & Lokasi</span>
+                    <button onClick={() => { setActiveSohColModal({ key: 'cabang', name: 'Cabang' }); setSohModalSearchInput(sohColFilters['cabang']?.search || ''); }} className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition"><Filter className="w-3.5 h-3.5 text-emerald-400" /></button>
+                  </div>
+                </th>
+                <th className="py-3.5 px-3 border-l border-slate-800 text-left text-cyan-400">
+                  <div className="flex items-center gap-1.5 justify-between">
+                    <span>🏷️ Kategori Item</span>
+                    <button onClick={() => { setActiveSohColModal({ key: 'category', name: 'Kategori Item' }); setSohModalSearchInput(sohColFilters['category']?.search || ''); }} className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition"><Filter className="w-3.5 h-3.5 text-cyan-400" /></button>
+                  </div>
+                </th>
+                <th className="py-3.5 px-2.5 border-l border-slate-800 text-emerald-400">
+                  <div className="flex items-center gap-1 justify-between">
+                    <span>📦 On Hand</span>
+                    <button onClick={() => { setActiveSohColModal({ key: 'onHand', name: 'On Hand' }); setSohModalSearchInput(sohColFilters['onHand']?.search || ''); }} className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition"><Filter className="w-3.5 h-3.5" /></button>
+                  </div>
+                </th>
+                <th className="py-3.5 px-2.5 border-l border-slate-800 text-orange-400">
+                  <div className="flex items-center gap-1 justify-between">
+                    <span>🚚 TO (W1-W4)</span>
+                    <button onClick={() => { setActiveSohColModal({ key: 'to', name: 'TO' }); setSohModalSearchInput(sohColFilters['to']?.search || ''); }} className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition"><Filter className="w-3.5 h-3.5" /></button>
+                  </div>
+                </th>
+                <th className="py-3.5 px-2.5 border-l border-slate-800 text-blue-400">
+                  <div className="flex items-center gap-1 justify-between">
+                    <span>🚢 Vessel (W1-W4)</span>
+                    <button onClick={() => { setActiveSohColModal({ key: 'vessel', name: 'Vessel' }); setSohModalSearchInput(sohColFilters['vessel']?.search || ''); }} className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition"><Filter className="w-3.5 h-3.5" /></button>
+                  </div>
+                </th>
+                <th className="py-3.5 px-3 border-l border-slate-800 bg-emerald-950/40 text-emerald-300 font-extrabold">
+                  <div className="flex items-center gap-1 justify-between">
+                    <span>🧮 Total Pasokan (OH+TO+Vessel)</span>
+                    <button onClick={() => { setActiveSohColModal({ key: 'totalSupply', name: 'Total Pasokan' }); setSohModalSearchInput(sohColFilters['totalSupply']?.search || ''); }} className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition"><Filter className="w-3.5 h-3.5" /></button>
+                  </div>
+                </th>
+                <th className="py-3.5 px-2.5 border-l border-slate-800 text-purple-400">
+                  <div className="flex items-center gap-1 justify-between">
+                    <span>⚙️ Plan Loading</span>
+                    <button onClick={() => { setActiveSohColModal({ key: 'planLoading', name: 'Plan Loading' }); setSohModalSearchInput(sohColFilters['planLoading']?.search || ''); }} className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition"><Filter className="w-3.5 h-3.5" /></button>
+                  </div>
+                </th>
+                <th className="py-3.5 px-3 border-l border-slate-800 bg-slate-900 text-amber-300">
+                  <div className="flex items-center gap-1 justify-between">
+                    <span>🎯 Outstanding Target</span>
+                    <button onClick={() => { setActiveSohColModal({ key: 'target', name: 'Outstanding Target' }); setSohModalSearchInput(sohColFilters['target']?.search || ''); }} className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition"><Filter className="w-3.5 h-3.5" /></button>
+                  </div>
+                </th>
+                <th className="py-3.5 px-3 border-l border-slate-800 text-cyan-300">
+                  <div className="flex items-center gap-1 justify-between">
+                    <span>📈 Hasil Hitungan (Rasio)</span>
+                    <button onClick={() => { setActiveSohColModal({ key: 'ratio', name: 'Rasio' }); setSohModalSearchInput(sohColFilters['ratio']?.search || ''); }} className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition"><Filter className="w-3.5 h-3.5" /></button>
+                  </div>
+                </th>
+                <th className="py-3.5 px-3 border-l border-slate-800 text-white">
+                  <div className="flex items-center gap-1 justify-between">
+                    <span>🛡️ Kesimpulan Kondisi</span>
+                    <button onClick={() => { setActiveSohColModal({ key: 'badge', name: 'Kesimpulan Kondisi' }); setSohModalSearchInput(sohColFilters['badge']?.search || ''); }} className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition"><Filter className="w-3.5 h-3.5" /></button>
+                  </div>
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/80 text-slate-300 text-center font-medium">
-              {detailedTableData.map((row) => (
+              {displayedSohTableData.map((row) => (
                 <tr
                   key={row.key}
                   className="hover:bg-slate-800/60 transition cursor-pointer"
                   onClick={() => setSelectedCabangForChart(row.cabang === selectedCabangForChart ? 'All' : row.cabang)}
                 >
-                  <td className="py-3 px-4 text-left align-middle font-black text-white text-sm">
+                  <td className="py-3 px-3 text-left align-middle font-black text-white text-sm">
                     {row.cabang}
                   </td>
-                  <td className="py-3 px-3.5 border-l border-slate-800 text-left align-middle">
+                  <td className="py-3 px-3 border-l border-slate-800 text-left align-middle">
                     <span className="inline-block px-2.5 py-1 rounded-lg text-xs font-semibold text-cyan-300 bg-cyan-950/60 border border-cyan-800/50 truncate max-w-[200px]" title={row.category}>
                       {row.category}
                     </span>
                   </td>
-                  <td className="py-3 px-3 border-l border-slate-800 font-extrabold text-emerald-400 text-sm font-mono">
+                  <td className="py-3 px-2.5 border-l border-slate-800 font-extrabold text-emerald-400 text-sm font-mono">
                     {Math.round(row['On Hand'] || 0).toLocaleString('id-ID')}
                   </td>
-                  <td className="py-3 px-3 border-l border-slate-800 font-mono text-orange-300 font-bold">
+                  <td className="py-3 px-2.5 border-l border-slate-800 font-mono text-orange-300 font-bold">
                     {Math.round(row['TO'] || 0).toLocaleString('id-ID')}
                   </td>
-                  <td className="py-3 px-3 border-l border-slate-800 font-mono text-blue-300 font-bold">
+                  <td className="py-3 px-2.5 border-l border-slate-800 font-mono text-blue-300 font-bold">
                     {Math.round(row['VESSEL'] || 0).toLocaleString('id-ID')}
                   </td>
-                  <td className="py-3 px-3.5 border-l border-slate-800 bg-emerald-950/20 font-black font-mono text-emerald-300 text-sm">
+                  <td className="py-3 px-3 border-l border-slate-800 bg-emerald-950/20 font-black font-mono text-emerald-300 text-sm">
                     {(row.totalSupply || (row['On Hand'] + row['TO'] + row['VESSEL']) || 0).toLocaleString('id-ID')}
                   </td>
-                  <td className="py-3 px-3 border-l border-slate-800 font-mono text-purple-300">
+                  <td className="py-3 px-2.5 border-l border-slate-800 font-mono text-purple-300">
                     {Math.round(row['PLAN LOADING'] || 0).toLocaleString('id-ID')}
                   </td>
-                  <td className="py-3 px-3.5 border-l border-slate-800 font-extrabold text-amber-300 font-mono text-sm bg-slate-950/40">
+                  <td className="py-3 px-3 border-l border-slate-800 font-extrabold text-amber-300 font-mono text-sm bg-slate-950/40">
                     {row['Outstanding Target Sales'] > 0 ? Math.round(row['Outstanding Target Sales']).toLocaleString('id-ID') : '-'}
                   </td>
-                  <td className="py-3 px-3.5 border-l border-slate-800 font-black font-mono text-sm text-cyan-300">
+                  <td className="py-3 px-3 border-l border-slate-800 font-black font-mono text-sm text-cyan-300">
                     {row['Outstanding Target Sales'] > 0 ? `${row.ratio}x` : 'N/A'}
                   </td>
-                  <td className="py-3 px-4 border-l border-slate-800">
+                  <td className="py-3 px-3 border-l border-slate-800">
                     <div className="flex items-center justify-center">
                       <span className={`px-3.5 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider shadow-sm ${row.badgeColor}`}>
                         {row.badge}

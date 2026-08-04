@@ -9,7 +9,8 @@ import { MultiSelect } from '@/components/ui/MultiSelect';
 import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import {
   TrendingUp, BarChart3, Download, Sparkles,
-  AlertCircle, Award, Layers, HelpCircle, FileSpreadsheet, AlertTriangle
+  AlertCircle, Award, Layers, HelpCircle, FileSpreadsheet, AlertTriangle,
+  Filter, Search, X, RefreshCw
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
@@ -151,6 +152,11 @@ export default function HistorySalesPage() {
   const [selectedCabang, setSelectedCabang] = useState<string[]>(['All']);
   const [selectedCategory, setSelectedCategory] = useState<string[]>(['All']);
   const [selectedCategoryInsentif, setSelectedCategoryInsentif] = useState<string[]>(['All']);
+
+  // Excel AutoFilter state for Raw Data table
+  const [activeRawColModal, setActiveRawColModal] = useState<string | null>(null);
+  const [rawModalSearchInput, setRawModalSearchInput] = useState<string>('');
+  const [rawColFilters, setRawColFilters] = useState<Record<string, { search?: string; selected?: string[] }>>({});
 
   useEffect(() => {
     get('last_history_sales').then(saved => {
@@ -448,20 +454,29 @@ export default function HistorySalesPage() {
     };
   }, [parsed, filtered]);
 
-  // Insentif Analysis Grouping
+  // Insentif Analysis Grouping by Cabang & Category Insentif + M to M-5
   const insentifAnalysis = useMemo(() => {
     if (!parsed || !colCategoryInsentif || filtered.length === 0) return [];
-    const map: Record<string, { categoryInsentif: string; totalSales: number; totalOutstanding: number; itemCount: number }> = {};
+    const map: Record<string, { key: string; cabang: string; categoryInsentif: string; totalSales: number; totalOutstanding: number; itemCount: number; periods: Record<string, number> }> = {};
     
     const salesSet = new Set(executiveSummary?.salesCols || []);
     const outSet = new Set(executiveSummary?.outstandingCols || []);
+    const periodNames = ['M', 'M-1', 'M-2', 'M-3', 'M-4', 'M-5'];
+    const periodCols: Record<string, string | undefined> = {};
+    periodNames.forEach(p => {
+      const found = parsed.headers.find(h => h.trim().toUpperCase() === p.toUpperCase());
+      if (found) periodCols[p] = found;
+    });
 
     for (const row of filtered) {
+      const cbg = String(colCabang ? (row[colCabang] || 'All Cabang') : 'All Cabang').trim();
       const cat = String(row[colCategoryInsentif] || 'Non-Insentif / Umum').trim();
-      if (!map[cat]) {
-        map[cat] = { categoryInsentif: cat, totalSales: 0, totalOutstanding: 0, itemCount: 0 };
+      const key = `${cbg}_${cat}`;
+
+      if (!map[key]) {
+        map[key] = { key, cabang: cbg, categoryInsentif: cat, totalSales: 0, totalOutstanding: 0, itemCount: 0, periods: { 'M': 0, 'M-1': 0, 'M-2': 0, 'M-3': 0, 'M-4': 0, 'M-5': 0 } };
       }
-      map[cat].itemCount += 1;
+      map[key].itemCount += 1;
 
       let rowSales = 0;
       let rowOut = 0;
@@ -474,15 +489,49 @@ export default function HistorySalesPage() {
         }
       });
 
-      map[cat].totalSales += rowSales;
-      map[cat].totalOutstanding += rowOut;
+      periodNames.forEach(p => {
+        const colName = periodCols[p];
+        if (colName && row[colName] !== undefined) {
+          map[key].periods[p] += Number(String(row[colName] || 0).replace(/[^0-9.-]+/g, '')) || 0;
+        }
+      });
+
+      map[key].totalSales += rowSales;
+      map[key].totalOutstanding += rowOut;
     }
 
     return Object.values(map).map(item => {
       const ratio = item.totalSales > 0 ? (item.totalOutstanding / item.totalSales) * 100 : 0;
-      return { ...item, ratio };
+      return { ...item, labelKey: `${item.cabang} (${item.categoryInsentif})`, ratio };
     }).sort((a, b) => b.totalSales - a.totalSales);
-  }, [parsed, filtered, colCategoryInsentif, executiveSummary]);
+  }, [parsed, filtered, colCabang, colCategoryInsentif, executiveSummary]);
+
+  const currentRawUniqueValues = useMemo(() => {
+    if (!activeRawColModal || !parsed) return [];
+    const set = new Set<string>();
+    filtered.forEach(r => {
+      const val = String(r[activeRawColModal] !== undefined && r[activeRawColModal] !== null ? r[activeRawColModal] : '');
+      if (val) set.add(val);
+    });
+    return Array.from(set).sort();
+  }, [filtered, activeRawColModal, parsed]);
+
+  const displayedRawData = useMemo(() => {
+    return filtered.filter(row => {
+      for (const [key, filter] of Object.entries(rawColFilters)) {
+        if (!filter) continue;
+        const rawVal = row[key];
+        const val = String(rawVal !== undefined && rawVal !== null ? rawVal : '');
+        if (filter.selected && filter.selected.length > 0 && !filter.selected.includes(val)) {
+          return false;
+        }
+        if (filter.search && !val.toLowerCase().includes(filter.search.toLowerCase())) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [filtered, rawColFilters]);
 
   const handleExport = () => {
     if (!tableData || tableData.length === 0) return;
@@ -494,20 +543,11 @@ export default function HistorySalesPage() {
       'Volume M',
       'Volume M-1',
       'Pertumbuhan M vs AVG (%)',
-      'Pertumbuhan M-1 vs AVG (%)',
-      'Outstanding Order',
-      'Total Volume',
-      'Rasio (Out/Sales %)',
-      'Zonasi Status Analisis'
+      'Pertumbuhan M-1 vs AVG (%)'
     ].map(h => `"${h}"`).join(',');
     const lines = [header];
 
     tableData.forEach(row => {
-      const isCritical = row.ratio > 30;
-      const isWarning = row.ratio > 15 && !isCritical;
-      const isPrime = row.ratio <= 15 && row.sales > 5000;
-      const zonasi = isCritical ? 'OUTSTANDING KRITIS' : isWarning ? 'WASPADA TUNGGAKAN' : isPrime ? 'PERFORMA PRIMA' : 'STABLE SALES';
-
       const line = [
         `"${String(row.cabang).replace(/"/g, '""')}"`,
         `"${String(row.category).replace(/"/g, '""')}"`,
@@ -516,11 +556,7 @@ export default function HistorySalesPage() {
         toExactFloat(row.m, 2),
         toExactFloat(row.m1, 2),
         row.growthM,
-        row.growthM1,
-        toExactFloat(row.outstanding, 2),
-        toExactFloat(row.total, 2),
-        row.ratio,
-        `"${zonasi}"`
+        row.growthM1
       ].join(',');
       lines.push(line);
     });
@@ -763,6 +799,22 @@ export default function HistorySalesPage() {
                 <Legend wrapperStyle={{ paddingTop: '16px', fontSize: '12px' }} />
                 {displayedChartColumns.map((tc, idx) => {
                   const lower = tc.name.toLowerCase().trim();
+                  const isAvg = lower.includes('avg') || lower.includes('rata');
+                  if (isAvg) {
+                    return (
+                      <Line
+                        key={tc.name}
+                        type="monotone"
+                        dataKey={tc.name}
+                        name={`📈 ${tc.name} (Line Trend)`}
+                        stroke="#f43f5e"
+                        strokeWidth={3}
+                        dot={{ r: 6, fill: '#f43f5e', stroke: '#ffffff', strokeWidth: 1.5 }}
+                        activeDot={{ r: 7 }}
+                      />
+                    );
+                  }
+
                   const isSupplyOrOutstanding = 
                     lower.includes('soh') || 
                     lower === 'on hand' ||
@@ -774,36 +826,19 @@ export default function HistorySalesPage() {
                     lower.includes('order') ||
                     lower.includes('inbound');
 
-                  if (!isSupplyOrOutstanding) {
-                    // M sampai M-5 & AVG 3 Bln (Simbol garis horizontal)
-                    const isAvg = lower.includes('avg') || lower.includes('rata');
-                    const lineColor = isAvg ? '#f43f5e' : COLORS[idx % COLORS.length];
-                    return (
-                      <Line
-                        key={tc.name}
-                        type="monotone"
-                        dataKey={tc.name}
-                        name={isAvg ? `📈 ${tc.name} (Line Trend)` : `🔹 ${tc.name} (Garis Sales)`}
-                        stroke={lineColor}
-                        strokeWidth={isAvg ? 3 : 2.5}
-                        dot={{ r: isAvg ? 6 : 5, fill: lineColor, stroke: '#ffffff', strokeWidth: 1.5 }}
-                        activeDot={{ r: 7 }}
-                      />
-                    );
-                  }
-                  // SOH, TO, Vessel, Hold Delivery -> 1 grafik batang (stacked column)
                   let barColor = COLORS[idx % COLORS.length];
                   if (lower.includes('hold')) barColor = '#f59e0b';
                   else if (lower.includes('vessel')) barColor = '#3b82f6';
                   else if (lower.includes('soh')) barColor = '#10b981';
                   else if (lower === 'to' || lower.includes('to ')) barColor = '#f97316';
+                  else if (!isSupplyOrOutstanding) barColor = COLORS[(idx + 2) % COLORS.length];
 
                   return (
                     <Bar
                       key={tc.name}
                       dataKey={tc.name}
-                      name={`📦 ${tc.name}`}
-                      stackId="supply_outstanding"
+                      name={isSupplyOrOutstanding ? `📦 ${tc.name}` : `📊 ${tc.name} (Sales Vol)`}
+                      stackId={isSupplyOrOutstanding ? "supply_outstanding" : "sales_history"}
                       fill={barColor}
                       maxBarSize={60}
                     />
@@ -919,10 +954,6 @@ export default function HistorySalesPage() {
                 <th className="py-3.5 px-4 border-l border-slate-800 text-cyan-400">📅 Volume M & M-1</th>
                 <th className="py-3.5 px-4 border-l border-slate-800 text-emerald-400">📈 Pertumbuhan vs AVG 3 Bln</th>
                 <th className="py-3.5 px-4 border-l border-slate-800 text-amber-300">💡 Analisis Pertumbuhan</th>
-                <th className="py-3.5 px-4 border-l border-slate-800 text-amber-400">⏳ Outstanding Order</th>
-                <th className="py-3.5 px-4 border-l border-slate-800 bg-slate-800 text-white">Total Volume</th>
-                <th className="py-3.5 px-4 border-l border-slate-800">Rasio (Out/Sales)</th>
-                <th className="py-3.5 px-4 border-l border-slate-800">Zonasi Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/80 text-slate-300 text-center">
@@ -978,25 +1009,6 @@ export default function HistorySalesPage() {
                         {row.growthM >= 5 ? '🚀 PERTUMBUHAN POSITIF' : row.growthM <= -5 ? '📉 SALES MELAMBAT' : '⚖️ STABLE SALES'}
                       </span>
                     </td>
-                    <td className="py-3.5 px-4 border-l border-slate-800 font-bold text-amber-400 text-base font-mono align-middle">
-                      {row.outstanding.toLocaleString('id-ID')}
-                    </td>
-                    <td className="py-3.5 px-4 border-l border-slate-800 bg-slate-950/50 font-bold font-mono text-white text-base align-middle">
-                      {row.total.toLocaleString('id-ID')}
-                    </td>
-                    <td className="py-3.5 px-4 border-l border-slate-800 font-mono font-bold text-slate-200 align-middle">
-                      {row.ratio.toFixed(1)}%
-                    </td>
-                    <td className="py-3.5 px-4 border-l border-slate-800 align-middle">
-                      <span className={`px-2.5 py-1 rounded-full text-[11px] font-black uppercase tracking-wider inline-block ${
-                        isCritical ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40 animate-pulse' :
-                        isWarning ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40' :
-                        isPrime ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40' :
-                        'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
-                      }`}>
-                        {isCritical ? '🔴 OUTSTANDING KRITIS' : isWarning ? '🟡 WASPADA TUNGGAKAN' : isPrime ? '🔵 PERFORMA PRIMA' : '🟢 STABLE SALES'}
-                      </span>
-                    </td>
                   </tr>
                 );
               })}
@@ -1005,41 +1017,41 @@ export default function HistorySalesPage() {
         </div>
       </GlassCard>
 
-      {/* ─── ANALISIS TAMPILAN TAMBAHAN: GROUP BY CATEGORY INSENTIF ─── */}
+      {/* ─── ANALISIS TAMPILAN TAMBAHAN: GROUP BY CATEGORY INSENTIF & CABANG ─── */}
       {insentifAnalysis && insentifAnalysis.length > 0 && (
         <GlassCard className="p-6 border-purple-500/40 bg-gradient-to-b from-slate-900/95 via-purple-950/30 to-slate-950/95 shadow-2xl overflow-hidden">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-4 mb-6 gap-3">
             <div>
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[11px] font-black bg-purple-500/20 text-purple-300 border border-purple-500/40 uppercase tracking-widest mb-2 shadow-sm">
-                <Award className="w-3.5 h-3.5" /> Analisis Tambahan • Group by Category Insentif
+                <Award className="w-3.5 h-3.5" /> Analisis Tambahan • Group by Cabang & Category Insentif
               </div>
               <h3 className="text-lg sm:text-xl font-extrabold text-white flex items-center gap-2.5">
                 <BarChart3 className="w-5 h-5 text-purple-400" />
                 Performa Volume Sales & Outstanding per Category Insentif
               </h3>
               <p className="text-xs text-slate-300 mt-1">
-                Pengelompokan otomatis riwayat penjualan (M-12 s/d M) dan pesanan tertunggak berdasarkan tier/kategori insentif barang.
+                Pengelompokan riwayat penjualan dari <b>M sampai M-5</b> dan pesanan tertunggak berdasarkan kombinasi <b>Cabang & Kategori Insentif</b>.
               </p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          <div className="space-y-8">
             {/* Grafik Bar Category Insentif */}
-            <div className="lg:col-span-7 h-[360px] w-full bg-slate-950/60 p-5 rounded-2xl border border-slate-800 shadow-inner flex flex-col justify-between">
+            <div className="h-[360px] w-full bg-slate-950/60 p-5 rounded-2xl border border-slate-800 shadow-inner flex flex-col justify-between">
               <h4 className="text-xs font-bold uppercase tracking-wider text-purple-300 mb-2 text-center flex items-center justify-center gap-2">
-                📊 Komparasi Volume: Sales vs Outstanding per Insentif
+                📊 Komparasi Volume: Sales vs Outstanding per Kombinasi Cabang & Insentif
               </h4>
               <div className="flex-1 w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={insentifAnalysis} margin={{ top: 15, right: 20, left: 10, bottom: 25 }}>
+                  <BarChart data={insentifAnalysis.slice(0, 30)} margin={{ top: 15, right: 20, left: 10, bottom: 45 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.4} />
-                    <XAxis dataKey="categoryInsentif" stroke="#94a3b8" tick={{ fill: '#e2e8f0', fontSize: 11, fontWeight: 700 }} interval={0} angle={-8} textAnchor="end" height={45} />
+                    <XAxis dataKey="labelKey" stroke="#94a3b8" tick={{ fill: '#e2e8f0', fontSize: 11, fontWeight: 700 }} interval={0} angle={-20} textAnchor="end" height={60} />
                     <YAxis stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 11 }} />
                     <Tooltip
                       contentStyle={{ backgroundColor: '#0f172a', borderColor: '#a855f7', borderRadius: '12px', boxShadow: '0 15px 35px rgba(0,0,0,0.8)' }}
                       labelStyle={{ color: '#d8b4fe', fontWeight: 'bold' }}
                     />
-                    <Legend wrapperStyle={{ paddingTop: '10px', fontSize: '12px', fontWeight: 'bold' }} />
+                    <Legend wrapperStyle={{ paddingTop: '15px', fontSize: '12px', fontWeight: 'bold' }} />
                     <Bar dataKey="totalSales" name="📈 Total Volume Sales" fill="#a855f7" radius={[6, 6, 0, 0]} maxBarSize={50} />
                     <Bar dataKey="totalOutstanding" name="⏳ Outstanding Order" fill="#fbbf24" radius={[6, 6, 0, 0]} maxBarSize={50} />
                   </BarChart>
@@ -1047,38 +1059,62 @@ export default function HistorySalesPage() {
               </div>
             </div>
 
-            {/* Tabel Ringkasan Insentif */}
-            <div className="lg:col-span-5 overflow-x-auto rounded-2xl border border-slate-800 max-h-[360px] overflow-y-auto bg-slate-950/40 shadow-lg">
-              <table className="w-full text-left text-xs border-collapse min-w-[380px]">
+            {/* Tabel Ringkasan Insentif dengan M s/d M-5 */}
+            <div className="overflow-x-auto rounded-2xl border border-slate-800 max-h-[450px] overflow-y-auto bg-slate-950/60 shadow-lg">
+              <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[1000px]">
                 <thead className="bg-slate-950 text-slate-300 uppercase font-extrabold sticky top-0 z-20 shadow-md border-b border-slate-800">
                   <tr className="text-[11px] tracking-wider text-center">
-                    <th className="py-3.5 px-3.5 text-left">Category Insentif</th>
-                    <th className="py-3.5 px-3 border-l border-slate-800 text-purple-300">SKU Item</th>
-                    <th className="py-3.5 px-3 border-l border-slate-800 text-purple-400">📈 Sales Vol</th>
-                    <th className="py-3.5 px-3 border-l border-slate-800 text-amber-400">⏳ Out Vol</th>
-                    <th className="py-3.5 px-3 border-l border-slate-800">Rasio Out/Sales</th>
+                    <th className="py-3.5 px-4 text-left">Cabang / Wilayah</th>
+                    <th className="py-3.5 px-4 border-l border-slate-800 text-purple-300 text-left">Category Insentif</th>
+                    <th className="py-3.5 px-3 border-l border-slate-800 text-cyan-300">M</th>
+                    <th className="py-3.5 px-3 border-l border-slate-800 text-cyan-400">M-1</th>
+                    <th className="py-3.5 px-3 border-l border-slate-800 text-cyan-400">M-2</th>
+                    <th className="py-3.5 px-3 border-l border-slate-800 text-cyan-500">M-3</th>
+                    <th className="py-3.5 px-3 border-l border-slate-800 text-cyan-500">M-4</th>
+                    <th className="py-3.5 px-3 border-l border-slate-800 text-cyan-600">M-5</th>
+                    <th className="py-3.5 px-4 border-l border-slate-800 bg-purple-950/40 text-purple-300 font-extrabold">📈 Total Sales Vol</th>
+                    <th className="py-3.5 px-4 border-l border-slate-800 bg-amber-950/40 text-amber-300 font-extrabold">⏳ Total Out Vol</th>
+                    <th className="py-3.5 px-4 border-l border-slate-800">Rasio Out/Sales</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800 text-slate-200 text-center font-medium">
                   {insentifAnalysis.map((item) => {
                     const isAlert = item.ratio > 25;
                     return (
-                      <tr key={item.categoryInsentif} className="hover:bg-slate-800/60 transition">
-                        <td className="py-3.5 px-3.5 text-left font-extrabold text-white flex items-center gap-2">
+                      <tr key={item.key} className="hover:bg-slate-800/60 transition">
+                        <td className="py-3 px-4 text-left font-extrabold text-white text-sm">
+                          {item.cabang}
+                        </td>
+                        <td className="py-3 px-4 border-l border-slate-800 text-left font-extrabold text-purple-300 flex items-center gap-2">
                           <span className="w-2.5 h-2.5 rounded-full bg-gradient-to-tr from-purple-500 to-pink-400 shrink-0 shadow-sm shadow-purple-500/50" />
                           <span>{item.categoryInsentif}</span>
                         </td>
-                        <td className="py-3.5 px-3 border-l border-slate-800 font-mono text-slate-300 font-bold">
-                          {item.itemCount.toLocaleString('id-ID')}
+                        <td className="py-3 px-3 border-l border-slate-800 font-mono text-cyan-300 font-bold">
+                          {Math.round(item.periods['M'] || 0).toLocaleString('id-ID')}
                         </td>
-                        <td className="py-3.5 px-3 border-l border-slate-800 font-mono font-extrabold text-purple-300 text-sm">
-                          {item.totalSales.toLocaleString('id-ID')}
+                        <td className="py-3 px-3 border-l border-slate-800 font-mono text-slate-300">
+                          {Math.round(item.periods['M-1'] || 0).toLocaleString('id-ID')}
                         </td>
-                        <td className="py-3.5 px-3 border-l border-slate-800 font-mono font-bold text-amber-400 text-sm">
-                          {item.totalOutstanding.toLocaleString('id-ID')}
+                        <td className="py-3 px-3 border-l border-slate-800 font-mono text-slate-300">
+                          {Math.round(item.periods['M-2'] || 0).toLocaleString('id-ID')}
                         </td>
-                        <td className="py-3.5 px-3 border-l border-slate-800 font-mono font-bold">
-                          <span className={`px-2 py-1 rounded-md text-[11px] font-black uppercase ${isAlert ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'}`}>
+                        <td className="py-3 px-3 border-l border-slate-800 font-mono text-slate-400">
+                          {Math.round(item.periods['M-3'] || 0).toLocaleString('id-ID')}
+                        </td>
+                        <td className="py-3 px-3 border-l border-slate-800 font-mono text-slate-400">
+                          {Math.round(item.periods['M-4'] || 0).toLocaleString('id-ID')}
+                        </td>
+                        <td className="py-3 px-3 border-l border-slate-800 font-mono text-slate-400">
+                          {Math.round(item.periods['M-5'] || 0).toLocaleString('id-ID')}
+                        </td>
+                        <td className="py-3 px-4 border-l border-slate-800 bg-purple-950/20 font-mono font-extrabold text-purple-300 text-sm">
+                          {Math.round(item.totalSales).toLocaleString('id-ID')}
+                        </td>
+                        <td className="py-3 px-4 border-l border-slate-800 bg-amber-950/20 font-mono font-bold text-amber-400 text-sm">
+                          {Math.round(item.totalOutstanding).toLocaleString('id-ID')}
+                        </td>
+                        <td className="py-3 px-4 border-l border-slate-800 font-mono font-bold">
+                          <span className={`px-2.5 py-1 rounded-md text-xs font-black uppercase inline-block ${isAlert ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'}`}>
                             {item.ratio.toFixed(1)}%
                           </span>
                         </td>
@@ -1092,30 +1128,147 @@ export default function HistorySalesPage() {
         </GlassCard>
       )}
 
-      {/* ─── FULL DATA TABLE (SEMUA KOLOM RAW DATA) ─── */}
+      {/* ─── FULL DATA TABLE (SEMUA KOLOM RAW DATA DENGAN FILTER ALA EXCEL) ─── */}
       {parsed && parsed.headers && (
         <GlassCard className="p-6 border-slate-800 bg-slate-900/80 shadow-2xl overflow-hidden">
-          <div className="border-b border-slate-800 pb-4 mb-6">
-            <h3 className="text-lg font-bold text-white flex items-center gap-2.5">
-              <BarChart3 className="w-5 h-5 text-emerald-400" />
-              Data Detail (Semua 32 Kolom Raw Data - Terintegrasi M-12 s/d M)
-            </h3>
-            <p className="text-xs text-slate-400 mt-1">
-              Menampilkan rincian seluruh kolom metrik penjualan (M-12 s/d M) dari sheet Data Compile tanpa modifikasi buatan.
-            </p>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-4 mb-6 gap-4">
+            <div>
+              <div className="flex items-center gap-3">
+                <h3 className="text-lg font-bold text-white flex items-center gap-2.5">
+                  <BarChart3 className="w-5 h-5 text-emerald-400" />
+                  Data Detail (Semua 32 Kolom Raw Data - Terintegrasi M-12 s/d M) ({displayedRawData.length} dari {filtered.length} baris)
+                </h3>
+                {Object.keys(rawColFilters).some(k => rawColFilters[k]?.search || (rawColFilters[k]?.selected && rawColFilters[k]?.selected.length > 0)) && (
+                  <button
+                    onClick={() => { setRawColFilters({}); toast.success('Semua filter kolom raw data dibersihkan!'); }}
+                    className="px-3 py-1 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" /> Reset Filter Kolom
+                  </button>
+                )}
+              </div>
+              <p className="text-xs text-slate-400 mt-1">
+                Dilengkapi <b className="text-emerald-400">Filter Kolom ala Excel</b> (klik ikon filter di setiap header untuk cari & pilih data pada seluruh 32 kolom).
+              </p>
+            </div>
           </div>
 
-          <div className="overflow-x-auto rounded-xl border border-slate-800 max-h-[500px] overflow-y-auto">
+          {/* Excel Filter Modal Popover for Raw Data */}
+          {activeRawColModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+              <div className="bg-slate-900 border border-slate-700 rounded-2xl p-5 max-w-sm w-full shadow-2xl text-slate-200">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
+                  <h4 className="font-bold text-sm text-white flex items-center gap-2">
+                    <Filter className="w-4 h-4 text-emerald-400" /> Filter Kolom: <span className="text-emerald-400">{activeRawColModal}</span>
+                  </h4>
+                  <button onClick={() => setActiveRawColModal(null)} className="text-slate-400 hover:text-white transition">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="relative">
+                    <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+                    <input
+                      type="text"
+                      value={rawModalSearchInput}
+                      onChange={e => setRawModalSearchInput(e.target.value)}
+                      placeholder={`Cari dalam ${activeRawColModal}...`}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                    />
+                    {rawModalSearchInput && (
+                      <button onClick={() => setRawModalSearchInput('')} className="absolute right-3 top-2.5 text-slate-500 hover:text-white text-xs">
+                        Hapus
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="max-h-48 overflow-y-auto border border-slate-800 rounded-xl bg-slate-950/50 p-2 space-y-1 text-xs">
+                    <div className="text-[11px] font-semibold text-slate-400 mb-1 px-1 flex justify-between">
+                      <span>Daftar Nilai Unik ({currentRawUniqueValues.length}):</span>
+                    </div>
+                    {currentRawUniqueValues.filter(val => !rawModalSearchInput || val.toLowerCase().includes(rawModalSearchInput.toLowerCase())).slice(0, 50).map((val, idx) => {
+                      const isChecked = !rawColFilters[activeRawColModal]?.selected?.length || rawColFilters[activeRawColModal]?.selected?.includes(val);
+                      return (
+                        <label
+                          key={idx}
+                          className="flex items-center gap-2 py-1 px-2 rounded hover:bg-slate-800/60 cursor-pointer text-slate-300 truncate"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => {
+                              const curSelected = rawColFilters[activeRawColModal]?.selected?.length ? [...(rawColFilters[activeRawColModal]?.selected || [])] : [...currentRawUniqueValues];
+                              let nextSelected: string[];
+                              if (curSelected.includes(val)) {
+                                nextSelected = curSelected.filter(item => item !== val);
+                              } else {
+                                nextSelected = [...curSelected, val];
+                              }
+                              if (nextSelected.length === currentRawUniqueValues.length) {
+                                nextSelected = [];
+                              }
+                              setRawColFilters({
+                                ...rawColFilters,
+                                [activeRawColModal]: { ...rawColFilters[activeRawColModal], selected: nextSelected }
+                              });
+                            }}
+                            className="rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-emerald-500/30"
+                          />
+                          <span className="truncate" title={val}>{val || '(Kosong)'}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-2 border-t border-slate-800">
+                    <button
+                      onClick={() => {
+                        const next = { ...rawColFilters };
+                        delete next[activeRawColModal];
+                        setRawColFilters(next);
+                        setRawModalSearchInput('');
+                        toast.success(`Filter kolom ${activeRawColModal} direset!`);
+                      }}
+                      className="flex-1 py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 font-bold text-xs text-slate-300 hover:text-white transition"
+                    >
+                      Reset
+                    </button>
+                    <button
+                      onClick={() => {
+                        setRawColFilters({
+                          ...rawColFilters,
+                          [activeRawColModal]: { ...rawColFilters[activeRawColModal], search: rawModalSearchInput }
+                        });
+                        setActiveRawColModal(null);
+                        toast.success('Filter diterapkan!');
+                      }}
+                      className="flex-1 py-2 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 font-bold text-xs text-slate-950 transition shadow-lg shadow-emerald-500/20"
+                    >
+                      Terapkan
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="overflow-x-auto rounded-xl border border-slate-800 max-h-[600px] overflow-y-auto">
             <table className="w-full text-left text-xs border-collapse min-w-[1200px]">
               <thead className="bg-slate-950/90 text-slate-300 uppercase font-bold sticky top-0 z-20 shadow-md">
                 <tr className="border-b border-slate-800 text-[10px] tracking-wider text-center">
                   {parsed.headers.map((h) => (
-                    <th key={h} className="py-3 px-3 border-l border-slate-800 whitespace-nowrap">{h}</th>
+                    <th key={h} className="py-3 px-3 border-l border-slate-800 whitespace-nowrap">
+                      <div className="flex items-center gap-1.5 justify-between">
+                        <span>{h}</span>
+                        <button onClick={() => { setActiveRawColModal(h); setRawModalSearchInput(rawColFilters[h]?.search || ''); }} className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition"><Filter className="w-3.5 h-3.5 text-emerald-400" /></button>
+                      </div>
+                    </th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/80 text-slate-300 text-center">
-                {filtered.slice(0, 50).map((row, idx) => (
+                {displayedRawData.slice(0, 100).map((row, idx) => (
                   <tr key={idx} className="hover:bg-slate-800/40 transition">
                     {parsed.headers.map((h) => {
                       const val = row[h];
@@ -1130,9 +1283,9 @@ export default function HistorySalesPage() {
               </tbody>
             </table>
           </div>
-          {filtered.length > 50 && (
+          {displayedRawData.length > 100 && (
             <p className="text-xs text-slate-400 mt-4 italic">
-              * Menampilkan 50 baris pertama dari total {filtered.length} baris data...
+              * Menampilkan 100 baris pertama dari total {displayedRawData.length} baris data (setelah filter)...
             </p>
           )}
         </GlassCard>

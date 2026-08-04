@@ -223,6 +223,8 @@ export default function PRUpdatePage() {
   const [selectedCabang, setSelectedCabang] = useState<string[]>(['All']);
   const [selectedCategory, setSelectedCategory] = useState<string[]>(['All']);
   const [selectedEta, setSelectedEta] = useState<string[]>(['All']);
+  const [selectedStatusCompile, setSelectedStatusCompile] = useState<string[]>(['All']);
+  const [chartViewMode, setChartViewMode] = useState<'eta' | 'cabang'>('eta');
 
   // Excel-like column filters for Table Detail
   const [colFilters, setColFilters] = useState<Record<string, { search: string; selected: string[] }>>({});
@@ -328,6 +330,11 @@ export default function PRUpdatePage() {
     return ['All', ...Array.from(new Set(source.map(d => d[colEta]).filter(v => v && !String(v).includes('#N/A') && !String(v).includes('#REF!') && String(v).toLowerCase() !== 'semua eta'))).sort()];
   }, [parsed, colEta, selectedCabang, selectedCategory, colCabang, colCategory, colGrup]);
 
+  const statusCompiles = useMemo(() => {
+    if (!parsed || !colStatus) return ['All'];
+    return ['All', ...Array.from(new Set(parsed.data.map(d => String(d[colStatus] || '').trim()).filter(v => v && !v.includes('#N/A') && !v.includes('#REF!') && v !== '-'))).sort()];
+  }, [parsed, colStatus]);
+
   // Filtered Data with Scenario adjustments
   const filtered = useMemo(() => {
     if (!parsed) return [];
@@ -337,7 +344,8 @@ export default function PRUpdatePage() {
       .filter(d =>
         (!colCabang || selectedCabang.includes('All') || selectedCabang.includes(d[colCabang])) &&
         (!colCatUse || selectedCategory.includes('All') || selectedCategory.includes(d[colCatUse])) &&
-        (!colEta || selectedEta.includes('All') || selectedEta.includes(d[colEta]))
+        (!colEta || selectedEta.includes('All') || selectedEta.includes(d[colEta])) &&
+        (!colStatus || selectedStatusCompile.includes('All') || selectedStatusCompile.includes(String(d[colStatus] || '').trim()))
       )
       .map(row => {
         const copy = { ...row };
@@ -352,12 +360,13 @@ export default function PRUpdatePage() {
         }
         return copy;
       });
-  }, [parsed, selectedCabang, selectedCategory, selectedEta, colCabang, colCategory, colGrup, colEta, colQty, colStatus, activeScenario]);
+  }, [parsed, selectedCabang, selectedCategory, selectedEta, selectedStatusCompile, colCabang, colCategory, colGrup, colEta, colQty, colStatus, activeScenario]);
 
-  // Chart data: Grouped by Cabang & by Category, Count by STATUS Compile
-  const { chartData, chartCategoryData, statusList, totalQty, holdCount } = useMemo(() => {
-    if (!parsed || filtered.length === 0) return { chartData: [], chartCategoryData: [], statusList: [], totalQty: 0, holdCount: 0 };
+  // Chart data: Grouped by Cabang, Week ETA & by Category, Count by STATUS Compile
+  const { chartData, chartEtaData, chartCategoryData, statusList, totalQty, holdCount } = useMemo(() => {
+    if (!parsed || filtered.length === 0) return { chartData: [], chartEtaData: [], chartCategoryData: [], statusList: [], totalQty: 0, holdCount: 0 };
     const mapCabang: Record<string, any> = {};
+    const mapEta: Record<string, any> = {};
     const mapCat: Record<string, any> = {};
     const statuses = new Set<string>();
     let qtySum = 0;
@@ -368,6 +377,7 @@ export default function PRUpdatePage() {
     for (const row of filtered) {
       const cbg = colCabang ? (row[colCabang] || 'Unknown') : 'All';
       const cat = colCatUse ? (row[colCatUse] || 'Umum / No Kategori') : 'Umum';
+      const eta = colEta ? (row[colEta] || 'Unscheduled / Tanpa ETA') : 'Unscheduled';
       
       if (selectedCabangForChart !== 'All' && cbg !== selectedCabangForChart) continue;
 
@@ -386,6 +396,12 @@ export default function PRUpdatePage() {
       }
       mapCabang[cbg][stat] = Math.round((mapCabang[cbg][stat] || 0) + q);
 
+      // Group by Week ETA
+      if (!mapEta[eta]) {
+        mapEta[eta] = { eta: eta };
+      }
+      mapEta[eta][stat] = Math.round((mapEta[eta][stat] || 0) + q);
+
       // Group by Category
       if (!mapCat[cat]) {
         mapCat[cat] = { category: cat };
@@ -395,12 +411,13 @@ export default function PRUpdatePage() {
 
     return { 
       chartData: Object.values(mapCabang), 
+      chartEtaData: Object.values(mapEta).sort((a, b) => String(a.eta).localeCompare(String(b.eta))),
       chartCategoryData: Object.values(mapCat), 
       statusList: Array.from(statuses), 
       totalQty: Math.round(qtySum), 
       holdCount: holdSum 
     };
-  }, [parsed, filtered, colCabang, colCategory, colGrup, colStatus, colQty, selectedCabangForChart]);
+  }, [parsed, filtered, colCabang, colCategory, colGrup, colEta, colStatus, colQty, selectedCabangForChart]);
 
   // Pivot Table Data (Grouped by Cabang - PO - Grup - Category - Description)
   const pivotData = useMemo(() => {
@@ -680,7 +697,7 @@ export default function PRUpdatePage() {
 
       {/* ─── FILTER CONTROLS & SELECTION (EXPANDED & OVERFLOW-VISIBLE) ─── */}
       <GlassCard allowOverflow={true} className="p-6 border-slate-800 bg-slate-900/90 backdrop-blur-xl mb-10 shadow-xl">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
           <div className="space-y-2">
             <label className="text-xs font-bold text-slate-300 mb-1 block uppercase tracking-wider">🏢 Filter Cabang:</label>
             <MultiSelect
@@ -712,45 +729,75 @@ export default function PRUpdatePage() {
             />
           </div>
           <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-300 mb-1 block uppercase tracking-wider">⚡ Filter Status Compile:</label>
+            <MultiSelect
+              options={statusCompiles}
+              selected={selectedStatusCompile}
+              onChange={setSelectedStatusCompile}
+              selectAllLabel="Semua Status"
+              placeholder="Pilih Status..."
+            />
+          </div>
+          <div className="space-y-2">
             <label className="text-xs font-bold text-slate-300 mb-1 block uppercase tracking-wider">📍 Sorot Grafik Cabang:</label>
             <select
               value={selectedCabangForChart}
               onChange={(e) => setSelectedCabangForChart(e.target.value)}
               className="w-full min-h-[44px] rounded-xl border border-slate-700 bg-slate-950/90 px-3.5 py-2 text-sm text-slate-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/30 outline-none transition font-semibold cursor-pointer shadow-md"
             >
-              <option value="All">📊 Semua Cabang (Gabungan)</option>
-              {cabangs.filter(c => c !== 'All').map(c => (
-                <option key={c} value={c}>📍 Fokus: {c}</option>
+              <option value="All">🌐 Seluruh Cabang (All)</option>
+              {cabangs.filter(c => c !== 'All').map((cab) => (
+                <option key={cab} value={cab}>🏢 {cab}</option>
               ))}
             </select>
           </div>
         </div>
       </GlassCard>
 
-      {/* ─── VISUALIZATION CHART 1: STATUS COMPILE PER CABANG ─── */}
-      {chartData && chartData.length > 0 && (
+      {/* ─── VISUALIZATION CHART 1: STATUS COMPILE PER WEEK ETA / CABANG ─── */}
+      {((chartViewMode === 'eta' && chartEtaData.length > 0) || (chartViewMode === 'cabang' && chartData.length > 0)) && (
         <GlassCard className="p-6 border-purple-500/30 bg-gradient-to-b from-slate-900/90 to-slate-950/90 shadow-2xl">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-4 mb-6 gap-3">
             <div>
               <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
                 <BarChart3 className="w-5 h-5 text-purple-400" />
-                1. Grafik Distribusi Status Compile (Total Qty) per Cabang
+                1. Grafik Distribusi Status Compile (Total Qty) {chartViewMode === 'eta' ? 'per Week ETA' : 'per Cabang'}
               </h3>
               <p className="text-xs text-slate-400 mt-1">
-                Sorotan: <b className="text-cyan-400">{selectedCabangForChart === 'All' ? 'Seluruh Cabang' : selectedCabangForChart}</b> • Skenario Aktif: <b className="text-amber-300">{activeScenario.toUpperCase()}</b>
+                Sorotan: <b className="text-cyan-400">{selectedCabangForChart === 'All' ? 'Seluruh Cabang' : selectedCabangForChart}</b> • Skenario Aktif: <b className="text-amber-300">{activeScenario.toUpperCase()}</b> • Mode: <b className="text-emerald-400">{chartViewMode === 'eta' ? 'Persebaran Week ETA' : 'Persebaran Cabang'}</b>
               </p>
             </div>
             
-            <div className="flex items-center gap-2 text-xs text-slate-400 bg-slate-800/50 px-3 py-1.5 rounded-xl border border-slate-700">
-              <span>📊 Menampilkan {statusList.length} status pada {chartData.length} cabang</span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex bg-slate-800/80 p-1 rounded-xl border border-slate-700">
+                <button
+                  onClick={() => setChartViewMode('eta')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                    chartViewMode === 'eta' ? 'bg-purple-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  🗓️ Week ETA
+                </button>
+                <button
+                  onClick={() => setChartViewMode('cabang')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                    chartViewMode === 'cabang' ? 'bg-purple-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  🏢 Cabang
+                </button>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-slate-400 bg-slate-800/50 px-3 py-1.5 rounded-xl border border-slate-700">
+                <span>📊 Menampilkan {statusList.length} status pada {chartViewMode === 'eta' ? `${chartEtaData.length} periode ETA` : `${chartData.length} cabang`}</span>
+              </div>
             </div>
           </div>
 
           <div className="h-[360px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} margin={{ top: 20, right: 30, left: 10, bottom: 20 }}>
+              <BarChart data={chartViewMode === 'eta' ? chartEtaData : chartData} margin={{ top: 20, right: 30, left: 10, bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
-                <XAxis dataKey="cabang" stroke="#94a3b8" tick={{ fill: '#e2e8f0', fontSize: 12, fontWeight: 600 }} angle={-15} textAnchor="end" height={50} />
+                <XAxis dataKey={chartViewMode === 'eta' ? 'eta' : 'cabang'} stroke="#94a3b8" tick={{ fill: '#e2e8f0', fontSize: 12, fontWeight: 600 }} angle={-15} textAnchor="end" height={50} />
                 <YAxis stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 12 }} />
                 <Tooltip
                   contentStyle={{ backgroundColor: '#0f172a', borderColor: '#a855f7', borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}
