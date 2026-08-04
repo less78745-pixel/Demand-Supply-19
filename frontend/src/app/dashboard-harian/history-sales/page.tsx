@@ -14,7 +14,7 @@ import {
 import toast from 'react-hot-toast';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  Legend, ResponsiveContainer
+  Legend, ResponsiveContainer, ComposedChart, Line, ReferenceArea, ReferenceLine, Cell
 } from 'recharts';
 import { get, set } from 'idb-keyval';
 import { parseDynamicCSV, findColumn, ParsedData } from '@/lib/csvParser';
@@ -118,7 +118,7 @@ function generateDemoHistorySales(): ParsedData {
 export default function HistorySalesPage() {
   const [parsed, setParsed] = useState<ParsedData | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [chartFilter, setChartFilter] = useState<'all' | 'sales' | 'outstanding'>('all');
+  const [chartFilter, setChartFilter] = useState<'all' | 'sales' | 'outstanding' | 'avg3'>('all');
   const [showHowTo, setShowHowTo] = useState<boolean>(false);
   const [selectedCabangForChart, setSelectedCabangForChart] = useState<string>('All');
 
@@ -301,24 +301,117 @@ export default function HistorySalesPage() {
   const displayedChartColumns = useMemo(() => {
     if (!parsed) return [];
     if (!executiveSummary || chartFilter === 'all') return parsed.targetColumns;
+    if (chartFilter === 'avg3') {
+      return parsed.targetColumns.filter(tc => tc.name.toLowerCase().includes('avg'));
+    }
     const targetSet = new Set(chartFilter === 'sales' ? executiveSummary.salesCols : executiveSummary.outstandingCols);
     return parsed.targetColumns.filter(tc => targetSet.has(tc.name));
   }, [parsed, executiveSummary, chartFilter]);
 
-  // Table Data grouped per Cabang for cleaner comparison & zonasi
+  // Table Data grouped per Cabang + Category for detailed comparison & zonasi
   const tableData = useMemo(() => {
-    if (!executiveSummary) return [];
-    return Object.entries(executiveSummary.cabangVol).map(([cabang, vals]) => {
-      const ratio = vals.sales > 0 ? (vals.outstanding / vals.sales) * 100 : 0;
-      return {
-        cabang,
-        sales: vals.sales,
-        outstanding: vals.outstanding,
-        total: vals.total,
-        ratio
-      };
-    }).sort((a, b) => b.sales - a.sales);
-  }, [executiveSummary]);
+    if (!parsed || !executiveSummary || filtered.length === 0) return [];
+    const map: Record<string, { cabang: string; category: string; sales: number; outstanding: number; total: number; avg3: number }> = {};
+    
+    const salesSet = new Set(executiveSummary.salesCols);
+    const outSet = new Set(executiveSummary.outstandingCols);
+    const colAvg = findColumn(parsed.headers, ['avg sales 3 bln', 'avg sales', 'avg']);
+
+    for (const row of filtered) {
+      const cbg = colCabang ? String(row[colCabang] || 'Unknown') : 'All';
+      const cat = colCategory ? String(row[colCategory] || 'Uncategorized') : 'General';
+      const key = `${cbg}___${cat}`;
+
+      if (!map[key]) {
+        map[key] = { cabang: cbg, category: cat, sales: 0, outstanding: 0, total: 0, avg3: 0 };
+      }
+
+      parsed.targetColumns.forEach(tc => {
+        const val = Number(String(row[tc.name] || 0).replace(/[^0-9.-]+/g, '')) || 0;
+        if (salesSet.has(tc.name)) {
+          map[key].sales += val;
+          map[key].total += val;
+        } else if (outSet.has(tc.name)) {
+          map[key].outstanding += val;
+          map[key].total += val;
+        }
+      });
+
+      if (colAvg) {
+        map[key].avg3 += Number(String(row[colAvg] || 0).replace(/[^0-9.-]+/g, '')) || 0;
+      }
+    }
+
+    return Object.values(map).map(item => {
+      const ratio = item.sales > 0 ? (item.outstanding / item.sales) * 100 : 0;
+      return { ...item, ratio };
+    }).sort((a, b) => {
+      if (a.cabang !== b.cabang) return a.cabang.localeCompare(b.cabang);
+      return b.sales - a.sales;
+    });
+  }, [parsed, executiveSummary, filtered, colCabang, colCategory]);
+
+  // Supply vs Monthly Sales (M to M-5) computation
+  const supplyVsMonthlySales = useMemo(() => {
+    if (!parsed || filtered.length === 0) return null;
+    let totalSOH = 0;
+    let totalTO = 0;
+    let totalVessel = 0;
+
+    const periodNames = ['M', 'M-1', 'M-2', 'M-3', 'M-4', 'M-5'];
+    const periodTotals: Record<string, number> = {
+      'M': 0,
+      'M-1': 0,
+      'M-2': 0,
+      'M-3': 0,
+      'M-4': 0,
+      'M-5': 0
+    };
+
+    const colSOH = findColumn(parsed.headers, ['soh', 'on hand', 'stock on hand']);
+    const colTO = findColumn(parsed.headers, ['to', 'transfer order']);
+    const colVessel = findColumn(parsed.headers, ['on vessel', 'vessel', 'in transit']);
+
+    const periodCols: Record<string, string | undefined> = {};
+    periodNames.forEach(p => {
+      const found = parsed.headers.find(h => h.trim().toUpperCase() === p.toUpperCase());
+      if (found) periodCols[p] = found;
+    });
+
+    for (const row of filtered) {
+      if (colSOH) totalSOH += Number(String(row[colSOH] || 0).replace(/[^0-9.-]+/g, '')) || 0;
+      if (colTO) totalTO += Number(String(row[colTO] || 0).replace(/[^0-9.-]+/g, '')) || 0;
+      if (colVessel) totalVessel += Number(String(row[colVessel] || 0).replace(/[^0-9.-]+/g, '')) || 0;
+
+      periodNames.forEach(p => {
+        const colName = periodCols[p];
+        if (colName) {
+          periodTotals[p] += Number(String(row[colName] || 0).replace(/[^0-9.-]+/g, '')) || 0;
+        }
+      });
+    }
+
+    const totalSupply = totalSOH + totalTO + totalVessel;
+    const barColors = ['#facc15', '#fbcfe8', '#86efac', '#475569', '#fcd34d', '#8b5cf6'];
+
+    const chartData = periodNames.map((p, index) => ({
+      period: p,
+      sales: periodTotals[p],
+      fill: barColors[index % barColors.length]
+    }));
+
+    const maxSales = Math.max(...Object.values(periodTotals), 0);
+    const maxY = Math.max(totalSupply, maxSales) * 1.15;
+
+    return {
+      totalSOH,
+      totalTO,
+      totalVessel,
+      totalSupply,
+      chartData,
+      maxY
+    };
+  }, [parsed, filtered]);
 
   // Insentif Analysis Grouping
   const insentifAnalysis = useMemo(() => {
@@ -585,12 +678,20 @@ export default function HistorySalesPage() {
               >
                 ⚠️ Fokus Outstanding
               </button>
+              <button
+                onClick={() => setChartFilter('avg3')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 ${
+                  chartFilter === 'avg3' ? 'bg-rose-600 text-white shadow-md scale-105' : 'text-slate-400 hover:text-rose-400'
+                }`}
+              >
+                📈 AVG 3 Bulan (Garis)
+              </button>
             </div>
           </div>
 
           <div className="h-[360px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} margin={{ top: 20, right: 30, left: 10, bottom: 20 }}>
+              <ComposedChart data={chartData} margin={{ top: 20, right: 30, left: 10, bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
                 <XAxis dataKey="cabang" stroke="#94a3b8" tick={{ fill: '#e2e8f0', fontSize: 12, fontWeight: 600 }} angle={-15} textAnchor="end" height={50} />
                 <YAxis stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 12 }} />
@@ -599,16 +700,104 @@ export default function HistorySalesPage() {
                   labelStyle={{ color: '#38bdf8', fontWeight: 'bold', borderBottom: '1px solid #334155', paddingBottom: '4px' }}
                 />
                 <Legend wrapperStyle={{ paddingTop: '16px', fontSize: '12px' }} />
-                {displayedChartColumns.map((tc, idx) => (
-                  <Bar
-                    key={tc.name}
-                    dataKey={tc.name}
-                    fill={COLORS[idx % COLORS.length]}
-                    radius={[4, 4, 0, 0]}
-                    maxBarSize={50}
-                  />
-                ))}
-              </BarChart>
+                {displayedChartColumns.map((tc, idx) => {
+                  if (tc.name.toLowerCase().includes('avg') || tc.name.toLowerCase().includes('rata')) {
+                    return (
+                      <Line
+                        key={tc.name}
+                        type="monotone"
+                        dataKey={tc.name}
+                        name={`📈 ${tc.name} (Line Trend)`}
+                        stroke="#f43f5e"
+                        strokeWidth={3}
+                        dot={{ r: 6, fill: '#f43f5e', stroke: '#ffffff', strokeWidth: 2 }}
+                        activeDot={{ r: 8 }}
+                      />
+                    );
+                  }
+                  return (
+                    <Bar
+                      key={tc.name}
+                      dataKey={tc.name}
+                      fill={COLORS[idx % COLORS.length]}
+                      radius={[4, 4, 0, 0]}
+                      maxBarSize={50}
+                    />
+                  );
+                })}
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </GlassCard>
+      )}
+
+      {/* ─── NEW VISUALIZATION: ON HAND + VESSEL + TO VS HISTORY M s/d M-5 ─── */}
+      {supplyVsMonthlySales && (
+        <GlassCard className="p-6 border-amber-500/40 bg-gradient-to-b from-slate-900/95 via-slate-950/90 to-slate-900/95 shadow-2xl">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-4 mb-6 gap-3">
+            <div>
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[11px] font-black bg-amber-500/10 text-amber-400 border border-amber-500/30 uppercase tracking-widest mb-2">
+                <Layers className="w-3.5 h-3.5" /> Kapasitas Stok vs History Penjualan
+              </div>
+              <h3 className="text-lg sm:text-xl font-black text-white flex items-center gap-2.5">
+                <BarChart3 className="w-5 h-5 text-amber-400" />
+                Komparasi Stok (SOH + TO + Vessel) Terhadap Penjualan Bulanan (M s/d M-5)
+              </h3>
+              <p className="text-xs text-slate-300 mt-1">
+                Visualisasi terpadu membandingkan volume transaksi penjualan dari 6 bulan terakhir (M s/d M-5) dengan kapasitas posisi stok aktual dan perjalanan.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 bg-slate-950/80 p-2.5 rounded-xl border border-slate-800 text-xs font-mono font-bold">
+              <span className="px-2.5 py-1 rounded bg-slate-700/50 text-slate-200">SOH: {supplyVsMonthlySales.totalSOH.toLocaleString('id-ID')}</span>
+              <span className="text-slate-500">+</span>
+              <span className="px-2.5 py-1 rounded bg-blue-500/20 text-blue-300">TO: {supplyVsMonthlySales.totalTO.toLocaleString('id-ID')}</span>
+              <span className="text-slate-500">+</span>
+              <span className="px-2.5 py-1 rounded bg-slate-200/20 text-slate-200">Vessel: {supplyVsMonthlySales.totalVessel.toLocaleString('id-ID')}</span>
+              <span className="text-slate-500">=</span>
+              <span className="px-3 py-1 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">Total: {supplyVsMonthlySales.totalSupply.toLocaleString('id-ID')}</span>
+            </div>
+          </div>
+
+          <div className="h-[420px] w-full mt-4">
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={supplyVsMonthlySales.chartData} margin={{ top: 25, right: 75, left: 75, bottom: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.4} />
+                <XAxis dataKey="period" stroke="#94a3b8" tick={{ fill: '#ffffff', fontSize: 15, fontWeight: 800 }} />
+                <YAxis stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 12 }} domain={[0, supplyVsMonthlySales.maxY]} tickFormatter={(val) => val.toLocaleString('id-ID')} />
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#0f172a', borderColor: '#eab308', borderRadius: '12px', padding: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.8)' }}
+                  formatter={(val: any) => [Number(val).toLocaleString('id-ID') + ' Unit', 'Volume Sales']}
+                  labelStyle={{ color: '#fde047', fontWeight: 'bold' }}
+                />
+
+                {/* Background Zones representing SOH, TO, VESSEL */}
+                <ReferenceArea y1={0} y2={supplyVsMonthlySales.totalSOH} fill="#64748b" fillOpacity={0.35} stroke="none" />
+                <ReferenceArea y1={supplyVsMonthlySales.totalSOH} y2={supplyVsMonthlySales.totalSOH + supplyVsMonthlySales.totalTO} fill="#3b82f6" fillOpacity={0.3} stroke="none" />
+                <ReferenceArea y1={supplyVsMonthlySales.totalSOH + supplyVsMonthlySales.totalTO} y2={supplyVsMonthlySales.totalSupply} fill="#cbd5e1" fillOpacity={0.25} stroke="none" />
+
+                {/* Zone Labels inside left & right */}
+                <ReferenceLine y={supplyVsMonthlySales.totalSOH / 2} stroke="none" label={{ value: 'SOH', position: 'insideLeft', fill: '#cbd5e1', fontSize: 14, fontWeight: 900 }} />
+                <ReferenceLine y={supplyVsMonthlySales.totalSOH / 2} stroke="none" label={{ value: 'SOH', position: 'insideRight', fill: '#cbd5e1', fontSize: 14, fontWeight: 900 }} />
+
+                <ReferenceLine y={supplyVsMonthlySales.totalSOH + supplyVsMonthlySales.totalTO / 2} stroke="none" label={{ value: 'TO', position: 'insideLeft', fill: '#93c5fd', fontSize: 14, fontWeight: 900 }} />
+                <ReferenceLine y={supplyVsMonthlySales.totalSOH + supplyVsMonthlySales.totalTO / 2} stroke="none" label={{ value: 'TO', position: 'insideRight', fill: '#93c5fd', fontSize: 14, fontWeight: 900 }} />
+
+                <ReferenceLine y={supplyVsMonthlySales.totalSOH + supplyVsMonthlySales.totalTO + supplyVsMonthlySales.totalVessel / 2} stroke="none" label={{ value: 'VESSEL', position: 'insideLeft', fill: '#f8fafc', fontSize: 14, fontWeight: 900 }} />
+                <ReferenceLine y={supplyVsMonthlySales.totalSOH + supplyVsMonthlySales.totalTO + supplyVsMonthlySales.totalVessel / 2} stroke="none" label={{ value: 'VESSEL', position: 'insideRight', fill: '#f8fafc', fontSize: 14, fontWeight: 900 }} />
+
+                {/* Dashed boundary lines with numerical summary */}
+                <ReferenceLine y={supplyVsMonthlySales.totalSOH} stroke="#94a3b8" strokeDasharray="3 3" label={{ value: `SOH: ${supplyVsMonthlySales.totalSOH.toLocaleString('id-ID')}`, position: 'insideTopLeft', fill: '#94a3b8', fontSize: 11 }} />
+                <ReferenceLine y={supplyVsMonthlySales.totalSOH + supplyVsMonthlySales.totalTO} stroke="#3b82f6" strokeDasharray="3 3" label={{ value: `+TO: ${(supplyVsMonthlySales.totalSOH + supplyVsMonthlySales.totalTO).toLocaleString('id-ID')}`, position: 'insideTopLeft', fill: '#60a5fa', fontSize: 11 }} />
+                <ReferenceLine y={supplyVsMonthlySales.totalSupply} stroke="#e2e8f0" strokeDasharray="4 4" strokeWidth={2} label={{ value: `Total (SOH+TO+Vessel): ${supplyVsMonthlySales.totalSupply.toLocaleString('id-ID')}`, position: 'top', fill: '#ffffff', fontSize: 12, fontWeight: 'bold' }} />
+
+                {/* Monthly Sales Bars */}
+                <Bar dataKey="sales" name="Volume Sales Bulanan" radius={[6, 6, 0, 0]} maxBarSize={80}>
+                  {supplyVsMonthlySales.chartData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.fill} stroke="#0f172a" strokeWidth={1} />
+                  ))}
+                </Bar>
+              </ComposedChart>
             </ResponsiveContainer>
           </div>
         </GlassCard>
@@ -620,10 +809,10 @@ export default function HistorySalesPage() {
           <div>
             <h3 className="text-lg font-bold text-white flex items-center gap-2.5">
               <FileSpreadsheet className="w-5 h-5 text-blue-400" />
-              Tabel Analisis Komparatif Sales vs Outstanding ({tableData.length} Cabang)
+              Tabel Analisis Komparatif Sales vs Outstanding ({tableData.length} Kombinasi Cabang & Kategori)
             </h3>
             <p className="text-xs text-slate-400 mt-1">
-              Rincian performa penjualan dengan zonasi status kewaspadaan outstanding secara real-time.
+              Rincian performa penjualan dan rata-rata 3 bulan per Cabang & Kategori dengan zonasi status kewaspadaan secara real-time.
             </p>
           </div>
 
@@ -636,11 +825,13 @@ export default function HistorySalesPage() {
         </div>
 
         <div className="overflow-x-auto rounded-xl border border-slate-800 max-h-[600px] overflow-y-auto">
-          <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[800px]">
+          <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[950px]">
             <thead className="bg-slate-950/90 text-slate-300 uppercase font-bold sticky top-0 z-20 shadow-md">
               <tr className="border-b border-slate-800 text-[11px] tracking-wider text-center">
                 <th className="py-3.5 px-4 text-left">Cabang / Wilayah</th>
+                <th className="py-3.5 px-4 border-l border-slate-800 text-purple-300">📦 Kategori Item</th>
                 <th className="py-3.5 px-4 border-l border-slate-800 text-blue-400">📈 Total Volume Sales</th>
+                <th className="py-3.5 px-4 border-l border-slate-800 text-rose-400">📊 AVG Sales 3 Bln</th>
                 <th className="py-3.5 px-4 border-l border-slate-800 text-amber-400">⏳ Outstanding Order</th>
                 <th className="py-3.5 px-4 border-l border-slate-800 bg-slate-800 text-white">Total Volume</th>
                 <th className="py-3.5 px-4 border-l border-slate-800">Rasio (Out/Sales)</th>
@@ -648,14 +839,14 @@ export default function HistorySalesPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/80 text-slate-300 text-center">
-              {tableData.map((row) => {
+              {tableData.map((row, idx) => {
                 const isCritical = row.ratio > 30;
                 const isWarning = row.ratio > 15 && !isCritical;
                 const isPrime = row.ratio <= 15 && row.sales > 5000;
 
                 return (
                   <tr
-                    key={row.cabang}
+                    key={`${row.cabang}-${row.category}-${idx}`}
                     className="hover:bg-slate-800/40 transition cursor-pointer font-medium"
                     onClick={() => setSelectedCabangForChart(row.cabang === selectedCabangForChart ? 'All' : row.cabang)}
                   >
@@ -668,19 +859,27 @@ export default function HistorySalesPage() {
                       </div>
                       <div className="text-[11px] text-slate-400 mt-0.5">Sales & Outstanding Track</div>
                     </td>
-                    <td className="py-3.5 px-4 border-l border-slate-800 font-extrabold text-blue-400 text-base font-mono">
+                    <td className="py-3.5 px-4 border-l border-slate-800 align-middle">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-purple-500/10 text-purple-300 border border-purple-500/20 font-bold text-xs">
+                        📦 {row.category}
+                      </span>
+                    </td>
+                    <td className="py-3.5 px-4 border-l border-slate-800 font-extrabold text-blue-400 text-base font-mono align-middle">
                       {row.sales.toLocaleString('id-ID')}
                     </td>
-                    <td className="py-3.5 px-4 border-l border-slate-800 font-bold text-amber-400 text-base font-mono">
+                    <td className="py-3.5 px-4 border-l border-slate-800 font-extrabold text-rose-400 text-base font-mono align-middle">
+                      {row.avg3.toLocaleString('id-ID')}
+                    </td>
+                    <td className="py-3.5 px-4 border-l border-slate-800 font-bold text-amber-400 text-base font-mono align-middle">
                       {row.outstanding.toLocaleString('id-ID')}
                     </td>
-                    <td className="py-3.5 px-4 border-l border-slate-800 bg-slate-950/50 font-bold font-mono text-white text-base">
+                    <td className="py-3.5 px-4 border-l border-slate-800 bg-slate-950/50 font-bold font-mono text-white text-base align-middle">
                       {row.total.toLocaleString('id-ID')}
                     </td>
-                    <td className="py-3.5 px-4 border-l border-slate-800 font-mono font-bold text-slate-200">
+                    <td className="py-3.5 px-4 border-l border-slate-800 font-mono font-bold text-slate-200 align-middle">
                       {row.ratio.toFixed(1)}%
                     </td>
-                    <td className="py-3.5 px-4 border-l border-slate-800">
+                    <td className="py-3.5 px-4 border-l border-slate-800 align-middle">
                       <span className={`px-2.5 py-1 rounded-full text-[11px] font-black uppercase tracking-wider inline-block ${
                         isCritical ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40 animate-pulse' :
                         isWarning ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40' :

@@ -14,16 +14,17 @@ import {
 import toast from 'react-hot-toast';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  Legend, ResponsiveContainer
+  Legend, ResponsiveContainer, PieChart, Pie, Cell
 } from 'recharts';
 import { get, set } from 'idb-keyval';
 import { parseDynamicCSV, findColumn, ParsedData } from '@/lib/csvParser';
 import { getStandardFilename } from '@/utils/export';
 
-const COLORS = ['#f97316', '#3b82f6', '#22c55e', '#ef4444', '#a855f7', '#eab308', '#06b6d4', '#ec4899'];
+const COLORS = ['#f97316', '#3b82f6', '#22c55e', '#ef4444', '#a855f7', '#eab308', '#06b6d4', '#ec4899', '#14b8a6', '#6366f1', '#f43f5e', '#84cc16'];
 
-const getPillarCategory = (colName: string): 'On Hand' | 'VESSEL' | 'TO' | 'PLAN LOADING' | 'Lainnya' => {
+const getPillarCategory = (colName: string): 'On Hand' | 'VESSEL' | 'TO' | 'PLAN LOADING' | 'TARGET SALES' | 'Lainnya' => {
   const lower = colName.toLowerCase().trim();
+  if (lower.includes('outstanding') || lower.includes('target') || lower.includes('target sales')) return 'TARGET SALES';
   if (lower.includes('on hand') || lower === 'soh' || lower.includes('stock on hand')) return 'On Hand';
   if (lower.includes('vessel') || lower.includes('kapal') || lower.includes('on vessel')) return 'VESSEL';
   if (lower.includes('to ') || lower.startsWith('to') || lower.includes('transfer order')) return 'TO';
@@ -36,6 +37,7 @@ const PILLAR_COLORS: Record<string, string> = {
   'VESSEL': '#3b82f6',       // Blue
   'TO': '#f97316',           // Orange
   'PLAN LOADING': '#a855f7', // Purple
+  'TARGET SALES': '#ec4899', // Pink
   'Lainnya': '#64748b'       // Slate Gray
 };
 
@@ -70,6 +72,28 @@ const SCENARIOS = [
   }
 ];
 
+export interface StockCondition {
+  ratio: number;
+  status: string;
+  badge: string;
+  color: string;
+}
+
+const calculateStockCondition = (onHand: number, totalTO: number, totalVessel: number, targetSales: number): StockCondition => {
+  const totalSupply = onHand + totalTO + totalVessel;
+  if (!targetSales || targetSales <= 0) {
+    return { ratio: 0, status: 'N/A (Target 0)', badge: '⚪ N/A (Target 0)', color: 'bg-slate-700/50 text-slate-300 border border-slate-600' };
+  }
+  const ratio = Number((totalSupply / targetSales).toFixed(2));
+  if (ratio > 1.25) {
+    return { ratio, status: 'Aman', badge: '🟢 AMAN', color: 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' };
+  }
+  if (ratio >= 1.0 && ratio <= 1.25) {
+    return { ratio, status: 'Hati-Hati', badge: '🟡 HATI-HATI', color: 'bg-amber-500/20 text-amber-400 border border-amber-500/40' };
+  }
+  return { ratio, status: 'Bahaya', badge: '🔴 BAHAYA', color: 'bg-rose-500/20 text-rose-400 border border-rose-500/40 animate-pulse' };
+};
+
 function generateDemoSOH(): ParsedData {
   const cabangs = ['Surabaya', 'Jakarta', 'Bandung', 'Medan', 'Semarang', 'Makassar', 'Palembang', 'Denpasar'];
   const categories = ['Minyak Goreng Premium', 'Beras Setra Ramos', 'Gula Pasir Kristal', 'Tepung Terigu Serbaguna', 'Kopi Bubuk Murni', 'Susu Kental Manis'];
@@ -87,6 +111,7 @@ function generateDemoSOH(): ParsedData {
       const v3 = Math.round(220 + Math.random() * 480);
       const v4 = Math.round(150 + Math.random() * 420);
       const planLoading = Math.round(500 + Math.random() * 1200);
+      const targetSales = Math.round(2500 + Math.random() * 4500);
       data.push({
         cabang: cab,
         Category: cat,
@@ -99,13 +124,14 @@ function generateDemoSOH(): ParsedData {
         'Vessel Week 2': v2,
         'Vessel Week 3': v3,
         'Vessel Week 4': v4,
-        'Plan Loading': planLoading
+        'Plan Loading': planLoading,
+        'Outstanding Target Sales': targetSales
       });
     });
   });
 
   return {
-    headers: ['cabang', 'Category', 'On Hand', 'TO Week 1', 'TO Week 2', 'TO Week 3', 'TO Week 4', 'Vessel Week 1', 'Vessel Week 2', 'Vessel Week 3', 'Vessel Week 4', 'Plan Loading'],
+    headers: ['cabang', 'Category', 'On Hand', 'TO Week 1', 'TO Week 2', 'TO Week 3', 'TO Week 4', 'Vessel Week 1', 'Vessel Week 2', 'Vessel Week 3', 'Vessel Week 4', 'Plan Loading', 'Outstanding Target Sales'],
     targetColumns: [
       { index: 2, name: 'On Hand' },
       { index: 3, name: 'TO Week 1' },
@@ -116,7 +142,8 @@ function generateDemoSOH(): ParsedData {
       { index: 8, name: 'Vessel Week 2' },
       { index: 9, name: 'Vessel Week 3' },
       { index: 10, name: 'Vessel Week 4' },
-      { index: 11, name: 'Plan Loading' }
+      { index: 11, name: 'Plan Loading' },
+      { index: 12, name: 'Outstanding Target Sales' }
     ],
     data,
     processed_at: new Date().toISOString()
@@ -126,7 +153,7 @@ function generateDemoSOH(): ParsedData {
 export default function SOHAnalysisPage() {
   const [parsed, setParsed] = useState<ParsedData | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [chartMode, setChartMode] = useState<'weekly' | 'summary' | 'stock' | 'to' | 'vessel'>('weekly');
+  const [chartMode, setChartMode] = useState<'weekly' | 'summary' | 'stock'>('weekly');
   const [showHowTo, setShowHowTo] = useState<boolean>(false);
   const [activeScenario, setActiveScenario] = useState<ScenarioType>('base');
   const [selectedCabangForChart, setSelectedCabangForChart] = useState<string>('All');
@@ -156,9 +183,9 @@ export default function SOHAnalysisPage() {
   };
 
   const handleDownloadTemplate = () => {
-    const headers = 'cabang,Category,On Hand,TO Week 1,TO Week 2,TO Week 3,TO Week 4,Vessel Week 1,Vessel Week 2,Vessel Week 3,Vessel Week 4,Plan Loading';
-    const row1 = 'Surabaya,Minyak Goreng Premium,4500,250,300,280,320,500,450,480,520,900';
-    const row2 = 'Jakarta,Beras Setra Ramos,2800,200,220,210,230,400,380,410,390,1100';
+    const headers = 'cabang,Category,On Hand,TO Week 1,TO Week 2,TO Week 3,TO Week 4,Vessel Week 1,Vessel Week 2,Vessel Week 3,Vessel Week 4,Plan Loading,Outstanding Target Sales';
+    const row1 = 'Surabaya,Minyak Goreng Premium,4500,250,300,280,320,500,450,480,520,900,5200';
+    const row2 = 'Jakarta,Beras Setra Ramos,2800,200,220,210,230,400,380,410,390,1100,3500';
     const blob = new Blob(['\ufeff' + headers + '\n' + row1 + '\n' + row2], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -190,8 +217,9 @@ export default function SOHAnalysisPage() {
 
   // Identify column names dynamically
   const colCabang = useMemo(() => parsed ? findColumn(parsed.headers, ['cabang', 'branch_name', 'branch', 'cab', 'regional', 'region']) : undefined, [parsed]);
-  const colCategory = useMemo(() => parsed ? findColumn(parsed.headers, ['grup', 'category', 'kategori item', 'kategori']) : undefined, [parsed]);
+  const colCategory = useMemo(() => parsed ? findColumn(parsed.headers, ['grup', 'category', 'kategori item', 'kategori', 'item category']) : undefined, [parsed]);
   const colInsentif = useMemo(() => parsed ? findColumn(parsed.headers, ['insentif', 'kategori insentif']) : undefined, [parsed]);
+  const colTargetSales = useMemo(() => parsed ? findColumn(parsed.headers, ['outstanding target sales', 'target sales', 'outstanding target', 'target_sales', 'target', 'target sales outstanding']) : undefined, [parsed]);
 
   // Filter options
   const cabangs = useMemo(() => parsed && colCabang ? ['All', ...Array.from(new Set(parsed.data.map(d => d[colCabang]).filter(v => v && !String(v).includes('#N/A') && !String(v).includes('#REF!') && String(v).toLowerCase() !== 'semua cabang'))).sort()] : [], [parsed, colCabang]);
@@ -248,7 +276,7 @@ export default function SOHAnalysisPage() {
           map[cbg][cat] += val;
         }
         map[cbg].details[tc.name] += val;
-        if (cat !== 'Lainnya') {
+        if (cat !== 'Lainnya' && cat !== 'TARGET SALES') {
           map[cbg].total += val;
         }
       });
@@ -263,31 +291,157 @@ export default function SOHAnalysisPage() {
     }).sort((a, b) => b.total - a.total);
   }, [parsed, filtered, colCabang, selectedCabangForChart]);
 
-  // Weekly Grouped Data for Bar Chart (Trend TO vs Vessel W1-W4)
+  // Weekly Grouped Data with Category Breakdown (Stacked TO vs Vessel W1-W4)
   const weeklyGroupedData = useMemo(() => {
     if (!parsed || filtered.length === 0) return [];
     const weeks = [1, 2, 3, 4];
+    const activeCategories = categories.filter(c => c !== 'All');
+
     return weeks.map(w => {
-      let totalTO = 0;
-      let totalVessel = 0;
+      const item: Record<string, any> = { week: `Week ${w}` };
+      activeCategories.forEach(cat => {
+        item[`${cat} (TO)`] = 0;
+        item[`${cat} (Vessel)`] = 0;
+      });
+
       for (const row of filtered) {
         const cbg = colCabang ? (row[colCabang] || 'Unknown') : 'All';
         if (selectedCabangForChart !== 'All' && cbg !== selectedCabangForChart) continue;
         
+        const cat = colCategory ? (row[colCategory] || 'Umum') : 'Umum';
+
         parsed.targetColumns.forEach(tc => {
           const name = tc.name.toLowerCase();
           if (name.includes(`week ${w}`) || name.endsWith(`w${w}`) || name.includes(`wk ${w}`) || name.includes(`minggu ${w}`)) {
-            if (name.includes('to') || name.startsWith('to')) {
-              totalTO += Math.round(Number(row[tc.name]) || 0);
-            } else if (name.includes('vessel') || name.includes('kapal')) {
-              totalVessel += Math.round(Number(row[tc.name]) || 0);
+            const val = Math.round(Number(row[tc.name]) || 0);
+            if (name.includes('to') || name.startsWith('to') || name.includes('transfer')) {
+              item[`${cat} (TO)`] = (item[`${cat} (TO)`] || 0) + val;
+            } else if (name.includes('vessel') || name.includes('kapal') || name.includes('laut')) {
+              item[`${cat} (Vessel)`] = (item[`${cat} (Vessel)`] || 0) + val;
             }
           }
         });
       }
-      return { week: `Week ${w}`, 'Transfer Order (TO)': totalTO, 'On Vessel': totalVessel };
+      return item;
     });
-  }, [parsed, filtered, colCabang, selectedCabangForChart]);
+  }, [parsed, filtered, colCabang, colCategory, selectedCabangForChart, categories]);
+
+  // On Hand detail per Category
+  const onHandByCategoryData = useMemo(() => {
+    if (!parsed || filtered.length === 0) return [];
+    const map: Record<string, any> = {};
+
+    for (const row of filtered) {
+      const cbg = colCabang ? (row[colCabang] || 'Unknown') : 'All';
+      if (selectedCabangForChart !== 'All' && cbg !== selectedCabangForChart) continue;
+
+      const cat = colCategory ? (row[colCategory] || 'Umum') : 'Umum';
+      if (!map[cat]) {
+        map[cat] = { category: cat, 'On Hand': 0 };
+      }
+      parsed.targetColumns.forEach(tc => {
+        if (getPillarCategory(tc.name) === 'On Hand') {
+          map[cat]['On Hand'] += Math.round(Number(row[tc.name]) || 0);
+        }
+      });
+    }
+    return Object.values(map).sort((a, b) => b['On Hand'] - a['On Hand']);
+  }, [parsed, filtered, colCabang, colCategory, selectedCabangForChart]);
+
+  // Detailed Table Data per Cabang per Category with Condition Logic
+  const detailedTableData = useMemo(() => {
+    if (!parsed || filtered.length === 0) return [];
+    const map: Record<string, any> = {};
+
+    for (const row of filtered) {
+      const cbg = colCabang ? (row[colCabang] || 'Unknown') : 'Unknown';
+      const cat = colCategory ? (row[colCategory] || 'Umum') : 'Umum';
+      const key = `${cbg}___${cat}`;
+
+      if (!map[key]) {
+        map[key] = {
+          key,
+          cabang: cbg,
+          category: cat,
+          'On Hand': 0,
+          'VESSEL': 0,
+          'TO': 0,
+          'PLAN LOADING': 0,
+          'Outstanding Target Sales': 0
+        };
+      }
+
+      parsed.targetColumns.forEach(tc => {
+        const val = Math.round(Number(row[tc.name]) || 0);
+        const pillar = getPillarCategory(tc.name);
+        if (pillar === 'TARGET SALES') {
+          map[key]['Outstanding Target Sales'] += val;
+        } else if (map[key][pillar] !== undefined) {
+          map[key][pillar] += val;
+        }
+      });
+
+      if (colTargetSales && !parsed.targetColumns.some(t => t.name === colTargetSales)) {
+        map[key]['Outstanding Target Sales'] += Math.round(Number(row[colTargetSales]) || 0);
+      }
+    }
+
+    return Object.values(map).map(item => {
+      const totalInbound = item['VESSEL'] + item['TO'] + item['PLAN LOADING'];
+      const totalSupply = (item['On Hand'] || 0) + (item['TO'] || 0) + (item['VESSEL'] || 0);
+      const cond = calculateStockCondition(item['On Hand'], item['TO'], item['VESSEL'], item['Outstanding Target Sales']);
+      return {
+        ...item,
+        totalInbound,
+        totalSupply,
+        ratio: cond.ratio,
+        status: cond.status,
+        badge: cond.badge,
+        badgeColor: cond.color
+      };
+    }).sort((a, b) => {
+      if (a.cabang === b.cabang) {
+        return (b['On Hand'] + b.totalInbound) - (a['On Hand'] + a.totalInbound);
+      }
+      return a.cabang.localeCompare(b.cabang);
+    });
+  }, [parsed, filtered, colCabang, colCategory, colTargetSales]);
+
+  // Pie Chart Data (% Category per Total On Hand + TO + Vessel)
+  const pieCategoryData = useMemo(() => {
+    if (!parsed || filtered.length === 0) return [];
+    const map: Record<string, number> = {};
+
+    for (const row of filtered) {
+      const cbg = colCabang ? (row[colCabang] || 'Unknown') : 'All';
+      if (selectedCabangForChart !== 'All' && cbg !== selectedCabangForChart) continue;
+
+      const cat = colCategory ? (row[colCategory] || 'Umum') : 'Umum';
+      if (!map[cat]) map[cat] = 0;
+
+      let rowTotalSupply = 0;
+      parsed.targetColumns.forEach(tc => {
+        const pillar = getPillarCategory(tc.name);
+        if (pillar === 'On Hand' || pillar === 'TO' || pillar === 'VESSEL') {
+          rowTotalSupply += Math.round(Number(row[tc.name]) || 0);
+        }
+      });
+      map[cat] += rowTotalSupply;
+    }
+
+    const grandTotal = Object.values(map).reduce((a, b) => a + b, 0);
+    if (grandTotal === 0) return [];
+
+    return Object.entries(map)
+      .filter(([_, val]) => val > 0)
+      .map(([cat, val], idx) => ({
+        name: cat,
+        value: val,
+        percentage: Number(((val / grandTotal) * 100).toFixed(1)),
+        color: COLORS[idx % COLORS.length]
+      }))
+      .sort((a, b) => b.value - a.value);
+  }, [parsed, filtered, colCabang, colCategory, selectedCabangForChart]);
 
   // Pillar KPIs
   const pillarKpis = useMemo(() => {
@@ -311,18 +465,89 @@ export default function SOHAnalysisPage() {
     return pivotData.filter(r => (r['On Hand'] || 0) < 2000).length;
   }, [pivotData]);
 
+  // Executive Calculation Summary & Condition Breakdown
+  const calculationSummary = useMemo(() => {
+    if (!detailedTableData || detailedTableData.length === 0) {
+      return { totalOH: 0, totalTO: 0, totalVessel: 0, totalSupply: 0, totalTarget: 0, globalRatio: 0, globalStatus: 'N/A', badgeColor: 'bg-slate-700/50 text-slate-300 border-slate-600', countAman: 0, countHati: 0, countBahaya: 0 };
+    }
+    let totalOH = 0;
+    let totalTO = 0;
+    let totalVessel = 0;
+    let totalTarget = 0;
+    let countAman = 0;
+    let countHati = 0;
+    let countBahaya = 0;
+
+    for (const row of detailedTableData) {
+      totalOH += (row['On Hand'] || 0);
+      totalTO += (row['TO'] || 0);
+      totalVessel += (row['VESSEL'] || 0);
+      totalTarget += (row['Outstanding Target Sales'] || 0);
+      if (row.status === 'Aman') countAman++;
+      else if (row.status === 'Hati-Hati') countHati++;
+      else if (row.status === 'Bahaya') countBahaya++;
+    }
+
+    const totalSupply = totalOH + totalTO + totalVessel;
+    const globalRatio = totalTarget > 0 ? Number((totalSupply / totalTarget).toFixed(2)) : 0;
+    let globalStatus = '⚪ N/A (Target 0)';
+    let badgeColor = 'bg-slate-700/50 text-slate-300 border border-slate-600';
+    if (globalRatio > 1.25) {
+      globalStatus = '🟢 AMAN (Rasio > 1.25)';
+      badgeColor = 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40';
+    } else if (globalRatio >= 1.0) {
+      globalStatus = '🟡 HATI-HATI (Rasio 1.0 - 1.25)';
+      badgeColor = 'bg-amber-500/20 text-amber-400 border border-amber-500/40';
+    } else if (totalTarget > 0) {
+      globalStatus = '🔴 BAHAYA (Rasio < 1.0)';
+      badgeColor = 'bg-rose-500/20 text-rose-400 border border-rose-500/40 animate-pulse';
+    }
+
+    return {
+      totalOH: Math.round(totalOH),
+      totalTO: Math.round(totalTO),
+      totalVessel: Math.round(totalVessel),
+      totalSupply: Math.round(totalSupply),
+      totalTarget: Math.round(totalTarget),
+      globalRatio,
+      globalStatus,
+      badgeColor,
+      countAman,
+      countHati,
+      countBahaya,
+      totalItems: detailedTableData.length
+    };
+  }, [detailedTableData]);
+
   const handleExport = () => {
-    if (!parsed || !parsed.data) return;
-    const header = parsed.headers.map(h => `"${h}"`).join(',');
+    if (!parsed || !parsed.data || detailedTableData.length === 0) return;
+    const header = [
+      'Cabang',
+      'Kategori Item',
+      'On Hand (SOH)',
+      'Total TO (W1-W4)',
+      'Total Vessel (W1-W4)',
+      'Total Pasokan (OH+TO+Vessel)',
+      'Plan Loading',
+      'Outstanding Target Sales',
+      'Hasil Hitungan (Rasio Pasokan vs Target)',
+      'Kesimpulan Kondisi'
+    ].map(h => `"${h}"`).join(',');
     const lines = [header];
 
-    filtered.forEach(row => {
-      const line = parsed.headers.map(h => {
-        let val = row[h];
-        if (val === undefined || val === null) val = '';
-        if (typeof val === 'string') return `"${val.replace(/"/g, '""')}"`;
-        return val;
-      }).join(',');
+    detailedTableData.forEach(row => {
+      const line = [
+        `"${String(row.cabang).replace(/"/g, '""')}"`,
+        `"${String(row.category).replace(/"/g, '""')}"`,
+        Math.round(row['On Hand'] || 0),
+        Math.round(row['TO'] || 0),
+        Math.round(row['VESSEL'] || 0),
+        Math.round(row.totalSupply || (row['On Hand'] + row['TO'] + row['VESSEL']) || 0),
+        Math.round(row['PLAN LOADING'] || 0),
+        Math.round(row['Outstanding Target Sales'] || 0),
+        row.ratio || 0,
+        `"${row.status}"`
+      ].join(',');
       lines.push(line);
     });
 
@@ -330,10 +555,10 @@ export default function SOHAnalysisPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = getStandardFilename(`SOH_TO_${activeScenario}`, new Date().toISOString(), 'csv');
+    link.download = getStandardFilename(`SOH_TO_Komparatif_Detail_${activeScenario}`, new Date().toISOString(), 'csv');
     link.click();
     URL.revokeObjectURL(url);
-    toast.success('📊 Hasil Analisis SOH & TO Berhasil Diekspor!');
+    toast.success('📊 Hasil Analisis SOH & TO Detail Berhasil Diekspor!');
   };
 
   return (
@@ -546,7 +771,7 @@ export default function SOHAnalysisPage() {
             <div>
               <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
                 <BarChart3 className="w-5 h-5 text-emerald-400" />
-                {chartMode === 'weekly' ? 'Grafik Grouping Mingguan: Transfer Order (TO) vs On Vessel (W1 - W4)' : 'Grafik Komparasi Pilar SOH & Inbound per Cabang'}
+                {chartMode === 'weekly' ? 'Grafik Grouping Mingguan: TO vs Vessel per Kategori (W1 - W4)' : chartMode === 'stock' ? 'Detail On Hand (Fisik) per Kategori Barang' : 'Grafik Komparasi Pilar SOH & Inbound per Cabang'}
               </h3>
               <p className="text-xs text-slate-400 mt-1">
                 Sorotan: <b className="text-cyan-400">{selectedCabangForChart === 'All' ? 'Seluruh Cabang' : selectedCabangForChart}</b> • Skenario Aktif: <b className="text-amber-300">{activeScenario.toUpperCase()}</b>
@@ -578,26 +803,20 @@ export default function SOHAnalysisPage() {
               >
                 📦 On Hand
               </button>
-              <button
-                onClick={() => setChartMode('to')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 ${
-                  chartMode === 'to' ? 'bg-orange-600 text-white shadow-md scale-105' : 'text-slate-400 hover:text-orange-400'
-                }`}
-              >
-                🚚 TO
-              </button>
-              <button
-                onClick={() => setChartMode('vessel')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 ${
-                  chartMode === 'vessel' ? 'bg-blue-600 text-white shadow-md scale-105' : 'text-slate-400 hover:text-blue-400'
-                }`}
-              >
-                🚢 Vessel
-              </button>
             </div>
           </div>
 
-          <div className="h-[380px] w-full">
+          {chartMode === 'weekly' && (
+            <div className="mb-4 p-3 rounded-xl bg-slate-800/60 border border-slate-700/60 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <span className="text-slate-300 flex items-center gap-2 font-medium">
+                <Info className="w-4 h-4 text-cyan-400 shrink-0" />
+                <b>Batang Kembar per Minggu:</b> Batang Kiri = Stack Transfer Order (TO) | Batang Kanan (Garis Biru) = Stack On Vessel (Kapal)
+              </span>
+              <span className="text-slate-400 text-[11px] italic">Warna segmen mewakili breakdown per kategori barang</span>
+            </div>
+          )}
+
+          <div className="h-[400px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               {chartMode === 'weekly' ? (
                 <BarChart data={weeklyGroupedData} margin={{ top: 20, right: 30, left: 10, bottom: 20 }}>
@@ -605,12 +824,33 @@ export default function SOHAnalysisPage() {
                   <XAxis dataKey="week" stroke="#94a3b8" tick={{ fill: '#e2e8f0', fontSize: 13, fontWeight: 700 }} height={40} />
                   <YAxis stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 12 }} />
                   <Tooltip
-                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#f97316', borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}
+                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#f97316', borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.5)', fontSize: '12px' }}
                     labelStyle={{ color: '#38bdf8', fontWeight: 'bold', borderBottom: '1px solid #334155', paddingBottom: '4px' }}
                   />
-                  <Legend wrapperStyle={{ paddingTop: '16px', fontSize: '12px', fontWeight: 'bold' }} />
-                  <Bar dataKey="Transfer Order (TO)" name="Transfer Order (TO)" fill="#f97316" radius={[6, 6, 0, 0]} maxBarSize={50} />
-                  <Bar dataKey="On Vessel" name="On Vessel (Kapal)" fill="#3b82f6" radius={[6, 6, 0, 0]} maxBarSize={50} />
+                  <Legend wrapperStyle={{ paddingTop: '16px', fontSize: '11px', fontWeight: 'bold' }} />
+                  {categories.filter(c => c !== 'All').map((cat, idx) => (
+                    <Bar key={`to-${cat}`} dataKey={`${cat} (TO)`} name={`${cat} (TO)`} stackId="TO" fill={COLORS[idx % COLORS.length]} maxBarSize={45} />
+                  ))}
+                  {categories.filter(c => c !== 'All').map((cat, idx) => (
+                    <Bar key={`vessel-${cat}`} dataKey={`${cat} (Vessel)`} name={`${cat} (Vessel)`} stackId="Vessel" fill={COLORS[idx % COLORS.length]} stroke="#38bdf8" strokeWidth={2} maxBarSize={45} opacity={0.85} />
+                  ))}
+                </BarChart>
+              ) : chartMode === 'stock' ? (
+                <BarChart data={onHandByCategoryData} margin={{ top: 20, right: 30, left: 10, bottom: 50 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
+                  <XAxis dataKey="category" stroke="#94a3b8" tick={{ fill: '#e2e8f0', fontSize: 12, fontWeight: 600 }} angle={-15} textAnchor="end" height={60} />
+                  <YAxis stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 12 }} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#10b981', borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}
+                    labelStyle={{ color: '#38bdf8', fontWeight: 'bold', borderBottom: '1px solid #334155', paddingBottom: '4px' }}
+                    formatter={(value: any) => [`${Number(value).toLocaleString('id-ID')} Qty`, 'On Hand Fisik']}
+                  />
+                  <Legend wrapperStyle={{ paddingTop: '16px', fontSize: '12px' }} />
+                  <Bar dataKey="On Hand" name="On Hand (Fisik) per Kategori" radius={[6, 6, 0, 0]} maxBarSize={60}>
+                    {onHandByCategoryData.map((_, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Bar>
                 </BarChart>
               ) : (
                 <BarChart data={pivotData} margin={{ top: 20, right: 30, left: 10, bottom: 20 }}>
@@ -622,17 +862,10 @@ export default function SOHAnalysisPage() {
                     labelStyle={{ color: '#38bdf8', fontWeight: 'bold', borderBottom: '1px solid #334155', paddingBottom: '4px' }}
                   />
                   <Legend wrapperStyle={{ paddingTop: '16px', fontSize: '12px' }} />
-                  {chartMode === 'summary' && (
-                    <>
-                      <Bar dataKey="On Hand" name="On Hand (Fisik)" fill="#10b981" stackId="a" />
-                      <Bar dataKey="VESSEL" name="Total Vessel (W1-W4)" fill="#3b82f6" stackId="a" />
-                      <Bar dataKey="TO" name="Total TO (W1-W4)" fill="#f97316" stackId="a" />
-                      <Bar dataKey="PLAN LOADING" name="Plan Loading" fill="#a855f7" stackId="a" radius={[4, 4, 0, 0]} />
-                    </>
-                  )}
-                  {chartMode === 'stock' && <Bar dataKey="On Hand" name="On Hand (Fisik)" fill="#10b981" radius={[6, 6, 0, 0]} maxBarSize={60} />}
-                  {chartMode === 'to' && <Bar dataKey="TO" name="Total Transfer Order (W1-W4)" fill="#f97316" radius={[6, 6, 0, 0]} maxBarSize={60} />}
-                  {chartMode === 'vessel' && <Bar dataKey="VESSEL" name="Total Vessel (W1-W4)" fill="#3b82f6" radius={[6, 6, 0, 0]} maxBarSize={60} />}
+                  <Bar dataKey="On Hand" name="On Hand (Fisik)" fill="#10b981" stackId="a" />
+                  <Bar dataKey="VESSEL" name="Total Vessel (W1-W4)" fill="#3b82f6" stackId="a" />
+                  <Bar dataKey="TO" name="Total TO (W1-W4)" fill="#f97316" stackId="a" />
+                  <Bar dataKey="PLAN LOADING" name="Plan Loading" fill="#a855f7" stackId="a" radius={[4, 4, 0, 0]} />
                 </BarChart>
               )}
             </ResponsiveContainer>
@@ -640,16 +873,153 @@ export default function SOHAnalysisPage() {
         </GlassCard>
       )}
 
-      {/* ─── TABEL COMPLEMENTARY: ANALISIS PIVOT & ZONASI STOK ─── */}
+      {/* ─── NEW: PIE CHART % CATEGORY PER TOTAL (ON HAND + TO + VESSEL) ─── */}
+      {pieCategoryData && pieCategoryData.length > 0 && (
+        <GlassCard className="p-6 border-purple-500/30 bg-gradient-to-b from-slate-900/90 to-slate-950/90 shadow-2xl">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-4 mb-6 gap-3">
+            <div>
+              <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+                <Layers className="w-5 h-5 text-purple-400" />
+                Pie Chart Kontribusi Kategori (% per Total On Hand + Semua TO + Semua Vessel)
+              </h3>
+              <p className="text-xs text-slate-400 mt-1">
+                Persentase proporsional total stok (Fisik & Dalam Perjalanan W1-W4) untuk tiap kategori barang di <b className="text-cyan-400">{selectedCabangForChart === 'All' ? 'Seluruh Cabang' : selectedCabangForChart}</b>.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+            <div className="h-[350px] w-full flex items-center justify-center">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={pieCategoryData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={true}
+                    label={({ name, percentage }) => `${name.length > 15 ? name.slice(0, 14) + '..' : name} (${percentage}%)`}
+                    outerRadius={115}
+                    innerRadius={45}
+                    paddingAngle={3}
+                    dataKey="value"
+                  >
+                    {pieCategoryData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} stroke="#0f172a" strokeWidth={2} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    formatter={(value: any, name: any, props: any) => [
+                      `${Number(value).toLocaleString('id-ID')} Qty (${props.payload.percentage}%)`,
+                      `Kategori: ${name}`
+                    ]}
+                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#a855f7', borderRadius: '12px', color: '#fff', boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="space-y-3 max-h-[350px] overflow-y-auto pr-2">
+              <h4 className="text-xs font-black text-slate-300 uppercase tracking-wider mb-2 flex items-center gap-2">
+                📊 Rincian Porsi Stok per Kategori (OH + TO + Vessel):
+              </h4>
+              <div className="space-y-2">
+                {pieCategoryData.map((item) => (
+                  <div key={item.name} className="flex items-center justify-between p-3 rounded-xl bg-slate-800/60 border border-slate-700/50 hover:border-slate-600 transition">
+                    <div className="flex items-center gap-3">
+                      <span className="w-3.5 h-3.5 rounded-full shrink-0 shadow-sm" style={{ backgroundColor: item.color }} />
+                      <span className="text-xs sm:text-sm font-bold text-white truncate max-w-[170px] sm:max-w-[220px]" title={item.name}>
+                        {item.name}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-xs font-mono font-extrabold text-slate-300">
+                        {item.value.toLocaleString('id-ID')} Qty
+                      </span>
+                      <span className="px-2 py-0.5 rounded-md text-[11px] font-black text-white shadow-sm font-mono" style={{ backgroundColor: item.color }}>
+                        {item.percentage}%
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </GlassCard>
+      )}
+
+      {/* ─── HASIL KESIMPULAN HITUNGAN (EXECUTIVE CALCULATION CONCLUSION) ─── */}
+      <GlassCard className="p-6 border-amber-500/40 bg-gradient-to-r from-slate-900 via-slate-950 to-slate-900 shadow-2xl">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between border-b border-slate-800 pb-4 mb-6 gap-4">
+          <div>
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider bg-amber-500/10 text-amber-400 border border-amber-500/20 mb-2.5">
+              <Sparkles className="w-3.5 h-3.5" /> Hasil Kesimpulan Hitungan Otomatis
+            </div>
+            <h3 className="text-lg sm:text-xl font-black text-white flex items-center gap-2">
+              Kesimpulan Rasio Pasokan vs Outstanding Target Sales
+            </h3>
+            <p className="text-xs text-slate-400 mt-1">
+              Rumus Hitungan: <code className="px-2 py-0.5 bg-slate-800 text-amber-300 font-mono rounded font-bold">(On Hand + Semua TO + Semua Vessel) ÷ Outstanding Target Sales</code>
+            </p>
+          </div>
+
+          <div className="flex flex-col items-start md:items-end shrink-0">
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Kesimpulan Kondisi Keseluruhan:</span>
+            <span className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-black uppercase tracking-wider shadow-xl ${calculationSummary.badgeColor}`}>
+              {calculationSummary.globalStatus}
+            </span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+          <div className="p-4 rounded-xl bg-slate-800/60 border border-slate-700/60 shadow-inner">
+            <span className="text-xs font-bold text-slate-400 block mb-1">📦 Total Pasokan (OH+TO+Vessel)</span>
+            <span className="text-base sm:text-xl font-black font-mono text-emerald-400">
+              {calculationSummary.totalSupply.toLocaleString('id-ID')} Qty
+            </span>
+            <span className="text-[11px] text-slate-400 block mt-1">Stok Fisik + Muatan W1-W4</span>
+          </div>
+          <div className="p-4 rounded-xl bg-slate-800/60 border border-slate-700/60 shadow-inner">
+            <span className="text-xs font-bold text-slate-400 block mb-1">🎯 Outstanding Target Sales</span>
+            <span className="text-base sm:text-xl font-black font-mono text-amber-300">
+              {calculationSummary.totalTarget.toLocaleString('id-ID')} Qty
+            </span>
+            <span className="text-[11px] text-slate-400 block mt-1">Total Kuota Target Penjualan</span>
+          </div>
+          <div className="p-4 rounded-xl bg-slate-800/60 border border-slate-700/60 shadow-inner">
+            <span className="text-xs font-bold text-slate-400 block mb-1">⚖️ Hasil Hitungan (Rasio)</span>
+            <span className="text-base sm:text-xl font-black font-mono text-white">
+              {calculationSummary.globalRatio}x
+            </span>
+            <span className="text-[11px] text-cyan-400 font-medium block mt-1">Indeks Ketersediaan Pasokan</span>
+          </div>
+          <div className="p-4 rounded-xl bg-slate-800/60 border border-slate-700/60 shadow-inner">
+            <span className="text-xs font-bold text-slate-400 block mb-1">📊 Rincian Kesimpulan Baris</span>
+            <div className="flex flex-wrap items-center gap-1.5 mt-1.5 font-mono text-[11px] font-black">
+              <span className="px-2 py-1 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" title="Aman (>1.25)">🟢 {calculationSummary.countAman} Aman</span>
+              <span className="px-2 py-1 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30" title="Hati-Hati (1.0-1.25)">🟡 {calculationSummary.countHati} Hati-Hati</span>
+              <span className="px-2 py-1 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30" title="Bahaya (<1.0)">🔴 {calculationSummary.countBahaya} Bahaya</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-3.5 rounded-xl bg-slate-950/90 border border-slate-800 text-xs text-slate-300 flex flex-wrap items-center justify-between gap-3">
+          <span className="flex items-center gap-2 font-medium">
+            <Info className="w-4 h-4 text-cyan-400 shrink-0" />
+            <span><b>Logika Evaluasi Kondisi:</b> 🟢 <b>Aman</b> = Rasio &gt; 1.25 | 🟡 <b>Hati-Hati</b> = Rasio 1.00 s/d 1.25 | 🔴 <b>Bahaya</b> = Rasio &lt; 1.00 (Stok Tidak Mencukupi Target)</span>
+          </span>
+        </div>
+      </GlassCard>
+
+      {/* ─── TABEL ANALISIS KOMPARATIF SOH & TO — DETAIL CABANG PER KATEGORI ─── */}
       <GlassCard className="p-6 border-slate-800 bg-slate-900/80 shadow-2xl overflow-hidden">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-slate-800 pb-4 mb-6 gap-4">
           <div>
-            <h3 className="text-lg font-bold text-white flex items-center gap-2.5">
-              <FileSpreadsheet className="w-5 h-5 text-emerald-400" />
-              Tabel Analisis Komparatif SOH & TO ({pivotData.length} Cabang Terfilter)
+            <h3 className="text-lg sm:text-xl font-black text-white flex items-center gap-2.5">
+              <FileSpreadsheet className="w-6 h-6 text-emerald-400" />
+              Tabel Analisis Komparatif SOH & TO — Detail Cabang per Kategori
             </h3>
             <p className="text-xs text-slate-400 mt-1">
-              Rincian kuota persediaan per cabang dengan zonasi status ketersediaan gudang secara real-time.
+              Menampilkan rincian kuota persediaan untuk <b>setiap kombinasi Cabang dan Kategori Barang ({detailedTableData.length} baris)</b> dengan kesimpulan hitungan rasio secara lengkap.
             </p>
           </div>
 
@@ -661,64 +1031,67 @@ export default function SOHAnalysisPage() {
           </button>
         </div>
 
-        <div className="overflow-x-auto rounded-xl border border-slate-800 max-h-[600px] overflow-y-auto">
-          <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[900px]">
-            <thead className="bg-slate-950/90 text-slate-300 uppercase font-bold sticky top-0 z-20 shadow-md">
+        <div className="overflow-x-auto rounded-xl border border-slate-800 max-h-[650px] overflow-y-auto">
+          <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[1150px]">
+            <thead className="bg-slate-950/95 text-slate-300 uppercase font-bold sticky top-0 z-20 shadow-md">
               <tr className="border-b border-slate-800 text-[11px] tracking-wider text-center">
                 <th className="py-3.5 px-4 text-left">Cabang & Lokasi</th>
-                <th className="py-3.5 px-3.5 border-l border-slate-800 text-emerald-400">📦 On Hand (Fisik)</th>
-                <th className="py-3.5 px-3.5 border-l border-slate-800 text-orange-400">🚚 TO (Week 1-4)</th>
-                <th className="py-3.5 px-3.5 border-l border-slate-800 text-blue-400">🚢 Vessel (Week 1-4)</th>
-                <th className="py-3.5 px-3.5 border-l border-slate-800 text-purple-400">⚙️ Plan Loading</th>
-                <th className="py-3.5 px-4 border-l border-slate-800 bg-slate-800 text-white">Total Inbound</th>
-                <th className="py-3.5 px-4 border-l border-slate-800">Zonasi Status</th>
+                <th className="py-3.5 px-3.5 border-l border-slate-800 text-left text-cyan-400">🏷️ Kategori Item</th>
+                <th className="py-3.5 px-3 border-l border-slate-800 text-emerald-400">📦 On Hand</th>
+                <th className="py-3.5 px-3 border-l border-slate-800 text-orange-400">🚚 TO (W1-W4)</th>
+                <th className="py-3.5 px-3 border-l border-slate-800 text-blue-400">🚢 Vessel (W1-W4)</th>
+                <th className="py-3.5 px-3.5 border-l border-slate-800 bg-emerald-950/40 text-emerald-300 font-extrabold">🧮 Total Pasokan (OH+TO+Vessel)</th>
+                <th className="py-3.5 px-3 border-l border-slate-800 text-purple-400">⚙️ Plan Loading</th>
+                <th className="py-3.5 px-3.5 border-l border-slate-800 bg-slate-900 text-amber-300">🎯 Outstanding Target</th>
+                <th className="py-3.5 px-3.5 border-l border-slate-800 text-cyan-300">📈 Hasil Hitungan (Rasio)</th>
+                <th className="py-3.5 px-4 border-l border-slate-800 text-white">🛡️ Kesimpulan Kondisi</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/80 text-slate-300 text-center">
-              {pivotData.map((row) => {
-                const totalInboundRow = Math.round((row['VESSEL'] || 0) + (row['TO'] || 0) + (row['PLAN LOADING'] || 0));
-                const isCritical = (row['On Hand'] || 0) < 2000;
-                const isWarning = (row['On Hand'] || 0) < 4000 && !isCritical;
-                const isOver = (row['On Hand'] || 0) > 8000;
-                
-                return (
-                  <tr
-                    key={row.cabang}
-                    className="hover:bg-slate-800/40 transition cursor-pointer font-medium"
-                    onClick={() => setSelectedCabangForChart(row.cabang === selectedCabangForChart ? 'All' : row.cabang)}
-                  >
-                    <td className="py-3.5 px-4 text-left align-middle">
-                      <div className="font-bold text-white text-sm">{row.cabang}</div>
-                      <div className="text-[11px] text-slate-400 mt-0.5">SOH & TO Monitoring</div>
-                    </td>
-                    <td className="py-3.5 px-3.5 border-l border-slate-800 font-extrabold text-emerald-400 text-base font-mono">
-                      {Math.round(row['On Hand'] || 0).toLocaleString('id-ID')}
-                    </td>
-                    <td className="py-3.5 px-3.5 border-l border-slate-800 font-mono text-orange-300">
-                      {Math.round(row['TO'] || 0).toLocaleString('id-ID')}
-                    </td>
-                    <td className="py-3.5 px-3.5 border-l border-slate-800 font-mono text-blue-300">
-                      {Math.round(row['VESSEL'] || 0).toLocaleString('id-ID')}
-                    </td>
-                    <td className="py-3.5 px-3.5 border-l border-slate-800 font-mono text-purple-300">
-                      {Math.round(row['PLAN LOADING'] || 0).toLocaleString('id-ID')}
-                    </td>
-                    <td className="py-3.5 px-4 border-l border-slate-800 bg-slate-950/50 font-bold font-mono text-white text-base">
-                      {totalInboundRow.toLocaleString('id-ID')}
-                    </td>
-                    <td className="py-3.5 px-4 border-l border-slate-800">
-                      <span className={`px-2.5 py-1 rounded-full text-[11px] font-black uppercase tracking-wider inline-block ${
-                        isCritical ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40 animate-pulse' :
-                        isWarning ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40' :
-                        isOver ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40' :
-                        'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
-                      }`}>
-                        {isCritical ? '🔴 KRITIS (PERCEPAT TO)' : isWarning ? '🟡 RE-ORDER AREA' : isOver ? '🔵 SURPLUS STOK' : '🟢 STOK OPTIMAL'}
+            <tbody className="divide-y divide-slate-800/80 text-slate-300 text-center font-medium">
+              {detailedTableData.map((row) => (
+                <tr
+                  key={row.key}
+                  className="hover:bg-slate-800/60 transition cursor-pointer"
+                  onClick={() => setSelectedCabangForChart(row.cabang === selectedCabangForChart ? 'All' : row.cabang)}
+                >
+                  <td className="py-3 px-4 text-left align-middle font-black text-white text-sm">
+                    {row.cabang}
+                  </td>
+                  <td className="py-3 px-3.5 border-l border-slate-800 text-left align-middle">
+                    <span className="inline-block px-2.5 py-1 rounded-lg text-xs font-semibold text-cyan-300 bg-cyan-950/60 border border-cyan-800/50 truncate max-w-[200px]" title={row.category}>
+                      {row.category}
+                    </span>
+                  </td>
+                  <td className="py-3 px-3 border-l border-slate-800 font-extrabold text-emerald-400 text-sm font-mono">
+                    {Math.round(row['On Hand'] || 0).toLocaleString('id-ID')}
+                  </td>
+                  <td className="py-3 px-3 border-l border-slate-800 font-mono text-orange-300 font-bold">
+                    {Math.round(row['TO'] || 0).toLocaleString('id-ID')}
+                  </td>
+                  <td className="py-3 px-3 border-l border-slate-800 font-mono text-blue-300 font-bold">
+                    {Math.round(row['VESSEL'] || 0).toLocaleString('id-ID')}
+                  </td>
+                  <td className="py-3 px-3.5 border-l border-slate-800 bg-emerald-950/20 font-black font-mono text-emerald-300 text-sm">
+                    {(row.totalSupply || (row['On Hand'] + row['TO'] + row['VESSEL']) || 0).toLocaleString('id-ID')}
+                  </td>
+                  <td className="py-3 px-3 border-l border-slate-800 font-mono text-purple-300">
+                    {Math.round(row['PLAN LOADING'] || 0).toLocaleString('id-ID')}
+                  </td>
+                  <td className="py-3 px-3.5 border-l border-slate-800 font-extrabold text-amber-300 font-mono text-sm bg-slate-950/40">
+                    {row['Outstanding Target Sales'] > 0 ? Math.round(row['Outstanding Target Sales']).toLocaleString('id-ID') : '-'}
+                  </td>
+                  <td className="py-3 px-3.5 border-l border-slate-800 font-black font-mono text-sm text-cyan-300">
+                    {row['Outstanding Target Sales'] > 0 ? `${row.ratio}x` : 'N/A'}
+                  </td>
+                  <td className="py-3 px-4 border-l border-slate-800">
+                    <div className="flex items-center justify-center">
+                      <span className={`px-3.5 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider shadow-sm ${row.badgeColor}`}>
+                        {row.badge}
                       </span>
-                    </td>
-                  </tr>
-                );
-              })}
+                    </div>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
