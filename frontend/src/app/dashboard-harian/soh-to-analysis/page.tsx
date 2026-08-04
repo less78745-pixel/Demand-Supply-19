@@ -74,6 +74,31 @@ const SCENARIOS = [
   }
 ];
 
+// ===== PRECISION & ACCURACY COMPUTATION ENGINE =====
+export const parseHighPrecision = (val: any): number => {
+  if (typeof val === 'number') return isNaN(val) ? 0 : val;
+  if (val === null || val === undefined || val === '') return 0;
+  const str = String(val).trim();
+  if (!str) return 0;
+  let cleaned = str;
+  if (str.includes(',') && str.includes('.')) {
+    if (str.lastIndexOf(',') > str.lastIndexOf('.')) {
+      cleaned = str.replace(/\./g, '').replace(',', '.');
+    } else {
+      cleaned = str.replace(/,/g, '');
+    }
+  } else if (str.includes(',')) {
+    cleaned = str.replace(/,/g, '.');
+  }
+  const parsed = parseFloat(cleaned.replace(/[^0-9.-]+/g, ''));
+  return isNaN(parsed) ? 0 : parsed;
+};
+
+export const toExactFloat = (num: number, decimals: number = 2): number => {
+  if (isNaN(num) || !isFinite(num)) return 0;
+  return Number(Math.round(Number(num + 'e' + decimals)) + 'e-' + decimals);
+};
+
 export interface StockCondition {
   ratio: number;
   status: string;
@@ -82,15 +107,16 @@ export interface StockCondition {
 }
 
 const calculateStockCondition = (onHand: number, totalTO: number, totalVessel: number, targetSales: number): StockCondition => {
-  const totalSupply = onHand + totalTO + totalVessel;
+  const totalSupply = toExactFloat(onHand + totalTO + totalVessel, 4);
   if (!targetSales || targetSales <= 0) {
     return { ratio: 0, status: 'N/A (Target 0)', badge: '⚪ N/A (Target 0)', color: 'bg-slate-700/50 text-slate-300 border border-slate-600' };
   }
-  const ratio = Number((totalSupply / targetSales).toFixed(2));
-  if (ratio > 1.25) {
+  const exactRatio = totalSupply / targetSales;
+  const ratio = toExactFloat(exactRatio, 2);
+  if (ratio > 1.25 || exactRatio > 1.250001) {
     return { ratio, status: 'Aman', badge: '🟢 AMAN', color: 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' };
   }
-  if (ratio >= 1.0 && ratio <= 1.25) {
+  if ((ratio >= 1.0 && ratio <= 1.25) || (exactRatio >= 0.99999 && exactRatio <= 1.250001)) {
     return { ratio, status: 'Hati-Hati', badge: '🟡 HATI-HATI', color: 'bg-amber-500/20 text-amber-400 border border-amber-500/40' };
   }
   return { ratio, status: 'Bahaya', badge: '🔴 BAHAYA', color: 'bg-rose-500/20 text-rose-400 border border-rose-500/40 animate-pulse' };
@@ -874,7 +900,7 @@ export default function SOHAnalysisPage() {
                     cx="50%"
                     cy="50%"
                     labelLine={true}
-                    label={({ name, percentage }) => `${name.length > 15 ? name.slice(0, 14) + '..' : name} (${percentage}%)`}
+                    label={({ name, percentage }: any) => `${String(name || '').length > 15 ? String(name || '').slice(0, 14) + '..' : (name || 'Umum')} (${percentage || 0}%)`}
                     outerRadius={115}
                     innerRadius={45}
                     paddingAngle={3}

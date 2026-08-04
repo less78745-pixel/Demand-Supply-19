@@ -115,6 +115,31 @@ function generateDemoHistorySales(): ParsedData {
   };
 }
 
+// ===== PRECISION & ACCURACY COMPUTATION ENGINE =====
+export const parseHighPrecision = (val: any): number => {
+  if (typeof val === 'number') return isNaN(val) ? 0 : val;
+  if (val === null || val === undefined || val === '') return 0;
+  const str = String(val).trim();
+  if (!str) return 0;
+  let cleaned = str;
+  if (str.includes(',') && str.includes('.')) {
+    if (str.lastIndexOf(',') > str.lastIndexOf('.')) {
+      cleaned = str.replace(/\./g, '').replace(',', '.');
+    } else {
+      cleaned = str.replace(/,/g, '');
+    }
+  } else if (str.includes(',')) {
+    cleaned = str.replace(/,/g, '.');
+  }
+  const parsed = parseFloat(cleaned.replace(/[^0-9.-]+/g, ''));
+  return isNaN(parsed) ? 0 : parsed;
+};
+
+export const toExactFloat = (num: number, decimals: number = 2): number => {
+  if (isNaN(num) || !isFinite(num)) return 0;
+  return Number(Math.round(Number(num + 'e' + decimals)) + 'e-' + decimals);
+};
+
 export default function HistorySalesPage() {
   const [parsed, setParsed] = useState<ParsedData | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -351,9 +376,9 @@ export default function HistorySalesPage() {
     }
 
     return Object.values(map).map(item => {
-      const ratio = item.sales > 0 ? (item.outstanding / item.sales) * 100 : 0;
-      const growthM = item.avg3 > 0 ? ((item.m - item.avg3) / item.avg3) * 100 : 0;
-      const growthM1 = item.avg3 > 0 ? ((item.m1 - item.avg3) / item.avg3) * 100 : 0;
+      const ratio = item.sales > 0 ? toExactFloat((item.outstanding / item.sales) * 100, 2) : 0;
+      const growthM = item.avg3 > 0 ? toExactFloat(((item.m - item.avg3) / item.avg3) * 100, 2) : 0;
+      const growthM1 = item.avg3 > 0 ? toExactFloat(((item.m1 - item.avg3) / item.avg3) * 100, 2) : 0;
       return { ...item, ratio, growthM, growthM1 };
     }).sort((a, b) => {
       if (a.cabang !== b.cabang) return a.cabang.localeCompare(b.cabang);
@@ -460,28 +485,54 @@ export default function HistorySalesPage() {
   }, [parsed, filtered, colCategoryInsentif, executiveSummary]);
 
   const handleExport = () => {
-    if (!parsed || !parsed.data) return;
-    const header = parsed.headers.map(h => `"${h}"`).join(',');
+    if (!tableData || tableData.length === 0) return;
+    const header = [
+      'Cabang / Wilayah',
+      'Kategori Item',
+      'Total Volume Sales',
+      'AVG Sales 3 Bln',
+      'Volume M',
+      'Volume M-1',
+      'Pertumbuhan M vs AVG (%)',
+      'Pertumbuhan M-1 vs AVG (%)',
+      'Outstanding Order',
+      'Total Volume',
+      'Rasio (Out/Sales %)',
+      'Zonasi Status Analisis'
+    ].map(h => `"${h}"`).join(',');
     const lines = [header];
-    
-    filtered.forEach(row => {
-      const line = parsed.headers.map(h => {
-        let val = row[h];
-        if (val === undefined || val === null) val = '';
-        if (typeof val === 'string') return `"${val.replace(/"/g, '""')}"`;
-        return val;
-      }).join(',');
+
+    tableData.forEach(row => {
+      const isCritical = row.ratio > 30;
+      const isWarning = row.ratio > 15 && !isCritical;
+      const isPrime = row.ratio <= 15 && row.sales > 5000;
+      const zonasi = isCritical ? 'OUTSTANDING KRITIS' : isWarning ? 'WASPADA TUNGGAKAN' : isPrime ? 'PERFORMA PRIMA' : 'STABLE SALES';
+
+      const line = [
+        `"${String(row.cabang).replace(/"/g, '""')}"`,
+        `"${String(row.category).replace(/"/g, '""')}"`,
+        toExactFloat(row.sales, 2),
+        toExactFloat(row.avg3, 2),
+        toExactFloat(row.m, 2),
+        toExactFloat(row.m1, 2),
+        row.growthM,
+        row.growthM1,
+        toExactFloat(row.outstanding, 2),
+        toExactFloat(row.total, 2),
+        row.ratio,
+        `"${zonasi}"`
+      ].join(',');
       lines.push(line);
     });
-    
+
     const blob = new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = getStandardFilename(`History_Sales_Export`, new Date().toISOString(), 'csv');
+    link.download = getStandardFilename(`History_Sales_Komparatif_Analisis`, new Date().toISOString(), 'csv');
     link.click();
     URL.revokeObjectURL(url);
-    toast.success('📊 Hasil Analisis History Sales Berhasil Diekspor!');
+    toast.success('📊 Hasil Analisis Presisi History Sales Berhasil Diekspor!');
   };
 
   return (
