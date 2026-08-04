@@ -152,7 +152,7 @@ export default function SOHAnalysisPage() {
   const handleGenerateDemo = () => {
     const demo = generateDemoSOH();
     setParsed(demo);
-    toast.success('🎉 Data Demo SOH & TO Berhasil Dimuat!');
+    toast.success('🎉 Data Demo SOH-TO-Vessel Berhasil Dimuat!');
   };
 
   const handleDownloadTemplate = () => {
@@ -163,10 +163,10 @@ export default function SOHAnalysisPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'template_soh_to_analysis.csv';
+    link.download = 'template_soh_to_vessel.csv';
     link.click();
     URL.revokeObjectURL(url);
-    toast.success('📁 Template CSV SOH & TO Berhasil Diunduh');
+    toast.success('📁 Template CSV SOH-TO-Vessel Berhasil Diunduh');
   };
 
   const handleFileUpload = async (file: File) => {
@@ -344,14 +344,14 @@ export default function SOHAnalysisPage() {
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase tracking-widest">
-              <ClipboardList className="w-3.5 h-3.5" /> Dashboard Data Harian • SOH & TO
+              <ClipboardList className="w-3.5 h-3.5" /> Dashboard Data Harian • SOH-TO-Vessel
             </div>
             <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white flex items-center gap-3">
-              SOH & TO Analysis <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-cyan-400 to-teal-300">(5-Pillars Engine)</span>
+              SOH-TO-Vessel <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-cyan-400 to-teal-300">(Weekly Grouping Analytics)</span>
             </h1>
             <p className="text-slate-300 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
-              Analisis persediaan terstruktur berdasarkan 5 pilar utama: <b>On Hand ➔ Vessel ➔ TO ➔ Plan Loading ➔ Ready</b>.
-              Dilengkapi 3 jalur simulasi ketahanan stok & proteksi seasonality.
+              Analisis persediaan terstruktur dengan pengelompokan mingguan: <b>On Hand ➔ TO Week 1-4 ➔ Vessel Week 1-4 ➔ Plan Loading</b>.
+              Dilengkapi evaluasi ketahanan stok dan grafik perbandingan TO vs Vessel.
             </p>
           </div>
 

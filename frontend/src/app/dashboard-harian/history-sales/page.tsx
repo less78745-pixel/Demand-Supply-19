@@ -38,10 +38,11 @@ function generateDemoHistorySales(): ParsedData {
 
   cabangs.forEach((item, idx) => {
     categories.forEach((cat, cIdx) => {
-      const sMei = Math.round(1800 + Math.random() * 5000);
-      const sJuni = Math.round(2000 + Math.random() * 5200);
-      const sJuli = Math.round(2200 + Math.random() * 5500);
-      const avg = Math.round((sMei + sJuni + sJuli) / 3);
+      const m3 = Math.round(1800 + Math.random() * 5000);
+      const m2 = Math.round(2000 + Math.random() * 5200);
+      const m1 = Math.round(2100 + Math.random() * 5300);
+      const m0 = Math.round(2200 + Math.random() * 5500);
+      const avg = Math.round((m2 + m1 + m0) / 3);
       const soh = Math.round(1500 + Math.random() * 4000);
       const hold = Math.round(100 + Math.random() * 500);
       const vessel = Math.round(200 + Math.random() * 800);
@@ -58,18 +59,19 @@ function generateDemoHistorySales(): ParsedData {
         'Sub item': 'Regular',
         'STATUS DOI': 'ACTIVE',
         SOH: soh,
-        'Sales Agus': Math.round(1500 + Math.random() * 3000),
-        'Sales Sept': Math.round(1600 + Math.random() * 3200),
-        'Sales Okt': Math.round(1700 + Math.random() * 3500),
-        'Sales Nov': Math.round(1800 + Math.random() * 3800),
-        'Sales Des': Math.round(2500 + Math.random() * 6000),
-        'Sales Januari': Math.round(1900 + Math.random() * 4000),
-        'Sales Februari': Math.round(1800 + Math.random() * 3900),
-        'Sales Maret': Math.round(2000 + Math.random() * 4200),
-        'Sales April': Math.round(2100 + Math.random() * 4500),
-        'Sales Mei': sMei,
-        'Sales Juni': sJuni,
-        'Sales Juli': sJuli,
+        'M-12': Math.round(1500 + Math.random() * 3000),
+        'M-11': Math.round(1600 + Math.random() * 3200),
+        'M-10': Math.round(1700 + Math.random() * 3500),
+        'M-9': Math.round(1800 + Math.random() * 3800),
+        'M-8': Math.round(2500 + Math.random() * 6000),
+        'M-7': Math.round(1900 + Math.random() * 4000),
+        'M-6': Math.round(1800 + Math.random() * 3900),
+        'M-5': Math.round(2000 + Math.random() * 4200),
+        'M-4': Math.round(2100 + Math.random() * 4500),
+        'M-3': m3,
+        'M-2': m2,
+        'M-1': m1,
+        'M': m0,
         'AVG Sales 3 Bln': avg,
         'On Vessel': vessel,
         'Hold Delivery': hold,
@@ -85,20 +87,22 @@ function generateDemoHistorySales(): ParsedData {
 
   const headers = [
     'Cabang', 'Region', 'Item', 'NAMA BARANG', 'CATEGORY', 'GRUP', 'CATEGORY ITEM', 'Sub item', 'STATUS DOI', 'SOH',
-    'Sales Agus', 'Sales Sept', 'Sales Okt', 'Sales Nov', 'Sales Des', 'Sales Januari', 'Sales Februari', 'Sales Maret',
-    'Sales April', 'Sales Mei', 'Sales Juni', 'Sales Juli', 'AVG Sales 3 Bln', 'On Vessel', 'Hold Delivery', 'SPJM',
-    'Load', 'Plan Loading', 'Ready', 'TO', 'Category Insentif'
+    'M-12', 'M-11', 'M-10', 'M-9', 'M-8', 'M-7', 'M-6', 'M-5', 'M-4', 'M-3', 'M-2', 'M-1', 'M',
+    'AVG Sales 3 Bln', 'On Vessel', 'Hold Delivery', 'SPJM', 'Load', 'Plan Loading', 'Ready', 'TO', 'Category Insentif'
   ];
 
   const targetColumns = [
     { index: 9, name: 'SOH' },
-    { index: 19, name: 'Sales Mei' },
-    { index: 20, name: 'Sales Juni' },
-    { index: 21, name: 'Sales Juli' },
-    { index: 22, name: 'AVG Sales 3 Bln' },
-    { index: 23, name: 'On Vessel' },
-    { index: 24, name: 'Hold Delivery' },
-    { index: 29, name: 'TO' }
+    { index: 17, name: 'M-5' },
+    { index: 18, name: 'M-4' },
+    { index: 19, name: 'M-3' },
+    { index: 20, name: 'M-2' },
+    { index: 21, name: 'M-1' },
+    { index: 22, name: 'M' },
+    { index: 23, name: 'AVG Sales 3 Bln' },
+    { index: 24, name: 'On Vessel' },
+    { index: 25, name: 'Hold Delivery' },
+    { index: 30, name: 'TO' }
   ];
 
   return {
@@ -140,9 +144,9 @@ export default function HistorySalesPage() {
   };
 
   const handleDownloadTemplate = () => {
-    const headers = 'Cabang,Region,Item,NAMA BARANG,CATEGORY,GRUP,CATEGORY ITEM,Sub item,STATUS DOI,SOH,Sales Agus,Sales Sept,Sales Okt,Sales Nov,Sales Des,Sales Januari,Sales Februari,Sales Maret,Sales April,Sales Mei,Sales Juni,Sales Juli,AVG Sales 3 Bln,On Vessel,Hold Delivery,SPJM,Load,Plan Loading,Ready,TO,Category Insentif';
-    const row1 = 'Surabaya,Jatim,ITM-001,Minyak Goreng Premium 1kg,Food & Beverage,Minyak Goreng Premium,Minyak Goreng Premium,Regular,ACTIVE,3500,2100,2200,2300,2400,3100,2500,2400,2600,2700,4500,4800,5100,4800,600,200,100,300,500,400,350,Tier 1';
-    const row2 = 'Jakarta,DKI,ITM-002,Beras Setra Ramos 5kg,Food & Beverage,Beras Setra Ramos,Beras Setra Ramos,Regular,ACTIVE,2800,1800,1900,2000,2100,2800,2200,2100,2300,2400,3200,3400,3600,3400,450,150,80,250,400,300,280,Tier 1';
+    const headers = 'Cabang,Region,Item,NAMA BARANG,CATEGORY,GRUP,CATEGORY ITEM,Sub item,STATUS DOI,SOH,M-12,M-11,M-10,M-9,M-8,M-7,M-6,M-5,M-4,M-3,M-2,M-1,M,AVG Sales 3 Bln,On Vessel,Hold Delivery,SPJM,Load,Plan Loading,Ready,TO,Category Insentif';
+    const row1 = 'Surabaya,Jatim,ITM-001,Minyak Goreng Premium 1kg,Food & Beverage,Minyak Goreng Premium,Minyak Goreng Premium,Regular,ACTIVE,3500,2100,2200,2300,2400,3100,2500,2400,2600,2700,3000,4500,4800,5100,4800,600,200,100,300,500,400,350,Tier 1';
+    const row2 = 'Jakarta,DKI,ITM-002,Beras Setra Ramos 5kg,Food & Beverage,Beras Setra Ramos,Beras Setra Ramos,Regular,ACTIVE,2800,1800,1900,2000,2100,2800,2200,2100,2300,2400,2600,3200,3400,3600,3400,450,150,80,250,400,300,280,Tier 1';
     const blob = new Blob(['\ufeff' + headers + '\n' + row1 + '\n' + row2], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -212,8 +216,8 @@ export default function HistorySalesPage() {
     const outstandingCols: string[] = [];
 
     parsed.targetColumns.forEach(tc => {
-      const lower = tc.name.toLowerCase();
-      if (lower.includes('sales') || lower.includes('jual') || lower.includes('avg')) {
+      const lower = tc.name.toLowerCase().trim();
+      if (lower.includes('sales') || lower.includes('jual') || lower.includes('avg') || /^m(?:-\d+)?$/.test(lower) || lower.startsWith('m-') || lower === 'm') {
         salesCols.push(tc.name);
       } else {
         outstandingCols.push(tc.name);
@@ -636,10 +640,10 @@ export default function HistorySalesPage() {
           <div className="border-b border-slate-800 pb-4 mb-6">
             <h3 className="text-lg font-bold text-white flex items-center gap-2.5">
               <BarChart3 className="w-5 h-5 text-emerald-400" />
-              Data Detail (Semua 31 Kolom Raw Data)
+              Data Detail (Semua 32 Kolom Raw Data - Terintegrasi M-12 s/d M)
             </h3>
             <p className="text-xs text-slate-400 mt-1">
-              Menampilkan rincian seluruh kolom metrik penjualan dari sheet Data Compile tanpa modifikasi buatan.
+              Menampilkan rincian seluruh kolom metrik penjualan (M-12 s/d M) dari sheet Data Compile tanpa modifikasi buatan.
             </p>
           </div>
 

@@ -103,12 +103,14 @@ function getDirectTrackingUrl(containerNo?: string, carrierName?: string): { url
 
 const syncToTrackingContainer = async (parsed: ParsedData) => {
   const colCont = findColumn(parsed.headers, ['no container', 'nocontainer', 'no_kontainer', 'no kontainer', 'container', 'nomor container']);
-  const colBranch = findColumn(parsed.headers, ['branch_name', 'branch', 'cabang']);
+  const colBranch = findColumn(parsed.headers, ['branch name', 'branch_name', 'branch', 'cabang']);
   const colStatus = findColumn(parsed.headers, ['status compile', 'status', 'state']);
   const colEta = findColumn(parsed.headers, ['tanggal eta', 'week eta', 'eta']);
   const colDesc = findColumn(parsed.headers, ['description', 'deskripsi', 'grup']);
   const colPo = findColumn(parsed.headers, ['po', 'po no', 'no po']);
   const colPr = findColumn(parsed.headers, ['nopr', 'no pr', 'pr no', 'pr']);
+  const colBl = findColumn(parsed.headers, ['bl', 'no bl', 'bill of lading', 'booking', 'no booking']);
+  const colCarrier = findColumn(parsed.headers, ['shipping line', 'shipping_line', 'pelayaran', 'carrier', 'maskapai', 'line']);
 
   if (!colCont) return;
   
@@ -116,11 +118,13 @@ const syncToTrackingContainer = async (parsed: ParsedData) => {
     .filter(row => row[colCont] && String(row[colCont]).trim() !== '' && String(row[colCont]).trim() !== '-' && String(row[colCont]).trim() !== '0' && String(row[colCont]).toUpperCase() !== 'N/A')
     .map((row, index) => {
       const no = String(row[colCont]).trim().toUpperCase();
-      const info = getDirectTrackingUrl(no);
+      const carrierRaw = colCarrier ? String(row[colCarrier] || '') : '';
+      const blVal = colBl ? String(row[colBl] || '') : '';
+      const info = getDirectTrackingUrl(no, carrierRaw);
       return {
         id: 'sync-' + Date.now() + '-' + index,
         no: no,
-        bl: '',
+        bl: blVal,
         carrier: info.carrier,
         cabang: colBranch ? String(row[colBranch] || 'Unknown') : 'Unknown',
         status: colStatus ? String(row[colStatus] || 'Sedang Berlayar') : 'Sedang Berlayar',
@@ -155,6 +159,8 @@ function generateDemoPRUpdate(): ParsedData {
   const statuses = ['ON VESSEL', 'HOLD DELIVERY', 'READY', 'PLAN LOADING', 'IN PROCESS'];
   const etas = ['Week 1 Agu', 'Week 2 Agu', 'Week 3 Agu', 'Week 4 Agu'];
   const containers = ['MRTU1234567', 'TEMU7654321', 'SPIL8899001', 'MAEU9988776', 'MSCU4455667', 'CMAU1122334', 'ONEY7788990', 'EGLV3344556'];
+  const carriers = ['Meratus Line', 'Temas Line', 'SPIL (mySPIL)', 'Maersk', 'MSC', 'CMA CGM', 'ONE', 'Evergreen Line'];
+  const bls = ['BL-MRT-9988', 'BL-TMS-7766', 'BL-SPL-5544', 'BL-MAE-3322', 'BL-MSC-1100', 'BL-CMA-8899', 'BL-ONE-6677', 'BL-EVG-4455'];
   
   const data: any[] = [];
   let poCounter = 1001;
@@ -165,16 +171,20 @@ function generateDemoPRUpdate(): ParsedData {
       const eta = etas[(idx + Math.floor(cIdx / 2)) % etas.length];
       const qty = Math.round(500 + Math.random() * 3500);
       const cont = (stat === 'ON VESSEL' || stat === 'READY') ? containers[(idx + cIdx) % containers.length] : '-';
+      const bl = (stat === 'ON VESSEL' || stat === 'READY') ? bls[(idx + cIdx) % bls.length] : '-';
+      const carrier = (stat === 'ON VESSEL' || stat === 'READY') ? carriers[(idx + cIdx) % carriers.length] : '-';
       
       data.push({
         'PO': `PO-2026-${poCounter++}`,
         'NoPR': `PR-08-${poCounter}`,
-        'branch_name': cab,
+        'Branch Name': cab,
         'GRUP': cat,
         'Category': 'Food & Beverage',
-        'DESCRIPTION': `${cat} (Kemasan Karton 24x)`,
+        'Description': `${cat} (Kemasan Karton 24x)`,
         'STATUS Compile': stat,
         'No Container': cont,
+        'bl': bl,
+        'Shipping Line': carrier,
         'Tanggal ETA': new Date(Date.now() + (idx * 2 - 1) * 86400000).toISOString().slice(0, 10),
         'Week ETA': eta,
         'Qty': qty
@@ -183,9 +193,9 @@ function generateDemoPRUpdate(): ParsedData {
   });
 
   const parsedDemo: ParsedData = {
-    headers: ['PO', 'NoPR', 'branch_name', 'GRUP', 'Category', 'DESCRIPTION', 'STATUS Compile', 'No Container', 'Tanggal ETA', 'Week ETA', 'Qty'],
+    headers: ['PO', 'NoPR', 'Branch Name', 'GRUP', 'Category', 'Description', 'STATUS Compile', 'No Container', 'bl', 'Shipping Line', 'Tanggal ETA', 'Week ETA', 'Qty'],
     targetColumns: [
-      { index: 10, name: 'Qty' }
+      { index: 12, name: 'Qty' }
     ],
     data,
     processed_at: new Date().toISOString()
@@ -227,17 +237,17 @@ export default function PRUpdatePage() {
   };
 
   const handleDownloadTemplate = () => {
-    const headers = 'PO,NoPR,branch_name,GRUP,Category,DESCRIPTION,STATUS Compile,No Container,Tanggal ETA,Week ETA,Qty';
-    const row1 = 'PO-2026-101,PR-08-01,Surabaya,Minyak Goreng Premium,Food & Beverage,Minyak Goreng 2L,ON VESSEL,MRTU1234567,2026-08-10,Week 2 Agu,2500';
-    const row2 = 'PO-2026-102,PR-08-02,Jakarta,Beras Setra Ramos,Food & Beverage,Beras Premium 5kg,HOLD DELIVERY,-,2026-08-15,Week 3 Agu,1800';
+    const headers = 'PO,NoPR,Branch Name,GRUP,Category,Description,STATUS Compile,No Container,bl,Shipping Line,Tanggal ETA,Week ETA,Qty';
+    const row1 = 'PO-2026-101,PR-08-01,Surabaya,Minyak Goreng Premium,Food & Beverage,Minyak Goreng 2L,ON VESSEL,MRTU1234567,BL-MRT-9988,Meratus Line,2026-08-10,Week 2 Agu,2500';
+    const row2 = 'PO-2026-102,PR-08-02,Jakarta,Beras Setra Ramos,Food & Beverage,Beras Premium 5kg,HOLD DELIVERY,-,-,-,2026-08-15,Week 3 Agu,1800';
     const blob = new Blob(['\ufeff' + headers + '\n' + row1 + '\n' + row2], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'template_pr_update_tracking.csv';
+    link.download = 'template_pr_update_tracking_13col.csv';
     link.click();
     URL.revokeObjectURL(url);
-    toast.success('📁 Template CSV PR Update & Tracking Container Berhasil Diunduh');
+    toast.success('📁 Template CSV PR Update & Tracking Container (13 Kolom) Berhasil Diunduh');
   };
 
   const handleFileUpload = async (file: File) => {
@@ -261,12 +271,14 @@ export default function PRUpdatePage() {
   };
 
   // Identify column names dynamically
-  const colCabang = useMemo(() => parsed ? findColumn(parsed.headers, ['branch_name', 'cabang', 'branch', 'cab', 'regional', 'region']) : undefined, [parsed]);
+  const colCabang = useMemo(() => parsed ? findColumn(parsed.headers, ['branch name', 'branch_name', 'cabang', 'branch', 'cab', 'regional', 'region']) : undefined, [parsed]);
   const colCategory = useMemo(() => parsed ? findColumn(parsed.headers, ['grup', 'item category', 'category', 'kategori']) : undefined, [parsed]);
   const colEta = useMemo(() => parsed ? findColumn(parsed.headers, ['week eta', 'eta fix', 'tanggal eta', 'eta']) : undefined, [parsed]);
   const colStatus = useMemo(() => parsed ? findColumn(parsed.headers, ['status compile', 'status', 'state']) : undefined, [parsed]);
   const colQty = useMemo(() => parsed ? findColumn(parsed.headers, ['qty', 'quantity', 'jumlah']) : undefined, [parsed]);
   const colContainer = useMemo(() => parsed ? findColumn(parsed.headers, ['no container', 'nocontainer', 'no_kontainer', 'no kontainer', 'container', 'nomor container']) : undefined, [parsed]);
+  const colBl = useMemo(() => parsed ? findColumn(parsed.headers, ['bl', 'no bl', 'bill of lading', 'booking', 'no booking']) : undefined, [parsed]);
+  const colCarrier = useMemo(() => parsed ? findColumn(parsed.headers, ['shipping line', 'shipping_line', 'pelayaran', 'carrier', 'maskapai', 'line']) : undefined, [parsed]);
 
   // Linked Filter options
   const cabangs = useMemo(() => {
@@ -416,13 +428,13 @@ export default function PRUpdatePage() {
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-purple-500/10 text-purple-400 border border-purple-500/20 uppercase tracking-widest">
-              <FileBarChart className="w-3.5 h-3.5" /> Dashboard Data Harian • PR Update
+              <FileBarChart className="w-3.5 h-3.5" /> Dashboard Data Harian • PR Update & Tracking Container
             </div>
             <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white flex items-center gap-3">
-              PR Update & Status Compile <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-pink-400 to-amber-300">(Supply Tracker)</span>
+              PR Update & Tracking Container <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-pink-400 to-amber-300">(Integrated Tracker)</span>
             </h1>
             <p className="text-slate-300 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
-              Pemantauan pengadaan Purchase Requisition dan konversi status pesanan vendor (On Vessel, Ready, Hold). Dilengkapi 3 jalur simulasi percepatan lead time.
+              Modul gabungan pemantauan Purchase Requisition dan Live Tracking Container kapal (On Vessel, Ready, Hold) dengan format <b>13 kolom terpadu</b>. Klik langsung pada nomor kontainer atau tombol lacak untuk pemantauan real-time.
             </p>
           </div>
 
@@ -750,7 +762,7 @@ export default function PRUpdatePage() {
         )}
       </GlassCard>
 
-      {/* ─── TABEL DETAIL PR UPDATE & LIVE TRACKING CONTAINER (11 KOLOM GABUNGAN) ─── */}
+      {/* ─── TABEL DETAIL PR UPDATE & LIVE TRACKING CONTAINER (13 KOLOM GABUNGAN) ─── */}
       {parsed && parsed.headers && (
         <GlassCard className="p-6 border-slate-800 bg-slate-900/80 shadow-2xl overflow-hidden">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-slate-800 pb-4 mb-6 gap-4">
@@ -760,7 +772,7 @@ export default function PRUpdatePage() {
                 Tabel Detail PR & Live Tracking Container ({filtered.length} Dokumen Order)
               </h3>
               <p className="text-xs text-slate-400 mt-1">
-                Data gabungan 11 kolom: Klik pada <b className="text-sky-300">Nomor Container</b> untuk melacak posisi kontainer secara langsung di web resmi pelayaran.
+                Data gabungan 13 kolom terpadu: Klik pada <b className="text-sky-300 underline">Nomor Container</b> atau tombol lacak untuk memantau posisi kontainer langsung di web resmi pelayaran/maskapai.
               </p>
             </div>
 
@@ -768,12 +780,12 @@ export default function PRUpdatePage() {
               onClick={handleExport}
               className="px-5 py-2.5 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white font-semibold text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-sky-600/20 shrink-0"
             >
-              <Download className="w-4 h-4" /> Ekspor Data 11 Kolom
+              <Download className="w-4 h-4" /> Ekspor Data 13 Kolom
             </button>
           </div>
 
           <div className="overflow-x-auto rounded-xl border border-slate-800 max-h-[550px] overflow-y-auto">
-            <table className="w-full text-left text-xs border-collapse min-w-[1100px]">
+            <table className="w-full text-left text-xs border-collapse min-w-[1250px]">
               <thead className="bg-slate-950/90 text-slate-300 uppercase font-bold sticky top-0 z-20 shadow-md">
                 <tr className="border-b border-slate-800 text-[10px] tracking-wider text-center">
                   {parsed.headers.map((h) => (
@@ -785,8 +797,9 @@ export default function PRUpdatePage() {
               <tbody className="divide-y divide-slate-800/80 text-slate-300 text-center font-medium">
                 {filtered.slice(0, 100).map((row, idx) => {
                   const contVal = colContainer ? String(row[colContainer] || '') : '';
+                  const carrierVal = colCarrier ? String(row[colCarrier] || '') : '';
                   const hasCont = contVal && contVal.trim() !== '' && contVal.trim() !== '-' && contVal.trim() !== '0' && contVal.toUpperCase() !== 'N/A';
-                  const trackInfo = hasCont ? getDirectTrackingUrl(contVal.trim()) : null;
+                  const trackInfo = hasCont ? getDirectTrackingUrl(contVal.trim(), carrierVal.trim()) : null;
 
                   return (
                     <tr key={idx} className="hover:bg-slate-800/40 transition">
@@ -799,7 +812,12 @@ export default function PRUpdatePage() {
                         }
                         return (
                           <td key={h} className={`py-2.5 px-3 border-l border-slate-800 whitespace-nowrap ${h === colContainer && hasCont ? 'font-mono font-bold text-sky-300' : ''}`}>
-                            {val !== undefined && val !== null && val !== '' ? val : '-'}
+                            {h === colContainer && hasCont && trackInfo && trackInfo.url ? (
+                              <a href={trackInfo.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 hover:underline hover:text-white transition group font-bold" title={`Lacak ${val} di ${trackInfo.carrier}`}>
+                                <span>{val}</span>
+                                <ExternalLink className="w-3 h-3 text-sky-400 group-hover:text-white inline ml-0.5 shrink-0" />
+                              </a>
+                            ) : (val !== undefined && val !== null && val !== '' ? val : '-')}
                           </td>
                         );
                       })}

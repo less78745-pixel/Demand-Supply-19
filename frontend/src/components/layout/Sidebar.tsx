@@ -26,10 +26,9 @@ const MENU_ITEMS: MenuItem[] = [
     href: '/dashboard-harian',
     icon: CalendarClock,
     children: [
-      { name: 'SOH & TO Analysis', href: '/dashboard-harian/soh-to-analysis', icon: ClipboardList },
+      { name: 'SOH-TO-Vessel', href: '/dashboard-harian/soh-to-analysis', icon: ClipboardList },
       { name: 'History Sales-Outstanding', href: '/dashboard-harian/history-sales', icon: TrendingUp },
-      { name: 'PR Update', href: '/dashboard-harian/pr-update', icon: FileBarChart },
-      { name: 'Tracking Container', href: '/dashboard-harian/tracking-container', icon: Anchor },
+      { name: 'PR Update & Tracking Container', href: '/dashboard-harian/pr-update', icon: Anchor },
     ],
   },
   {

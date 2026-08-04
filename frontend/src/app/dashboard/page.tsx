@@ -488,7 +488,7 @@ export default function DashboardOverview() {
               <Activity className="w-4 h-4 text-primary" /> Run Forecast
             </Link>
             <Link href="/dashboard-harian/soh-to-analysis" className="px-5 py-2.5 bg-background border border-border hover:border-primary text-sm font-medium transition flex items-center gap-2 rounded-none">
-              <ClipboardList className="w-4 h-4 text-primary" /> Run SOH
+              <ClipboardList className="w-4 h-4 text-primary" /> Run SOH-TO-Vessel
             </Link>
           </div>
         </GlassCard>
@@ -580,9 +580,9 @@ export default function DashboardOverview() {
             ) : <EmptySection label="forecast" />}
           </section>
 
-          {/* ═══ 3. SOH & TO ANALYSIS ═══ */}
+          {/* ═══ 3. SOH-TO-VESSEL ═══ */}
           <section>
-            <SectionHeader title="SOH & TO Analysis" icon={ClipboardList} href="/dashboard-harian/soh-to-analysis" timestamp={data.soh?.processed_at} />
+            <SectionHeader title="SOH-TO-Vessel" icon={ClipboardList} href="/dashboard-harian/soh-to-analysis" timestamp={data.soh?.processed_at} />
             {sohSnapshot ? (
               <div className="grid md:grid-cols-5 gap-4">
                 {sohSnapshot.metrics.map((m: any, idx: number) => (
@@ -606,9 +606,9 @@ export default function DashboardOverview() {
             ) : <EmptySection label="History Sales" />}
           </section>
 
-          {/* ═══ 5. PR UPDATE ═══ */}
+          {/* ═══ 5. PR UPDATE & TRACKING CONTAINER ═══ */}
           <section>
-            <SectionHeader title="PR Update" icon={FileBarChart} href="/dashboard-harian/pr-update" timestamp={data.prUpdate?.processed_at} />
+            <SectionHeader title="PR Update & Tracking Container" icon={FileBarChart} href="/dashboard-harian/pr-update" timestamp={data.prUpdate?.processed_at} />
             {prSnapshot ? (
               <div className="grid md:grid-cols-5 gap-4">
                 <KPICard title="Total PR Entries" value={prSnapshot.totalRows.toLocaleString()} icon={<FileBarChart />} />
@@ -616,12 +616,12 @@ export default function DashboardOverview() {
                   <KPICard key={idx} title={status} value={Number(count).toLocaleString()} icon={<FileBarChart />} />
                 ))}
               </div>
-            ) : <EmptySection label="PR Update" />}
+            ) : <EmptySection label="PR Update & Tracking Container" />}
           </section>
 
-          {/* ═══ TRACKING CONTAINER ═══ */}
+          {/* ═══ TRACKING CONTAINER (VIA PR UPDATE) ═══ */}
           <section>
-            <SectionHeader title="Tracking Container" icon={Anchor} href="/dashboard-harian/tracking-container" timestamp={data.trackingContainer?.processed_at} />
+            <SectionHeader title="Tracking Container Summary" icon={Anchor} href="/dashboard-harian/pr-update" timestamp={data.trackingContainer?.processed_at || data.prUpdate?.processed_at} />
             {trackingContainerSnapshot ? (
               <div className="grid md:grid-cols-4 gap-4">
                 <KPICard title="Total Kontainer" value={trackingContainerSnapshot.total} icon={<Anchor />} />
