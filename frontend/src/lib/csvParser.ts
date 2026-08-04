@@ -10,12 +10,34 @@ export interface ParsedData {
 
 export function parseIndonesianNumber(val: any): number {
   if (val === null || val === undefined) return 0;
-  if (typeof val === 'number') return val;
-  const s = String(val).trim();
-  if (s === '' || s === '-' || s === ' - ' || s === '  -   ') return 0;
-  const cleaned = s.replace(/\./g, '').replace(',', '.');
-  const num = parseFloat(cleaned);
-  return isNaN(num) ? 0 : num;
+  let num: number;
+  if (typeof val === 'number') {
+    num = val;
+  } else {
+    const s = String(val).trim();
+    if (s === '' || s === '-' || s === ' - ' || s === '  -   ') return 0;
+    
+    if (s.includes(',') && !s.includes('.')) {
+      num = parseFloat(s.replace(',', '.'));
+    } else if (s.includes('.') && !s.includes(',')) {
+      const parts = s.split('.');
+      if (parts.length === 2 && parts[1].length !== 3) {
+        num = parseFloat(s);
+      } else {
+        num = parseFloat(s.replace(/\./g, ''));
+      }
+    } else {
+      const cleaned = s.replace(/\./g, '').replace(',', '.');
+      num = parseFloat(cleaned);
+    }
+  }
+
+  if (isNaN(num)) return 0;
+  // Clean up IEEE 754 floating-point inaccuracies (e.g. 20.999999999999996 -> 21)
+  if (Math.abs(num - Math.round(num)) < 0.0001) {
+    return Math.round(num);
+  }
+  return Math.round((num + Number.EPSILON) * 100) / 100;
 }
 
 function processLines(lines: any[][], resolve: (val: ParsedData) => void, reject: (err: any) => void) {
@@ -27,7 +49,7 @@ function processLines(lines: any[][], resolve: (val: ParsedData) => void, reject
     let headerRowIndex = 0;
 
     // 1. Identify the Header Row
-    const headerKeywords = ['cabang', 'cab', 'region', 'category', 'kategori', 'item', 'nama barang', 'po no', 'pr no'];
+    const headerKeywords = ['cabang', 'cab', 'region', 'category', 'kategori', 'item', 'nama barang', 'po no', 'pr no', 'no container', 'tanggal eta', 'status compile'];
     
     for (let i = 0; i < Math.min(lines.length, 15); i++) {
       if (!lines[i]) continue;
@@ -46,9 +68,9 @@ function processLines(lines: any[][], resolve: (val: ParsedData) => void, reject
     
     const knownMetadata = [
       'cabang', 'region', 'item', 'nama barang', 'category', 'grup', 'category item', 
-      'sub item', 'status doi', 'category insentif', 'po no', 'pr no', 'vendor_no', 
-      'no sku', 'description', 'status compile', 'container', 'item category', 
-      'sub item category', 'category dsp', 'branch_name', 'regional', 'eta fix', 'week eta', 'cut off', 'cutoff'
+      'sub item', 'status doi', 'category insentif', 'po no', 'pr no', 'po', 'nopr', 'vendor_no', 
+      'no sku', 'description', 'status compile', 'container', 'no container', 'no_container', 'item category', 
+      'sub item category', 'category dsp', 'branch_name', 'regional', 'eta fix', 'tanggal eta', 'week eta', 'cut off', 'cutoff'
     ];
 
     for (let i = 0; i < headers.length; i++) {

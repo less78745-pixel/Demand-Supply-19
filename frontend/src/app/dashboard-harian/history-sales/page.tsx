@@ -8,8 +8,8 @@ import { KPICard } from '@/components/ui/KPICard';
 import { MultiSelect } from '@/components/ui/MultiSelect';
 import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import {
-  TrendingUp, Info, DollarSign, BarChart3, Download, Sparkles,
-  CheckCircle2, AlertCircle, Award, Layers, HelpCircle, FileSpreadsheet, Zap, AlertTriangle, ArrowUpRight
+  TrendingUp, BarChart3, Download, Sparkles,
+  AlertCircle, Award, Layers, HelpCircle, FileSpreadsheet, AlertTriangle
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
@@ -22,69 +22,88 @@ import { getStandardFilename } from '@/utils/export';
 
 const COLORS = ['#3b82f6', '#f97316', '#22c55e', '#ef4444', '#a855f7', '#eab308', '#06b6d4', '#ec4899'];
 
-type ScenarioType = 'actual' | 'growth' | 'rebound';
-
-const SCENARIOS = [
-  {
-    id: 'actual' as ScenarioType,
-    title: 'Jalur 1: Evaluasi Aktual Sales (Historical Base)',
-    desc: 'Pemantauan pencapaian volume penjualan riil dan rasio pesanan tertunggak (outstanding) secara aktual.',
-    color: 'from-blue-600 to-indigo-500',
-    icon: BarChart3,
-    multiplier: 1.0
-  },
-  {
-    id: 'growth' as ScenarioType,
-    title: 'Jalur 2: Simulasi Target Growth (+15% Demand)',
-    desc: 'Proyeksi peningkatan permintaan kuartal depan untuk perencanaan cadangan pasokan pabrik dan alokasi gudang.',
-    color: 'from-emerald-600 to-teal-500',
-    icon: TrendingUp,
-    multiplier: 1.15
-  },
-  {
-    id: 'rebound' as ScenarioType,
-    title: 'Jalur 3: Koreksi Musim Basah / Rebound (-10%)',
-    desc: 'Evaluasi risiko akumulasi outstanding pada masa penurunan permintaan seasonal agar terhindar dari overstock.',
-    color: 'from-amber-600 to-orange-500',
-    icon: Zap,
-    multiplier: 0.90
-  }
-];
-
 function generateDemoHistorySales(): ParsedData {
-  const cabangs = ['Surabaya', 'Jakarta', 'Bandung', 'Medan', 'Semarang', 'Makassar', 'Palembang', 'Denpasar'];
+  const cabangs = [
+    { cab: 'Surabaya', reg: 'Jatim' },
+    { cab: 'Jakarta', reg: 'DKI' },
+    { cab: 'Bandung', reg: 'Jabar' },
+    { cab: 'Medan', reg: 'Sumut' },
+    { cab: 'Semarang', reg: 'Jateng' },
+    { cab: 'Makassar', reg: 'Sulsel' },
+    { cab: 'Palembang', reg: 'Sumsel' },
+    { cab: 'Denpasar', reg: 'Bali' }
+  ];
   const categories = ['Minyak Goreng Premium', 'Beras Setra Ramos', 'Gula Pasir Kristal', 'Tepung Terigu Serbaguna', 'Kopi Bubuk Murni', 'Susu Kental Manis'];
   const data: any[] = [];
 
-  cabangs.forEach(cab => {
-    categories.forEach(cat => {
-      const salesMei = Math.round(1800 + Math.random() * 5000);
-      const salesJuni = Math.round(2000 + Math.random() * 5200);
-      const salesJuli = Math.round(2200 + Math.random() * 5500);
-      const avgSales = Math.round((salesMei + salesJuni + salesJuli) / 3);
-      const outstanding = Math.round(300 + Math.random() * 1200);
-      
+  cabangs.forEach((item, idx) => {
+    categories.forEach((cat, cIdx) => {
+      const sMei = Math.round(1800 + Math.random() * 5000);
+      const sJuni = Math.round(2000 + Math.random() * 5200);
+      const sJuli = Math.round(2200 + Math.random() * 5500);
+      const avg = Math.round((sMei + sJuni + sJuli) / 3);
+      const soh = Math.round(1500 + Math.random() * 4000);
+      const hold = Math.round(100 + Math.random() * 500);
+      const vessel = Math.round(200 + Math.random() * 800);
+      const to = Math.round(150 + Math.random() * 600);
+
       data.push({
-        Cabang: cab,
-        Grup: cat,
-        'Sales Mei': salesMei,
-        'Sales Juni': salesJuni,
-        'Sales Juli': salesJuli,
-        'AVG Sales 3 Bln': avgSales,
-        'Outstanding Order': outstanding
+        Cabang: item.cab,
+        Region: item.reg,
+        Item: `ITM-00${cIdx + 1}`,
+        'NAMA BARANG': `${cat} 1kg`,
+        CATEGORY: 'Food & Beverage',
+        GRUP: cat,
+        'CATEGORY ITEM': cat,
+        'Sub item': 'Regular',
+        'STATUS DOI': 'ACTIVE',
+        SOH: soh,
+        'Sales Agus': Math.round(1500 + Math.random() * 3000),
+        'Sales Sept': Math.round(1600 + Math.random() * 3200),
+        'Sales Okt': Math.round(1700 + Math.random() * 3500),
+        'Sales Nov': Math.round(1800 + Math.random() * 3800),
+        'Sales Des': Math.round(2500 + Math.random() * 6000),
+        'Sales Januari': Math.round(1900 + Math.random() * 4000),
+        'Sales Februari': Math.round(1800 + Math.random() * 3900),
+        'Sales Maret': Math.round(2000 + Math.random() * 4200),
+        'Sales April': Math.round(2100 + Math.random() * 4500),
+        'Sales Mei': sMei,
+        'Sales Juni': sJuni,
+        'Sales Juli': sJuli,
+        'AVG Sales 3 Bln': avg,
+        'On Vessel': vessel,
+        'Hold Delivery': hold,
+        SPJM: Math.round(50 + Math.random() * 200),
+        Load: Math.round(100 + Math.random() * 400),
+        'Plan Loading': Math.round(300 + Math.random() * 700),
+        Ready: Math.round(200 + Math.random() * 500),
+        TO: to,
+        'Category Insentif': 'Tier 1'
       });
     });
   });
 
+  const headers = [
+    'Cabang', 'Region', 'Item', 'NAMA BARANG', 'CATEGORY', 'GRUP', 'CATEGORY ITEM', 'Sub item', 'STATUS DOI', 'SOH',
+    'Sales Agus', 'Sales Sept', 'Sales Okt', 'Sales Nov', 'Sales Des', 'Sales Januari', 'Sales Februari', 'Sales Maret',
+    'Sales April', 'Sales Mei', 'Sales Juni', 'Sales Juli', 'AVG Sales 3 Bln', 'On Vessel', 'Hold Delivery', 'SPJM',
+    'Load', 'Plan Loading', 'Ready', 'TO', 'Category Insentif'
+  ];
+
+  const targetColumns = [
+    { index: 9, name: 'SOH' },
+    { index: 19, name: 'Sales Mei' },
+    { index: 20, name: 'Sales Juni' },
+    { index: 21, name: 'Sales Juli' },
+    { index: 22, name: 'AVG Sales 3 Bln' },
+    { index: 23, name: 'On Vessel' },
+    { index: 24, name: 'Hold Delivery' },
+    { index: 29, name: 'TO' }
+  ];
+
   return {
-    headers: ['Cabang', 'Grup', 'Sales Mei', 'Sales Juni', 'Sales Juli', 'AVG Sales 3 Bln', 'Outstanding Order'],
-    targetColumns: [
-      { index: 2, name: 'Sales Mei' },
-      { index: 3, name: 'Sales Juni' },
-      { index: 4, name: 'Sales Juli' },
-      { index: 5, name: 'AVG Sales 3 Bln' },
-      { index: 6, name: 'Outstanding Order' }
-    ],
+    headers,
+    targetColumns,
     data,
     processed_at: new Date().toISOString()
   };
@@ -95,7 +114,6 @@ export default function HistorySalesPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [chartFilter, setChartFilter] = useState<'all' | 'sales' | 'outstanding'>('all');
   const [showHowTo, setShowHowTo] = useState<boolean>(false);
-  const [activeScenario, setActiveScenario] = useState<ScenarioType>('actual');
   const [selectedCabangForChart, setSelectedCabangForChart] = useState<string>('All');
 
   // Filter states
@@ -122,9 +140,9 @@ export default function HistorySalesPage() {
   };
 
   const handleDownloadTemplate = () => {
-    const headers = 'Cabang,Grup,Sales Mei,Sales Juni,Sales Juli,AVG Sales 3 Bln,Outstanding Order';
-    const row1 = 'Surabaya,Minyak Goreng Premium,4500,4800,5100,4800,600';
-    const row2 = 'Jakarta,Beras Setra Ramos,3200,3400,3600,3400,450';
+    const headers = 'Cabang,Region,Item,NAMA BARANG,CATEGORY,GRUP,CATEGORY ITEM,Sub item,STATUS DOI,SOH,Sales Agus,Sales Sept,Sales Okt,Sales Nov,Sales Des,Sales Januari,Sales Februari,Sales Maret,Sales April,Sales Mei,Sales Juni,Sales Juli,AVG Sales 3 Bln,On Vessel,Hold Delivery,SPJM,Load,Plan Loading,Ready,TO,Category Insentif';
+    const row1 = 'Surabaya,Jatim,ITM-001,Minyak Goreng Premium 1kg,Food & Beverage,Minyak Goreng Premium,Minyak Goreng Premium,Regular,ACTIVE,3500,2100,2200,2300,2400,3100,2500,2400,2600,2700,4500,4800,5100,4800,600,200,100,300,500,400,350,Tier 1';
+    const row2 = 'Jakarta,DKI,ITM-002,Beras Setra Ramos 5kg,Food & Beverage,Beras Setra Ramos,Beras Setra Ramos,Regular,ACTIVE,2800,1800,1900,2000,2100,2800,2200,2100,2300,2400,3200,3400,3600,3400,450,150,80,250,400,300,280,Tier 1';
     const blob = new Blob(['\ufeff' + headers + '\n' + row1 + '\n' + row2], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -175,23 +193,14 @@ export default function HistorySalesPage() {
     return ['All', ...Array.from(new Set(source.map(d => d[colCategory]).filter(v => v && !String(v).includes('#N/A') && !String(v).includes('#REF!') && String(v).toLowerCase() !== 'semua kategori'))).sort()];
   }, [parsed, colCategory, selectedCabang, colCabang]);
 
-  // Filtered Data with Scenario Multiplier applied
+  // Filtered Data (Pure historical actuals, without simulation alteration)
   const filtered = useMemo(() => {
     if (!parsed) return [];
-    const sc = SCENARIOS.find(s => s.id === activeScenario) || SCENARIOS[0];
-    return parsed.data
-      .filter(d =>
-        (!colCabang || selectedCabang.includes('All') || selectedCabang.includes(d[colCabang])) &&
-        (!colCategory || selectedCategory.includes('All') || selectedCategory.includes(d[colCategory]))
-      )
-      .map(row => {
-        const copy = { ...row };
-        parsed.targetColumns.forEach(tc => {
-          copy[tc.name] = Math.round((row[tc.name] || 0) * sc.multiplier);
-        });
-        return copy;
-      });
-  }, [parsed, selectedCabang, selectedCategory, colCabang, colCategory, activeScenario]);
+    return parsed.data.filter(d =>
+      (!colCabang || selectedCabang.includes('All') || selectedCabang.includes(d[colCabang])) &&
+      (!colCategory || selectedCategory.includes('All') || selectedCategory.includes(d[colCategory]))
+    );
+  }, [parsed, selectedCabang, selectedCategory, colCabang, colCategory]);
 
   // Executive Summary Insights Computation
   const executiveSummary = useMemo(() => {
@@ -310,7 +319,7 @@ export default function HistorySalesPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = getStandardFilename(`History_Sales_${activeScenario}`, new Date().toISOString(), 'csv');
+    link.download = getStandardFilename(`History_Sales_Export`, new Date().toISOString(), 'csv');
     link.click();
     URL.revokeObjectURL(url);
     toast.success('📊 Hasil Analisis History Sales Berhasil Diekspor!');
@@ -330,7 +339,7 @@ export default function HistorySalesPage() {
               History Sales & Outstanding <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-sky-400 to-cyan-300">(Analytics Engine)</span>
             </h1>
             <p className="text-slate-300 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
-              Pemantauan performa penjualan historis terhadap pesanan tertunggak (outstanding). Dilengkapi 3 jalur simulasi growth & koreksi seasonal untuk akurasi pasokan.
+              Pemantauan performa penjualan historis terhadap pesanan tertunggak (outstanding). Menganalisa metrik otomatis dari sheet Data Compile secara aktual dan riil.
             </p>
           </div>
 
@@ -396,52 +405,6 @@ export default function HistorySalesPage() {
           </div>
         </GlassCard>
       )}
-
-      {/* ─── TAB SWITCHER 3 JALUR SKENARIO ANALISIS ─── */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-bold uppercase tracking-wider text-blue-400 flex items-center gap-2">
-            <Zap className="w-4 h-4" /> Pilih 3 Jalur Evaluasi & Proyeksi Sales:
-          </h2>
-          <span className="text-xs text-slate-400 italic hidden sm:inline">Klik tab untuk mengaktifkan simulasi volume permintaan!</span>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {SCENARIOS.map((sc) => {
-            const Icon = sc.icon;
-            const isSelected = activeScenario === sc.id;
-            return (
-              <button
-                key={sc.id}
-                onClick={() => {
-                  setActiveScenario(sc.id);
-                  toast.success(`Mengaktifkan ${sc.title}`);
-                }}
-                className={`relative group p-4 sm:p-5 rounded-2xl transition-all duration-300 text-left border overflow-hidden shadow-lg ${
-                  isSelected
-                    ? `bg-gradient-to-br ${sc.color} text-white border-transparent ring-2 ring-white/20 shadow-blue-500/25 scale-[1.02]`
-                    : 'bg-slate-900/70 hover:bg-slate-800/80 text-slate-300 border-slate-700 hover:border-slate-600'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-bold text-base tracking-wide flex items-center gap-2.5">
-                    <Icon className={`w-5 h-5 ${isSelected ? 'text-white' : 'text-blue-400'}`} />
-                    {sc.title}
-                  </span>
-                  {isSelected && (
-                    <span className="px-2 py-0.5 rounded-full bg-white/20 text-white text-xs font-black uppercase tracking-wider">
-                      Aktif
-                    </span>
-                  )}
-                </div>
-                <p className={`text-xs sm:text-sm leading-relaxed ${isSelected ? 'text-slate-100 font-medium' : 'text-slate-400'}`}>
-                  {sc.desc}
-                </p>
-              </button>
-            );
-          })}
-        </div>
-      </div>
 
       {/* ─── EXECUTIVE KPI SUMMARY CHIPS ─── */}
       {executiveSummary && (
@@ -525,7 +488,7 @@ export default function HistorySalesPage() {
                 Grafik Komparasi Volume Sales vs Outstanding per Cabang
               </h3>
               <p className="text-xs text-slate-400 mt-1">
-                Sorotan: <b className="text-cyan-400">{selectedCabangForChart === 'All' ? 'Seluruh Cabang' : selectedCabangForChart}</b> • Skenario Aktif: <b className="text-amber-300">{activeScenario.toUpperCase()}</b>
+                Sorotan: <b className="text-cyan-400">{selectedCabangForChart === 'All' ? 'Seluruh Cabang' : selectedCabangForChart}</b> • Data Mode: <b className="text-emerald-300">AKTUAL & RIIL</b>
               </p>
             </div>
 
@@ -666,6 +629,52 @@ export default function HistorySalesPage() {
           </table>
         </div>
       </GlassCard>
+
+      {/* ─── FULL DATA TABLE (SEMUA KOLOM RAW DATA) ─── */}
+      {parsed && parsed.headers && (
+        <GlassCard className="p-6 border-slate-800 bg-slate-900/80 shadow-2xl overflow-hidden">
+          <div className="border-b border-slate-800 pb-4 mb-6">
+            <h3 className="text-lg font-bold text-white flex items-center gap-2.5">
+              <BarChart3 className="w-5 h-5 text-emerald-400" />
+              Data Detail (Semua 31 Kolom Raw Data)
+            </h3>
+            <p className="text-xs text-slate-400 mt-1">
+              Menampilkan rincian seluruh kolom metrik penjualan dari sheet Data Compile tanpa modifikasi buatan.
+            </p>
+          </div>
+
+          <div className="overflow-x-auto rounded-xl border border-slate-800 max-h-[500px] overflow-y-auto">
+            <table className="w-full text-left text-xs border-collapse min-w-[1200px]">
+              <thead className="bg-slate-950/90 text-slate-300 uppercase font-bold sticky top-0 z-20 shadow-md">
+                <tr className="border-b border-slate-800 text-[10px] tracking-wider text-center">
+                  {parsed.headers.map((h) => (
+                    <th key={h} className="py-3 px-3 border-l border-slate-800 whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/80 text-slate-300 text-center">
+                {filtered.slice(0, 50).map((row, idx) => (
+                  <tr key={idx} className="hover:bg-slate-800/40 transition">
+                    {parsed.headers.map((h) => {
+                      const val = row[h];
+                      return (
+                        <td key={h} className="py-2.5 px-3 border-l border-slate-800 whitespace-nowrap">
+                          {typeof val === 'number' ? val.toLocaleString('id-ID') : (val || '-')}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {filtered.length > 50 && (
+            <p className="text-xs text-slate-400 mt-4 italic">
+              * Menampilkan 50 baris pertama dari total {filtered.length} baris data...
+            </p>
+          )}
+        </GlassCard>
+      )}
     </div>
   );
 }

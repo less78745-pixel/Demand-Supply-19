@@ -83,29 +83,29 @@ export function MultiSelect({
   };
 
   return (
-    <div className={cn("relative inline-block w-48 text-sm", className)} ref={dropdownRef}>
+    <div className={cn("relative inline-block min-w-[230px] max-w-[360px] w-auto text-sm", className)} ref={dropdownRef}>
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex w-full items-center justify-between gap-2 rounded-md border border-border bg-background px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-1 focus:ring-primary transition-colors hover:border-primary/50"
+        className="flex w-full items-center justify-between gap-3 rounded-md border border-border bg-background px-3.5 py-2 text-foreground shadow-sm focus:outline-none focus:ring-1 focus:ring-primary transition-colors hover:border-primary/50"
       >
-        <span className="truncate">{displayValue()}</span>
+        <span className="truncate text-left font-medium">{displayValue()}</span>
         <ChevronDown className="h-4 w-4 opacity-50 shrink-0" />
       </button>
 
       {isOpen && (
-        <div className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-md border border-border bg-popover shadow-md py-1">
+        <div className="absolute z-50 mt-1 max-h-80 min-w-[280px] w-max max-w-[450px] overflow-auto rounded-md border border-border bg-popover shadow-lg py-1">
           <div
             onClick={() => toggleOption("All")}
-            className="flex cursor-pointer items-center px-3 py-2 text-popover-foreground hover:bg-muted"
+            className="flex cursor-pointer items-center px-3.5 py-2.5 text-popover-foreground hover:bg-muted transition-colors"
           >
             <div className={cn(
-              "flex h-4 w-4 items-center justify-center border rounded-sm mr-2 shrink-0 transition-colors",
+              "flex h-4 w-4 items-center justify-center border rounded-sm mr-2.5 shrink-0 transition-colors",
               selected.includes("All") ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/30"
             )}>
               {selected.includes("All") && <Check className="h-3 w-3" />}
             </div>
-            <span className="font-medium">{selectAllLabel}</span>
+            <span className="font-semibold">{selectAllLabel}</span>
           </div>
 
           <div className="my-1 h-px bg-border" />
@@ -117,15 +117,15 @@ export function MultiSelect({
                 <div
                   key={option}
                   onClick={() => toggleOption(option)}
-                  className="flex cursor-pointer items-center px-3 py-2 text-popover-foreground hover:bg-muted"
+                  className="flex cursor-pointer items-center px-3.5 py-2 text-popover-foreground hover:bg-muted transition-colors"
                 >
                   <div className={cn(
-                    "flex h-4 w-4 items-center justify-center border rounded-sm mr-2 shrink-0 transition-colors",
+                    "flex h-4 w-4 items-center justify-center border rounded-sm mr-2.5 shrink-0 transition-colors",
                     checked ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/30"
                   )}>
                     {checked && <Check className="h-3 w-3" />}
                   </div>
-                  <span className="truncate">{option}</span>
+                  <span className="break-words pr-2 whitespace-normal leading-snug">{option}</span>
                 </div>
               );
             })

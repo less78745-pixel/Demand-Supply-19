@@ -9,7 +9,7 @@ import { MultiSelect } from '@/components/ui/MultiSelect';
 import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import {
   FileBarChart, Info, Calendar, BarChart3, Clock, Table as TableIcon, Download,
-  Sparkles, Layers, HelpCircle, FileSpreadsheet, Zap, AlertTriangle, CheckCircle2, TrendingUp, Truck, AlertCircle
+  Sparkles, Layers, HelpCircle, FileSpreadsheet, Zap, AlertTriangle, CheckCircle2, TrendingUp, Truck, AlertCircle, ExternalLink, Globe
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
@@ -54,42 +54,145 @@ const SCENARIOS = [
   }
 ];
 
+function getDirectTrackingUrl(containerNo?: string, carrierName?: string): { url: string; carrier: string } {
+  const no = (containerNo || "").trim().toUpperCase();
+  let carrier = (carrierName || "").toLowerCase().trim();
+
+  if (!no || no === '-' || no === '0' || no === '#N/A' || no === 'N/A' || no === 'NULL') {
+    return { url: "", carrier: "-" };
+  }
+
+  // Auto-detect carrier by container prefix if carrier not explicit or generic
+  if (!carrier || carrier === '-' || carrier.includes('agregator') || carrier.includes('custom') || carrier === 'all') {
+    if (no.startsWith('MRTU') || no.startsWith('MTRU')) carrier = 'meratus';
+    else if (no.startsWith('TEMU') || no.startsWith('TMSU')) carrier = 'temas';
+    else if (no.startsWith('SPIL') || no.startsWith('SPU') || no.startsWith('SUL')) carrier = 'spil';
+    else if (no.startsWith('MAEU') || no.startsWith('MSKU') || no.startsWith('MRKU')) carrier = 'maersk';
+    else if (no.startsWith('MSCU') || no.startsWith('MEDU')) carrier = 'msc';
+    else if (no.startsWith('CMAU') || no.startsWith('CGMU') || no.startsWith('APZU')) carrier = 'cma cgm';
+    else if (no.startsWith('ONEU') || no.startsWith('ONEY')) carrier = 'one';
+    else if (no.startsWith('EGLV') || no.startsWith('EVER') || no.startsWith('EMCU')) carrier = 'evergreen';
+    else if (no.startsWith('HLCU') || no.startsWith('HPGU')) carrier = 'hapag-lloyd';
+    else if (no.startsWith('COSU') || no.startsWith('CCLU') || no.startsWith('OOCL')) carrier = 'cosco';
+    else if (no.startsWith('ZIMU')) carrier = 'zim';
+  }
+
+  // Domestic Indonesia Shipping
+  if (carrier.includes("temas") || carrier.includes("kliktemas")) return { url: "https://apps.kliktemas.com/", carrier: "Temas Line (KlikTemas)" };
+  if (carrier.includes("meratus")) return { url: "https://www.meratusline.com/", carrier: "Meratus Line" };
+  if (carrier.includes("spil") || carrier.includes("salam pacific") || carrier.includes("myspil")) return { url: "https://www.myspil.com/", carrier: "SPIL (mySPIL)" };
+  if (carrier.includes("samudera")) return { url: "https://samuderaconnect.com/", carrier: "Samudera Indonesia" };
+  if (carrier.includes("tanto")) return { url: "https://www.tantonet.com/", carrier: "Tanto Intim Line" };
+  if (carrier.includes("wan hai") || carrier.includes("wanhai")) return { url: "https://www.wanhai.com/views/Cargo_Tracking/CargoTracking.xhtml", carrier: "Wan Hai Lines" };
+  if (carrier.includes("pil") || carrier.includes("pacific int")) return { url: "https://www.pilship.com/cargo-tracking", carrier: "PIL (Pacific Int'l Lines)" };
+
+  // Global Shipping Deep Links
+  if (carrier.includes("maersk")) return { url: `https://www.maersk.com/tracking/${no}`, carrier: "Maersk" };
+  if (carrier.includes("msc")) return { url: `https://www.msc.com/en/track-a-shipment?number=${no}`, carrier: "MSC" };
+  if (carrier.includes("cma") || carrier.includes("cgm")) return { url: `https://www.cma-cgm.com/ebusiness/tracking/search?SearchBy=CN&Reference=${no}`, carrier: "CMA CGM" };
+  if (carrier.includes("one") || carrier.includes("ocean network")) return { url: `https://ecomm.one-line.com/one-ecom/manage-shipment/cargo-tracking?trackingNo=${no}`, carrier: "ONE (Ocean Network Express)" };
+  if (carrier.includes("hapag") || carrier.includes("lloyd")) return { url: `https://www.hapag-lloyd.com/en/online-business/track/track-by-container-solution.html?blno=${no}`, carrier: "Hapag-Lloyd" };
+  if (carrier.includes("zim")) return { url: `https://www.zim.com/tools/track-a-shipment?consignmentNumber=${no}`, carrier: "ZIM" };
+  if (carrier.includes("evergreen")) return { url: `https://www.evergreen-line.com/emodal/Cargo/CargoTrackingDetail?no=${no}`, carrier: "Evergreen Line" };
+  if (carrier.includes("oocl")) return { url: `https://www.oocl.com/eng/ourservices/eservices/cargotracking/Pages/cargotracking.aspx?cn=${no}`, carrier: "OOCL" };
+  if (carrier.includes("cosco")) return { url: `https://elines.coscoshipping.com/ebusiness/cargoTracking?no=${no}`, carrier: "COSCO Shipping" };
+
+  // Default Universal Container Tracking via SeaRates
+  return { url: `https://www.searates.com/container/tracking/?number=${no}`, carrier: "Universal Agregator (SeaRates)" };
+}
+
+const syncToTrackingContainer = async (parsed: ParsedData) => {
+  const colCont = findColumn(parsed.headers, ['no container', 'nocontainer', 'no_kontainer', 'no kontainer', 'container', 'nomor container']);
+  const colBranch = findColumn(parsed.headers, ['branch_name', 'branch', 'cabang']);
+  const colStatus = findColumn(parsed.headers, ['status compile', 'status', 'state']);
+  const colEta = findColumn(parsed.headers, ['tanggal eta', 'week eta', 'eta']);
+  const colDesc = findColumn(parsed.headers, ['description', 'deskripsi', 'grup']);
+  const colPo = findColumn(parsed.headers, ['po', 'po no', 'no po']);
+  const colPr = findColumn(parsed.headers, ['nopr', 'no pr', 'pr no', 'pr']);
+
+  if (!colCont) return;
+  
+  const containers = parsed.data
+    .filter(row => row[colCont] && String(row[colCont]).trim() !== '' && String(row[colCont]).trim() !== '-' && String(row[colCont]).trim() !== '0' && String(row[colCont]).toUpperCase() !== 'N/A')
+    .map((row, index) => {
+      const no = String(row[colCont]).trim().toUpperCase();
+      const info = getDirectTrackingUrl(no);
+      return {
+        id: 'sync-' + Date.now() + '-' + index,
+        no: no,
+        bl: '',
+        carrier: info.carrier,
+        cabang: colBranch ? String(row[colBranch] || 'Unknown') : 'Unknown',
+        status: colStatus ? String(row[colStatus] || 'Sedang Berlayar') : 'Sedang Berlayar',
+        pol: '',
+        pod: colBranch ? `Gudang ${String(row[colBranch])}` : '',
+        etd: '',
+        eta: colEta ? String(row[colEta] || '') : '',
+        notes: `Sinkronisasi PR Update: PO ${colPo ? row[colPo] : '-'} | PR ${colPr ? row[colPr] : '-'} | ${colDesc ? row[colDesc] : ''}`,
+        lastChecked: new Date().toISOString().slice(0, 10)
+      };
+    });
+
+  if (containers.length > 0) {
+    const payload = {
+      processed_at: new Date().toISOString(),
+      containers
+    };
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('last_tracking_containers', JSON.stringify(payload));
+    }
+    try {
+      await set('last_tracking_containers_v3', payload);
+    } catch (e) {
+      console.warn("Failed syncing to tracking containers IndexDB", e);
+    }
+  }
+};
+
 function generateDemoPRUpdate(): ParsedData {
   const cabangs = ['Surabaya', 'Jakarta', 'Bandung', 'Medan', 'Semarang', 'Makassar', 'Palembang', 'Denpasar'];
   const categories = ['Minyak Goreng Premium', 'Beras Setra Ramos', 'Gula Pasir Kristal', 'Tepung Terigu Serbaguna', 'Kopi Bubuk Murni', 'Susu Kental Manis'];
   const statuses = ['ON VESSEL', 'HOLD DELIVERY', 'READY', 'PLAN LOADING', 'IN PROCESS'];
   const etas = ['Week 1 Agu', 'Week 2 Agu', 'Week 3 Agu', 'Week 4 Agu'];
+  const containers = ['MRTU1234567', 'TEMU7654321', 'SPIL8899001', 'MAEU9988776', 'MSCU4455667', 'CMAU1122334', 'ONEY7788990', 'EGLV3344556'];
   
   const data: any[] = [];
   let poCounter = 1001;
 
-  cabangs.forEach(cab => {
+  cabangs.forEach((cab, cIdx) => {
     categories.forEach((cat, idx) => {
-      const stat = statuses[(idx + Math.floor(Math.random() * 5)) % statuses.length];
-      const eta = etas[Math.floor(Math.random() * etas.length)];
+      const stat = statuses[(idx + cIdx) % statuses.length];
+      const eta = etas[(idx + Math.floor(cIdx / 2)) % etas.length];
       const qty = Math.round(500 + Math.random() * 3500);
+      const cont = (stat === 'ON VESSEL' || stat === 'READY') ? containers[(idx + cIdx) % containers.length] : '-';
       
       data.push({
-        'PO No': `PO-2026-${poCounter++}`,
-        'PR No': `PR-08-${poCounter}`,
+        'PO': `PO-2026-${poCounter++}`,
+        'NoPR': `PR-08-${poCounter}`,
         'branch_name': cab,
         'GRUP': cat,
-        'DESCRIPTION': `${cat} (Kemasan Karton)`,
+        'Category': 'Food & Beverage',
+        'DESCRIPTION': `${cat} (Kemasan Karton 24x)`,
         'STATUS Compile': stat,
+        'No Container': cont,
+        'Tanggal ETA': new Date(Date.now() + (idx * 2 - 1) * 86400000).toISOString().slice(0, 10),
         'Week ETA': eta,
         'Qty': qty
       });
     });
   });
 
-  return {
-    headers: ['PO No', 'PR No', 'branch_name', 'GRUP', 'DESCRIPTION', 'STATUS Compile', 'Week ETA', 'Qty'],
+  const parsedDemo: ParsedData = {
+    headers: ['PO', 'NoPR', 'branch_name', 'GRUP', 'Category', 'DESCRIPTION', 'STATUS Compile', 'No Container', 'Tanggal ETA', 'Week ETA', 'Qty'],
     targetColumns: [
-      { index: 7, name: 'Qty' }
+      { index: 10, name: 'Qty' }
     ],
     data,
     processed_at: new Date().toISOString()
   };
+
+  syncToTrackingContainer(parsedDemo);
+  return parsedDemo;
 }
 
 export default function PRUpdatePage() {
@@ -124,17 +227,17 @@ export default function PRUpdatePage() {
   };
 
   const handleDownloadTemplate = () => {
-    const headers = 'PO No,PR No,branch_name,GRUP,DESCRIPTION,STATUS Compile,Week ETA,Qty';
-    const row1 = 'PO-2026-101,PR-08-01,Surabaya,Minyak Goreng Premium,Minyak Goreng 2L,ON VESSEL,Week 1 Agu,2500';
-    const row2 = 'PO-2026-102,PR-08-02,Jakarta,Beras Setra Ramos,Beras Premium 5kg,HOLD DELIVERY,Week 2 Agu,1800';
+    const headers = 'PO,NoPR,branch_name,GRUP,Category,DESCRIPTION,STATUS Compile,No Container,Tanggal ETA,Week ETA,Qty';
+    const row1 = 'PO-2026-101,PR-08-01,Surabaya,Minyak Goreng Premium,Food & Beverage,Minyak Goreng 2L,ON VESSEL,MRTU1234567,2026-08-10,Week 2 Agu,2500';
+    const row2 = 'PO-2026-102,PR-08-02,Jakarta,Beras Setra Ramos,Food & Beverage,Beras Premium 5kg,HOLD DELIVERY,-,2026-08-15,Week 3 Agu,1800';
     const blob = new Blob(['\ufeff' + headers + '\n' + row1 + '\n' + row2], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'template_pr_update.csv';
+    link.download = 'template_pr_update_tracking.csv';
     link.click();
     URL.revokeObjectURL(url);
-    toast.success('📁 Template CSV PR Update Berhasil Diunduh');
+    toast.success('📁 Template CSV PR Update & Tracking Container Berhasil Diunduh');
   };
 
   const handleFileUpload = async (file: File) => {
@@ -145,6 +248,7 @@ export default function PRUpdatePage() {
       setParsed(parsedData);
       try {
         await set('last_pr_update', parsedData);
+        await syncToTrackingContainer(parsedData);
       } catch (e) {
         console.warn('Data terlalu besar untuk disimpan di IndexDB', e);
       }
@@ -157,11 +261,12 @@ export default function PRUpdatePage() {
   };
 
   // Identify column names dynamically
-  const colCabang = useMemo(() => parsed ? findColumn(parsed.headers, ['cabang', 'branch_name', 'branch', 'cab', 'regional', 'region']) : undefined, [parsed]);
-  const colCategory = useMemo(() => parsed ? findColumn(parsed.headers, ['item category', 'grup', 'category', 'kategori']) : undefined, [parsed]);
+  const colCabang = useMemo(() => parsed ? findColumn(parsed.headers, ['branch_name', 'cabang', 'branch', 'cab', 'regional', 'region']) : undefined, [parsed]);
+  const colCategory = useMemo(() => parsed ? findColumn(parsed.headers, ['grup', 'item category', 'category', 'kategori']) : undefined, [parsed]);
   const colEta = useMemo(() => parsed ? findColumn(parsed.headers, ['week eta', 'eta fix', 'tanggal eta', 'eta']) : undefined, [parsed]);
   const colStatus = useMemo(() => parsed ? findColumn(parsed.headers, ['status compile', 'status', 'state']) : undefined, [parsed]);
   const colQty = useMemo(() => parsed ? findColumn(parsed.headers, ['qty', 'quantity', 'jumlah']) : undefined, [parsed]);
+  const colContainer = useMemo(() => parsed ? findColumn(parsed.headers, ['no container', 'nocontainer', 'no_kontainer', 'no kontainer', 'container', 'nomor container']) : undefined, [parsed]);
 
   // Linked Filter options
   const cabangs = useMemo(() => {
@@ -203,8 +308,8 @@ export default function PRUpdatePage() {
       )
       .map(row => {
         const copy = { ...row };
-        if (colQty && copy[colQty] != null) {
-          copy[colQty] = Math.round(Number(copy[colQty]) * sc.multiplier || 0);
+        if (colQty && copy[colQty] != null && copy[colQty] !== '') {
+          copy[colQty] = Math.round(Number(String(copy[colQty]).replace(/[^0-9.-]+/g, '')) * sc.multiplier || 0);
         }
         if (colStatus && sc.statusModifier === 'expedite' && String(copy[colStatus]).toUpperCase().includes('HOLD')) {
           copy[colStatus] = 'READY / EXPEDITED';
@@ -229,7 +334,7 @@ export default function PRUpdatePage() {
       if (selectedCabangForChart !== 'All' && cbg !== selectedCabangForChart) continue;
 
       const stat = colStatus ? (String(row[colStatus] || 'Unknown').toUpperCase()) : 'TOTAL';
-      const q = colQty ? Number(row[colQty]) || 0 : 1;
+      const q = colQty && row[colQty] != null ? Math.round(Number(String(row[colQty]).replace(/[^0-9.-]+/g, '')) || 0) : 1;
       
       statuses.add(stat);
       qtySum += q;
@@ -240,10 +345,10 @@ export default function PRUpdatePage() {
       if (!map[cbg]) {
         map[cbg] = { cabang: cbg };
       }
-      map[cbg][stat] = (map[cbg][stat] || 0) + q;
+      map[cbg][stat] = Math.round((map[cbg][stat] || 0) + q);
     }
 
-    return { chartData: Object.values(map), statusList: Array.from(statuses), totalQty: qtySum, holdCount: holdSum };
+    return { chartData: Object.values(map), statusList: Array.from(statuses), totalQty: Math.round(qtySum), holdCount: holdSum };
   }, [parsed, filtered, colCabang, colStatus, colQty, selectedCabangForChart]);
 
   // Pivot Table Data
@@ -258,7 +363,7 @@ export default function PRUpdatePage() {
       const eta = colEta ? (row[colEta] || 'Unknown') : 'Unknown';
       const cat = colCategory ? (row[colCategory] || 'Unknown') : 'Unknown';
       const desc = colDesc ? (row[colDesc] || 'Unknown') : 'Unknown';
-      const q = colQty ? Number(row[colQty]) || 0 : 0;
+      const q = colQty && row[colQty] != null ? Math.round(Number(String(row[colQty]).replace(/[^0-9.-]+/g, '')) || 0) : 0;
 
       const key = `${cbg}_${stat}_${eta}_${cat}_${desc}`;
       if (!map[key]) {
@@ -272,7 +377,7 @@ export default function PRUpdatePage() {
           'Jumlah Dokumen': 0
         };
       }
-      map[key]['Total Qty'] += q;
+      map[key]['Total Qty'] = Math.round(map[key]['Total Qty'] + q);
       map[key]['Jumlah Dokumen'] += 1;
     }
     return Object.values(map).sort((a: any, b: any) => b['Total Qty'] - a['Total Qty']);
@@ -644,6 +749,89 @@ export default function PRUpdatePage() {
           </p>
         )}
       </GlassCard>
+
+      {/* ─── TABEL DETAIL PR UPDATE & LIVE TRACKING CONTAINER (11 KOLOM GABUNGAN) ─── */}
+      {parsed && parsed.headers && (
+        <GlassCard className="p-6 border-slate-800 bg-slate-900/80 shadow-2xl overflow-hidden">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-slate-800 pb-4 mb-6 gap-4">
+            <div>
+              <h3 className="text-lg font-bold text-white flex items-center gap-2.5">
+                <Globe className="w-5 h-5 text-sky-400" />
+                Tabel Detail PR & Live Tracking Container ({filtered.length} Dokumen Order)
+              </h3>
+              <p className="text-xs text-slate-400 mt-1">
+                Data gabungan 11 kolom: Klik pada <b className="text-sky-300">Nomor Container</b> untuk melacak posisi kontainer secara langsung di web resmi pelayaran.
+              </p>
+            </div>
+
+            <button
+              onClick={handleExport}
+              className="px-5 py-2.5 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white font-semibold text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-sky-600/20 shrink-0"
+            >
+              <Download className="w-4 h-4" /> Ekspor Data 11 Kolom
+            </button>
+          </div>
+
+          <div className="overflow-x-auto rounded-xl border border-slate-800 max-h-[550px] overflow-y-auto">
+            <table className="w-full text-left text-xs border-collapse min-w-[1100px]">
+              <thead className="bg-slate-950/90 text-slate-300 uppercase font-bold sticky top-0 z-20 shadow-md">
+                <tr className="border-b border-slate-800 text-[10px] tracking-wider text-center">
+                  {parsed.headers.map((h) => (
+                    <th key={h} className="py-3 px-3 border-l border-slate-800 whitespace-nowrap">{h}</th>
+                  ))}
+                  <th className="py-3 px-4 border-l border-slate-800 text-sky-400 bg-sky-950/40">🛰️ Action Track</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/80 text-slate-300 text-center font-medium">
+                {filtered.slice(0, 100).map((row, idx) => {
+                  const contVal = colContainer ? String(row[colContainer] || '') : '';
+                  const hasCont = contVal && contVal.trim() !== '' && contVal.trim() !== '-' && contVal.trim() !== '0' && contVal.toUpperCase() !== 'N/A';
+                  const trackInfo = hasCont ? getDirectTrackingUrl(contVal.trim()) : null;
+
+                  return (
+                    <tr key={idx} className="hover:bg-slate-800/40 transition">
+                      {parsed.headers.map((h) => {
+                        let val = row[h];
+                        if (colQty && h === colQty && val != null && val !== '') {
+                          val = Math.round(Number(String(val).replace(/[^0-9.-]+/g, '')) || 0).toLocaleString('id-ID');
+                        } else if (typeof val === 'number') {
+                          val = val.toLocaleString('id-ID');
+                        }
+                        return (
+                          <td key={h} className={`py-2.5 px-3 border-l border-slate-800 whitespace-nowrap ${h === colContainer && hasCont ? 'font-mono font-bold text-sky-300' : ''}`}>
+                            {val !== undefined && val !== null && val !== '' ? val : '-'}
+                          </td>
+                        );
+                      })}
+                      <td className="py-2 px-4 border-l border-slate-800 bg-slate-950/30 whitespace-nowrap">
+                        {hasCont && trackInfo && trackInfo.url ? (
+                          <a
+                            href={trackInfo.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 hover:text-white border border-sky-500/40 font-bold transition shadow-sm"
+                            title={`Lacak ${contVal} via ${trackInfo.carrier}`}
+                          >
+                            <span>Lacak ({trackInfo.carrier.split(' ')[0]})</span>
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </a>
+                        ) : (
+                          <span className="text-slate-500 text-[11px] italic">Belum Ada Cont</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          {filtered.length > 100 && (
+            <p className="text-xs text-slate-400 mt-4 italic text-center">
+              * Menampilkan 100 baris pertama dari total {filtered.length} dokumen pesanan...
+            </p>
+          )}
+        </GlassCard>
+      )}
     </div>
   );
 }

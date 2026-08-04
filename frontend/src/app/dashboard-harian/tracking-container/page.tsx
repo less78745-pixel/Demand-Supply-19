@@ -128,7 +128,26 @@ const DEFAULT_CONTAINERS: ContainerItem[] = [
 /* ─── Direct Tracking URL Synthesizer (Langsung ke Web Resmi Pelayaran) ─── */
 function getDirectTrackingUrl(carrierName?: string, containerNo?: string): { url: string; source: string } {
   const no = (containerNo || "").trim().toUpperCase();
-  const carrier = (carrierName || "").toLowerCase().trim();
+  let carrier = (carrierName || "").toLowerCase().trim();
+
+  if (!no || no === '-' || no === '0' || no === '#N/A' || no === 'N/A') {
+    return { url: "", source: "-" };
+  }
+
+  // Auto-detect carrier by container prefix if carrier not explicit or generic
+  if (!carrier || carrier === '-' || carrier === 'all' || carrier.includes('agregator') || carrier.includes('custom') || carrier.includes('lainnya')) {
+    if (no.startsWith('MRTU') || no.startsWith('MTRU')) carrier = 'meratus';
+    else if (no.startsWith('TEMU') || no.startsWith('TMSU')) carrier = 'temas';
+    else if (no.startsWith('SPIL') || no.startsWith('SPU') || no.startsWith('SUL')) carrier = 'spil';
+    else if (no.startsWith('MAEU') || no.startsWith('MSKU') || no.startsWith('MRKU')) carrier = 'maersk';
+    else if (no.startsWith('MSCU') || no.startsWith('MEDU')) carrier = 'msc';
+    else if (no.startsWith('CMAU') || no.startsWith('CGMU') || no.startsWith('APZU')) carrier = 'cma cgm';
+    else if (no.startsWith('ONEU') || no.startsWith('ONEY')) carrier = 'one';
+    else if (no.startsWith('EGLV') || no.startsWith('EVER') || no.startsWith('EMCU')) carrier = 'evergreen';
+    else if (no.startsWith('HLCU') || no.startsWith('HPGU')) carrier = 'hapag-lloyd';
+    else if (no.startsWith('COSU') || no.startsWith('CCLU') || no.startsWith('OOCL')) carrier = 'cosco';
+    else if (no.startsWith('ZIMU')) carrier = 'zim';
+  }
 
   // 1. Indonesian Domestic & Regional Shipping Lines (DIRECT TO OFFICIAL WEB TERUPDATE)
   if (carrier.includes("temas") || carrier.includes("kliktemas")) return { url: "https://apps.kliktemas.com/", source: "KlikTemas Official Portal" };
@@ -377,48 +396,69 @@ export default function TrackingContainerPage() {
           return "";
         };
 
-        // Strictly capture the 3 core columns: no_kontainer, pelayaran, cabang
-        const no = getVal(["no_kontainer", "no kontainer", "no. kontainer", "kontainer", "container", "container no"]);
-        const carrier = getVal(["pelayaran", "shipping line", "carrier", "maskapai", "shipping", "line"]);
-        const cabang = getVal(["cabang", "cabang tujuan", "branch", "tujuan", "dest", "destination"]);
+        // Capture container number, branch from unified 11-column format or 3-column format
+        const no = getVal(["no container", "nocontainer", "no_kontainer", "no kontainer", "no. kontainer", "kontainer", "container", "container no", "nomor container"]);
+        const cabang = getVal(["branch_name", "cabang", "cabang tujuan", "branch", "tujuan", "dest", "destination", "regional"]);
+        let carrier = getVal(["pelayaran", "shipping line", "carrier", "maskapai", "shipping", "line"]);
 
         // Also capture optional supplementary columns if present
+        const po = getVal(["po", "no po", "po no"]);
+        const nopr = getVal(["nopr", "no pr", "pr no", "pr"]);
+        const desc = getVal(["description", "deskripsi", "nama barang", "grup"]);
+        const qty = getVal(["qty", "quantity", "jumlah"]);
         const bl = getVal(["bl", "no bl", "booking", "bill of lading"]);
-        const statusRaw = getVal(["status", "status pengiriman", "state"]);
+        const statusRaw = getVal(["status compile", "status", "status pengiriman", "state"]);
         const pol = getVal(["pol", "pelabuhan muat", "port of loading"]);
         const pod = getVal(["pod", "pelabuhan bongkar", "port of discharge"]);
         const etd = getVal(["etd"]);
-        const eta = getVal(["eta"]);
+        const eta = getVal(["tanggal eta", "week eta", "eta"]);
         const notes = getVal(["catatan", "notes", "keterangan", "remark"]);
 
-        if (!no || !cabang) {
+        if (!no || no === '-' || no === '0' || !cabang) {
           skipped++;
           return;
+        }
+
+        if (!carrier || carrier.toLowerCase().includes('agregator') || carrier.toLowerCase().includes('lainnya')) {
+          const uNo = no.toUpperCase();
+          if (uNo.startsWith('MRTU') || uNo.startsWith('MTRU')) carrier = 'Meratus Line';
+          else if (uNo.startsWith('TEMU') || uNo.startsWith('TMSU')) carrier = 'Temas Line (KlikTemas)';
+          else if (uNo.startsWith('SPIL') || uNo.startsWith('SPU')) carrier = 'SPIL (mySPIL)';
+          else if (uNo.startsWith('MAEU') || uNo.startsWith('MSKU')) carrier = 'Maersk';
+          else if (uNo.startsWith('MSCU') || uNo.startsWith('MEDU')) carrier = 'MSC';
+          else if (uNo.startsWith('CMAU') || uNo.startsWith('CGMU')) carrier = 'CMA CGM';
+          else if (uNo.startsWith('ONEU') || uNo.startsWith('ONEY')) carrier = 'ONE (Ocean Network Express)';
+          else if (uNo.startsWith('EGLV') || uNo.startsWith('EVER')) carrier = 'Evergreen Line';
+          else if (uNo.startsWith('COSU') || uNo.startsWith('CCLU')) carrier = 'COSCO Shipping';
+          else if (uNo.startsWith('ZIMU')) carrier = 'ZIM';
+          else carrier = 'Universal Agregator (SeaRates)';
         }
 
         let validStatus = "Siap Di-track";
         if (STATUS_LIST.some(s => s.toLowerCase() === statusRaw.toLowerCase())) {
           validStatus = STATUS_LIST.find(s => s.toLowerCase() === statusRaw.toLowerCase()) || validStatus;
-        } else if (statusRaw.toLowerCase().includes("berlayar") || statusRaw.toLowerCase().includes("transit")) {
+        } else if (statusRaw.toLowerCase().includes("vessel") || statusRaw.toLowerCase().includes("berlayar") || statusRaw.toLowerCase().includes("transit")) {
           validStatus = "Sedang Berlayar";
-        } else if (statusRaw.toLowerCase().includes("delay") || statusRaw.toLowerCase().includes("lambat")) {
+        } else if (statusRaw.toLowerCase().includes("delay") || statusRaw.toLowerCase().includes("hold") || statusRaw.toLowerCase().includes("lambat")) {
           validStatus = "Estimasi Delay";
-        } else if (statusRaw.toLowerCase().includes("tiba") || statusRaw.toLowerCase().includes("port")) {
+        } else if (statusRaw.toLowerCase().includes("ready") || statusRaw.toLowerCase().includes("tiba") || statusRaw.toLowerCase().includes("port")) {
           validStatus = "Tiba di Pelabuhan";
         }
+
+        const compiledNotes = po || nopr ? `PO: ${po || '-'} | PR: ${nopr || '-'} | ${desc || ''} (${qty ? Math.round(Number(String(qty).replace(/[^0-9.-]+/g, ''))) : 0} Unit)` : (notes || "📦 Raw data diimpor (Siap di-track)");
 
         newContainers.push({
           id: uid() + Math.random().toString(36).substring(2, 5),
           no: no.toUpperCase(),
           bl: bl || "",
-          carrier: carrier || "Lainnya / Agregator",
+          carrier: carrier,
           cabang: cabang,
           status: validStatus,
           pol: pol || "",
-          pod: pod || "",
+          pod: pod || (cabang ? `Gudang ${cabang}` : ""),
           etd: etd && /^\d{4}-\d{2}-\d{2}$/.test(etd) ? etd : "",
-          eta: eta && /^\d{4}-\d{2}-\d{2}$/.test(eta) ? eta : "",
-          notes: notes || "📦 Raw data diimpor (Siap di-track)",
+          eta: eta || "",
+          notes: compiledNotes,
           lastChecked: "",
         });
         added++;
@@ -1448,9 +1488,15 @@ function ContainerRow({
       {/* Column 1: Container No, BL & Carrier */}
       <div className="space-y-1.5 pb-3 md:pb-0 border-b border-border md:border-b-0">
         <div>
-          <span className="font-mono font-black text-base sm:text-lg tracking-wide text-foreground flex items-center gap-2">
-            {item.no}
-          </span>
+          <button
+            type="button"
+            onClick={() => onOpenDirect(item)}
+            className="font-mono font-black text-base sm:text-lg tracking-wide text-sky-400 hover:text-white flex items-center gap-2 hover:underline cursor-pointer text-left transition group"
+            title="Klik nomor kontainer untuk melacak posisi di web resmi pelayaran"
+          >
+            <span>{item.no}</span>
+            <ExternalLink className="w-4 h-4 text-sky-400 opacity-75 group-hover:opacity-100 transition shrink-0" />
+          </button>
           {item.bl && (
             <span className="block text-xs text-muted-foreground font-mono mt-0.5">
               BL/Booking: <span className="text-foreground font-medium">{item.bl}</span>
