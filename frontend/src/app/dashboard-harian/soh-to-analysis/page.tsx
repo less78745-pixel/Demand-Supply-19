@@ -21,6 +21,8 @@ import { parseDynamicCSV, findColumn, ParsedData } from '@/lib/csvParser';
 import { getStandardFilename } from '@/utils/export';
 
 const COLORS = ['#f97316', '#3b82f6', '#22c55e', '#ef4444', '#a855f7', '#eab308', '#06b6d4', '#ec4899', '#14b8a6', '#6366f1', '#f43f5e', '#84cc16'];
+const TO_COLORS = ['#f97316', '#ef4444', '#eab308', '#ec4899', '#f43f5e', '#d946ef', '#fb923c', '#fde047']; // Warm tones
+const VESSEL_COLORS = ['#3b82f6', '#06b6d4', '#22c55e', '#6366f1', '#14b8a6', '#84cc16', '#38bdf8', '#10b981']; // Cool tones
 
 const getPillarCategory = (colName: string): 'On Hand' | 'VESSEL' | 'TO' | 'PLAN LOADING' | 'TARGET SALES' | 'Lainnya' => {
   const lower = colName.toLowerCase().trim();
@@ -407,26 +409,16 @@ export default function SOHAnalysisPage() {
     });
   }, [parsed, filtered, colCabang, colCategory, colTargetSales]);
 
-  // Pie Chart Data (% Category per Total On Hand + TO + Vessel)
+  // Pie Chart Data (% Category per Total On Hand + TO + Vessel) - Wajib mengikuti filter Cabang, Kategori & Sorot
   const pieCategoryData = useMemo(() => {
-    if (!parsed || filtered.length === 0) return [];
+    if (!detailedTableData || detailedTableData.length === 0) return [];
     const map: Record<string, number> = {};
 
-    for (const row of filtered) {
-      const cbg = colCabang ? (row[colCabang] || 'Unknown') : 'All';
-      if (selectedCabangForChart !== 'All' && cbg !== selectedCabangForChart) continue;
-
-      const cat = colCategory ? (row[colCategory] || 'Umum') : 'Umum';
+    for (const row of detailedTableData) {
+      if (selectedCabangForChart !== 'All' && row.cabang !== selectedCabangForChart) continue;
+      const cat = row.category || 'Umum';
       if (!map[cat]) map[cat] = 0;
-
-      let rowTotalSupply = 0;
-      parsed.targetColumns.forEach(tc => {
-        const pillar = getPillarCategory(tc.name);
-        if (pillar === 'On Hand' || pillar === 'TO' || pillar === 'VESSEL') {
-          rowTotalSupply += Math.round(Number(row[tc.name]) || 0);
-        }
-      });
-      map[cat] += rowTotalSupply;
+      map[cat] += (row.totalSupply || 0);
     }
 
     const grandTotal = Object.values(map).reduce((a, b) => a + b, 0);
@@ -441,7 +433,7 @@ export default function SOHAnalysisPage() {
         color: COLORS[idx % COLORS.length]
       }))
       .sort((a, b) => b.value - a.value);
-  }, [parsed, filtered, colCabang, colCategory, selectedCabangForChart]);
+  }, [detailedTableData, selectedCabangForChart]);
 
   // Pillar KPIs
   const pillarKpis = useMemo(() => {
@@ -693,7 +685,7 @@ export default function SOHAnalysisPage() {
       </div>
 
       {/* ─── EXECUTIVE KPI SUMMARY CHIPS ─── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
         <KPICard
           title="Total On Hand Fisik"
           value={`${totalOnHand.toLocaleString('id-ID')} Qty`}
@@ -707,21 +699,6 @@ export default function SOHAnalysisPage() {
           trend="Gabungan Vessel + TO + Loading"
           icon={<TrendingUp className="w-5 h-5 text-blue-400" />}
           className="border-blue-500/20 bg-blue-500/5 hover:border-blue-500/40 transition"
-        />
-        <KPICard
-          title="Cabang Stok Kritis (<2K)"
-          value={`${criticalCount} Cabang`}
-          trend={criticalCount === 0 ? "Seluruh Cabang Optimal!" : "Perlu percepatan bongkar Vessel/TO"}
-          isAlert={criticalCount > 0}
-          icon={<AlertTriangle className="w-5 h-5 text-rose-400" />}
-          className="border-rose-500/20 bg-rose-500/5 hover:border-rose-500/40 transition"
-        />
-        <KPICard
-          title="Total Baris Terolah"
-          value={`${filtered.length.toLocaleString('id-ID')} Item`}
-          trend="Dari Database SOH Terverifikasi"
-          icon={<CheckCircle2 className="w-5 h-5 text-purple-400" />}
-          className="border-purple-500/20 bg-purple-500/5 hover:border-purple-500/40 transition"
         />
       </div>
 
@@ -829,10 +806,10 @@ export default function SOHAnalysisPage() {
                   />
                   <Legend wrapperStyle={{ paddingTop: '16px', fontSize: '11px', fontWeight: 'bold' }} />
                   {categories.filter(c => c !== 'All').map((cat, idx) => (
-                    <Bar key={`to-${cat}`} dataKey={`${cat} (TO)`} name={`${cat} (TO)`} stackId="TO" fill={COLORS[idx % COLORS.length]} maxBarSize={45} />
+                    <Bar key={`to-${cat}`} dataKey={`${cat} (TO)`} name={`${cat} (TO)`} stackId="TO" fill={TO_COLORS[idx % TO_COLORS.length]} maxBarSize={45} />
                   ))}
                   {categories.filter(c => c !== 'All').map((cat, idx) => (
-                    <Bar key={`vessel-${cat}`} dataKey={`${cat} (Vessel)`} name={`${cat} (Vessel)`} stackId="Vessel" fill={COLORS[idx % COLORS.length]} stroke="#38bdf8" strokeWidth={2} maxBarSize={45} opacity={0.85} />
+                    <Bar key={`vessel-${cat}`} dataKey={`${cat} (Vessel)`} name={`${cat} (Vessel)`} stackId="Vessel" fill={VESSEL_COLORS[idx % VESSEL_COLORS.length]} stroke="#e2e8f0" strokeWidth={1} maxBarSize={45} opacity={0.9} />
                   ))}
                 </BarChart>
               ) : chartMode === 'stock' ? (

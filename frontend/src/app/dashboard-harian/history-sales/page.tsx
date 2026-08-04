@@ -308,14 +308,16 @@ export default function HistorySalesPage() {
     return parsed.targetColumns.filter(tc => targetSet.has(tc.name));
   }, [parsed, executiveSummary, chartFilter]);
 
-  // Table Data grouped per Cabang + Category for detailed comparison & zonasi
+  // Table Data grouped per Cabang + Category for detailed comparison & growth analysis
   const tableData = useMemo(() => {
     if (!parsed || !executiveSummary || filtered.length === 0) return [];
-    const map: Record<string, { cabang: string; category: string; sales: number; outstanding: number; total: number; avg3: number }> = {};
+    const map: Record<string, { cabang: string; category: string; sales: number; outstanding: number; total: number; avg3: number; m: number; m1: number }> = {};
     
     const salesSet = new Set(executiveSummary.salesCols);
     const outSet = new Set(executiveSummary.outstandingCols);
     const colAvg = findColumn(parsed.headers, ['avg sales 3 bln', 'avg sales', 'avg']);
+    const colM = parsed.headers.find(h => h.trim().toUpperCase() === 'M') || findColumn(parsed.headers, ['m', 'bulan m', 'sales m']);
+    const colM1 = parsed.headers.find(h => h.trim().toUpperCase() === 'M-1' || h.trim().toUpperCase() === 'M - 1') || findColumn(parsed.headers, ['m-1', 'bulan m-1']);
 
     for (const row of filtered) {
       const cbg = colCabang ? String(row[colCabang] || 'Unknown') : 'All';
@@ -323,7 +325,7 @@ export default function HistorySalesPage() {
       const key = `${cbg}___${cat}`;
 
       if (!map[key]) {
-        map[key] = { cabang: cbg, category: cat, sales: 0, outstanding: 0, total: 0, avg3: 0 };
+        map[key] = { cabang: cbg, category: cat, sales: 0, outstanding: 0, total: 0, avg3: 0, m: 0, m1: 0 };
       }
 
       parsed.targetColumns.forEach(tc => {
@@ -340,11 +342,19 @@ export default function HistorySalesPage() {
       if (colAvg) {
         map[key].avg3 += Number(String(row[colAvg] || 0).replace(/[^0-9.-]+/g, '')) || 0;
       }
+      if (colM) {
+        map[key].m += Number(String(row[colM] || 0).replace(/[^0-9.-]+/g, '')) || 0;
+      }
+      if (colM1) {
+        map[key].m1 += Number(String(row[colM1] || 0).replace(/[^0-9.-]+/g, '')) || 0;
+      }
     }
 
     return Object.values(map).map(item => {
       const ratio = item.sales > 0 ? (item.outstanding / item.sales) * 100 : 0;
-      return { ...item, ratio };
+      const growthM = item.avg3 > 0 ? ((item.m - item.avg3) / item.avg3) * 100 : 0;
+      const growthM1 = item.avg3 > 0 ? ((item.m1 - item.avg3) / item.avg3) * 100 : 0;
+      return { ...item, ratio, growthM, growthM1 };
     }).sort((a, b) => {
       if (a.cabang !== b.cabang) return a.cabang.localeCompare(b.cabang);
       return b.sales - a.sales;
@@ -701,27 +711,50 @@ export default function HistorySalesPage() {
                 />
                 <Legend wrapperStyle={{ paddingTop: '16px', fontSize: '12px' }} />
                 {displayedChartColumns.map((tc, idx) => {
-                  if (tc.name.toLowerCase().includes('avg') || tc.name.toLowerCase().includes('rata')) {
+                  const lower = tc.name.toLowerCase().trim();
+                  const isSupplyOrOutstanding = 
+                    lower.includes('soh') || 
+                    lower === 'on hand' ||
+                    lower.includes('to') || 
+                    lower === 'transfer order' ||
+                    lower.includes('vessel') || 
+                    lower.includes('hold') || 
+                    lower.includes('outstanding') || 
+                    lower.includes('order') ||
+                    lower.includes('inbound');
+
+                  if (!isSupplyOrOutstanding) {
+                    // M sampai M-5 & AVG 3 Bln (Simbol garis horizontal)
+                    const isAvg = lower.includes('avg') || lower.includes('rata');
+                    const lineColor = isAvg ? '#f43f5e' : COLORS[idx % COLORS.length];
                     return (
                       <Line
                         key={tc.name}
                         type="monotone"
                         dataKey={tc.name}
-                        name={`📈 ${tc.name} (Line Trend)`}
-                        stroke="#f43f5e"
-                        strokeWidth={3}
-                        dot={{ r: 6, fill: '#f43f5e', stroke: '#ffffff', strokeWidth: 2 }}
-                        activeDot={{ r: 8 }}
+                        name={isAvg ? `📈 ${tc.name} (Line Trend)` : `🔹 ${tc.name} (Garis Sales)`}
+                        stroke={lineColor}
+                        strokeWidth={isAvg ? 3 : 2.5}
+                        dot={{ r: isAvg ? 6 : 5, fill: lineColor, stroke: '#ffffff', strokeWidth: 1.5 }}
+                        activeDot={{ r: 7 }}
                       />
                     );
                   }
+                  // SOH, TO, Vessel, Hold Delivery -> 1 grafik batang (stacked column)
+                  let barColor = COLORS[idx % COLORS.length];
+                  if (lower.includes('hold')) barColor = '#f59e0b';
+                  else if (lower.includes('vessel')) barColor = '#3b82f6';
+                  else if (lower.includes('soh')) barColor = '#10b981';
+                  else if (lower === 'to' || lower.includes('to ')) barColor = '#f97316';
+
                   return (
                     <Bar
                       key={tc.name}
                       dataKey={tc.name}
-                      fill={COLORS[idx % COLORS.length]}
-                      radius={[4, 4, 0, 0]}
-                      maxBarSize={50}
+                      name={`📦 ${tc.name}`}
+                      stackId="supply_outstanding"
+                      fill={barColor}
+                      maxBarSize={60}
                     />
                   );
                 })}
@@ -825,13 +858,16 @@ export default function HistorySalesPage() {
         </div>
 
         <div className="overflow-x-auto rounded-xl border border-slate-800 max-h-[600px] overflow-y-auto">
-          <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[950px]">
+          <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[1250px]">
             <thead className="bg-slate-950/90 text-slate-300 uppercase font-bold sticky top-0 z-20 shadow-md">
               <tr className="border-b border-slate-800 text-[11px] tracking-wider text-center">
                 <th className="py-3.5 px-4 text-left">Cabang / Wilayah</th>
                 <th className="py-3.5 px-4 border-l border-slate-800 text-purple-300">📦 Kategori Item</th>
                 <th className="py-3.5 px-4 border-l border-slate-800 text-blue-400">📈 Total Volume Sales</th>
                 <th className="py-3.5 px-4 border-l border-slate-800 text-rose-400">📊 AVG Sales 3 Bln</th>
+                <th className="py-3.5 px-4 border-l border-slate-800 text-cyan-400">📅 Volume M & M-1</th>
+                <th className="py-3.5 px-4 border-l border-slate-800 text-emerald-400">📈 Pertumbuhan vs AVG 3 Bln</th>
+                <th className="py-3.5 px-4 border-l border-slate-800 text-amber-300">💡 Analisis Pertumbuhan</th>
                 <th className="py-3.5 px-4 border-l border-slate-800 text-amber-400">⏳ Outstanding Order</th>
                 <th className="py-3.5 px-4 border-l border-slate-800 bg-slate-800 text-white">Total Volume</th>
                 <th className="py-3.5 px-4 border-l border-slate-800">Rasio (Out/Sales)</th>
@@ -869,6 +905,27 @@ export default function HistorySalesPage() {
                     </td>
                     <td className="py-3.5 px-4 border-l border-slate-800 font-extrabold text-rose-400 text-base font-mono align-middle">
                       {row.avg3.toLocaleString('id-ID')}
+                    </td>
+                    <td className="py-3.5 px-4 border-l border-slate-800 text-xs align-middle">
+                      <div className="font-mono text-cyan-300 font-bold">M: {row.m.toLocaleString('id-ID')}</div>
+                      <div className="font-mono text-slate-400 mt-1">M-1: {row.m1.toLocaleString('id-ID')}</div>
+                    </td>
+                    <td className="py-3.5 px-4 border-l border-slate-800 text-xs align-middle">
+                      <div className={`font-mono font-bold ${row.growthM >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        M vs AVG: {row.growthM >= 0 ? '▲ +' : '▼ '}{row.growthM.toFixed(1)}%
+                      </div>
+                      <div className={`font-mono font-bold mt-1 ${row.growthM1 >= 0 ? 'text-emerald-400/80' : 'text-rose-400/80'}`}>
+                        M-1 vs AVG: {row.growthM1 >= 0 ? '▲ +' : '▼ '}{row.growthM1.toFixed(1)}%
+                      </div>
+                    </td>
+                    <td className="py-3.5 px-4 border-l border-slate-800 align-middle">
+                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider inline-block ${
+                        row.growthM >= 5 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' :
+                        row.growthM <= -5 ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30' :
+                        'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                      }`}>
+                        {row.growthM >= 5 ? '🚀 PERTUMBUHAN POSITIF' : row.growthM <= -5 ? '📉 SALES MELAMBAT' : '⚖️ STABLE SALES'}
+                      </span>
                     </td>
                     <td className="py-3.5 px-4 border-l border-slate-800 font-bold text-amber-400 text-base font-mono align-middle">
                       {row.outstanding.toLocaleString('id-ID')}
