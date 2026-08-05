@@ -49,7 +49,7 @@ function processLines(lines: any[][], resolve: (val: ParsedData) => void, reject
     let headerRowIndex = 0;
 
     // 1. Identify the Header Row
-    const headerKeywords = ['cabang', 'cab', 'region', 'category', 'kategori', 'item', 'nama barang', 'po no', 'pr no', 'no container', 'tanggal eta', 'status compile'];
+    const headerKeywords = ['cabang', 'cab', 'region', 'branch', 'category', 'kategori', 'item', 'nama barang', 'po no', 'pr no', 'no container', 'container', 'tanggal eta', 'status compile', 'shipping line', 'pelayaran', 'bill of lading', 'no bl', 'no_bl', 'booking', 'description', 'deskripsi', 'grup', 'group', 'divisi', 'qty', 'quantity'];
     
     for (let i = 0; i < Math.min(lines.length, 15); i++) {
       if (!lines[i]) continue;
@@ -67,21 +67,40 @@ function processLines(lines: any[][], resolve: (val: ParsedData) => void, reject
     const targetColumns: { index: number; name: string }[] = [];
     
     const knownMetadata = [
-      'cabang', 'region', 'item', 'nama barang', 'category', 'grup', 'category item', 
-      'sub item', 'status doi', 'category insentif', 'po no', 'pr no', 'po', 'nopr', 'vendor_no', 
-      'no sku', 'description', 'status compile', 'container', 'no container', 'no_container', 'item category', 
-      'sub item category', 'category dsp', 'branch_name', 'regional', 'eta fix', 'tanggal eta', 'week eta', 'cut off', 'cutoff'
+      'cabang', 'region', 'regional', 'branch', 'branch_name', 'branch name', 'cab', 'lokasi',
+      'item', 'nama barang', 'category', 'grup', 'group', 'divisi', 'category item', 'item category', 
+      'sub item', 'sub item category', 'category dsp', 'status doi', 'category insentif', 'kategori insentif', 'insentif',
+      'po no', 'pr no', 'no po', 'no pr', 'po', 'nopr', 'nomor po', 'nomor pr', 'vendor_no', 'vendor', 
+      'no sku', 'sku', 'description', 'deskripsi', 'item description', 'nama produk',
+      'status compile', 'status', 'state', 'urgency', 'keterangan', 'notes',
+      'container', 'no container', 'no_container', 'nocontainer', 'nomor container', 'kontainer', 'no kontainer',
+      'bl', 'no bl', 'no_bl', 'no. bl', 'nomor bl', 'bill of lading', 'booking', 'no booking', 'no_booking', 'nomor booking', 'b/l', 'no b/l',
+      'shipping line', 'shipping_line', 'shippingline', 'shipping', 'pelayaran', 'carrier', 'maskapai', 'line',
+      'eta fix', 'tanggal eta', 'week eta', 'cut off', 'cutoff', 'eta', 'etd', 'free time end', 'eta_port', 'last checked', 'tanggal', 'date'
     ];
 
     for (let i = 0; i < headers.length; i++) {
-      const hLower = headers[i].toLowerCase().trim();
+      const hRaw = String(headers[i] || '').trim();
+      const hLower = hRaw.toLowerCase();
       if (!hLower) continue;
 
       let isMetadata = false;
+      const hNorm = hLower.replace(/[^a-z0-9]/g, '');
+
       for (const meta of knownMetadata) {
-        if (hLower === meta || hLower.replace(/\s+/g, '') === meta.replace(/\s+/g, '')) {
+        const metaNorm = meta.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (hLower === meta || hNorm === metaNorm) {
           isMetadata = true;
           break;
+        }
+      }
+
+      if (!isMetadata) {
+        const dimWords = ['branch', 'cabang', 'regional', 'region', 'shipping', 'pelayaran', 'carrier', 'maskapai', 'booking', 'container', 'kontainer', 'category', 'kategori', 'grup', 'group', 'divisi', 'status', 'description', 'deskripsi', 'bill of lading', 'tanggal', 'date', 'week eta', 'vendor', 'lading'];
+        if (dimWords.some(dw => hLower.includes(dw) || hNorm.includes(dw.replace(/[^a-z0-9]/g, '')))) {
+          isMetadata = true;
+        } else if (/\b(bl|po|pr|cab|sku|line)\b/i.test(hRaw.replace(/[._/-/]/g, ' '))) {
+          isMetadata = true;
         }
       }
 
@@ -151,10 +170,32 @@ export async function parseDynamicCSV(file: File): Promise<ParsedData> {
 }
 
 export function findColumn(headers: string[], possibleNames: string[]): string | undefined {
-  const hLower = headers.map(h => h.toLowerCase().trim());
+  const hLower = headers.map(h => String(h || '').toLowerCase().trim());
+  const hNorm = hLower.map(h => h.replace(/[^a-z0-9]/g, ''));
+
+  // Pass 1: Exact Match (either raw lowercased or normalized alphanumeric)
   for (const name of possibleNames) {
-    const idx = hLower.findIndex(h => h.includes(name.toLowerCase()));
+    const nLower = name.toLowerCase().trim();
+    const nNorm = nLower.replace(/[^a-z0-9]/g, '');
+    const idx = hLower.findIndex((h, i) => h === nLower || hNorm[i] === nNorm);
     if (idx !== -1) return headers[idx];
   }
+
+  // Pass 2: Word / Token boundary match
+  for (const name of possibleNames) {
+    const nLower = name.toLowerCase().trim();
+    const regex = new RegExp(`\\b${nLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+    const idx = headers.findIndex(h => regex.test(String(h || '').replace(/[._/-/]/g, ' ')));
+    if (idx !== -1) return headers[idx];
+  }
+
+  // Pass 3: Substring fallback (only for search terms >= 3 characters)
+  for (const name of possibleNames) {
+    const nLower = name.toLowerCase().trim();
+    if (nLower.length < 3) continue;
+    const idx = hLower.findIndex(h => h.includes(nLower));
+    if (idx !== -1) return headers[idx];
+  }
+
   return undefined; 
 }

@@ -55,6 +55,42 @@ const SCENARIOS = [
   }
 ];
 
+const CustomStackedTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    const validItems = payload.filter((item: any) => Number(item.value || 0) > 0);
+    const totalQty = validItems.reduce((sum: number, item: any) => sum + Number(item.value || 0), 0);
+
+    return (
+      <div className="bg-[#090e1a] text-white p-3.5 rounded-xl border-2 border-purple-500 shadow-[0_15px_60px_rgba(0,0,0,1)] z-[999999] opacity-100 max-h-[300px] overflow-y-auto min-w-[240px] pointer-events-auto select-none backdrop-blur-none" style={{ backgroundColor: '#090e1a', opacity: 1, zIndex: 999999 }}>
+        <div className="border-b border-slate-700/80 pb-2 mb-2 sticky -top-3.5 bg-[#090e1a] pt-1 z-10 flex items-center justify-between gap-3">
+          <span className="text-sky-400 font-extrabold text-sm tracking-wide">{label}</span>
+          <span className="text-xs px-2 py-0.5 bg-purple-950/90 border border-purple-500/50 rounded-md font-bold text-purple-300 shadow-sm">
+            Total: {totalQty.toLocaleString('id-ID')} Qty
+          </span>
+        </div>
+        {validItems.length === 0 ? (
+          <div className="text-xs text-slate-400 font-medium py-2">Tidak ada data kuantitas (0 Qty)</div>
+        ) : (
+          <div className="space-y-1.5 text-xs">
+            {validItems.map((entry: any, index: number) => (
+              <div key={index} className="flex items-center justify-between gap-4 py-1 border-b border-slate-800/60 last:border-0 font-medium">
+                <span className="flex items-center gap-2 text-slate-200 min-w-[120px]">
+                  <span className="w-3 h-3 rounded-full inline-block shrink-0 border border-slate-600/50 shadow-sm" style={{ backgroundColor: entry.color }}></span>
+                  <span className="truncate max-w-[160px] font-semibold" title={entry.name}>{entry.name}</span>
+                </span>
+                <span className="font-extrabold text-white shrink-0 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
+                  {Number(entry.value).toLocaleString('id-ID')} Qty
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+  return null;
+};
+
 function getDirectTrackingUrl(containerNo?: string, carrierName?: string): { url: string; carrier: string } {
   const no = (containerNo || "").trim().toUpperCase();
   let carrier = (carrierName || "").toLowerCase().trim();
@@ -103,15 +139,15 @@ function getDirectTrackingUrl(containerNo?: string, carrierName?: string): { url
 }
 
 const syncToTrackingContainer = async (parsed: ParsedData) => {
-  const colCont = findColumn(parsed.headers, ['no container', 'nocontainer', 'no_kontainer', 'no kontainer', 'container', 'nomor container']);
-  const colBranch = findColumn(parsed.headers, ['branch name', 'branch_name', 'branch', 'cabang']);
+  const colCont = findColumn(parsed.headers, ['no container', 'nocontainer', 'no. container', 'no_kontainer', 'no kontainer', 'container', 'nomor container']);
+  const colBranch = findColumn(parsed.headers, ['branch name', 'branch_name', 'branchname', 'branch', 'cabang', 'cab', 'regional', 'region']);
   const colStatus = findColumn(parsed.headers, ['status compile', 'status', 'state']);
   const colEta = findColumn(parsed.headers, ['tanggal eta', 'week eta', 'eta']);
-  const colDesc = findColumn(parsed.headers, ['description', 'deskripsi', 'grup']);
-  const colPo = findColumn(parsed.headers, ['po', 'po no', 'no po']);
-  const colPr = findColumn(parsed.headers, ['nopr', 'no pr', 'pr no', 'pr']);
-  const colBl = findColumn(parsed.headers, ['bl', 'no bl', 'bill of lading', 'booking', 'no booking']);
-  const colCarrier = findColumn(parsed.headers, ['shipping line', 'shipping_line', 'pelayaran', 'carrier', 'maskapai', 'line']);
+  const colDesc = findColumn(parsed.headers, ['description', 'deskripsi', 'grup', 'nama barang']);
+  const colPo = findColumn(parsed.headers, ['po', 'po no', 'no po', 'nomor po']);
+  const colPr = findColumn(parsed.headers, ['nopr', 'no pr', 'pr no', 'pr', 'nomor pr']);
+  const colBl = findColumn(parsed.headers, ['bill of lading', 'no bl', 'no. bl', 'no_bl', 'nomor bl', 'b/l', 'no b/l', 'bl no', 'bl_no', 'no booking', 'booking', 'nomor booking', 'bl']);
+  const colCarrier = findColumn(parsed.headers, ['shipping line', 'shipping_line', 'shippingline', 'pelayaran', 'carrier', 'maskapai', 'shipping', 'line']);
 
   if (!colCont) return;
   
@@ -288,17 +324,17 @@ export default function PRUpdatePage() {
   };
 
   // Identify column names dynamically & distinctly
-  const colCabang = useMemo(() => parsed ? findColumn(parsed.headers, ['branch name', 'branch_name', 'cabang', 'branch', 'cab', 'regional', 'region']) : undefined, [parsed]);
+  const colCabang = useMemo(() => parsed ? findColumn(parsed.headers, ['branch name', 'branch_name', 'branchname', 'branch', 'cabang', 'cab', 'regional', 'region']) : undefined, [parsed]);
   const colGrup = useMemo(() => parsed ? findColumn(parsed.headers, ['grup', 'group', 'divisi', 'grup barang']) : undefined, [parsed]);
   const colCategory = useMemo(() => parsed ? findColumn(parsed.headers, ['category', 'kategori', 'item category', 'kategori produk']) : undefined, [parsed]);
-  const colPo = useMemo(() => parsed ? findColumn(parsed.headers, ['po', 'no po', 'nomor po', 'po no']) : undefined, [parsed]);
-  const colDesc = useMemo(() => parsed ? findColumn(parsed.headers, ['description', 'deskripsi', 'nama barang', 'item description']) : undefined, [parsed]);
-  const colEta = useMemo(() => parsed ? findColumn(parsed.headers, ['week eta', 'eta fix', 'tanggal eta', 'eta']) : undefined, [parsed]);
-  const colStatus = useMemo(() => parsed ? findColumn(parsed.headers, ['status compile', 'status', 'state']) : undefined, [parsed]);
-  const colQty = useMemo(() => parsed ? findColumn(parsed.headers, ['qty', 'quantity', 'jumlah']) : undefined, [parsed]);
-  const colContainer = useMemo(() => parsed ? findColumn(parsed.headers, ['no container', 'nocontainer', 'no_kontainer', 'no kontainer', 'container', 'nomor container']) : undefined, [parsed]);
-  const colBl = useMemo(() => parsed ? findColumn(parsed.headers, ['bl', 'no bl', 'bill of lading', 'booking', 'no booking']) : undefined, [parsed]);
-  const colCarrier = useMemo(() => parsed ? findColumn(parsed.headers, ['shipping line', 'shipping_line', 'pelayaran', 'carrier', 'maskapai', 'line']) : undefined, [parsed]);
+  const colPo = useMemo(() => parsed ? findColumn(parsed.headers, ['po', 'no po', 'nomor po', 'po no', 'no_po']) : undefined, [parsed]);
+  const colDesc = useMemo(() => parsed ? findColumn(parsed.headers, ['description', 'deskripsi', 'nama barang', 'item description', 'nama produk']) : undefined, [parsed]);
+  const colEta = useMemo(() => parsed ? findColumn(parsed.headers, ['week eta', 'eta fix', 'tanggal eta', 'eta_port', 'eta']) : undefined, [parsed]);
+  const colStatus = useMemo(() => parsed ? findColumn(parsed.headers, ['status compile', 'status', 'state', 'posisi']) : undefined, [parsed]);
+  const colQty = useMemo(() => parsed ? findColumn(parsed.headers, ['qty', 'quantity', 'jumlah', 'qty order', 'kuantitas']) : undefined, [parsed]);
+  const colContainer = useMemo(() => parsed ? findColumn(parsed.headers, ['no container', 'nocontainer', 'no. container', 'no_kontainer', 'no kontainer', 'container', 'nomor container']) : undefined, [parsed]);
+  const colBl = useMemo(() => parsed ? findColumn(parsed.headers, ['bill of lading', 'no bl', 'no. bl', 'no_bl', 'nomor bl', 'b/l', 'no b/l', 'bl no', 'bl_no', 'no booking', 'booking', 'nomor booking', 'bl']) : undefined, [parsed]);
+  const colCarrier = useMemo(() => parsed ? findColumn(parsed.headers, ['shipping line', 'shipping_line', 'shippingline', 'pelayaran', 'carrier', 'maskapai', 'shipping', 'line']) : undefined, [parsed]);
 
   // Linked Filter options
   const cabangs = useMemo(() => {
@@ -805,9 +841,8 @@ export default function PRUpdatePage() {
                 <XAxis dataKey={chartViewMode === 'eta' ? 'eta' : 'cabang'} stroke="#94a3b8" tick={{ fill: '#e2e8f0', fontSize: 12, fontWeight: 600 }} angle={-15} textAnchor="end" height={50} />
                 <YAxis stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 12 }} tickFormatter={(val) => Number(val).toLocaleString('id-ID')} />
                 <Tooltip
-                  contentStyle={{ backgroundColor: '#0f172a', borderColor: '#a855f7', borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}
-                  labelStyle={{ color: '#38bdf8', fontWeight: 'bold', borderBottom: '1px solid #334155', paddingBottom: '4px' }}
-                  formatter={(val: any, name: any) => [Number(val).toLocaleString('id-ID') + ' Qty', name]}
+                  content={<CustomStackedTooltip />}
+                  wrapperStyle={{ zIndex: 999999, pointerEvents: 'auto', outline: 'none' }}
                 />
                 <Legend wrapperStyle={{ paddingTop: '16px', fontSize: '12px' }} />
                 {categoryList.map((cat, idx) => (
@@ -1133,11 +1168,12 @@ export default function PRUpdatePage() {
                     <tr key={idx} className="hover:bg-slate-800/50 transition">
                       {parsed.headers.map((h) => {
                         let val = row[h];
-                        const isShippingLine = h.toLowerCase().includes('shipping') || h.toLowerCase().includes('carrier') || h.toLowerCase().includes('pelayaran');
+                        const isShippingLine = h.toLowerCase().includes('shipping') || h.toLowerCase().includes('carrier') || h.toLowerCase().includes('pelayaran') || h === colCarrier;
+                        const isBl = h === colBl || h.toLowerCase().includes('bl') || h.toLowerCase().includes('lading') || h.toLowerCase().includes('booking');
                         
                         if (colQty && h === colQty && val != null && val !== '') {
                           val = Math.round(Number(String(val).replace(/[^0-9.-]+/g, '')) || 0).toLocaleString('id-ID');
-                        } else if (typeof val === 'number') {
+                        } else if (typeof val === 'number' && h !== colBl && h !== colContainer && h !== colPo && h !== colPr && !isBl && h !== colCabang) {
                           val = val.toLocaleString('id-ID');
                         }
                         return (
@@ -1145,7 +1181,9 @@ export default function PRUpdatePage() {
                             key={h}
                             className={`py-2.5 px-3 border-l border-slate-800 whitespace-nowrap ${
                               h === colContainer && hasCont ? 'font-mono font-bold text-sky-300' : 
-                              isShippingLine ? 'font-semibold text-teal-300' : ''
+                              isShippingLine ? 'font-semibold text-teal-300' : 
+                              isBl ? 'font-mono text-purple-300 font-medium' : 
+                              h === colCabang || h.toLowerCase().includes('branch') || h.toLowerCase().includes('cabang') ? 'font-bold text-slate-200' : ''
                             }`}
                           >
                             {h === colContainer && hasCont && trackInfo && trackInfo.url ? (
