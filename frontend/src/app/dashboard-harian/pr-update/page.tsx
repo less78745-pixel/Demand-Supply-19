@@ -55,13 +55,38 @@ const SCENARIOS = [
   }
 ];
 
+function parseEtaRank(etaStr: string): number {
+  if (!etaStr || etaStr.toLowerCase().includes('unscheduled') || etaStr.toLowerCase().includes('tanpa')) return -1;
+  const lower = etaStr.toLowerCase();
+  const months: Record<string, number> = {
+    'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'mei': 5, 'jun': 6,
+    'jul': 7, 'aug': 8, 'agu': 8, 'sep': 9, 'oct': 10, 'okt': 10, 'nov': 11, 'dec': 12, 'des': 12
+  };
+  let monthVal = 0;
+  for (const [key, val] of Object.entries(months)) {
+    if (lower.includes(key)) {
+      monthVal = val;
+      break;
+    }
+  }
+  let weekVal = 0;
+  const matchW = lower.match(/w(eek)?\s*(\d+)/i) || lower.match(/minggu\s*(\d+)/i) || lower.match(/ke\s*(\d+)/i);
+  if (matchW && matchW[2]) {
+    weekVal = parseInt(matchW[2], 10);
+  }
+  if (monthVal > 0) {
+    return monthVal * 100 + weekVal;
+  }
+  return 9999 + weekVal;
+}
+
 const CustomStackedTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
     const validItems = payload.filter((item: any) => Number(item.value || 0) > 0);
     const totalQty = validItems.reduce((sum: number, item: any) => sum + Number(item.value || 0), 0);
 
     return (
-      <div className="bg-[#090e1a] text-white p-3.5 rounded-xl border-2 border-purple-500 shadow-[0_15px_60px_rgba(0,0,0,1)] z-[999999] opacity-100 max-h-[300px] overflow-y-auto min-w-[240px] pointer-events-auto select-none backdrop-blur-none" style={{ backgroundColor: '#090e1a', opacity: 1, zIndex: 999999 }}>
+      <div className="bg-[#090e1a] text-white p-3.5 rounded-xl border-2 border-purple-500 shadow-[0_15px_60px_rgba(0,0,0,1)] z-[999999] opacity-100 max-h-[300px] overflow-y-auto max-w-[340px] pointer-events-none select-none backdrop-blur-none" style={{ backgroundColor: '#090e1a', opacity: 1, zIndex: 999999 }}>
         <div className="border-b border-slate-700/80 pb-2 mb-2 sticky -top-3.5 bg-[#090e1a] pt-1 z-10 flex items-center justify-between gap-3">
           <span className="text-sky-400 font-extrabold text-sm tracking-wide">{label}</span>
           <span className="text-xs px-2 py-0.5 bg-purple-950/90 border border-purple-500/50 rounded-md font-bold text-purple-300 shadow-sm">
@@ -73,10 +98,10 @@ const CustomStackedTooltip = ({ active, payload, label }: any) => {
         ) : (
           <div className="space-y-1.5 text-xs">
             {validItems.map((entry: any, index: number) => (
-              <div key={index} className="flex items-center justify-between gap-4 py-1 border-b border-slate-800/60 last:border-0 font-medium">
-                <span className="flex items-center gap-2 text-slate-200 min-w-[120px]">
-                  <span className="w-3 h-3 rounded-full inline-block shrink-0 border border-slate-600/50 shadow-sm" style={{ backgroundColor: entry.color }}></span>
-                  <span className="truncate max-w-[160px] font-semibold" title={entry.name}>{entry.name}</span>
+              <div key={index} className="flex items-start justify-between gap-3 py-1 border-b border-slate-800/60 last:border-0 font-medium">
+                <span className="flex items-center gap-2 text-slate-200 flex-1 min-w-0">
+                  <span className="w-3 h-3 rounded-full inline-block shrink-0 border border-slate-600/50 shadow-sm mt-0.5" style={{ backgroundColor: entry.color }}></span>
+                  <span className="whitespace-normal leading-tight font-semibold" title={entry.name}>{entry.name}</span>
                 </span>
                 <span className="font-extrabold text-white shrink-0 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
                   {Number(entry.value).toLocaleString('id-ID')} Qty
@@ -122,12 +147,12 @@ function getDirectTrackingUrl(containerNo?: string, carrierName?: string): { url
   if (carrier.includes("evergreen")) return { url: "https://ct.shipmentlink.com/servlet/TDB1_CargoTracking.do", carrier: "EVERGREEN" };
   if (carrier.includes("hapag") || carrier.includes("lloyd") || carrier.includes("llyod") || carrier.includes("uasc")) return { url: "https://www.hapag-lloyd.com/en/online-business/tracing/tracing-by-container.html", carrier: carrier.includes("uasc") ? "UASC (Hapag-Lloyd)" : "HAPAG-LLOYD" };
   if (carrier.includes("hmm") || carrier.includes("hyundai")) return { url: "https://www.hmm21.com/", carrier: "HMM (Track & Trace)" };
-  if (carrier.includes("interasia")) return { url: "https://www.interasia.cc/", carrier: "Interasia" };
+  if (carrier.includes("interasia") || carrier.includes("ial")) return { url: "https://www.interasia.cc/", carrier: "Interasia" };
   if (carrier.includes("kmtc")) return { url: "http://www.ekmtc.com/", carrier: "KMTC" };
   if (carrier.includes("maersk")) return { url: "https://www.maersk.com/tracking/", carrier: "MAERSK" };
   if (carrier.includes("meratus")) return { url: "https://www.meratusline.com/", carrier: "Meratus Line" };
   if (carrier.includes("msc")) return { url: "https://www.msc.com/en/track-a-shipment", carrier: "MSC" };
-  if (carrier.includes("one") || carrier.includes("ocean network") || carrier.includes("k-line") || carrier.includes("k line") || carrier.includes("kline") || carrier.includes("mol")) {
+  if (carrier.includes("one") || carrier.includes("ocean network") || carrier.includes("k-line") || carrier.includes("k line") || carrier.includes("kline") || carrier.includes("mol") || carrier.includes("nyk")) {
     let label = "ONE (Ocean Network Express)";
     if (carrier.includes("k-line") || carrier.includes("k line") || carrier.includes("kline")) label = "K-LINE (ONE)";
     else if (carrier.includes("mol")) label = "MOL (ONE)";
@@ -146,14 +171,18 @@ function getDirectTrackingUrl(containerNo?: string, carrierName?: string): { url
   if (carrier.includes("tanto")) return { url: "https://www.tantonet.com/", carrier: "Tanto Intim Line" };
   if (carrier.includes("zim")) return { url: `https://www.zim.com/tools/track-a-shipment?consignmentNumber=${no}`, carrier: "ZIM" };
 
-  // 3. Container Leasing Companies
+  // 3. Container Leasing Companies (Perusahaan Penyewaan - Direct Official Website)
   if (carrier.includes("seaco") || carrier.includes("seacube")) return { url: "https://www.seacoglobal.com/equipment/unit-enquiry/", carrier: "Seaco (Unit Enquiry)" };
-  if (carrier.includes("beacon") || carrier.includes("cai") || carrier.includes("florens") || carrier.includes("textainer") || carrier.includes("triton") || carrier.includes("ues") || carrier.includes("leasing")) {
-    return { url: "https://shipsgo.com/container-tracking", carrier: `${carrierName || "Container Leasing"} (ShipsGo / Agregator)` };
-  }
+  if (carrier.includes("triton")) return { url: "https://www.tritoncontainer.com/unit-inquiry", carrier: "TRITON" };
+  if (carrier.includes("cai")) return { url: "https://www.caiintl.com/", carrier: "CAI International" };
+  if (carrier.includes("beacon")) return { url: "https://www.beaconintermodal.com/", carrier: "Beacon Intermodal" };
+  if (carrier.includes("florens")) return { url: "http://www.florens.com/", carrier: "Florens" };
+  if (carrier.includes("textainer")) return { url: "https://www.textainer.com/equipment/unit-inquiry", carrier: "Textainer" };
+  if (carrier.includes("ues")) return { url: "https://www.ues-int.com/", carrier: "UES International" };
+  if (carrier.includes("leasing")) return { url: `https://www.searates.com/container/tracking/?number=${no}`, carrier: carrierName || "Container Leasing" };
 
   // Default Universal Container Tracking
-  return { url: `https://www.searates.com/container/tracking/?number=${no}`, carrier: "Universal Agregator (SeaRates)" };
+  return { url: `https://www.searates.com/container/tracking/?number=${no}`, carrier: carrierName && carrierName !== '-' ? carrierName : "Container Tracking" };
 }
 
 const syncToTrackingContainer = async (parsed: ParsedData) => {
@@ -470,7 +499,7 @@ export default function PRUpdatePage() {
 
     return { 
       chartData: Object.values(mapCabang), 
-      chartEtaData: Object.values(mapEta).sort((a, b) => String(a.eta).localeCompare(String(b.eta))),
+      chartEtaData: Object.values(mapEta).sort((a, b) => parseEtaRank(String(a.eta)) - parseEtaRank(String(b.eta))),
       chartCategoryData: Object.values(mapCat), 
       statusList: Array.from(statuses), 
       categoryList: Array.from(categories),
@@ -853,17 +882,18 @@ export default function PRUpdatePage() {
             </div>
           </div>
 
-          <div className="h-[400px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartViewMode === 'eta' ? chartEtaData : chartData} margin={{ top: 20, right: 30, left: 10, bottom: 25 }}>
+          <div className="w-full pb-4" style={{ minHeight: '520px' }}>
+            <ResponsiveContainer width="100%" height={520}>
+              <BarChart data={chartViewMode === 'eta' ? chartEtaData : chartData} margin={{ top: 20, right: 60, left: 20, bottom: 40 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
-                <XAxis dataKey={chartViewMode === 'eta' ? 'eta' : 'cabang'} stroke="#94a3b8" tick={{ fill: '#e2e8f0', fontSize: 12, fontWeight: 600 }} angle={-15} textAnchor="end" height={50} />
+                <XAxis dataKey={chartViewMode === 'eta' ? 'eta' : 'cabang'} stroke="#94a3b8" tick={{ fill: '#e2e8f0', fontSize: 12, fontWeight: 600 }} angle={-15} textAnchor="end" height={60} />
                 <YAxis stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 12 }} tickFormatter={(val) => Number(val).toLocaleString('id-ID')} />
                 <Tooltip
                   content={<CustomStackedTooltip />}
-                  wrapperStyle={{ zIndex: 999999, pointerEvents: 'auto', outline: 'none' }}
+                  wrapperStyle={{ zIndex: 999999, pointerEvents: 'none', outline: 'none' }}
+                  cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }}
                 />
-                <Legend wrapperStyle={{ paddingTop: '16px', fontSize: '12px' }} />
+                <Legend wrapperStyle={{ paddingTop: '24px', fontSize: '11px', maxHeight: '120px', overflowY: 'auto' }} />
                 {categoryList.map((cat, idx) => (
                   <Bar
                     key={cat}
@@ -871,7 +901,7 @@ export default function PRUpdatePage() {
                     name={cat}
                     fill={COLORS[idx % COLORS.length]}
                     stackId="pr_cat_stack"
-                    maxBarSize={60}
+                    maxBarSize={50}
                   />
                 ))}
               </BarChart>
@@ -1189,10 +1219,20 @@ export default function PRUpdatePage() {
                         let val = row[h];
                         const isShippingLine = h.toLowerCase().includes('shipping') || h.toLowerCase().includes('carrier') || h.toLowerCase().includes('pelayaran') || h === colCarrier;
                         const isBl = h === colBl || h.toLowerCase().includes('bl') || h.toLowerCase().includes('lading') || h.toLowerCase().includes('booking');
+                        const isDateCol = (h.toLowerCase().includes('eta') && !h.toLowerCase().includes('week')) || h.toLowerCase().includes('tanggal') || h.toLowerCase().includes('date') || h.toLowerCase().includes('tgl') || h.toLowerCase().includes('waktu');
                         
-                        if (colQty && h === colQty && val != null && val !== '') {
+                        if (isDateCol && val != null && val !== '') {
+                          const numVal = Number(val);
+                          if (!isNaN(numVal) && numVal > 30000 && numVal < 70000) {
+                            const d = new Date((numVal - 25569) * 86400 * 1000);
+                            const days = String(d.getUTCDate()).padStart(2, '0');
+                            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+                            const month = months[d.getUTCMonth()];
+                            val = `${days} ${month} ${d.getUTCFullYear()}`;
+                          }
+                        } else if (colQty && h === colQty && val != null && val !== '') {
                           val = Math.round(Number(String(val).replace(/[^0-9.-]+/g, '')) || 0).toLocaleString('id-ID');
-                        } else if (typeof val === 'number' && h !== colBl && h !== colContainer && h !== colPo && h !== colPr && !isBl && h !== colCabang) {
+                        } else if (typeof val === 'number' && h !== colBl && h !== colContainer && h !== colPo && h !== colPr && !isBl && h !== colCabang && !isDateCol) {
                           val = val.toLocaleString('id-ID');
                         }
                         return (

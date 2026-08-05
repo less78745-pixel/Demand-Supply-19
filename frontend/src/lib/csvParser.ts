@@ -118,7 +118,22 @@ function processLines(lines: any[][], resolve: (val: ParsedData) => void, reject
       const rowObj: any = {};
       for (let j = 0; j < headers.length; j++) {
         const headerName = headers[j] || `Col_${j}`;
-        rowObj[headerName] = cols[j] != null ? String(cols[j]).trim() : '';
+        let val = cols[j] != null ? String(cols[j]).trim() : '';
+
+        // Auto-convert Excel serial date numbers to readable date strings for date/tanggal/ETA columns
+        const hLower = headerName.toLowerCase();
+        if (((hLower.includes('eta') && !hLower.includes('week')) || hLower.includes('tanggal') || hLower.includes('date') || hLower.includes('tgl') || hLower.includes('waktu')) && val) {
+          const numVal = Number(val);
+          if (!isNaN(numVal) && numVal > 30000 && numVal < 70000) {
+            const d = new Date((numVal - 25569) * 86400 * 1000);
+            const days = String(d.getUTCDate()).padStart(2, '0');
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+            const month = months[d.getUTCMonth()];
+            val = `${days} ${month} ${d.getUTCFullYear()}`;
+          }
+        }
+
+        rowObj[headerName] = val;
       }
       
       // Convert target columns to numbers
