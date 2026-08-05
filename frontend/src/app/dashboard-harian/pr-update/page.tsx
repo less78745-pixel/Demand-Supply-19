@@ -114,27 +114,45 @@ function getDirectTrackingUrl(containerNo?: string, carrierName?: string): { url
     else if (no.startsWith('ZIMU')) carrier = 'zim';
   }
 
-  // Domestic Indonesia Shipping
-  if (carrier.includes("temas") || carrier.includes("kliktemas")) return { url: "https://apps.kliktemas.com/", carrier: "Temas Line (KlikTemas)" };
+  // 1. Shipping Line Aktif (Pelacakan Langsung)
+  if (carrier.includes("anl")) return { url: "https://www.anl.com.au/tracking/", carrier: "ANL" };
+  if (carrier.includes("apl")) return { url: "https://www.apl.com/tracking/", carrier: "APL" };
+  if (carrier.includes("cma") || carrier.includes("cgm")) return { url: "https://www.cma-cgm.com/ebusiness/tracking", carrier: "CMA CGM" };
+  if (carrier.includes("cosco") || carrier.includes("china shipping") || carrier.includes("cscl")) return { url: "https://lines.coscoshipping.com/home/Services/tracking", carrier: carrier.includes("china") ? "China Shipping (COSCO)" : "COSCO" };
+  if (carrier.includes("evergreen")) return { url: "https://ct.shipmentlink.com/servlet/TDB1_CargoTracking.do", carrier: "EVERGREEN" };
+  if (carrier.includes("hapag") || carrier.includes("lloyd") || carrier.includes("llyod") || carrier.includes("uasc")) return { url: "https://www.hapag-lloyd.com/en/online-business/tracing/tracing-by-container.html", carrier: carrier.includes("uasc") ? "UASC (Hapag-Lloyd)" : "HAPAG-LLOYD" };
+  if (carrier.includes("hmm") || carrier.includes("hyundai")) return { url: "https://www.hmm21.com/", carrier: "HMM (Track & Trace)" };
+  if (carrier.includes("interasia")) return { url: "https://www.interasia.cc/", carrier: "Interasia" };
+  if (carrier.includes("kmtc")) return { url: "http://www.ekmtc.com/", carrier: "KMTC" };
+  if (carrier.includes("maersk")) return { url: "https://www.maersk.com/tracking/", carrier: "MAERSK" };
   if (carrier.includes("meratus")) return { url: "https://www.meratusline.com/", carrier: "Meratus Line" };
+  if (carrier.includes("msc")) return { url: "https://www.msc.com/en/track-a-shipment", carrier: "MSC" };
+  if (carrier.includes("one") || carrier.includes("ocean network") || carrier.includes("k-line") || carrier.includes("k line") || carrier.includes("kline") || carrier.includes("mol")) {
+    let label = "ONE (Ocean Network Express)";
+    if (carrier.includes("k-line") || carrier.includes("k line") || carrier.includes("kline")) label = "K-LINE (ONE)";
+    else if (carrier.includes("mol")) label = "MOL (ONE)";
+    return { url: "https://ecomm.one-line.com/one-ecom/manage-shipment/cargo-tracking", carrier: label };
+  }
+  if (carrier.includes("oocl")) return { url: "https://www.oocl.com/eng/ourservices/eservices/cargotracking/Pages/cargotracking.aspx", carrier: "OOCL" };
+  if (carrier.includes("pil") || carrier.includes("pacific int") || carrier.includes("pilship")) return { url: "https://www.pilship.com/en-our-track-and-trace/120.html", carrier: "PilShip (Pacific Int'l Lines)" };
+  if (carrier.includes("sinokor")) return { url: "http://www.sinokor.co.kr/", carrier: "SINOKOR" };
+  if (carrier.includes("wan hai") || carrier.includes("wanhai")) return { url: "https://www.wanhai.com/", carrier: "Wan Hai (Cargo Tracking)" };
+  if (carrier.includes("yang ming") || carrier.includes("yangming")) return { url: "https://www.yangming.com/e-service/track_trace/track_trace_cargo_tracking.aspx", carrier: "YANG MING" };
+
+  // Domestic & Other Shipping Lines
+  if (carrier.includes("temas") || carrier.includes("kliktemas")) return { url: "https://apps.kliktemas.com/", carrier: "Temas Line (KlikTemas)" };
   if (carrier.includes("spil") || carrier.includes("salam pacific") || carrier.includes("myspil")) return { url: "https://www.myspil.com/", carrier: "SPIL (mySPIL)" };
   if (carrier.includes("samudera")) return { url: "https://samuderaconnect.com/", carrier: "Samudera Indonesia" };
   if (carrier.includes("tanto")) return { url: "https://www.tantonet.com/", carrier: "Tanto Intim Line" };
-  if (carrier.includes("wan hai") || carrier.includes("wanhai")) return { url: "https://www.wanhai.com/views/Cargo_Tracking/CargoTracking.xhtml", carrier: "Wan Hai Lines" };
-  if (carrier.includes("pil") || carrier.includes("pacific int")) return { url: "https://www.pilship.com/cargo-tracking", carrier: "PIL (Pacific Int'l Lines)" };
-
-  // Global Shipping Deep Links
-  if (carrier.includes("maersk")) return { url: `https://www.maersk.com/tracking/${no}`, carrier: "Maersk" };
-  if (carrier.includes("msc")) return { url: `https://www.msc.com/en/track-a-shipment?number=${no}`, carrier: "MSC" };
-  if (carrier.includes("cma") || carrier.includes("cgm")) return { url: `https://www.cma-cgm.com/ebusiness/tracking/search?SearchBy=CN&Reference=${no}`, carrier: "CMA CGM" };
-  if (carrier.includes("one") || carrier.includes("ocean network")) return { url: `https://ecomm.one-line.com/one-ecom/manage-shipment/cargo-tracking?trackingNo=${no}`, carrier: "ONE (Ocean Network Express)" };
-  if (carrier.includes("hapag") || carrier.includes("lloyd")) return { url: `https://www.hapag-lloyd.com/en/online-business/track/track-by-container-solution.html?blno=${no}`, carrier: "Hapag-Lloyd" };
   if (carrier.includes("zim")) return { url: `https://www.zim.com/tools/track-a-shipment?consignmentNumber=${no}`, carrier: "ZIM" };
-  if (carrier.includes("evergreen")) return { url: `https://www.evergreen-line.com/emodal/Cargo/CargoTrackingDetail?no=${no}`, carrier: "Evergreen Line" };
-  if (carrier.includes("oocl")) return { url: `https://www.oocl.com/eng/ourservices/eservices/cargotracking/Pages/cargotracking.aspx?cn=${no}`, carrier: "OOCL" };
-  if (carrier.includes("cosco")) return { url: `https://elines.coscoshipping.com/ebusiness/cargoTracking?no=${no}`, carrier: "COSCO Shipping" };
 
-  // Default Universal Container Tracking via SeaRates
+  // 3. Container Leasing Companies
+  if (carrier.includes("seaco") || carrier.includes("seacube")) return { url: "https://www.seacoglobal.com/equipment/unit-enquiry/", carrier: "Seaco (Unit Enquiry)" };
+  if (carrier.includes("beacon") || carrier.includes("cai") || carrier.includes("florens") || carrier.includes("textainer") || carrier.includes("triton") || carrier.includes("ues") || carrier.includes("leasing")) {
+    return { url: "https://shipsgo.com/container-tracking", carrier: `${carrierName || "Container Leasing"} (ShipsGo / Agregator)` };
+  }
+
+  // Default Universal Container Tracking
   return { url: `https://www.searates.com/container/tracking/?number=${no}`, carrier: "Universal Agregator (SeaRates)" };
 }
 
@@ -328,6 +346,7 @@ export default function PRUpdatePage() {
   const colGrup = useMemo(() => parsed ? findColumn(parsed.headers, ['grup', 'group', 'divisi', 'grup barang']) : undefined, [parsed]);
   const colCategory = useMemo(() => parsed ? findColumn(parsed.headers, ['category', 'kategori', 'item category', 'kategori produk']) : undefined, [parsed]);
   const colPo = useMemo(() => parsed ? findColumn(parsed.headers, ['po', 'no po', 'nomor po', 'po no', 'no_po']) : undefined, [parsed]);
+  const colPr = useMemo(() => parsed ? findColumn(parsed.headers, ['nopr', 'no pr', 'pr no', 'pr', 'nomor pr', 'no_pr']) : undefined, [parsed]);
   const colDesc = useMemo(() => parsed ? findColumn(parsed.headers, ['description', 'deskripsi', 'nama barang', 'item description', 'nama produk']) : undefined, [parsed]);
   const colEta = useMemo(() => parsed ? findColumn(parsed.headers, ['week eta', 'eta fix', 'tanggal eta', 'eta_port', 'eta']) : undefined, [parsed]);
   const colStatus = useMemo(() => parsed ? findColumn(parsed.headers, ['status compile', 'status', 'state', 'posisi']) : undefined, [parsed]);
