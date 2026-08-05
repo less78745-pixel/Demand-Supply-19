@@ -20,14 +20,17 @@ import {
 import { get, set } from 'idb-keyval';
 import { parseDynamicCSV, findColumn, ParsedData } from '@/lib/csvParser';
 import { getStandardFilename } from '@/utils/export';
+import * as XLSX from 'xlsx';
 
 const COLORS = ['#f97316', '#3b82f6', '#22c55e', '#ef4444', '#a855f7', '#eab308', '#06b6d4', '#ec4899', '#14b8a6', '#6366f1', '#f43f5e', '#84cc16'];
 const TO_COLORS = ['#f97316', '#ef4444', '#eab308', '#ec4899', '#f43f5e', '#d946ef', '#fb923c', '#fde047']; // Warm tones
 const VESSEL_COLORS = ['#3b82f6', '#06b6d4', '#22c55e', '#6366f1', '#14b8a6', '#84cc16', '#38bdf8', '#10b981']; // Cool tones
 
-const getPillarCategory = (colName: string): 'On Hand' | 'VESSEL' | 'TO' | 'PLAN LOADING' | 'TARGET SALES' | 'Lainnya' => {
+const getPillarCategory = (colName: string): 'On Hand' | 'VESSEL' | 'TO' | 'PLAN LOADING' | 'TARGET SALES' | 'OUTSTANDING TARGET' | 'SALES BERJALAN' | 'Lainnya' => {
   const lower = colName.toLowerCase().trim();
-  if (lower.includes('outstanding') || lower.includes('target') || lower.includes('target sales')) return 'TARGET SALES';
+  if (lower.includes('outstanding') || lower === 'outstanding target') return 'OUTSTANDING TARGET';
+  if (lower.includes('berjalan') || lower === 'sales berjalan') return 'SALES BERJALAN';
+  if (lower === 'target sales' || lower === 'target' || lower.includes('target_sales')) return 'TARGET SALES';
   if (lower.includes('on hand') || lower === 'soh' || lower.includes('stock on hand')) return 'On Hand';
   if (lower.includes('vessel') || lower.includes('kapal') || lower.includes('on vessel')) return 'VESSEL';
   if (lower.includes('to ') || lower.startsWith('to') || lower.includes('transfer order')) return 'TO';
@@ -107,12 +110,13 @@ export interface StockCondition {
   color: string;
 }
 
-const calculateStockCondition = (onHand: number, totalTO: number, totalVessel: number, targetSales: number): StockCondition => {
+const calculateStockCondition = (onHand: number, totalTO: number, totalVessel: number, outstandingTarget: number, salesBerjalan: number): StockCondition => {
   const totalSupply = toExactFloat(onHand + totalTO + totalVessel, 4);
-  if (!targetSales || targetSales <= 0) {
-    return { ratio: 0, status: 'N/A (Target 0)', badge: '⚪ N/A (Target 0)', color: 'bg-slate-700/50 text-slate-300 border border-slate-600' };
+  const effectiveTarget = Math.max(0, toExactFloat((outstandingTarget || 0) - (salesBerjalan || 0), 4));
+  if (!effectiveTarget || effectiveTarget <= 0) {
+    return { ratio: 0, status: 'N/A (Target <= 0)', badge: '⚪ N/A (Target <= 0)', color: 'bg-slate-700/50 text-slate-300 border border-slate-600' };
   }
-  const exactRatio = totalSupply / targetSales;
+  const exactRatio = totalSupply / effectiveTarget;
   const ratio = toExactFloat(exactRatio, 2);
   if (ratio > 1.25 || exactRatio > 1.250001) {
     return { ratio, status: 'Aman', badge: '🟢 AMAN', color: 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' };
@@ -125,11 +129,46 @@ const calculateStockCondition = (onHand: number, totalTO: number, totalVessel: n
 
 function generateDemoSOH(): ParsedData {
   const cabangs = ['Surabaya', 'Jakarta', 'Bandung', 'Medan', 'Semarang', 'Makassar', 'Palembang', 'Denpasar'];
+  const grups = ['Food & Beverage', 'Home Care', 'Personal Care'];
   const categories = ['Minyak Goreng Premium', 'Beras Setra Ramos', 'Gula Pasir Kristal', 'Tepung Terigu Serbaguna', 'Kopi Bubuk Murni', 'Susu Kental Manis'];
-  const data: any[] = [];
+  const insentifTiers = ['Tier 1 (High Performance)', 'Tier 2 (Core Growth)', 'Tier 3 (Standard)', 'Non-Insentif'];
+  const doiStatuses = ['ACTIVE', 'FAST MOVING', 'SLOW MOVING', 'NEW ITEM'];
 
-  cabangs.forEach(cab => {
-    categories.forEach(cat => {
+  const headers = [
+    'cabang', 'Grup', 'Category', 'Description', 'Status Insentif', 'Status DOI',
+    'On Hand', 'TO Week 1', 'TO Week 2', 'TO Week 3', 'TO Week 4',
+    'Vessel Week 1', 'Vessel Week 2', 'Vessel Week 3', 'Vessel Week 4',
+    'Plan Loading', 'Target Sales', 'Outstanding Target', 'Sales Berjalan'
+  ];
+
+  const targetColumns = [
+    { index: 6, name: 'On Hand' },
+    { index: 7, name: 'TO Week 1' },
+    { index: 8, name: 'TO Week 2' },
+    { index: 9, name: 'TO Week 3' },
+    { index: 10, name: 'TO Week 4' },
+    { index: 11, name: 'Vessel Week 1' },
+    { index: 12, name: 'Vessel Week 2' },
+    { index: 13, name: 'Vessel Week 3' },
+    { index: 14, name: 'Vessel Week 4' },
+    { index: 15, name: 'Plan Loading' },
+    { index: 16, name: 'Target Sales' },
+    { index: 17, name: 'Outstanding Target' },
+    { index: 18, name: 'Sales Berjalan' }
+  ];
+
+  const qtyData: any[] = [];
+  const valueData: any[] = [];
+
+  let count = 0;
+  cabangs.forEach((cab, cIdx) => {
+    categories.forEach((cat, idx) => {
+      count++;
+      const grup = grups[(cIdx + idx) % grups.length];
+      const insentif = insentifTiers[(count + idx) % insentifTiers.length];
+      const doi = doiStatuses[(count + cIdx) % doiStatuses.length];
+      const desc = `${cat} - Kemasan Karton Penuh (${cab})`;
+
       const onHand = Math.round(1500 + Math.random() * 4500);
       const to1 = Math.round(100 + Math.random() * 300);
       const to2 = Math.round(150 + Math.random() * 350);
@@ -140,10 +179,19 @@ function generateDemoSOH(): ParsedData {
       const v3 = Math.round(220 + Math.random() * 480);
       const v4 = Math.round(150 + Math.random() * 420);
       const planLoading = Math.round(500 + Math.random() * 1200);
-      const targetSales = Math.round(2500 + Math.random() * 4500);
-      data.push({
+      const targetSales = Math.round(3500 + Math.random() * 5000);
+      const outstandingTarget = Math.round(targetSales * (0.6 + Math.random() * 0.3));
+      const salesBerjalan = Math.round(outstandingTarget * (0.15 + Math.random() * 0.35));
+
+      const unitPrice = (Math.floor(Math.random() * 25) + 10) * 10000; // Rp 100rb - 350rb
+
+      qtyData.push({
         cabang: cab,
+        Grup: grup,
         Category: cat,
+        Description: desc,
+        'Status Insentif': insentif,
+        'Status DOI': doi,
         'On Hand': onHand,
         'TO Week 1': to1,
         'TO Week 2': to2,
@@ -154,33 +202,54 @@ function generateDemoSOH(): ParsedData {
         'Vessel Week 3': v3,
         'Vessel Week 4': v4,
         'Plan Loading': planLoading,
-        'Outstanding Target Sales': targetSales
+        'Target Sales': targetSales,
+        'Outstanding Target': outstandingTarget,
+        'Sales Berjalan': salesBerjalan
+      });
+
+      valueData.push({
+        cabang: cab,
+        Grup: grup,
+        Category: cat,
+        Description: desc,
+        'Status Insentif': insentif,
+        'Status DOI': doi,
+        'On Hand': onHand * unitPrice,
+        'TO Week 1': to1 * unitPrice,
+        'TO Week 2': to2 * unitPrice,
+        'TO Week 3': to3 * unitPrice,
+        'TO Week 4': to4 * unitPrice,
+        'Vessel Week 1': v1 * unitPrice,
+        'Vessel Week 2': v2 * unitPrice,
+        'Vessel Week 3': v3 * unitPrice,
+        'Vessel Week 4': v4 * unitPrice,
+        'Plan Loading': planLoading * unitPrice,
+        'Target Sales': targetSales * unitPrice,
+        'Outstanding Target': outstandingTarget * unitPrice,
+        'Sales Berjalan': salesBerjalan * unitPrice
       });
     });
   });
 
+  const sheetNames = ['Nilai Qty', 'Nilai Value'];
+  const sheets = {
+    'Nilai Qty': { headers, targetColumns, data: qtyData },
+    'Nilai Value': { headers, targetColumns, data: valueData }
+  };
+
   return {
-    headers: ['cabang', 'Category', 'On Hand', 'TO Week 1', 'TO Week 2', 'TO Week 3', 'TO Week 4', 'Vessel Week 1', 'Vessel Week 2', 'Vessel Week 3', 'Vessel Week 4', 'Plan Loading', 'Outstanding Target Sales'],
-    targetColumns: [
-      { index: 2, name: 'On Hand' },
-      { index: 3, name: 'TO Week 1' },
-      { index: 4, name: 'TO Week 2' },
-      { index: 5, name: 'TO Week 3' },
-      { index: 6, name: 'TO Week 4' },
-      { index: 7, name: 'Vessel Week 1' },
-      { index: 8, name: 'Vessel Week 2' },
-      { index: 9, name: 'Vessel Week 3' },
-      { index: 10, name: 'Vessel Week 4' },
-      { index: 11, name: 'Plan Loading' },
-      { index: 12, name: 'Outstanding Target Sales' }
-    ],
-    data,
-    processed_at: new Date().toISOString()
+    headers,
+    targetColumns,
+    data: qtyData,
+    processed_at: new Date().toISOString(),
+    sheetNames,
+    sheets
   };
 }
 
 export default function SOHAnalysisPage() {
   const [parsed, setParsed] = useState<ParsedData | null>(null);
+  const [selectedSheetName, setSelectedSheetName] = useState<string>('Nilai Qty');
   const [isProcessing, setIsProcessing] = useState(false);
   const [chartMode, setChartMode] = useState<'weekly' | 'summary' | 'stock'>('weekly');
   const [showHowTo, setShowHowTo] = useState<boolean>(false);
@@ -191,6 +260,7 @@ export default function SOHAnalysisPage() {
   const [selectedCabang, setSelectedCabang] = useState<string[]>(['All']);
   const [selectedCategory, setSelectedCategory] = useState<string[]>(['All']);
   const [selectedInsentif, setSelectedInsentif] = useState<string[]>(['All']);
+  const [selectedDoi, setSelectedDoi] = useState<string[]>(['All']);
 
   // Excel AutoFilter state for SOH TO table
   const [activeSohColModal, setActiveSohColModal] = useState<{ key: string; name: string } | null>(null);
@@ -199,35 +269,76 @@ export default function SOHAnalysisPage() {
 
   useEffect(() => {
     get('last_soh_data').then(saved => {
-      if (saved && saved.data && saved.data.length > 0) {
+      if (saved && saved.data && saved.data.length > 0 && saved.sheetNames && saved.sheetNames.length > 1) {
         setParsed(saved);
+        if (saved.sheetNames && saved.sheetNames.length > 0) {
+          setSelectedSheetName(saved.sheetNames[0]);
+        }
       } else {
-        setParsed(generateDemoSOH());
+        const demo = generateDemoSOH();
+        setParsed(demo);
+        if (demo.sheetNames && demo.sheetNames.length > 0) {
+          setSelectedSheetName(demo.sheetNames[0]);
+        }
       }
     }).catch(err => {
       console.warn('Failed to load SOH state from IndexDB', err);
-      setParsed(generateDemoSOH());
+      const demo = generateDemoSOH();
+      setParsed(demo);
+      if (demo.sheetNames && demo.sheetNames.length > 0) {
+        setSelectedSheetName(demo.sheetNames[0]);
+      }
     });
   }, []);
+
+  useEffect(() => {
+    if (parsed && parsed.sheetNames && parsed.sheetNames.length > 0) {
+      if (!selectedSheetName || !parsed.sheetNames.includes(selectedSheetName)) {
+        setSelectedSheetName(parsed.sheetNames[0]);
+      }
+    }
+  }, [parsed, selectedSheetName]);
+
+  const currentData: ParsedData | null = useMemo(() => {
+    if (!parsed) return null;
+    if (selectedSheetName && parsed.sheets && parsed.sheets[selectedSheetName]) {
+      return {
+        ...parsed.sheets[selectedSheetName],
+        processed_at: parsed.processed_at,
+        sheetNames: parsed.sheetNames,
+        sheets: parsed.sheets
+      };
+    }
+    return parsed;
+  }, [parsed, selectedSheetName]);
 
   const handleGenerateDemo = () => {
     const demo = generateDemoSOH();
     setParsed(demo);
-    toast.success('🎉 Data Demo SOH-TO-Vessel Berhasil Dimuat!');
+    if (demo.sheetNames && demo.sheetNames.length > 0) {
+      setSelectedSheetName(demo.sheetNames[0]);
+    }
+    toast.success('🎉 Data Demo SOH-TO-Vessel (2 Sheet: Qty & Value) Berhasil Dimuat!');
   };
 
   const handleDownloadTemplate = () => {
-    const headers = 'cabang,Category,On Hand,TO Week 1,TO Week 2,TO Week 3,TO Week 4,Vessel Week 1,Vessel Week 2,Vessel Week 3,Vessel Week 4,Plan Loading,Outstanding Target Sales';
-    const row1 = 'Surabaya,Minyak Goreng Premium,4500,250,300,280,320,500,450,480,520,900,5200';
-    const row2 = 'Jakarta,Beras Setra Ramos,2800,200,220,210,230,400,380,410,390,1100,3500';
-    const blob = new Blob(['\ufeff' + headers + '\n' + row1 + '\n' + row2], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'template_soh_to_vessel.csv';
-    link.click();
-    URL.revokeObjectURL(url);
-    toast.success('📁 Template CSV SOH-TO-Vessel Berhasil Diunduh');
+    try {
+      const demo = generateDemoSOH();
+      const wb = XLSX.utils.book_new();
+      if (demo.sheetNames && demo.sheets) {
+        demo.sheetNames.forEach(name => {
+          const ws = XLSX.utils.json_to_sheet(demo.sheets![name].data, { header: demo.headers });
+          XLSX.utils.book_append_sheet(wb, ws, name);
+        });
+      } else {
+        const ws = XLSX.utils.json_to_sheet(demo.data, { header: demo.headers });
+        XLSX.utils.book_append_sheet(wb, ws, "Nilai Qty");
+      }
+      XLSX.writeFile(wb, "template_soh_to_vessel_2_sheet.xlsx");
+      toast.success("📁 Template Excel (2 Sheet: Qty & Value) Berhasil Diunduh");
+    } catch (err: any) {
+      toast.error("Gagal mengunduh template: " + (err.message || String(err)));
+    }
   };
 
   const handleFileUpload = async (file: File) => {
@@ -236,6 +347,9 @@ export default function SOHAnalysisPage() {
     try {
       const parsedData = await parseDynamicCSV(file);
       setParsed(parsedData);
+      if (parsedData.sheetNames && parsedData.sheetNames.length > 0) {
+        setSelectedSheetName(parsedData.sheetNames[0]);
+      }
       try {
         await set('last_soh_data', parsedData);
       } catch (e) {
@@ -249,50 +363,57 @@ export default function SOHAnalysisPage() {
     }
   };
 
-  // Identify column names dynamically
-  const colCabang = useMemo(() => parsed ? findColumn(parsed.headers, ['cabang', 'branch_name', 'branch', 'cab', 'regional', 'region']) : undefined, [parsed]);
-  const colCategory = useMemo(() => parsed ? findColumn(parsed.headers, ['grup', 'category', 'kategori item', 'kategori', 'item category']) : undefined, [parsed]);
-  const colInsentif = useMemo(() => parsed ? findColumn(parsed.headers, ['insentif', 'kategori insentif']) : undefined, [parsed]);
-  const colTargetSales = useMemo(() => parsed ? findColumn(parsed.headers, ['outstanding target sales', 'target sales', 'outstanding target', 'target_sales', 'target', 'target sales outstanding']) : undefined, [parsed]);
+  // Identify column names dynamically using currentData
+  const colCabang = useMemo(() => currentData ? findColumn(currentData.headers, ['cabang', 'branch_name', 'branch', 'cab', 'regional', 'region']) : undefined, [currentData]);
+  const colGrup = useMemo(() => currentData ? findColumn(currentData.headers, ['grup', 'group']) : undefined, [currentData]);
+  const colCategory = useMemo(() => currentData ? findColumn(currentData.headers, ['category', 'kategori item', 'kategori', 'item category']) : undefined, [currentData]);
+  const colDescription = useMemo(() => currentData ? findColumn(currentData.headers, ['description', 'desc', 'nama barang', 'deskripsi']) : undefined, [currentData]);
+  const colInsentif = useMemo(() => currentData ? findColumn(currentData.headers, ['status insentif', 'insentif', 'kategori insentif']) : undefined, [currentData]);
+  const colDoi = useMemo(() => currentData ? findColumn(currentData.headers, ['status doi', 'doi', 'doi status']) : undefined, [currentData]);
+  const colTargetSales = useMemo(() => currentData ? findColumn(currentData.headers, ['target sales', 'target_sales', 'target sales bulanan', 'target']) : undefined, [currentData]);
+  const colOutstandingTarget = useMemo(() => currentData ? findColumn(currentData.headers, ['outstanding target', 'outstanding target sales', 'target sales outstanding']) : undefined, [currentData]);
+  const colSalesBerjalan = useMemo(() => currentData ? findColumn(currentData.headers, ['sales berjalan', 'penjualan berjalan', 'actual sales']) : undefined, [currentData]);
 
   // Filter options
-  const cabangs = useMemo(() => parsed && colCabang ? ['All', ...Array.from(new Set(parsed.data.map(d => d[colCabang]).filter(v => v && !String(v).includes('#N/A') && !String(v).includes('#REF!') && String(v).toLowerCase() !== 'semua cabang'))).sort()] : [], [parsed, colCabang]);
-  const categories = useMemo(() => parsed && colCategory ? ['All', ...Array.from(new Set(parsed.data.map(d => d[colCategory]).filter(v => v && !String(v).includes('#N/A') && !String(v).includes('#REF!') && String(v).toLowerCase() !== 'semua kategori'))).sort()] : [], [parsed, colCategory]);
-  const insentifs = useMemo(() => parsed && colInsentif ? ['All', ...Array.from(new Set(parsed.data.map(d => d[colInsentif]).filter(v => v && !String(v).includes('#N/A') && !String(v).includes('#REF!') && String(v).toLowerCase() !== 'semua insentif'))).sort()] : [], [parsed, colInsentif]);
+  const cabangs = useMemo(() => currentData && colCabang ? ['All', ...Array.from(new Set(currentData.data.map(d => d[colCabang]).filter(v => v && !String(v).includes('#N/A') && !String(v).includes('#REF!') && String(v).toLowerCase() !== 'semua cabang'))).sort()] : [], [currentData, colCabang]);
+  const categories = useMemo(() => currentData && colCategory ? ['All', ...Array.from(new Set(currentData.data.map(d => d[colCategory]).filter(v => v && !String(v).includes('#N/A') && !String(v).includes('#REF!') && String(v).toLowerCase() !== 'semua kategori'))).sort()] : [], [currentData, colCategory]);
+  const insentifs = useMemo(() => currentData && colInsentif ? ['All', ...Array.from(new Set(currentData.data.map(d => d[colInsentif]).filter(v => v && !String(v).includes('#N/A') && !String(v).includes('#REF!') && String(v).toLowerCase() !== 'semua insentif'))).sort()] : [], [currentData, colInsentif]);
+  const dois = useMemo(() => currentData && colDoi ? ['All', ...Array.from(new Set(currentData.data.map(d => d[colDoi]).filter(v => v && !String(v).includes('#N/A') && !String(v).includes('#REF!') && String(v).toLowerCase() !== 'semua doi'))).sort()] : [], [currentData, colDoi]);
 
   // Filtered Data with Scenario Multiplier applied to numerical metrics
   const filtered = useMemo(() => {
-    if (!parsed) return [];
+    if (!currentData) return [];
     const sc = SCENARIOS.find(s => s.id === activeScenario) || SCENARIOS[0];
-    return parsed.data
+    return currentData.data
       .filter(d =>
         (!colCabang || selectedCabang.includes('All') || selectedCabang.includes(d[colCabang])) &&
         (!colCategory || selectedCategory.includes('All') || selectedCategory.includes(d[colCategory])) &&
-        (!colInsentif || selectedInsentif.includes('All') || selectedInsentif.includes(d[colInsentif]))
+        (!colInsentif || selectedInsentif.includes('All') || selectedInsentif.includes(d[colInsentif])) &&
+        (!colDoi || selectedDoi.includes('All') || selectedDoi.includes(d[colDoi]))
       )
       .map(row => {
         const copy = { ...row };
-        parsed.targetColumns.forEach(tc => {
+        currentData.targetColumns.forEach(tc => {
           copy[tc.name] = Math.round((row[tc.name] || 0) * sc.multiplier);
         });
         return copy;
       });
-  }, [parsed, selectedCabang, selectedCategory, selectedInsentif, colCabang, colCategory, colInsentif, activeScenario]);
+  }, [currentData, selectedCabang, selectedCategory, selectedInsentif, selectedDoi, colCabang, colCategory, colInsentif, colDoi, activeScenario]);
 
   // Pillar mapping
   const pillarColumnsMap = useMemo(() => {
-    if (!parsed) return { 'On Hand': [], 'VESSEL': [], 'TO': [], 'PLAN LOADING': [], 'Lainnya': [] };
+    if (!currentData) return { 'On Hand': [], 'VESSEL': [], 'TO': [], 'PLAN LOADING': [], 'Lainnya': [] };
     const map: Record<string, string[]> = { 'On Hand': [], 'VESSEL': [], 'TO': [], 'PLAN LOADING': [], 'Lainnya': [] };
-    parsed.targetColumns.forEach(tc => {
+    currentData.targetColumns.forEach(tc => {
       const cat = getPillarCategory(tc.name);
       if (map[cat]) map[cat].push(tc.name);
     });
     return map;
-  }, [parsed]);
+  }, [currentData]);
 
   // Grouped Pivot Data per Cabang
   const pivotData = useMemo(() => {
-    if (!parsed || filtered.length === 0) return [];
+    if (!currentData || filtered.length === 0) return [];
     const map: Record<string, any> = {};
 
     for (const row of filtered) {
@@ -301,16 +422,16 @@ export default function SOHAnalysisPage() {
 
       if (!map[cbg]) {
         map[cbg] = { cabang: cbg, 'On Hand': 0, 'VESSEL': 0, 'TO': 0, 'PLAN LOADING': 0, 'Lainnya': 0, total: 0, details: {} };
-        parsed.targetColumns.forEach(tc => { map[cbg].details[tc.name] = 0; });
+        currentData.targetColumns.forEach(tc => { map[cbg].details[tc.name] = 0; });
       }
-      parsed.targetColumns.forEach(tc => {
+      currentData.targetColumns.forEach(tc => {
         const val = Math.round(Number(row[tc.name]) || 0);
         const cat = getPillarCategory(tc.name);
         if (map[cbg][cat] !== undefined) {
           map[cbg][cat] += val;
         }
-        map[cbg].details[tc.name] += val;
-        if (cat !== 'Lainnya' && cat !== 'TARGET SALES') {
+        map[cbg].details[tc.name] = (map[cbg].details[tc.name] || 0) + val;
+        if (cat !== 'Lainnya' && cat !== 'TARGET SALES' && cat !== 'OUTSTANDING TARGET' && cat !== 'SALES BERJALAN') {
           map[cbg].total += val;
         }
       });
@@ -323,11 +444,11 @@ export default function SOHAnalysisPage() {
       item.total = Math.round(item.total);
       return item;
     }).sort((a, b) => b.total - a.total);
-  }, [parsed, filtered, colCabang, selectedCabangForChart]);
+  }, [currentData, filtered, colCabang, selectedCabangForChart]);
 
   // Weekly Grouped Data with Category Breakdown (Stacked TO vs Vessel W1-W4)
   const weeklyGroupedData = useMemo(() => {
-    if (!parsed || filtered.length === 0) return [];
+    if (!currentData || filtered.length === 0) return [];
     const weeks = [1, 2, 3, 4];
     const activeCategories = categories.filter(c => c !== 'All');
 
@@ -344,7 +465,7 @@ export default function SOHAnalysisPage() {
         
         const cat = colCategory ? (row[colCategory] || 'Umum') : 'Umum';
 
-        parsed.targetColumns.forEach(tc => {
+        currentData.targetColumns.forEach(tc => {
           const name = tc.name.toLowerCase();
           if (name.includes(`week ${w}`) || name.endsWith(`w${w}`) || name.includes(`wk ${w}`) || name.includes(`minggu ${w}`)) {
             const val = Math.round(Number(row[tc.name]) || 0);
@@ -358,11 +479,11 @@ export default function SOHAnalysisPage() {
       }
       return item;
     });
-  }, [parsed, filtered, colCabang, colCategory, selectedCabangForChart, categories]);
+  }, [currentData, filtered, colCabang, colCategory, selectedCabangForChart, categories]);
 
   // On Hand detail per Category
   const onHandByCategoryData = useMemo(() => {
-    if (!parsed || filtered.length === 0) return [];
+    if (!currentData || filtered.length === 0) return [];
     const map: Record<string, any> = {};
 
     for (const row of filtered) {
@@ -373,61 +494,79 @@ export default function SOHAnalysisPage() {
       if (!map[cat]) {
         map[cat] = { category: cat, 'On Hand': 0 };
       }
-      parsed.targetColumns.forEach(tc => {
+      currentData.targetColumns.forEach(tc => {
         if (getPillarCategory(tc.name) === 'On Hand') {
           map[cat]['On Hand'] += Math.round(Number(row[tc.name]) || 0);
         }
       });
     }
     return Object.values(map).sort((a, b) => b['On Hand'] - a['On Hand']);
-  }, [parsed, filtered, colCabang, colCategory, selectedCabangForChart]);
+  }, [currentData, filtered, colCabang, colCategory, selectedCabangForChart]);
 
   // Detailed Table Data per Cabang per Category with Condition Logic
   const detailedTableData = useMemo(() => {
-    if (!parsed || filtered.length === 0) return [];
+    if (!currentData || filtered.length === 0) return [];
     const map: Record<string, any> = {};
 
     for (const row of filtered) {
       const cbg = colCabang ? (row[colCabang] || 'Unknown') : 'Unknown';
+      const grp = colGrup ? (row[colGrup] || 'Umum') : 'Umum';
       const cat = colCategory ? (row[colCategory] || 'Umum') : 'Umum';
-      const key = `${cbg}___${cat}`;
+      const desc = colDescription ? (row[colDescription] || '-') : '-';
+      const ins = colInsentif ? (row[colInsentif] || 'Non-Insentif') : 'Non-Insentif';
+      const doi = colDoi ? (row[colDoi] || 'ACTIVE') : 'ACTIVE';
+      const key = `${cbg}___${grp}___${cat}___${ins}___${doi}`;
 
       if (!map[key]) {
         map[key] = {
           key,
           cabang: cbg,
+          grup: grp,
           category: cat,
+          description: desc,
+          statusInsentif: ins,
+          statusDoi: doi,
           'On Hand': 0,
           'VESSEL': 0,
           'TO': 0,
           'PLAN LOADING': 0,
-          'Outstanding Target Sales': 0
+          'Target Sales': 0,
+          'Outstanding Target': 0,
+          'Sales Berjalan': 0
         };
       }
 
-      parsed.targetColumns.forEach(tc => {
+      currentData.targetColumns.forEach(tc => {
         const val = Math.round(Number(row[tc.name]) || 0);
         const pillar = getPillarCategory(tc.name);
-        if (pillar === 'TARGET SALES') {
-          map[key]['Outstanding Target Sales'] += val;
-        } else if (map[key][pillar] !== undefined) {
+        if (colTargetSales && tc.name === colTargetSales) {
+          map[key]['Target Sales'] += val;
+        } else if (colOutstandingTarget && tc.name === colOutstandingTarget) {
+          map[key]['Outstanding Target'] += val;
+        } else if (colSalesBerjalan && tc.name === colSalesBerjalan) {
+          map[key]['Sales Berjalan'] += val;
+        } else if (pillar === 'OUTSTANDING TARGET') {
+          map[key]['Outstanding Target'] += val;
+        } else if (pillar === 'SALES BERJALAN') {
+          map[key]['Sales Berjalan'] += val;
+        } else if (pillar === 'TARGET SALES') {
+          map[key]['Target Sales'] += val;
+        } else if (map[key][pillar] !== undefined && pillar !== 'Lainnya') {
           map[key][pillar] += val;
         }
       });
-
-      if (colTargetSales && !parsed.targetColumns.some(t => t.name === colTargetSales)) {
-        map[key]['Outstanding Target Sales'] += Math.round(Number(row[colTargetSales]) || 0);
-      }
     }
 
     return Object.values(map).map(item => {
-      const totalInbound = item['VESSEL'] + item['TO'] + item['PLAN LOADING'];
+      const totalInbound = (item['VESSEL'] || 0) + (item['TO'] || 0) + (item['PLAN LOADING'] || 0);
       const totalSupply = (item['On Hand'] || 0) + (item['TO'] || 0) + (item['VESSEL'] || 0);
-      const cond = calculateStockCondition(item['On Hand'], item['TO'], item['VESSEL'], item['Outstanding Target Sales']);
+      const effectiveTarget = Math.max(0, (item['Outstanding Target'] || 0) - (item['Sales Berjalan'] || 0));
+      const cond = calculateStockCondition(item['On Hand'], item['TO'], item['VESSEL'], item['Outstanding Target'], item['Sales Berjalan']);
       return {
         ...item,
         totalInbound,
         totalSupply,
+        effectiveTarget,
         ratio: cond.ratio,
         status: cond.status,
         badge: cond.badge,
@@ -439,18 +578,24 @@ export default function SOHAnalysisPage() {
       }
       return a.cabang.localeCompare(b.cabang);
     });
-  }, [parsed, filtered, colCabang, colCategory, colTargetSales]);
+  }, [currentData, filtered, colCabang, colGrup, colCategory, colDescription, colInsentif, colDoi, colTargetSales, colOutstandingTarget, colSalesBerjalan]);
 
   const getSohColVal = (row: any, colKey: string): string => {
     if (colKey === 'cabang') return String(row.cabang || '');
+    if (colKey === 'grup') return String(row.grup || '');
     if (colKey === 'category') return String(row.category || '');
+    if (colKey === 'statusDoi') return String(row.statusDoi || '');
+    if (colKey === 'statusInsentif') return String(row.statusInsentif || '');
     if (colKey === 'onHand') return String(Math.round(row['On Hand'] || 0).toLocaleString('id-ID'));
     if (colKey === 'to') return String(Math.round(row['TO'] || 0).toLocaleString('id-ID'));
     if (colKey === 'vessel') return String(Math.round(row['VESSEL'] || 0).toLocaleString('id-ID'));
     if (colKey === 'totalSupply') return String(Math.round(row.totalSupply || (row['On Hand'] + row['TO'] + row['VESSEL']) || 0).toLocaleString('id-ID'));
     if (colKey === 'planLoading') return String(Math.round(row['PLAN LOADING'] || 0).toLocaleString('id-ID'));
-    if (colKey === 'target') return row['Outstanding Target Sales'] > 0 ? String(Math.round(row['Outstanding Target Sales']).toLocaleString('id-ID')) : '-';
-    if (colKey === 'ratio') return row['Outstanding Target Sales'] > 0 ? `${row.ratio}x` : 'N/A';
+    if (colKey === 'targetSales') return row['Target Sales'] > 0 ? String(Math.round(row['Target Sales']).toLocaleString('id-ID')) : '-';
+    if (colKey === 'target') return row['Outstanding Target'] > 0 ? String(Math.round(row['Outstanding Target']).toLocaleString('id-ID')) : '-';
+    if (colKey === 'salesBerjalan') return row['Sales Berjalan'] > 0 ? String(Math.round(row['Sales Berjalan']).toLocaleString('id-ID')) : '-';
+    if (colKey === 'effectiveTarget') return row.effectiveTarget > 0 ? String(Math.round(row.effectiveTarget).toLocaleString('id-ID')) : '-';
+    if (colKey === 'ratio') return row.effectiveTarget > 0 ? `${row.ratio}x` : 'N/A';
     if (colKey === 'badge') return String(row.badge || '');
     return '';
   };
@@ -507,6 +652,62 @@ export default function SOHAnalysisPage() {
       .sort((a, b) => b.value - a.value);
   }, [detailedTableData, selectedCabangForChart]);
 
+  // Pie Chart Data (% Status DOI per Total On Hand + TO + Vessel)
+  const pieDoiData = useMemo(() => {
+    if (!detailedTableData || detailedTableData.length === 0) return [];
+    const map: Record<string, number> = {};
+
+    for (const row of detailedTableData) {
+      if (selectedCabangForChart !== 'All' && row.cabang !== selectedCabangForChart) continue;
+      const doi = row.statusDoi || 'ACTIVE / UMUM';
+      if (!map[doi]) map[doi] = 0;
+      map[doi] += (row.totalSupply || 0);
+    }
+
+    const grandTotal = Object.values(map).reduce((a, b) => a + b, 0);
+    if (grandTotal === 0) return [];
+
+    const DOI_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#a855f7', '#ec4899', '#06b6d4'];
+
+    return Object.entries(map)
+      .filter(([_, val]) => val > 0)
+      .map(([doi, val], idx) => ({
+        name: doi,
+        value: val,
+        percentage: Number(((val / grandTotal) * 100).toFixed(1)),
+        color: DOI_COLORS[idx % DOI_COLORS.length]
+      }))
+      .sort((a, b) => b.value - a.value);
+  }, [detailedTableData, selectedCabangForChart]);
+
+  // Pie Chart Data (% Status Insentif per Total On Hand + TO + Vessel)
+  const pieInsentifData = useMemo(() => {
+    if (!detailedTableData || detailedTableData.length === 0) return [];
+    const map: Record<string, number> = {};
+
+    for (const row of detailedTableData) {
+      if (selectedCabangForChart !== 'All' && row.cabang !== selectedCabangForChart) continue;
+      const ins = row.statusInsentif || 'Non-Insentif / Umum';
+      if (!map[ins]) map[ins] = 0;
+      map[ins] += (row.totalSupply || 0);
+    }
+
+    const grandTotal = Object.values(map).reduce((a, b) => a + b, 0);
+    if (grandTotal === 0) return [];
+
+    const INS_COLORS = ['#a855f7', '#ec4899', '#f97316', '#3b82f6', '#10b981', '#eab308'];
+
+    return Object.entries(map)
+      .filter(([_, val]) => val > 0)
+      .map(([ins, val], idx) => ({
+        name: ins,
+        value: val,
+        percentage: Number(((val / grandTotal) * 100).toFixed(1)),
+        color: INS_COLORS[idx % INS_COLORS.length]
+      }))
+      .sort((a, b) => b.value - a.value);
+  }, [detailedTableData, selectedCabangForChart]);
+
   // Pillar KPIs
   const pillarKpis = useMemo(() => {
     if (!pivotData || pivotData.length === 0) return [];
@@ -532,12 +733,14 @@ export default function SOHAnalysisPage() {
   // Executive Calculation Summary & Condition Breakdown
   const calculationSummary = useMemo(() => {
     if (!detailedTableData || detailedTableData.length === 0) {
-      return { totalOH: 0, totalTO: 0, totalVessel: 0, totalSupply: 0, totalTarget: 0, globalRatio: 0, globalStatus: 'N/A', badgeColor: 'bg-slate-700/50 text-slate-300 border-slate-600', countAman: 0, countHati: 0, countBahaya: 0 };
+      return { totalOH: 0, totalTO: 0, totalVessel: 0, totalSupply: 0, totalTargetSales: 0, totalOutstanding: 0, totalSalesBerjalan: 0, totalEffectiveTarget: 0, globalRatio: 0, globalStatus: 'N/A', badgeColor: 'bg-slate-700/50 text-slate-300 border-slate-600', countAman: 0, countHati: 0, countBahaya: 0, totalItems: 0 };
     }
     let totalOH = 0;
     let totalTO = 0;
     let totalVessel = 0;
-    let totalTarget = 0;
+    let totalTargetSales = 0;
+    let totalOutstanding = 0;
+    let totalSalesBerjalan = 0;
     let countAman = 0;
     let countHati = 0;
     let countBahaya = 0;
@@ -546,15 +749,19 @@ export default function SOHAnalysisPage() {
       totalOH += (row['On Hand'] || 0);
       totalTO += (row['TO'] || 0);
       totalVessel += (row['VESSEL'] || 0);
-      totalTarget += (row['Outstanding Target Sales'] || 0);
+      totalTargetSales += (row['Target Sales'] || 0);
+      totalOutstanding += (row['Outstanding Target'] || 0);
+      totalSalesBerjalan += (row['Sales Berjalan'] || 0);
       if (row.status === 'Aman') countAman++;
       else if (row.status === 'Hati-Hati') countHati++;
       else if (row.status === 'Bahaya') countBahaya++;
     }
 
     const totalSupply = totalOH + totalTO + totalVessel;
-    const globalRatio = totalTarget > 0 ? Number((totalSupply / totalTarget).toFixed(2)) : 0;
-    let globalStatus = '⚪ N/A (Target 0)';
+    const totalEffectiveTarget = Math.max(0, totalOutstanding - totalSalesBerjalan);
+    const globalRatio = totalEffectiveTarget > 0 ? Number((totalSupply / totalEffectiveTarget).toFixed(2)) : 0;
+    
+    let globalStatus = '⚪ N/A (Target <= 0)';
     let badgeColor = 'bg-slate-700/50 text-slate-300 border border-slate-600';
     if (globalRatio > 1.25) {
       globalStatus = '🟢 AMAN (Rasio > 1.25)';
@@ -562,7 +769,7 @@ export default function SOHAnalysisPage() {
     } else if (globalRatio >= 1.0) {
       globalStatus = '🟡 HATI-HATI (Rasio 1.0 - 1.25)';
       badgeColor = 'bg-amber-500/20 text-amber-400 border border-amber-500/40';
-    } else if (totalTarget > 0) {
+    } else if (totalEffectiveTarget > 0) {
       globalStatus = '🔴 BAHAYA (Rasio < 1.0)';
       badgeColor = 'bg-rose-500/20 text-rose-400 border border-rose-500/40 animate-pulse';
     }
@@ -572,7 +779,10 @@ export default function SOHAnalysisPage() {
       totalTO: Math.round(totalTO),
       totalVessel: Math.round(totalVessel),
       totalSupply: Math.round(totalSupply),
-      totalTarget: Math.round(totalTarget),
+      totalTargetSales: Math.round(totalTargetSales),
+      totalOutstanding: Math.round(totalOutstanding),
+      totalSalesBerjalan: Math.round(totalSalesBerjalan),
+      totalEffectiveTarget: Math.round(totalEffectiveTarget),
       globalRatio,
       globalStatus,
       badgeColor,
@@ -584,31 +794,43 @@ export default function SOHAnalysisPage() {
   }, [detailedTableData]);
 
   const handleExport = () => {
-    if (!parsed || !parsed.data || displayedSohTableData.length === 0) return;
+    if (!currentData || !currentData.data || displayedSohTableData.length === 0) return;
     const header = [
       'Cabang',
+      'Grup',
       'Kategori Item',
+      'Status DOI',
+      'Status Insentif',
       'On Hand (SOH)',
       'Total TO (W1-W4)',
       'Total Vessel (W1-W4)',
       'Total Pasokan (OH+TO+Vessel)',
       'Plan Loading',
-      'Outstanding Target Sales',
-      'Hasil Hitungan (Rasio Pasokan vs Target)',
+      'Target Sales',
+      'Outstanding Target',
+      'Sales Berjalan',
+      'Target Efektif (Outstanding - Sales Berjalan)',
+      'Hasil Hitungan (Rasio Pasokan vs Target Efektif)',
       'Kesimpulan Kondisi'
     ].map(h => `"${h}"`).join(',');
     const lines = [header];
 
     displayedSohTableData.forEach(row => {
       const line = [
-        `"${String(row.cabang).replace(/"/g, '""')}"`,
-        `"${String(row.category).replace(/"/g, '""')}"`,
+        `"${String(row.cabang || '').replace(/"/g, '""')}"`,
+        `"${String(row.grup || '').replace(/"/g, '""')}"`,
+        `"${String(row.category || '').replace(/"/g, '""')}"`,
+        `"${String(row.statusDoi || '').replace(/"/g, '""')}"`,
+        `"${String(row.statusInsentif || '').replace(/"/g, '""')}"`,
         Math.round(row['On Hand'] || 0),
         Math.round(row['TO'] || 0),
         Math.round(row['VESSEL'] || 0),
-        Math.round(row.totalSupply || (row['On Hand'] + row['TO'] + row['VESSEL']) || 0),
+        Math.round(row.totalSupply || 0),
         Math.round(row['PLAN LOADING'] || 0),
-        Math.round(row['Outstanding Target Sales'] || 0),
+        Math.round(row['Target Sales'] || 0),
+        Math.round(row['Outstanding Target'] || 0),
+        Math.round(row['Sales Berjalan'] || 0),
+        Math.round(row.effectiveTarget || 0),
         row.ratio || 0,
         `"${row.status}"`
       ].join(',');
@@ -619,11 +841,14 @@ export default function SOHAnalysisPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = getStandardFilename(`SOH_TO_Komparatif_Detail_${activeScenario}`, new Date().toISOString(), 'csv');
+    link.download = getStandardFilename(`SOH_TO_Komparatif_Detail_${selectedSheetName}_${activeScenario}`, new Date().toISOString(), 'csv');
     link.click();
     URL.revokeObjectURL(url);
     toast.success('📊 Hasil Analisis SOH & TO Detail Berhasil Diekspor!');
   };
+
+  const isValueMode = Boolean(currentData?.sheetNames && selectedSheetName && (selectedSheetName.toLowerCase().includes('val') || selectedSheetName.toLowerCase().includes('rp')));
+  const unitLabel = isValueMode ? 'Rp / Value' : 'Qty';
 
   return (
     <div className="space-y-8 pb-16 min-h-screen animate-fade-in text-foreground">
@@ -710,6 +935,46 @@ export default function SOHAnalysisPage() {
         </GlassCard>
       )}
 
+      {/* ─── SHEET SWITCHER (NILAI QTY VS NILAI VALUE) ─── */}
+      {parsed?.sheetNames && parsed.sheetNames.length > 0 && (
+        <div className="p-5 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-950 to-slate-900 border border-emerald-500/30 shadow-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <h3 className="text-base font-black text-white flex items-center gap-2">
+              <FileSpreadsheet className="w-5 h-5 text-emerald-400" />
+              Pilih Sumber Data / Sheet Evaluasi ({unitLabel}):
+            </h3>
+            <p className="text-xs text-slate-400">
+              Beralih secara instan antara sheet <span className="text-emerald-400 font-bold">Nilai QTY</span> dan <span className="text-cyan-400 font-bold">Nilai VALUE (Rp)</span> untuk analisis komparatif pasokan terhadap target penjualan.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+            {parsed.sheetNames.map((sheet: string) => {
+              const isActive = selectedSheetName === sheet;
+              const isValue = sheet.toLowerCase().includes('val') || sheet.toLowerCase().includes('rp');
+              return (
+                <button
+                  key={sheet}
+                  onClick={() => {
+                    setSelectedSheetName(sheet);
+                    toast.success(`Beralih ke Sheet: ${sheet}`);
+                  }}
+                  className={`flex-1 sm:flex-none px-5 py-3 rounded-xl font-black text-xs sm:text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-2.5 shadow-xl border ${
+                    isActive
+                      ? isValue
+                        ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white border-cyan-400 scale-105 shadow-cyan-500/25'
+                        : 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-emerald-400 scale-105 shadow-emerald-500/25'
+                      : 'bg-slate-900 text-slate-300 border-slate-700 hover:border-slate-500 hover:bg-slate-800'
+                  }`}
+                >
+                  <FileSpreadsheet className={`w-4 h-4 ${isActive ? 'text-white' : isValue ? 'text-cyan-400' : 'text-emerald-400'}`} />
+                  {sheet}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* ─── TAB SWITCHER 3 JALUR SKENARIO ANALISIS ─── */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
@@ -760,14 +1025,14 @@ export default function SOHAnalysisPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
         <KPICard
           title="Total On Hand Fisik"
-          value={`${totalOnHand.toLocaleString('id-ID')} Qty`}
+          value={`${totalOnHand.toLocaleString('id-ID')} ${unitLabel}`}
           trend="Siap Jual Gudang Cabang"
           icon={<Package className="w-5 h-5 text-emerald-400" />}
           className="border-emerald-500/20 bg-emerald-500/5 hover:border-emerald-500/40 transition"
         />
         <KPICard
           title="Total Inbound (On Order)"
-          value={`${totalInbound.toLocaleString('id-ID')} Qty`}
+          value={`${totalInbound.toLocaleString('id-ID')} ${unitLabel}`}
           trend="Gabungan Vessel + TO + Loading"
           icon={<TrendingUp className="w-5 h-5 text-blue-400" />}
           className="border-blue-500/20 bg-blue-500/5 hover:border-blue-500/40 transition"
@@ -776,7 +1041,7 @@ export default function SOHAnalysisPage() {
 
       {/* ─── FILTER CONTROLS & SELECTION (EXPANDED & OVERFLOW-VISIBLE) ─── */}
       <GlassCard allowOverflow={true} className="p-6 border-slate-800 bg-slate-900/90 backdrop-blur-xl mb-10 shadow-xl">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <div className="space-y-2">
             <label className="text-xs font-bold text-slate-300 mb-1 block uppercase tracking-wider">🏢 Filter Cabang:</label>
             <MultiSelect
@@ -798,11 +1063,31 @@ export default function SOHAnalysisPage() {
             />
           </div>
           <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-300 mb-1 block uppercase tracking-wider">🔖 Filter Status DOI:</label>
+            <MultiSelect
+              options={dois}
+              selected={selectedDoi}
+              onChange={setSelectedDoi}
+              selectAllLabel="Semua Status DOI"
+              placeholder="Pilih DOI..."
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-300 mb-1 block uppercase tracking-wider">🏆 Filter Insentif:</label>
+            <MultiSelect
+              options={insentifs}
+              selected={selectedInsentif}
+              onChange={setSelectedInsentif}
+              selectAllLabel="Semua Insentif"
+              placeholder="Pilih Insentif..."
+            />
+          </div>
+          <div className="space-y-2">
             <label className="text-xs font-bold text-slate-300 mb-1 block uppercase tracking-wider">📍 Sorot Grafik Cabang:</label>
             <select
               value={selectedCabangForChart}
               onChange={(e) => setSelectedCabangForChart(e.target.value)}
-              className="w-full min-h-[44px] rounded-xl border border-slate-700 bg-slate-950/90 px-3.5 py-2.5 text-sm text-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/30 outline-none transition font-semibold cursor-pointer shadow-md"
+              className="w-full min-h-[44px] rounded-xl border border-slate-700 bg-slate-950/90 px-3.5 py-2.5 text-xs text-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/30 outline-none transition font-semibold cursor-pointer shadow-md"
             >
               <option value="All">📊 Semua Cabang (Gabungan)</option>
               {cabangs.filter(c => c !== 'All').map(c => (
@@ -823,7 +1108,7 @@ export default function SOHAnalysisPage() {
                 {chartMode === 'weekly' ? 'Grafik Grouping Mingguan: TO vs Vessel per Kategori (W1 - W4)' : chartMode === 'stock' ? 'Detail On Hand (Fisik) per Kategori Barang' : 'Grafik Komparasi Pilar SOH & Inbound per Cabang'}
               </h3>
               <p className="text-xs text-slate-400 mt-1">
-                Sorotan: <b className="text-cyan-400">{selectedCabangForChart === 'All' ? 'Seluruh Cabang' : selectedCabangForChart}</b> • Skenario Aktif: <b className="text-amber-300">{activeScenario.toUpperCase()}</b>
+                Sorotan: <b className="text-cyan-400">{selectedCabangForChart === 'All' ? 'Seluruh Cabang' : selectedCabangForChart}</b> • Skenario Aktif: <b className="text-amber-300">{activeScenario.toUpperCase()}</b> • Satuan: <b className="text-emerald-400">{unitLabel}</b>
               </p>
             </div>
 
@@ -873,15 +1158,18 @@ export default function SOHAnalysisPage() {
                   <XAxis dataKey="week" stroke="#94a3b8" tick={{ fill: '#e2e8f0', fontSize: 13, fontWeight: 700 }} height={40} />
                   <YAxis stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 12 }} />
                   <Tooltip
-                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#f97316', borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.5)', fontSize: '12px' }}
-                    labelStyle={{ color: '#38bdf8', fontWeight: 'bold', borderBottom: '1px solid #334155', paddingBottom: '4px' }}
+                    cursor={{ fill: 'rgba(255, 255, 255, 0.08)', stroke: '#f97316', strokeWidth: 1 }}
+                    contentStyle={{ backgroundColor: '#020617', borderColor: '#f97316', borderRadius: '12px', boxShadow: '0 10px 30px rgba(0,0,0,0.9)', color: '#ffffff', opacity: 1, padding: '12px', zIndex: 100 }}
+                    labelStyle={{ color: '#38bdf8', fontWeight: 'bold', borderBottom: '1px solid #334155', paddingBottom: '6px', marginBottom: '6px' }}
+                    itemStyle={{ color: '#f8fafc', fontWeight: 700, padding: '2px 0' }}
+                    formatter={(value: any) => [`${Number(value).toLocaleString('id-ID')} ${unitLabel}`, undefined]}
                   />
                   <Legend wrapperStyle={{ paddingTop: '16px', fontSize: '11px', fontWeight: 'bold' }} />
                   {categories.filter(c => c !== 'All').map((cat, idx) => (
                     <Bar key={`to-${cat}`} dataKey={`${cat} (TO)`} name={`${cat} (TO)`} stackId="TO" fill={TO_COLORS[idx % TO_COLORS.length]} maxBarSize={45} />
                   ))}
                   {categories.filter(c => c !== 'All').map((cat, idx) => (
-                    <Bar key={`vessel-${cat}`} dataKey={`${cat} (Vessel)`} name={`${cat} (Vessel)`} stackId="Vessel" fill={VESSEL_COLORS[idx % VESSEL_COLORS.length]} stroke="#e2e8f0" strokeWidth={1} maxBarSize={45} opacity={0.9} />
+                    <Bar key={`vessel-${cat}`} dataKey={`${cat} (Vessel)`} name={`${cat} (Vessel)`} stackId="Vessel" fill={VESSEL_COLORS[idx % VESSEL_COLORS.length]} stroke="#e2e8f0" strokeWidth={1} maxBarSize={45} opacity={0.95} />
                   ))}
                 </BarChart>
               ) : chartMode === 'stock' ? (
@@ -890,9 +1178,11 @@ export default function SOHAnalysisPage() {
                   <XAxis dataKey="category" stroke="#94a3b8" tick={{ fill: '#e2e8f0', fontSize: 12, fontWeight: 600 }} angle={-15} textAnchor="end" height={60} />
                   <YAxis stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 12 }} />
                   <Tooltip
-                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#10b981', borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}
-                    labelStyle={{ color: '#38bdf8', fontWeight: 'bold', borderBottom: '1px solid #334155', paddingBottom: '4px' }}
-                    formatter={(value: any) => [`${Number(value).toLocaleString('id-ID')} Qty`, 'On Hand Fisik']}
+                    cursor={{ fill: 'rgba(255, 255, 255, 0.08)', stroke: '#10b981', strokeWidth: 1 }}
+                    contentStyle={{ backgroundColor: '#020617', borderColor: '#10b981', borderRadius: '12px', boxShadow: '0 10px 30px rgba(0,0,0,0.9)', color: '#ffffff', opacity: 1, padding: '12px', zIndex: 100 }}
+                    labelStyle={{ color: '#38bdf8', fontWeight: 'bold', borderBottom: '1px solid #334155', paddingBottom: '6px', marginBottom: '6px' }}
+                    itemStyle={{ color: '#f8fafc', fontWeight: 700 }}
+                    formatter={(value: any) => [`${Number(value).toLocaleString('id-ID')} ${unitLabel}`, 'On Hand Fisik']}
                   />
                   <Legend wrapperStyle={{ paddingTop: '16px', fontSize: '12px' }} />
                   <Bar dataKey="On Hand" name="On Hand (Fisik) per Kategori" radius={[6, 6, 0, 0]} maxBarSize={60}>
@@ -907,8 +1197,11 @@ export default function SOHAnalysisPage() {
                   <XAxis dataKey="cabang" stroke="#94a3b8" tick={{ fill: '#e2e8f0', fontSize: 12, fontWeight: 600 }} angle={-15} textAnchor="end" height={50} />
                   <YAxis stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 12 }} />
                   <Tooltip
-                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#10b981', borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}
-                    labelStyle={{ color: '#38bdf8', fontWeight: 'bold', borderBottom: '1px solid #334155', paddingBottom: '4px' }}
+                    cursor={{ fill: 'rgba(255, 255, 255, 0.08)', stroke: '#10b981', strokeWidth: 1 }}
+                    contentStyle={{ backgroundColor: '#020617', borderColor: '#10b981', borderRadius: '12px', boxShadow: '0 10px 30px rgba(0,0,0,0.9)', color: '#ffffff', opacity: 1, padding: '12px', zIndex: 100 }}
+                    labelStyle={{ color: '#38bdf8', fontWeight: 'bold', borderBottom: '1px solid #334155', paddingBottom: '6px', marginBottom: '6px' }}
+                    itemStyle={{ color: '#f8fafc', fontWeight: 700, padding: '2px 0' }}
+                    formatter={(value: any) => [`${Number(value).toLocaleString('id-ID')} ${unitLabel}`, undefined]}
                   />
                   <Legend wrapperStyle={{ paddingTop: '16px', fontSize: '12px' }} />
                   <Bar dataKey="On Hand" name="On Hand (Fisik)" fill="#10b981" stackId="a" />
@@ -922,92 +1215,188 @@ export default function SOHAnalysisPage() {
         </GlassCard>
       )}
 
-      {/* ─── NEW: PIE CHART % CATEGORY PER TOTAL (ON HAND + TO + VESSEL) ─── */}
-      {pieCategoryData && pieCategoryData.length > 0 && (
-        <GlassCard className="p-6 border-purple-500/30 bg-gradient-to-b from-slate-900/90 to-slate-950/90 shadow-2xl">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-4 mb-6 gap-3">
-            <div>
-              <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
-                <Layers className="w-5 h-5 text-purple-400" />
-                Pie Chart Kontribusi Kategori (% per Total On Hand + Semua TO + Semua Vessel)
-              </h3>
-              <p className="text-xs text-slate-400 mt-1">
-                Persentase proporsional total stok (Fisik & Dalam Perjalanan W1-W4) untuk tiap kategori barang di <b className="text-cyan-400">{selectedCabangForChart === 'All' ? 'Seluruh Cabang' : selectedCabangForChart}</b>.
-              </p>
-            </div>
+      {/* ─── PIE CHARTS: PROPORSIONAL PASOKAN (KATEGORI, STATUS DOI, & STATUS INSENTIF) ─── */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
+              <Layers className="w-5 h-5 text-purple-400" />
+              Analisis Kontribusi & Proporsi Pasokan (Kategori Item, Status DOI & Status Insentif)
+            </h2>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Proporsi total stok pasokan (On Hand + Semua TO + Semua Vessel) dalam satuan <b className="text-emerald-400">{unitLabel}</b> di <b className="text-cyan-400">{selectedCabangForChart === 'All' ? 'Seluruh Cabang' : selectedCabangForChart}</b>.
+            </p>
           </div>
+        </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
-            <div className="h-[350px] w-full flex items-center justify-center">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={pieCategoryData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={true}
-                    label={({ name, percentage }: any) => `${String(name || '').length > 15 ? String(name || '').slice(0, 14) + '..' : (name || 'Umum')} (${percentage || 0}%)`}
-                    outerRadius={115}
-                    innerRadius={45}
-                    paddingAngle={3}
-                    dataKey="value"
-                  >
-                    {pieCategoryData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} stroke="#0f172a" strokeWidth={2} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    formatter={(value: any, name: any, props: any) => [
-                      `${Number(value).toLocaleString('id-ID')} Qty (${props.payload.percentage}%)`,
-                      `Kategori: ${name}`
-                    ]}
-                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#a855f7', borderRadius: '12px', color: '#fff', boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-
-            <div className="space-y-3 max-h-[350px] overflow-y-auto pr-2">
-              <h4 className="text-xs font-black text-slate-300 uppercase tracking-wider mb-2 flex items-center gap-2">
-                📊 Rincian Porsi Stok per Kategori (OH + TO + Vessel):
-              </h4>
-              <div className="space-y-2">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* PIE 1: KATEGORI */}
+          {pieCategoryData && pieCategoryData.length > 0 && (
+            <GlassCard className="p-5 border-purple-500/30 bg-gradient-to-b from-slate-900/95 to-slate-950/95 shadow-2xl flex flex-col">
+              <h3 className="text-sm font-black text-purple-300 border-b border-slate-800 pb-3 mb-3 flex items-center gap-2">
+                🏷️ Porsi per Kategori Item
+              </h3>
+              <div className="h-[240px] w-full shrink-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={pieCategoryData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={true}
+                      label={({ name, percentage }: any) => `${String(name || '').length > 12 ? String(name || '').slice(0, 10) + '..' : (name || 'Umum')} (${percentage || 0}%)`}
+                      outerRadius={78}
+                      innerRadius={35}
+                      paddingAngle={3}
+                      dataKey="value"
+                    >
+                      {pieCategoryData.map((entry, index) => (
+                        <Cell key={`cell-cat-${index}`} fill={entry.color} stroke="#030712" strokeWidth={2} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(value: any, name: any, props: any) => [
+                        `${Number(value).toLocaleString('id-ID')} ${unitLabel} (${props.payload.percentage}%)`,
+                        `Kategori: ${name}`
+                      ]}
+                      contentStyle={{ backgroundColor: '#030712', borderColor: '#a855f7', borderRadius: '12px', color: '#fff', boxShadow: '0 10px 25px rgba(0,0,0,0.8)', padding: '10px' }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="space-y-2 mt-3 flex-1 overflow-y-auto max-h-[220px] pr-1">
                 {pieCategoryData.map((item) => (
-                  <div key={item.name} className="flex items-center justify-between p-3 rounded-xl bg-slate-800/60 border border-slate-700/50 hover:border-slate-600 transition">
-                    <div className="flex items-center gap-3">
-                      <span className="w-3.5 h-3.5 rounded-full shrink-0 shadow-sm" style={{ backgroundColor: item.color }} />
-                      <span className="text-xs sm:text-sm font-bold text-white truncate max-w-[170px] sm:max-w-[220px]" title={item.name}>
-                        {item.name}
-                      </span>
+                  <div key={item.name} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-800/60 border border-slate-700/50 hover:border-slate-600 transition text-xs">
+                    <div className="flex items-center gap-2.5 truncate pr-2">
+                      <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
+                      <span className="font-bold text-white truncate" title={item.name}>{item.name}</span>
                     </div>
-                    <div className="flex items-center gap-2.5">
-                      <span className="text-xs font-mono font-extrabold text-slate-300">
-                        {item.value.toLocaleString('id-ID')} Qty
-                      </span>
-                      <span className="px-2 py-0.5 rounded-md text-[11px] font-black text-white shadow-sm font-mono" style={{ backgroundColor: item.color }}>
-                        {item.percentage}%
-                      </span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="font-mono font-extrabold text-slate-300">{item.value.toLocaleString('id-ID')}</span>
+                      <span className="px-1.5 py-0.5 rounded-md text-[10px] font-black text-white font-mono" style={{ backgroundColor: item.color }}>{item.percentage}%</span>
                     </div>
                   </div>
                 ))}
               </div>
-            </div>
-          </div>
-        </GlassCard>
-      )}
+            </GlassCard>
+          )}
+
+          {/* PIE 2: STATUS DOI */}
+          {pieDoiData && pieDoiData.length > 0 && (
+            <GlassCard className="p-5 border-blue-500/30 bg-gradient-to-b from-slate-900/95 to-slate-950/95 shadow-2xl flex flex-col">
+              <h3 className="text-sm font-black text-blue-300 border-b border-slate-800 pb-3 mb-3 flex items-center gap-2">
+                🔖 Porsi per Status DOI
+              </h3>
+              <div className="h-[240px] w-full shrink-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={pieDoiData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={true}
+                      label={({ name, percentage }: any) => `${String(name || '').length > 12 ? String(name || '').slice(0, 10) + '..' : (name || 'Umum')} (${percentage || 0}%)`}
+                      outerRadius={78}
+                      innerRadius={35}
+                      paddingAngle={3}
+                      dataKey="value"
+                    >
+                      {pieDoiData.map((entry, index) => (
+                        <Cell key={`cell-doi-${index}`} fill={entry.color} stroke="#030712" strokeWidth={2} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(value: any, name: any, props: any) => [
+                        `${Number(value).toLocaleString('id-ID')} ${unitLabel} (${props.payload.percentage}%)`,
+                        `Status DOI: ${name}`
+                      ]}
+                      contentStyle={{ backgroundColor: '#030712', borderColor: '#3b82f6', borderRadius: '12px', color: '#fff', boxShadow: '0 10px 25px rgba(0,0,0,0.8)', padding: '10px' }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="space-y-2 mt-3 flex-1 overflow-y-auto max-h-[220px] pr-1">
+                {pieDoiData.map((item) => (
+                  <div key={item.name} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-800/60 border border-slate-700/50 hover:border-slate-600 transition text-xs">
+                    <div className="flex items-center gap-2.5 truncate pr-2">
+                      <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
+                      <span className="font-bold text-white truncate" title={item.name}>{item.name}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="font-mono font-extrabold text-slate-300">{item.value.toLocaleString('id-ID')}</span>
+                      <span className="px-1.5 py-0.5 rounded-md text-[10px] font-black text-white font-mono" style={{ backgroundColor: item.color }}>{item.percentage}%</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </GlassCard>
+          )}
+
+          {/* PIE 3: STATUS INSENTIF */}
+          {pieInsentifData && pieInsentifData.length > 0 && (
+            <GlassCard className="p-5 border-emerald-500/30 bg-gradient-to-b from-slate-900/95 to-slate-950/95 shadow-2xl flex flex-col">
+              <h3 className="text-sm font-black text-emerald-300 border-b border-slate-800 pb-3 mb-3 flex items-center gap-2">
+                🏆 Porsi per Status Insentif
+              </h3>
+              <div className="h-[240px] w-full shrink-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={pieInsentifData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={true}
+                      label={({ name, percentage }: any) => `${String(name || '').length > 12 ? String(name || '').slice(0, 10) + '..' : (name || 'Umum')} (${percentage || 0}%)`}
+                      outerRadius={78}
+                      innerRadius={35}
+                      paddingAngle={3}
+                      dataKey="value"
+                    >
+                      {pieInsentifData.map((entry, index) => (
+                        <Cell key={`cell-ins-${index}`} fill={entry.color} stroke="#030712" strokeWidth={2} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(value: any, name: any, props: any) => [
+                        `${Number(value).toLocaleString('id-ID')} ${unitLabel} (${props.payload.percentage}%)`,
+                        `Status Insentif: ${name}`
+                      ]}
+                      contentStyle={{ backgroundColor: '#030712', borderColor: '#10b981', borderRadius: '12px', color: '#fff', boxShadow: '0 10px 25px rgba(0,0,0,0.8)', padding: '10px' }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="space-y-2 mt-3 flex-1 overflow-y-auto max-h-[220px] pr-1">
+                {pieInsentifData.map((item) => (
+                  <div key={item.name} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-800/60 border border-slate-700/50 hover:border-slate-600 transition text-xs">
+                    <div className="flex items-center gap-2.5 truncate pr-2">
+                      <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
+                      <span className="font-bold text-white truncate" title={item.name}>{item.name}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="font-mono font-extrabold text-slate-300">{item.value.toLocaleString('id-ID')}</span>
+                      <span className="px-1.5 py-0.5 rounded-md text-[10px] font-black text-white font-mono" style={{ backgroundColor: item.color }}>{item.percentage}%</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </GlassCard>
+          )}
+        </div>
+      </div>
 
       {/* ─── HASIL KESIMPULAN HITUNGAN (EXECUTIVE CALCULATION CONCLUSION) ─── */}
       <GlassCard className="p-6 border-amber-500/40 bg-gradient-to-r from-slate-900 via-slate-950 to-slate-900 shadow-2xl">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between border-b border-slate-800 pb-4 mb-6 gap-4">
           <div>
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider bg-amber-500/10 text-amber-400 border border-amber-500/20 mb-2.5">
-              <Sparkles className="w-3.5 h-3.5" /> Hasil Kesimpulan Hitungan Otomatis
+              <Sparkles className="w-3.5 h-3.5" /> Hasil Kesimpulan Hitungan Otomatis ({unitLabel})
             </div>
             <h3 className="text-lg sm:text-xl font-black text-white flex items-center gap-2">
-              Kesimpulan Rasio Pasokan vs Outstanding Target Sales
+              Kesimpulan Rasio Pasokan vs Target Efektif (Outstanding - Sales Berjalan)
             </h3>
             <p className="text-xs text-slate-400 mt-1">
-              Rumus Hitungan: <code className="px-2 py-0.5 bg-slate-800 text-amber-300 font-mono rounded font-bold">(On Hand + Semua TO + Semua Vessel) ÷ Outstanding Target Sales</code>
+              Rumus Hitungan: <code className="px-2 py-0.5 bg-slate-800 text-amber-300 font-mono rounded font-bold">(On Hand + Semua TO + Semua Vessel) ÷ (Outstanding Target - Sales Berjalan)</code>
             </p>
           </div>
 
@@ -1019,34 +1408,41 @@ export default function SOHAnalysisPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
           <div className="p-4 rounded-xl bg-slate-800/60 border border-slate-700/60 shadow-inner">
-            <span className="text-xs font-bold text-slate-400 block mb-1">📦 Total Pasokan (OH+TO+Vessel)</span>
-            <span className="text-base sm:text-xl font-black font-mono text-emerald-400">
-              {calculationSummary.totalSupply.toLocaleString('id-ID')} Qty
+            <span className="text-xs font-bold text-slate-400 block mb-1">📦 Total Pasokan (SOH+TO+Vessel)</span>
+            <span className="text-base sm:text-lg font-black font-mono text-emerald-400">
+              {calculationSummary.totalSupply.toLocaleString('id-ID')} {unitLabel}
             </span>
-            <span className="text-[11px] text-slate-400 block mt-1">Stok Fisik + Muatan W1-W4</span>
+            <span className="text-[11px] text-slate-400 block mt-1">Stok Fisik + Dalam Perjalanan</span>
           </div>
           <div className="p-4 rounded-xl bg-slate-800/60 border border-slate-700/60 shadow-inner">
-            <span className="text-xs font-bold text-slate-400 block mb-1">🎯 Outstanding Target Sales</span>
-            <span className="text-base sm:text-xl font-black font-mono text-amber-300">
-              {calculationSummary.totalTarget.toLocaleString('id-ID')} Qty
+            <span className="text-xs font-bold text-slate-400 block mb-1">🎯 Outstanding Target</span>
+            <span className="text-base sm:text-lg font-black font-mono text-amber-300">
+              {calculationSummary.totalOutstanding.toLocaleString('id-ID')} {unitLabel}
             </span>
-            <span className="text-[11px] text-slate-400 block mt-1">Total Kuota Target Penjualan</span>
+            <span className="text-[11px] text-slate-400 block mt-1">Target Belum Tercapai Awal</span>
           </div>
           <div className="p-4 rounded-xl bg-slate-800/60 border border-slate-700/60 shadow-inner">
-            <span className="text-xs font-bold text-slate-400 block mb-1">⚖️ Hasil Hitungan (Rasio)</span>
+            <span className="text-xs font-bold text-slate-400 block mb-1">🛒 Sales Berjalan</span>
+            <span className="text-base sm:text-lg font-black font-mono text-cyan-400">
+              {calculationSummary.totalSalesBerjalan.toLocaleString('id-ID')} {unitLabel}
+            </span>
+            <span className="text-[11px] text-slate-400 block mt-1">Penjualan Aktual Berlangsung</span>
+          </div>
+          <div className="p-4 rounded-xl bg-slate-800/60 border border-slate-700/60 shadow-inner">
+            <span className="text-xs font-bold text-slate-400 block mb-1">⚖️ Hasil Rasio vs Target Efektif</span>
             <span className="text-base sm:text-xl font-black font-mono text-white">
               {calculationSummary.globalRatio}x
             </span>
-            <span className="text-[11px] text-cyan-400 font-medium block mt-1">Indeks Ketersediaan Pasokan</span>
+            <span className="text-[11px] text-cyan-300 font-medium block mt-1">Target Efektif: {calculationSummary.totalEffectiveTarget.toLocaleString('id-ID')}</span>
           </div>
           <div className="p-4 rounded-xl bg-slate-800/60 border border-slate-700/60 shadow-inner">
             <span className="text-xs font-bold text-slate-400 block mb-1">📊 Rincian Kesimpulan Baris</span>
-            <div className="flex flex-wrap items-center gap-1.5 mt-1.5 font-mono text-[11px] font-black">
-              <span className="px-2 py-1 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" title="Aman (>1.25)">🟢 {calculationSummary.countAman} Aman</span>
-              <span className="px-2 py-1 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30" title="Hati-Hati (1.0-1.25)">🟡 {calculationSummary.countHati} Hati-Hati</span>
-              <span className="px-2 py-1 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30" title="Bahaya (<1.0)">🔴 {calculationSummary.countBahaya} Bahaya</span>
+            <div className="flex flex-wrap items-center gap-1 mt-1 font-mono text-[11px] font-black">
+              <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" title="Aman (>1.25)">🟢 {calculationSummary.countAman}</span>
+              <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30" title="Hati-Hati (1.0-1.25)">🟡 {calculationSummary.countHati}</span>
+              <span className="px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30" title="Bahaya (<1.0)">🔴 {calculationSummary.countBahaya}</span>
             </div>
           </div>
         </div>
@@ -1054,7 +1450,7 @@ export default function SOHAnalysisPage() {
         <div className="p-3.5 rounded-xl bg-slate-950/90 border border-slate-800 text-xs text-slate-300 flex flex-wrap items-center justify-between gap-3">
           <span className="flex items-center gap-2 font-medium">
             <Info className="w-4 h-4 text-cyan-400 shrink-0" />
-            <span><b>Logika Evaluasi Kondisi:</b> 🟢 <b>Aman</b> = Rasio &gt; 1.25 | 🟡 <b>Hati-Hati</b> = Rasio 1.00 s/d 1.25 | 🔴 <b>Bahaya</b> = Rasio &lt; 1.00 (Stok Tidak Mencukupi Target)</span>
+            <span><b>Logika Evaluasi Kondisi:</b> 🟢 <b>Aman</b> = Rasio &gt; 1.25 | 🟡 <b>Hati-Hati</b> = Rasio 1.00 s/d 1.25 | 🔴 <b>Bahaya</b> = Rasio &lt; 1.00 (Pasokan Tidak Mencukupi Sisa Target)</span>
           </span>
         </div>
       </GlassCard>
@@ -1191,19 +1587,37 @@ export default function SOHAnalysisPage() {
         )}
 
         <div className="overflow-x-auto rounded-xl border border-slate-800 max-h-[650px] overflow-y-auto">
-          <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[1250px]">
-            <thead className="bg-slate-950/95 text-slate-300 uppercase font-bold sticky top-0 z-20 shadow-md">
-              <tr className="border-b border-slate-800 text-[11px] tracking-wider text-center">
+          <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[1650px]">
+            <thead className="bg-slate-950/95 text-slate-300 uppercase font-bold sticky top-0 z-20 shadow-md text-[11px] tracking-wider text-center">
+              <tr className="border-b border-slate-800">
                 <th className="py-3.5 px-3 text-left">
                   <div className="flex items-center gap-1.5 justify-between">
                     <span>Cabang & Lokasi</span>
                     <button onClick={() => { setActiveSohColModal({ key: 'cabang', name: 'Cabang' }); setSohModalSearchInput(sohColFilters['cabang']?.search || ''); }} className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition"><Filter className="w-3.5 h-3.5 text-emerald-400" /></button>
                   </div>
                 </th>
+                <th className="py-3.5 px-2.5 border-l border-slate-800 text-left text-purple-400">
+                  <div className="flex items-center gap-1.5 justify-between">
+                    <span>👥 Grup</span>
+                    <button onClick={() => { setActiveSohColModal({ key: 'grup', name: 'Grup' }); setSohModalSearchInput(sohColFilters['grup']?.search || ''); }} className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition"><Filter className="w-3.5 h-3.5 text-purple-400" /></button>
+                  </div>
+                </th>
                 <th className="py-3.5 px-3 border-l border-slate-800 text-left text-cyan-400">
                   <div className="flex items-center gap-1.5 justify-between">
                     <span>🏷️ Kategori Item</span>
                     <button onClick={() => { setActiveSohColModal({ key: 'category', name: 'Kategori Item' }); setSohModalSearchInput(sohColFilters['category']?.search || ''); }} className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition"><Filter className="w-3.5 h-3.5 text-cyan-400" /></button>
+                  </div>
+                </th>
+                <th className="py-3.5 px-2.5 border-l border-slate-800 text-left text-emerald-300">
+                  <div className="flex items-center gap-1.5 justify-between">
+                    <span>🏆 Status Insentif</span>
+                    <button onClick={() => { setActiveSohColModal({ key: 'statusInsentif', name: 'Status Insentif' }); setSohModalSearchInput(sohColFilters['statusInsentif']?.search || ''); }} className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition"><Filter className="w-3.5 h-3.5 text-emerald-300" /></button>
+                  </div>
+                </th>
+                <th className="py-3.5 px-2.5 border-l border-slate-800 text-left text-blue-300">
+                  <div className="flex items-center gap-1.5 justify-between">
+                    <span>🔖 Status DOI</span>
+                    <button onClick={() => { setActiveSohColModal({ key: 'statusDoi', name: 'Status DOI' }); setSohModalSearchInput(sohColFilters['statusDoi']?.search || ''); }} className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition"><Filter className="w-3.5 h-3.5 text-blue-300" /></button>
                   </div>
                 </th>
                 <th className="py-3.5 px-2.5 border-l border-slate-800 text-emerald-400">
@@ -1242,6 +1656,18 @@ export default function SOHAnalysisPage() {
                     <button onClick={() => { setActiveSohColModal({ key: 'target', name: 'Outstanding Target' }); setSohModalSearchInput(sohColFilters['target']?.search || ''); }} className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition"><Filter className="w-3.5 h-3.5" /></button>
                   </div>
                 </th>
+                <th className="py-3.5 px-3 border-l border-slate-800 bg-slate-900 text-cyan-300">
+                  <div className="flex items-center gap-1 justify-between">
+                    <span>🛒 Sales Berjalan</span>
+                    <button onClick={() => { setActiveSohColModal({ key: 'salesBerjalan', name: 'Sales Berjalan' }); setSohModalSearchInput(sohColFilters['salesBerjalan']?.search || ''); }} className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition"><Filter className="w-3.5 h-3.5" /></button>
+                  </div>
+                </th>
+                <th className="py-3.5 px-3 border-l border-slate-800 bg-amber-950/30 text-amber-300 font-extrabold">
+                  <div className="flex items-center gap-1 justify-between">
+                    <span>📊 Target Efektif</span>
+                    <button onClick={() => { setActiveSohColModal({ key: 'effectiveTarget', name: 'Target Efektif' }); setSohModalSearchInput(sohColFilters['effectiveTarget']?.search || ''); }} className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition"><Filter className="w-3.5 h-3.5" /></button>
+                  </div>
+                </th>
                 <th className="py-3.5 px-3 border-l border-slate-800 text-cyan-300">
                   <div className="flex items-center gap-1 justify-between">
                     <span>📈 Hasil Hitungan (Rasio)</span>
@@ -1266,9 +1692,22 @@ export default function SOHAnalysisPage() {
                   <td className="py-3 px-3 text-left align-middle font-black text-white text-sm">
                     {row.cabang}
                   </td>
+                  <td className="py-3 px-2.5 border-l border-slate-800 text-left align-middle font-semibold text-purple-300">
+                    {row.grup || '-'}
+                  </td>
                   <td className="py-3 px-3 border-l border-slate-800 text-left align-middle">
-                    <span className="inline-block px-2.5 py-1 rounded-lg text-xs font-semibold text-cyan-300 bg-cyan-950/60 border border-cyan-800/50 truncate max-w-[200px]" title={row.category}>
+                    <span className="inline-block px-2.5 py-1 rounded-lg text-xs font-semibold text-cyan-300 bg-cyan-950/60 border border-cyan-800/50 truncate max-w-[180px]" title={row.category}>
                       {row.category}
+                    </span>
+                  </td>
+                  <td className="py-3 px-2.5 border-l border-slate-800 text-left align-middle">
+                    <span className="inline-block px-2 py-0.5 rounded text-[11px] font-bold text-emerald-300 bg-emerald-950/40 border border-emerald-800/40 truncate max-w-[140px]" title={row.statusInsentif}>
+                      {row.statusInsentif || '-'}
+                    </span>
+                  </td>
+                  <td className="py-3 px-2.5 border-l border-slate-800 text-left align-middle">
+                    <span className="inline-block px-2 py-0.5 rounded text-[11px] font-bold text-blue-300 bg-blue-950/40 border border-blue-800/40 truncate max-w-[140px]" title={row.statusDoi}>
+                      {row.statusDoi || '-'}
                     </span>
                   </td>
                   <td className="py-3 px-2.5 border-l border-slate-800 font-extrabold text-emerald-400 text-sm font-mono">
@@ -1286,11 +1725,17 @@ export default function SOHAnalysisPage() {
                   <td className="py-3 px-2.5 border-l border-slate-800 font-mono text-purple-300">
                     {Math.round(row['PLAN LOADING'] || 0).toLocaleString('id-ID')}
                   </td>
-                  <td className="py-3 px-3 border-l border-slate-800 font-extrabold text-amber-300 font-mono text-sm bg-slate-950/40">
+                  <td className="py-3 px-3 border-l border-slate-800 font-bold text-amber-300 font-mono text-sm bg-slate-950/40">
                     {row['Outstanding Target Sales'] > 0 ? Math.round(row['Outstanding Target Sales']).toLocaleString('id-ID') : '-'}
                   </td>
-                  <td className="py-3 px-3 border-l border-slate-800 font-black font-mono text-sm text-cyan-300">
-                    {row['Outstanding Target Sales'] > 0 ? `${row.ratio}x` : 'N/A'}
+                  <td className="py-3 px-3 border-l border-slate-800 font-bold text-cyan-300 font-mono text-sm bg-slate-950/40">
+                    {row['Sales Berjalan'] > 0 ? Math.round(row['Sales Berjalan']).toLocaleString('id-ID') : '-'}
+                  </td>
+                  <td className="py-3 px-3 border-l border-slate-800 bg-amber-950/20 font-black font-mono text-amber-300 text-sm">
+                    {row.effectiveTarget > 0 ? Math.round(row.effectiveTarget).toLocaleString('id-ID') : (row.effectiveTarget < 0 ? `(${Math.round(Math.abs(row.effectiveTarget)).toLocaleString('id-ID')})` : '-')}
+                  </td>
+                  <td className="py-3 px-3 border-l border-slate-800 font-black font-mono text-sm text-white">
+                    {row.effectiveTarget > 0 ? `${row.ratio}x` : 'N/A'}
                   </td>
                   <td className="py-3 px-3 border-l border-slate-800">
                     <div className="flex items-center justify-center">
