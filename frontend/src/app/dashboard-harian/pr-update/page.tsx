@@ -10,7 +10,8 @@ import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import {
   FileBarChart, Info, Calendar, BarChart3, Clock, Table as TableIcon, Download,
   Sparkles, Layers, HelpCircle, FileSpreadsheet, Zap, AlertTriangle, CheckCircle2,
-  TrendingUp, Truck, AlertCircle, ExternalLink, Globe, Filter, Search, X, Check, RefreshCw
+  TrendingUp, Truck, AlertCircle, ExternalLink, Globe, Filter, Search, X, Check, RefreshCw,
+  Package, Timer, ShieldAlert
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
@@ -115,6 +116,74 @@ const CustomStackedTooltip = ({ active, payload, label }: any) => {
   }
   return null;
 };
+
+const CustomContainerTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    const poList: string[] = data.poList || [];
+    return (
+      <div className="bg-[#090e1a] text-white p-4 rounded-xl border-2 border-cyan-500 shadow-[0_15px_60px_rgba(0,182,212,0.35)] z-[999999] max-w-[340px] pointer-events-none select-none">
+        <div className="border-b border-slate-700/80 pb-2 mb-2 flex items-center justify-between gap-3">
+          <span className="text-cyan-400 font-extrabold text-sm tracking-wide">🏢 {label}</span>
+          <span className="text-xs px-2 py-0.5 bg-cyan-950/90 border border-cyan-500/50 rounded-md font-bold text-cyan-300 shadow-sm">
+            {data["Jumlah Container"]} Container
+          </span>
+        </div>
+        <div className="text-xs text-slate-300 font-medium space-y-2">
+          <div className="flex items-center justify-between bg-slate-900 px-3 py-2 rounded-lg border border-slate-800">
+            <span className="text-slate-400 font-semibold">Total Container (Distinct PO):</span>
+            <span className="font-extrabold text-white text-sm bg-cyan-500/20 px-2.5 py-0.5 rounded text-cyan-300 border border-cyan-500/40">
+              {data["Jumlah Container"]} Unit
+            </span>
+          </div>
+          {poList.length > 0 && (
+            <div>
+              <div className="text-[11px] font-bold text-slate-400 mb-1">Daftar No. PO di Cabang Ini:</div>
+              <div className="max-h-[140px] overflow-y-auto bg-slate-950/90 p-2 rounded-lg border border-slate-800 space-y-1 font-mono text-[11px] text-amber-300">
+                {poList.slice(0, 10).map((po, i) => (
+                  <div key={i} className="truncate">• {po}</div>
+                ))}
+                {poList.length > 10 && (
+                  <div className="text-slate-400 font-sans italic text-[10px]">...+ {poList.length - 10} PO lainnya</div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
+
+function parseDateVal(val: any): Date | null {
+  if (val === undefined || val === null || val === '' || val === '-') return null;
+  const str = String(val).trim();
+  const num = Number(str);
+  if (!isNaN(num) && num > 30000 && num < 70000) {
+    const d = new Date((num - 25569) * 86400 * 1000);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
+  if (str.match(/^\d{4}-\d{2}-\d{2}/)) {
+    const parts = str.split('T')[0].split('-');
+    const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    d.setHours(0, 0, 0, 0);
+    return !isNaN(d.getTime()) ? d : null;
+  }
+  const matchIndo = str.match(/^(\d{1,2})[/\-. ](\d{1,2})[/\-. ](\d{4})$/);
+  if (matchIndo) {
+    const d = new Date(Number(matchIndo[3]), Number(matchIndo[2]) - 1, Number(matchIndo[1]));
+    d.setHours(0, 0, 0, 0);
+    return !isNaN(d.getTime()) ? d : null;
+  }
+  const dFallback = new Date(str);
+  if (!isNaN(dFallback.getTime())) {
+    dFallback.setHours(0, 0, 0, 0);
+    return dFallback;
+  }
+  return null;
+}
 
 function getDirectTrackingUrl(containerNo?: string, carrierName?: string): { url: string; carrier: string } {
   const no = (containerNo || "").trim().toUpperCase();
@@ -261,6 +330,10 @@ function generateDemoPRUpdate(): ParsedData {
       const bl = (stat === 'ON VESSEL' || stat === 'READY' || stat === 'SPJM') ? bls[(idx + cIdx) % bls.length] : '-';
       const carrier = (stat === 'ON VESSEL' || stat === 'READY' || stat === 'SPJM') ? carriers[(idx + cIdx) % carriers.length] : '-';
       
+      const isOverdueTarget = (stat === 'SPJM' || stat === 'HOLD DELIVERY' || stat === 'ON VESSEL') && ((idx + cIdx) % 2 === 0 || cIdx <= 2);
+      const dayOffset = isOverdueTarget ? -((idx * 3 + cIdx * 2) % 25 + 3) : ((idx + 1) * 4 + (cIdx % 3));
+      const tglEta = new Date(Date.now() + dayOffset * 86400000).toISOString().slice(0, 10);
+      
       data.push({
         'PO': `PO-2026-${poCounter++}`,
         'NoPR': `PR-08-${poCounter}`,
@@ -272,7 +345,7 @@ function generateDemoPRUpdate(): ParsedData {
         'No Container': cont,
         'bl': bl,
         'Shipping Line': carrier,
-        'Tanggal ETA': new Date(Date.now() + (idx * 2 - 1) * 86400000).toISOString().slice(0, 10),
+        'Tanggal ETA': tglEta,
         'Week ETA': eta,
         'Qty': qty
       });
@@ -307,7 +380,7 @@ export default function PRUpdatePage() {
   const [selectedCategory, setSelectedCategory] = useState<string[]>(['All']);
   const [selectedEta, setSelectedEta] = useState<string[]>(['All']);
   const [selectedStatusCompile, setSelectedStatusCompile] = useState<string[]>(['All']);
-  const [chartViewMode, setChartViewMode] = useState<'eta' | 'cabang'>('eta');
+  const [chartViewMode, setChartViewMode] = useState<'eta' | 'cabang' | 'container'>('eta');
 
   // Excel-like column filters for Table Detail
   const [colFilters, setColFilters] = useState<Record<string, { search: string; selected: string[] }>>({});
@@ -384,6 +457,23 @@ export default function PRUpdatePage() {
   const colBl = useMemo(() => parsed ? findColumn(parsed.headers, ['bill of lading', 'no bl', 'no. bl', 'no_bl', 'nomor bl', 'b/l', 'no b/l', 'bl no', 'bl_no', 'no booking', 'booking', 'nomor booking', 'bl']) : undefined, [parsed]);
   const colCarrier = useMemo(() => parsed ? findColumn(parsed.headers, ['shipping line', 'shipping_line', 'shippingline', 'pelayaran', 'carrier', 'maskapai', 'shipping', 'line']) : undefined, [parsed]);
 
+  const colTanggalEta = useMemo(() => {
+    if (!parsed) return undefined;
+    const explicit = findColumn(parsed.headers, ['tanggal eta', 'tgl eta', 'eta date', 'eta_date', 'tanggal_eta', 'tgl_eta', 'eta fix', 'eta_port']);
+    if (explicit) return explicit;
+    return parsed.headers.find(h => h.toLowerCase().includes('eta') && !h.toLowerCase().includes('week') && !h.toLowerCase().includes('minggu'));
+  }, [parsed]);
+
+  const rawDataProcessingDate = useMemo(() => {
+    if (parsed?.processed_at) {
+      const d = parseDateVal(parsed.processed_at);
+      if (d) return d;
+    }
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    return now;
+  }, [parsed]);
+
   // Linked Filter options
   const cabangs = useMemo(() => {
     if (!parsed || !colCabang) return [];
@@ -446,9 +536,60 @@ export default function PRUpdatePage() {
       });
   }, [parsed, selectedCabang, selectedCategory, selectedEta, selectedStatusCompile, colCabang, colCategory, colGrup, colEta, colQty, colStatus, activeScenario]);
 
+  // Insight PO Overdue ETA (SPJM, Hold Delivery, On Vessel)
+  const overdueInsights = useMemo(() => {
+    if (!parsed || filtered.length === 0 || !colTanggalEta) return [];
+    const results: any[] = [];
+
+    for (const row of filtered) {
+      const stat = colStatus ? (String(row[colStatus] || '').trim().toUpperCase()) : '';
+      const isTargetStatus = stat.includes('SPJM') || stat.includes('HOLD') || stat.includes('VESSEL') || stat.includes('DELAY') || stat.includes('SHIP');
+      if (!isTargetStatus) continue;
+
+      const rawEta = row[colTanggalEta];
+      const etaDate = parseDateVal(rawEta);
+      if (!etaDate) continue;
+
+      const diffMillis = rawDataProcessingDate.getTime() - etaDate.getTime();
+      const diffDays = Math.floor(diffMillis / (1000 * 60 * 60 * 24));
+      
+      if (diffDays > 0) {
+        const q = colQty && row[colQty] != null ? Math.round(Number(String(row[colQty]).replace(/[^0-9.-]+/g, '')) || 0) : 0;
+        const cbg = colCabang ? (row[colCabang] || 'Unknown') : 'Unknown';
+        const po = colPo ? (row[colPo] || '-') : '-';
+        const desc = colDesc ? (row[colDesc] || '-') : '-';
+        const grup = colGrup ? (row[colGrup] || '-') : '-';
+        const cat = colCategory ? (row[colCategory] || '-') : '-';
+        const cont = colContainer ? (row[colContainer] || '-') : '-';
+        const carrier = colCarrier ? (row[colCarrier] || '-') : '-';
+        
+        let statusCategory = 'VESSEL';
+        if (stat.includes('SPJM')) statusCategory = 'SPJM';
+        else if (stat.includes('HOLD') || stat.includes('DELAY')) statusCategory = 'HOLD';
+        
+        results.push({
+          cabang: cbg,
+          po: po,
+          deskripsi: desc,
+          grup: grup,
+          category: cat,
+          status: stat,
+          statusCategory,
+          etaRaw: rawEta,
+          etaFormatted: etaDate.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }),
+          overdueDays: diffDays,
+          qty: q,
+          container: cont,
+          carrier: carrier
+        });
+      }
+    }
+    return results.sort((a, b) => b.overdueDays - a.overdueDays);
+  }, [parsed, filtered, colTanggalEta, colStatus, colQty, colCabang, colPo, colDesc, colGrup, colCategory, colContainer, colCarrier, rawDataProcessingDate]);
+
   // Chart data: Grouped by Cabang, Week ETA & by Category, Count by STATUS Compile and Category
-  const { chartData, chartEtaData, chartCategoryData, statusList, categoryList, totalQty, holdCount } = useMemo(() => {
-    if (!parsed || filtered.length === 0) return { chartData: [], chartEtaData: [], chartCategoryData: [], statusList: [], categoryList: [], totalQty: 0, holdCount: 0 };
+  const { chartData, chartEtaData, chartContainerData, totalContainers, chartCategoryData, statusList, categoryList, totalQty, holdCount } = useMemo(() => {
+    if (!parsed || filtered.length === 0) return { chartData: [], chartEtaData: [], chartContainerData: [], totalContainers: 0, chartCategoryData: [], statusList: [], categoryList: [], totalQty: 0, holdCount: 0 };
     const mapCabang: Record<string, any> = {};
     const mapEta: Record<string, any> = {};
     const mapCat: Record<string, any> = {};
@@ -478,10 +619,16 @@ export default function PRUpdatePage() {
 
       // Group by Cabang
       if (!mapCabang[cbg]) {
-        mapCabang[cbg] = { cabang: cbg };
+        mapCabang[cbg] = { cabang: cbg, distinctPOs: new Set<string>() };
       }
       mapCabang[cbg][stat] = Math.round((mapCabang[cbg][stat] || 0) + q);
       mapCabang[cbg][cat] = Math.round((mapCabang[cbg][cat] || 0) + q);
+
+      // Record distinct PO per Cabang
+      const poVal = colPo && row[colPo] ? String(row[colPo]).trim() : '';
+      if (poVal && poVal !== '-' && poVal !== '0' && poVal.toUpperCase() !== 'N/A') {
+        mapCabang[cbg].distinctPOs.add(poVal);
+      }
 
       // Group by Week ETA
       if (!mapEta[eta]) {
@@ -497,16 +644,26 @@ export default function PRUpdatePage() {
       mapCat[cat][stat] = Math.round((mapCat[cat][stat] || 0) + q);
     }
 
+    const chartContainerData = Object.values(mapCabang).map((item: any) => ({
+      cabang: item.cabang,
+      "Jumlah Container": item.distinctPOs ? item.distinctPOs.size : 0,
+      poList: item.distinctPOs ? Array.from(item.distinctPOs) : []
+    })).sort((a: any, b: any) => b["Jumlah Container"] - a["Jumlah Container"]);
+
+    const totalContainers = chartContainerData.reduce((sum, d) => sum + d["Jumlah Container"], 0);
+
     return { 
       chartData: Object.values(mapCabang), 
       chartEtaData: Object.values(mapEta).sort((a, b) => parseEtaRank(String(a.eta)) - parseEtaRank(String(b.eta))),
+      chartContainerData,
+      totalContainers,
       chartCategoryData: Object.values(mapCat), 
       statusList: Array.from(statuses), 
       categoryList: Array.from(categories),
       totalQty: Math.round(qtySum), 
       holdCount: holdSum 
     };
-  }, [parsed, filtered, colCabang, colCategory, colGrup, colEta, colStatus, colQty, selectedCabangForChart]);
+  }, [parsed, filtered, colCabang, colCategory, colGrup, colEta, colStatus, colQty, colPo, selectedCabangForChart]);
 
   // Pivot Table Data (Grouped by Cabang - PO - Grup - Category - Description)
   const pivotData = useMemo(() => {
@@ -547,7 +704,19 @@ export default function PRUpdatePage() {
       map[key]['Total Qty'] = Math.round(map[key]['Total Qty'] + q);
       map[key]['Jumlah Dokumen'] += 1;
     }
-    return Object.values(map).sort((a: any, b: any) => b['Total Qty'] - a['Total Qty']);
+    return Object.values(map).sort((a: any, b: any) => {
+      const cabA = String(a['Cabang'] || '').trim();
+      const cabB = String(b['Cabang'] || '').trim();
+      const diffCab = cabA.localeCompare(cabB, 'id', { numeric: true });
+      if (diffCab !== 0) return diffCab;
+
+      const poA = String(a['PO'] || '').trim();
+      const poB = String(b['PO'] || '').trim();
+      const diffPo = poA.localeCompare(poB, 'id', { numeric: true });
+      if (diffPo !== 0) return diffPo;
+
+      return (Number(b['Total Qty']) || 0) - (Number(a['Total Qty']) || 0);
+    });
   }, [parsed, filtered, colCabang, colPo, colGrup, colCategory, colDesc, colStatus, colEta, colQty, onlyCrucialStatus]);
 
   // Excel-like Filtered Rows for Table Detail
@@ -844,25 +1013,29 @@ export default function PRUpdatePage() {
       </GlassCard>
 
       {/* ─── VISUALIZATION CHART: TERPADU WEEK ETA & STACKED CATEGORY ─── */}
-      {((chartViewMode === 'eta' && chartEtaData.length > 0) || (chartViewMode === 'cabang' && chartData.length > 0)) && (
+      {((chartViewMode === 'eta' && chartEtaData.length > 0) || (chartViewMode === 'cabang' && chartData.length > 0) || (chartViewMode === 'container' && chartContainerData.length > 0)) && (
         <GlassCard className="p-6 border-purple-500/30 bg-gradient-to-b from-slate-900/90 to-slate-950/90 shadow-2xl">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-4 mb-6 gap-3">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between border-b border-slate-800 pb-4 mb-6 gap-4">
             <div>
               <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
                 <BarChart3 className="w-5 h-5 text-purple-400" />
-                Grafik Distribusi Status Compile & Persebaran Category ({chartViewMode === 'eta' ? 'per Week ETA' : 'per Cabang'})
+                Grafik Distribusi Status Compile & Persebaran Category ({chartViewMode === 'eta' ? 'per Week ETA' : chartViewMode === 'cabang' ? 'per Cabang' : 'Jumlah Container per Cabang'})
               </h3>
               <p className="text-xs text-slate-400 mt-1">
-                Sumbu X: <b className="text-emerald-400">{chartViewMode === 'eta' ? 'Week ETA' : 'Cabang'}</b> • Batang bertingkat (Stacked Bar): <b className="text-sky-300">Category Barang</b> sesuai filter terpilih.
+                {chartViewMode === 'container' ? (
+                  <>Sumbu X: <b className="text-emerald-400">Cabang</b> • Sumbu Y: <b className="text-cyan-300">Jumlah Container</b> (dihitung otomatis dari distinct count nomor PO per cabang).</>
+                ) : (
+                  <>Sumbu X: <b className="text-emerald-400">{chartViewMode === 'eta' ? 'Week ETA' : 'Cabang'}</b> • Batang bertingkat (Stacked Bar): <b className="text-sky-300">Category Barang</b> sesuai filter terpilih.</>
+                )}
               </p>
             </div>
             
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className="flex bg-slate-800/80 p-1 rounded-xl border border-slate-700">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <div className="flex bg-slate-800/90 p-1 rounded-xl border border-slate-700 shadow-md">
                 <button
                   onClick={() => setChartViewMode('eta')}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
-                    chartViewMode === 'eta' ? 'bg-purple-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+                    chartViewMode === 'eta' ? 'bg-purple-600 text-white shadow-md ring-1 ring-purple-400' : 'text-slate-400 hover:text-white'
                   }`}
                 >
                   🗓️ Week ETA
@@ -870,45 +1043,231 @@ export default function PRUpdatePage() {
                 <button
                   onClick={() => setChartViewMode('cabang')}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
-                    chartViewMode === 'cabang' ? 'bg-purple-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+                    chartViewMode === 'cabang' ? 'bg-purple-600 text-white shadow-md ring-1 ring-purple-400' : 'text-slate-400 hover:text-white'
                   }`}
                 >
                   🏢 Cabang
                 </button>
+                <button
+                  onClick={() => setChartViewMode('container')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                    chartViewMode === 'container' ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-md ring-1 ring-cyan-400' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  📦 Jumlah Container
+                </button>
               </div>
+              
+              <div className="flex items-center gap-2 text-xs font-bold text-cyan-300 bg-cyan-950/60 px-3.5 py-2 rounded-xl border border-cyan-500/50 shadow-sm" title="Total container dari distinct count nomor PO per Cabang">
+                <Package className="w-4 h-4 text-cyan-400 shrink-0" />
+                <span>Jumlah Container: {totalContainers?.toLocaleString('id-ID') || 0} (Distinct PO)</span>
+              </div>
+
               <div className="flex items-center gap-2 text-xs text-slate-400 bg-slate-800/50 px-3 py-1.5 rounded-xl border border-slate-700">
-                <span>🏷️ Menampilkan {categoryList.length} kategori pada {chartViewMode === 'eta' ? `${chartEtaData.length} periode ETA` : `${chartData.length} cabang`}</span>
+                <span>🏷️ Menampilkan {chartViewMode === 'container' ? `${chartContainerData.length} cabang (Distinct PO)` : `${categoryList.length} kategori pada ${chartViewMode === 'eta' ? `${chartEtaData.length} periode ETA` : `${chartData.length} cabang`}`}</span>
               </div>
             </div>
           </div>
 
           <div className="w-full pb-4" style={{ minHeight: '520px' }}>
             <ResponsiveContainer width="100%" height={520}>
-              <BarChart data={chartViewMode === 'eta' ? chartEtaData : chartData} margin={{ top: 20, right: 60, left: 20, bottom: 40 }}>
+              <BarChart data={chartViewMode === 'eta' ? chartEtaData : chartViewMode === 'container' ? chartContainerData : chartData} margin={{ top: 20, right: 60, left: 20, bottom: 40 }}>
+                <defs>
+                  <linearGradient id="containerBarGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#06b6d4" stopOpacity={0.95} />
+                    <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.8} />
+                  </linearGradient>
+                </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
                 <XAxis dataKey={chartViewMode === 'eta' ? 'eta' : 'cabang'} stroke="#94a3b8" tick={{ fill: '#e2e8f0', fontSize: 12, fontWeight: 600 }} angle={-15} textAnchor="end" height={60} />
                 <YAxis stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 12 }} tickFormatter={(val) => Number(val).toLocaleString('id-ID')} />
                 <Tooltip
-                  content={<CustomStackedTooltip />}
+                  content={chartViewMode === 'container' ? <CustomContainerTooltip /> : <CustomStackedTooltip />}
                   wrapperStyle={{ zIndex: 999999, pointerEvents: 'none', outline: 'none' }}
                   cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }}
                 />
                 <Legend wrapperStyle={{ paddingTop: '24px', fontSize: '11px', maxHeight: '120px', overflowY: 'auto' }} />
-                {categoryList.map((cat, idx) => (
+                {chartViewMode === 'container' ? (
                   <Bar
-                    key={cat}
-                    dataKey={cat}
-                    name={cat}
-                    fill={COLORS[idx % COLORS.length]}
-                    stackId="pr_cat_stack"
-                    maxBarSize={50}
+                    dataKey="Jumlah Container"
+                    name="Jumlah Container (Distinct Count No. PO per Cabang)"
+                    fill="url(#containerBarGradient)"
+                    maxBarSize={60}
+                    radius={[8, 8, 0, 0]}
                   />
-                ))}
+                ) : (
+                  categoryList.map((cat, idx) => (
+                    <Bar
+                      key={cat}
+                      dataKey={cat}
+                      name={cat}
+                      fill={COLORS[idx % COLORS.length]}
+                      stackId="pr_cat_stack"
+                      maxBarSize={50}
+                    />
+                  ))
+                )}
               </BarChart>
             </ResponsiveContainer>
           </div>
         </GlassCard>
       )}
+
+      {/* ─── INSIGHT ALERT: PO OVERDUE ETA (SPJM, HOLD DELIVERY & ON VESSEL) ─── */}
+      <GlassCard className="p-6 border-rose-500/40 bg-gradient-to-br from-slate-900 via-rose-950/20 to-slate-900 shadow-2xl overflow-hidden relative">
+        <div className="absolute -top-12 -right-12 w-48 h-48 bg-rose-500/10 rounded-full blur-3xl pointer-events-none" />
+        
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800/80 pb-4 mb-6 gap-4">
+          <div className="space-y-1.5">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[11px] font-extrabold bg-rose-500/20 text-rose-300 border border-rose-500/40 uppercase tracking-wider mb-1 shadow-sm">
+              <ShieldAlert className="w-3.5 h-3.5 text-rose-400 animate-pulse" /> Warning Supply Chain • Monitoring Keterlambatan Port & Vendor
+            </div>
+            <h3 className="text-lg sm:text-xl font-black text-white flex items-center gap-2.5">
+              Insight PO Overdue: SPJM, Hold Delivery & On Vessel
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-300">
+              Mendeteksi dokumen dengan status krusial yang <b className="text-rose-400 underline">sudah melewati Tanggal ETA</b> dari tanggal pengolahan raw data (<b>{rawDataProcessingDate.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}</b>).
+            </p>
+          </div>
+          
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="px-4 py-2 rounded-xl bg-slate-900 border-2 border-amber-500/60 font-black text-xs sm:text-sm text-amber-300 shadow-lg flex items-center gap-2">
+              <Timer className="w-4 h-4 text-amber-400 animate-spin-slow" />
+              Total Overdue: {overdueInsights.length} PO
+            </span>
+          </div>
+        </div>
+
+        {/* Mini KPI Cards for Overdue Insights */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+          <div className="p-4 rounded-2xl bg-gradient-to-br from-purple-950/60 to-slate-900 border border-purple-500/40 shadow-lg flex items-center justify-between">
+            <div>
+              <div className="text-xs text-purple-300 font-extrabold uppercase tracking-wider flex items-center gap-1.5">
+                <span>🟣 SPJM Overdue</span>
+              </div>
+              <div className="text-xl sm:text-2xl font-black text-white mt-1.5">
+                {overdueInsights.filter(x => x.statusCategory === 'SPJM').length} <span className="text-xs font-semibold text-purple-300">Dokumen</span>
+              </div>
+              <div className="text-[11px] text-purple-300/90 font-mono font-bold mt-1 bg-purple-900/40 px-2 py-0.5 rounded border border-purple-500/30 inline-block">
+                Total Qty: {overdueInsights.filter(x => x.statusCategory === 'SPJM').reduce((s, x) => s + x.qty, 0).toLocaleString('id-ID')}
+              </div>
+            </div>
+            <div className="w-12 h-12 rounded-2xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-300 text-2xl font-black shadow-inner">
+              🟣
+            </div>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-gradient-to-br from-rose-950/60 to-slate-900 border border-rose-500/40 shadow-lg flex items-center justify-between">
+            <div>
+              <div className="text-xs text-rose-300 font-extrabold uppercase tracking-wider flex items-center gap-1.5">
+                <span>🔴 Hold Delivery Overdue</span>
+              </div>
+              <div className="text-xl sm:text-2xl font-black text-white mt-1.5">
+                {overdueInsights.filter(x => x.statusCategory === 'HOLD').length} <span className="text-xs font-semibold text-rose-300">Dokumen</span>
+              </div>
+              <div className="text-[11px] text-rose-300/90 font-mono font-bold mt-1 bg-rose-900/40 px-2 py-0.5 rounded border border-rose-500/30 inline-block">
+                Total Qty: {overdueInsights.filter(x => x.statusCategory === 'HOLD').reduce((s, x) => s + x.qty, 0).toLocaleString('id-ID')}
+              </div>
+            </div>
+            <div className="w-12 h-12 rounded-2xl bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-rose-300 text-2xl font-black shadow-inner">
+              🔴
+            </div>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-gradient-to-br from-blue-950/60 to-slate-900 border border-blue-500/40 shadow-lg flex items-center justify-between">
+            <div>
+              <div className="text-xs text-blue-300 font-extrabold uppercase tracking-wider flex items-center gap-1.5">
+                <span>🔵 On Vessel Overdue</span>
+              </div>
+              <div className="text-xl sm:text-2xl font-black text-white mt-1.5">
+                {overdueInsights.filter(x => x.statusCategory === 'VESSEL').length} <span className="text-xs font-semibold text-blue-300">Dokumen</span>
+              </div>
+              <div className="text-[11px] text-blue-300/90 font-mono font-bold mt-1 bg-blue-900/40 px-2 py-0.5 rounded border border-blue-500/30 inline-block">
+                Total Qty: {overdueInsights.filter(x => x.statusCategory === 'VESSEL').reduce((s, x) => s + x.qty, 0).toLocaleString('id-ID')}
+              </div>
+            </div>
+            <div className="w-12 h-12 rounded-2xl bg-blue-500/20 border border-blue-500/40 flex items-center justify-center text-blue-300 text-2xl font-black shadow-inner">
+              🔵
+            </div>
+          </div>
+        </div>
+
+        {/* Table of Overdue POs */}
+        <div className="overflow-x-auto rounded-xl border border-slate-800 max-h-[420px] overflow-y-auto shadow-inner">
+          <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[1050px]">
+            <thead className="bg-slate-950/95 text-slate-300 uppercase font-bold sticky top-0 z-20 shadow-md text-center text-[11px] tracking-wider">
+              <tr className="border-b border-slate-800">
+                <th className="py-3.5 px-3 text-left">Cabang</th>
+                <th className="py-3.5 px-3 border-l border-slate-800 text-amber-400">No. PO</th>
+                <th className="py-3.5 px-3 border-l border-slate-800 text-purple-400">Status Compile</th>
+                <th className="py-3.5 px-3 border-l border-slate-800 text-cyan-300">Tanggal ETA</th>
+                <th className="py-3.5 px-4 border-l border-slate-800 text-rose-400 bg-rose-950/40 font-extrabold">Durasi Terlewat</th>
+                <th className="py-3.5 px-3 border-l border-slate-800 text-left">Deskripsi & Kategori</th>
+                <th className="py-3.5 px-3 border-l border-slate-800 text-emerald-400">Total Qty</th>
+                <th className="py-3.5 px-4 border-l border-slate-800">Action & Rekomendasi</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800/80 text-slate-300 text-center font-medium">
+              {overdueInsights.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="py-12 text-center text-emerald-400 font-bold bg-slate-950/30 text-sm">
+                    🎉 Tidak ada dokumen SPJM, Hold Delivery, atau On Vessel yang melewati Tanggal ETA! Seluruh rantai pasok tepat waktu.
+                  </td>
+                </tr>
+              ) : overdueInsights.map((item: any, idx: number) => {
+                const isSevere = item.overdueDays >= 14;
+                const isMod = item.overdueDays >= 7 && !isSevere;
+                return (
+                  <tr key={idx} className="hover:bg-slate-800/60 transition font-semibold">
+                    <td className="py-3 px-3 text-left font-extrabold text-white align-middle">
+                      {item.cabang}
+                    </td>
+                    <td className="py-3 px-3 border-l border-slate-800 font-mono font-bold text-amber-300 align-middle text-sm">
+                      {item.po}
+                    </td>
+                    <td className="py-3 px-3 border-l border-slate-800 align-middle">
+                      <span className={`px-2.5 py-1 rounded-lg text-xs font-black inline-block shadow-sm ${
+                        item.statusCategory === 'SPJM' ? 'bg-purple-950/90 text-purple-300 border border-purple-500/50' :
+                        item.statusCategory === 'HOLD' ? 'bg-rose-950/90 text-rose-300 border border-rose-500/50' :
+                        'bg-blue-950/90 text-blue-300 border border-blue-500/50'
+                      }`}>
+                        {item.status}
+                      </span>
+                    </td>
+                    <td className="py-3 px-3 border-l border-slate-800 font-mono text-cyan-300 align-middle font-bold">
+                      {item.etaFormatted}
+                    </td>
+                    <td className="py-3 px-3 border-l border-slate-800 bg-rose-950/30 align-middle">
+                      <span className={`px-3 py-1 rounded-full text-xs font-black inline-flex items-center gap-1.5 shadow-md border ${
+                        isSevere ? 'bg-rose-600 text-white border-rose-400 animate-pulse' :
+                        isMod ? 'bg-orange-500 text-white border-orange-300' :
+                        'bg-amber-500/30 text-amber-300 border-amber-500/50'
+                      }`}>
+                        <Timer className="w-3.5 h-3.5 shrink-0" />
+                        Terlewat {item.overdueDays} Hari
+                      </span>
+                    </td>
+                    <td className="py-3 px-3 border-l border-slate-800 text-left align-middle max-w-[240px]">
+                      <div className="font-bold text-slate-100 truncate text-xs" title={item.deskripsi}>{item.deskripsi}</div>
+                      <div className="text-[11px] text-purple-300 font-mono mt-0.5 truncate">{item.grup} • {item.category}</div>
+                    </td>
+                    <td className="py-3 px-3 border-l border-slate-800 font-mono font-black text-emerald-400 text-base align-middle">
+                      {item.qty.toLocaleString('id-ID')}
+                    </td>
+                    <td className="py-3 px-3 border-l border-slate-800 align-middle">
+                      <div className="text-[11px] font-extrabold px-2.5 py-1 rounded-lg bg-slate-800 text-slate-200 border border-slate-700 shadow-sm inline-block">
+                        {item.statusCategory === 'SPJM' ? '🚛 Desak Trucking Port' :
+                         item.statusCategory === 'HOLD' ? '📞 Eskalasi Vendor/Port' :
+                         '⚓ Cek Sandar / Bea Cukai'}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </GlassCard>
 
       {/* ─── TABEL COMPLEMENTARY: ANALISIS KOMPARATIF PR & STATUS COMPILE (CABANG - PO - GRUP - CATEGORY - DESCRIPTION) ─── */}
       <GlassCard className="p-6 border-slate-800 bg-slate-900/80 shadow-2xl overflow-hidden">
@@ -933,7 +1292,7 @@ export default function PRUpdatePage() {
               </button>
             </div>
             <p className="text-xs text-slate-400 mt-1">
-              Dikelompokkan berdasarkan: <b className="text-amber-300">Cabang ➔ No PO ➔ Grup ➔ Category ➔ Description</b>. Menampilkan kuota dan zonasi tindak lanjut supply chain.
+              Diurutkan rapi berdasarkan: <b className="text-amber-300">Cabang (A-Z) ➔ No PO (A-Z)</b>. Menampilkan kuota dan zonasi tindak lanjut supply chain.
             </p>
           </div>
 
