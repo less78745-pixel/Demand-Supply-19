@@ -12,6 +12,7 @@ import { MultiSelect } from '@/components/ui/MultiSelect';
 import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import toast from 'react-hot-toast';
 import { getStandardFilename } from '@/utils/export';
+import * as XLSX from 'xlsx';
 
 type ScenarioType = 'actual' | 'promo' | 'recession';
 
@@ -170,49 +171,162 @@ export default function ForecastPage() {
     if (!results) return;
 
     const methods = results.available_methods || ['SMA-3', 'SES', 'Trend', 'SARIMAX', 'XGBoost', 'SAMAI', 'BiLSTM', 'Hybrid Ensemble', 'Fb Prophet', 'ARIMAX', 'GNN', 'LightGBM', 'GARCH', 'Wavelet', 'LSTM-GRU'];
-    const methodCols = methods.join(',');
 
-    const lines = [
-      `Cabang,Category,Date,Actual,${methodCols},Is Anomaly,Is Future,Best Model,MAPE,Bias,MAD,RMSE,ROP,Safety Stock`,
-      ...(results.forecast_data || []).map((r: any) => {
-        const methodVals = methods.map((m: string) => r.forecasts?.[m] ?? '').join(',');
-        return `"${r.cabang}","${r.category}","${r.date}",${r.actual ?? ''},${methodVals},${r.is_anomaly},${r.is_future},"${r.best_model || ''}",${r.mape?.toFixed(2) || ''},${r.bias?.toFixed(2) || ''},${r.mad?.toFixed(2) || ''},${r.rmse?.toFixed(2) || ''},${r.rop?.toFixed(2) || ''},${r.safety_stock?.toFixed(2) || ''}`;
-      })
+    const getBestModelValue = (r: any): number | null => {
+      const bestModel = String(r.best_model || results.best_model || '').trim().toLowerCase();
+      if (!bestModel || !r.forecasts) return null;
+      for (const [key, val] of Object.entries(r.forecasts)) {
+        if (key.trim().toLowerCase() === bestModel && val !== undefined && val !== null) {
+          const num = Number(val);
+          return isNaN(num) ? null : num;
+        }
+      }
+      for (const m of methods) {
+        if (m.trim().toLowerCase() === bestModel && r.forecasts[m] !== undefined && r.forecasts[m] !== null) {
+          const num = Number(r.forecasts[m]);
+          return isNaN(num) ? null : num;
+        }
+      }
+      if (r[bestModel] !== undefined && r[bestModel] !== null) {
+        const num = Number(r[bestModel]);
+        return isNaN(num) ? null : num;
+      }
+      return null;
+    };
+
+    // Sheet 1: Hasil Olahan Forecast (Demand Forecast)
+    const sheet1Data = (results.forecast_data || []).map((r: any) => {
+      const rowObj: any = {
+        'Cabang': r.cabang || '',
+        'Category': r.category || '',
+        'Date': r.date || '',
+        'Actual': r.actual ?? null,
+      };
+      methods.forEach((m: string) => {
+        rowObj[m] = r.forecasts?.[m] !== undefined && r.forecasts?.[m] !== null ? Number(r.forecasts[m]) : null;
+      });
+      rowObj['Is Anomaly'] = Boolean(r.is_anomaly);
+      rowObj['Is Future'] = Boolean(r.is_future);
+      rowObj['Best Model'] = r.best_model || results.best_model || '';
+      rowObj['Forecast_Original'] = getBestModelValue(r);
+      rowObj['MAPE'] = r.mape !== undefined && r.mape !== null ? Number(Number(r.mape).toFixed(2)) : null;
+      rowObj['Bias'] = r.bias !== undefined && r.bias !== null ? Number(Number(r.bias).toFixed(2)) : null;
+      rowObj['MAD'] = r.mad !== undefined && r.mad !== null ? Number(Number(r.mad).toFixed(2)) : null;
+      rowObj['RMSE'] = r.rmse !== undefined && r.rmse !== null ? Number(Number(r.rmse).toFixed(2)) : null;
+      rowObj['ROP'] = r.rop !== undefined && r.rop !== null ? Number(Number(r.rop).toFixed(2)) : null;
+      rowObj['Safety Stock'] = r.safety_stock !== undefined && r.safety_stock !== null ? Number(Number(r.safety_stock).toFixed(2)) : null;
+      return rowObj;
+    });
+
+    // Sheet 2: Weekly Breakdown dengan Tanggal & ISO Weeknum
+    const getNthMonday = (year: number, month: number, n: number): Date => {
+      const mondays: Date[] = [];
+      const daysInMonth = new Date(year, month, 0).getDate();
+      for (let d = 1; d <= daysInMonth; d++) {
+        const dt = new Date(year, month - 1, d);
+        if (dt.getDay() === 1) {
+          mondays.push(dt);
+        }
+      }
+      if (mondays.length === 0) return new Date(year, month - 1, 1);
+      if (n <= mondays.length) {
+        return mondays[n - 1];
+      } else {
+        return mondays[mondays.length - 1];
+      }
+    };
+
+    const getISOWeeknum = (date: Date): number => {
+      const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+      const dayNum = d.getUTCDay() || 7;
+      d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+      const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+      return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+    };
+
+    const formatDDMMYYYY = (dt: Date): string => {
+      const dd = String(dt.getDate()).padStart(2, '0');
+      const mm = String(dt.getMonth() + 1).padStart(2, '0');
+      const yyyy = dt.getFullYear();
+      return `${dd}/${mm}/${yyyy}`;
+    };
+
+    const weights = [
+      { label: 'Week 1', ratio: 0.15, nth: 1 },
+      { label: 'Week 2', ratio: 0.25, nth: 2 },
+      { label: 'Week 3', ratio: 0.30, nth: 3 },
+      { label: 'Week 4', ratio: 0.30, nth: 4 }
     ];
 
-    // DSP Insights section
-    const insights: string[] = results.ai_insights || [];
-    if (insights.length > 0) {
-      lines.push('');
-      lines.push('--- DSP INSIGHTS ---');
-      insights.forEach((ins: string) => lines.push(`"${ins}"`));
+    const weeklyRows: any[] = [];
+    const validFuture = (results.forecast_data || []).filter((r: any) => 
+      r.is_future === true || String(r.is_future).toLowerCase() === 'true' || Boolean(r.is_future) || (r.actual === null || r.actual === undefined)
+    );
+
+    validFuture.forEach((row: any) => {
+      const baseVal = getBestModelValue(row);
+      const dateStr = String(row.date || '').trim();
+      const parts = dateStr.split('-');
+      if (parts.length < 2) return;
+      const tahun = parseInt(parts[0], 10);
+      const bulan = parseInt(parts[1], 10);
+      if (isNaN(tahun) || isNaN(bulan) || bulan < 1 || bulan > 12) return;
+
+      weights.forEach(({ label, ratio, nth }) => {
+        const tanggalMingguan = getNthMonday(tahun, bulan, nth);
+        const isoWeeknum = getISOWeeknum(tanggalMingguan);
+        const forecastWeek = baseVal !== null && baseVal !== undefined ? Number((baseVal * ratio).toFixed(2)) : null;
+
+        weeklyRows.push({
+          'Cabang': row.cabang || '',
+          'Category': row.category || '',
+          'Periode Asli': row.date || '',
+          'Best Model': row.best_model || results.best_model || '',
+          'Nilai Forecast Original': baseVal,
+          'Week': label,
+          'Tanggal Mingguan': formatDDMMYYYY(tanggalMingguan),
+          'ISO Weeknum': isoWeeknum,
+          'Rasio': `${Math.round(ratio * 100)}%`,
+          'Nilai Forecast Week': forecastWeek
+        });
+      });
+    });
+
+    // Sheet 3: DSP Insights & KPI Summary
+    const summaryRows: any[] = [];
+    summaryRows.push({ Bagian: '--- DSP KPI SUMMARY ---', Parameter: 'Best Model (Global)', Nilai: results.best_model || 'N/A' });
+    summaryRows.push({ Bagian: '--- DSP KPI SUMMARY ---', Parameter: 'Avg Safety Stock', Nilai: results.inventory_kpis?.avg_safety_stock || 0 });
+    summaryRows.push({ Bagian: '--- DSP KPI SUMMARY ---', Parameter: 'Avg Reorder Point', Nilai: results.inventory_kpis?.avg_reorder_point || 0 });
+
+    if (results.ai_insights && results.ai_insights.length > 0) {
+      results.ai_insights.forEach((ins: string, idx: number) => {
+        summaryRows.push({ Bagian: '--- DSP INSIGHTS ---', Parameter: `Insight #${idx + 1}`, Nilai: ins });
+      });
     }
 
-    // KPI Summary
-    lines.push('');
-    lines.push('--- DSP KPI SUMMARY ---');
-    lines.push(`Best Model (Global),${results.best_model || 'N/A'}`);
-    lines.push(`Avg Safety Stock,${results.inventory_kpis?.avg_safety_stock || 0}`);
-    lines.push(`Avg Reorder Point,${results.inventory_kpis?.avg_reorder_point || 0}`);
-
-    // Model Tally
     const tally = results.model_tally || {};
     if (Object.keys(tally).length > 0) {
-      lines.push('');
-      lines.push('--- DSP MODEL DISTRIBUTION ---');
-      lines.push('Model,Count');
-      Object.entries(tally).forEach(([model, count]) => lines.push(`${model},${count}`));
+      Object.entries(tally).forEach(([model, count]) => {
+        summaryRows.push({ Bagian: '--- MODEL DISTRIBUTION ---', Parameter: model, Nilai: count });
+      });
     }
 
-    const blob = new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", getStandardFilename("Demand_Forecast", results?.processed_at || new Date().toISOString(), "csv"));
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    toast.success('Full report exported with DSP Insights!');
+    const wb = XLSX.utils.book_new();
+    const ws1 = XLSX.utils.json_to_sheet(sheet1Data);
+    const ws2 = XLSX.utils.json_to_sheet(weeklyRows);
+    const ws3 = XLSX.utils.json_to_sheet(summaryRows);
+
+    ws1['!cols'] = [{ wch: 15 }, { wch: 24 }, { wch: 12 }, { wch: 12 }];
+    ws2['!cols'] = [{ wch: 15 }, { wch: 24 }, { wch: 14 }, { wch: 18 }, { wch: 22 }, { wch: 10 }, { wch: 18 }, { wch: 14 }, { wch: 10 }, { wch: 20 }];
+    ws3['!cols'] = [{ wch: 28 }, { wch: 28 }, { wch: 80 }];
+
+    XLSX.utils.book_append_sheet(wb, ws1, "Hasil Forecast");
+    XLSX.utils.book_append_sheet(wb, ws2, "Breakdown Mingguan (ISO)");
+    XLSX.utils.book_append_sheet(wb, ws3, "DSP Insights & KPI");
+
+    const filename = getStandardFilename("Demand_Forecast_MultiSheet", results?.processed_at || new Date().toISOString(), "xlsx");
+    XLSX.writeFile(wb, filename);
+    toast.success('📊 File Excel 3-Sheet (Hasil Forecast + Weekly Breakdown) Berhasil Diekspor!');
   };
 
   const cabangs = useMemo(() => {
@@ -448,8 +562,8 @@ export default function ForecastPage() {
               </div>
               <div className="flex gap-3 shrink-0 mt-4 lg:mt-0">
                 <button onClick={handleExport}
-                  className="px-5 py-2.5 bg-slate-800 text-slate-100 border border-slate-700 rounded-xl hover:border-sky-500 hover:bg-slate-700 transition text-sm flex items-center gap-2 font-bold shadow-md">
-                  <Download className="w-4 h-4 text-sky-400" /> Export CSV
+                  className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white border border-emerald-500 rounded-xl hover:from-emerald-500 hover:to-teal-500 transition text-sm flex items-center gap-2 font-extrabold shadow-lg shadow-emerald-500/20">
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-200" /> Export Excel (3 Sheet)
                 </button>
               </div>
             </div>

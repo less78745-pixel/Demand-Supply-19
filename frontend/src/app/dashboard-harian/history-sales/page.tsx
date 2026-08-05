@@ -15,7 +15,7 @@ import {
 import toast from 'react-hot-toast';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  Legend, ResponsiveContainer, ComposedChart, Line, ReferenceArea, ReferenceLine, Cell
+  Legend, ResponsiveContainer, ComposedChart, Line, ReferenceArea, ReferenceLine, Cell, LabelList
 } from 'recharts';
 import { get, set } from 'idb-keyval';
 import { parseDynamicCSV, findColumn, ParsedData } from '@/lib/csvParser';
@@ -212,7 +212,8 @@ export default function HistorySalesPage() {
 
   // Identify column names dynamically
   const colCabang = useMemo(() => parsed ? findColumn(parsed.headers, ['cabang', 'branch_name', 'branch', 'cab', 'regional', 'region']) : undefined, [parsed]);
-  const colCategory = useMemo(() => parsed ? findColumn(parsed.headers, ['category', 'grup', 'kategori item', 'kategori']) : undefined, [parsed]);
+  const colGrup = useMemo(() => parsed ? findColumn(parsed.headers, ['grup', 'group', 'grup barang', 'group item', 'divisi', 'division']) : undefined, [parsed]);
+  const colCategory = useMemo(() => parsed ? findColumn(parsed.headers, ['category', 'kategori item', 'kategori', 'grup']) : undefined, [parsed]);
   const colCategoryInsentif = useMemo(() => parsed ? findColumn(parsed.headers, ['category insentif', 'category_insentif', 'kategori insentif', 'insentif', 'cat insentif']) : undefined, [parsed]);
 
   // Linked Filter options
@@ -342,7 +343,7 @@ export default function HistorySalesPage() {
   // Table Data grouped per Cabang + Category for detailed comparison & growth analysis
   const tableData = useMemo(() => {
     if (!parsed || !executiveSummary || filtered.length === 0) return [];
-    const map: Record<string, { cabang: string; category: string; sales: number; outstanding: number; total: number; avg3: number; m: number; m1: number }> = {};
+    const map: Record<string, { cabang: string; grup: string; category: string; sales: number; outstanding: number; total: number; avg3: number; m: number; m1: number }> = {};
     
     const salesSet = new Set(executiveSummary.salesCols);
     const outSet = new Set(executiveSummary.outstandingCols);
@@ -352,11 +353,12 @@ export default function HistorySalesPage() {
 
     for (const row of filtered) {
       const cbg = colCabang ? String(row[colCabang] || 'Unknown') : 'All';
+      const grp = colGrup ? String(row[colGrup] || '-') : '-';
       const cat = colCategory ? String(row[colCategory] || 'Uncategorized') : 'General';
-      const key = `${cbg}___${cat}`;
+      const key = `${cbg}___${grp}___${cat}`;
 
       if (!map[key]) {
-        map[key] = { cabang: cbg, category: cat, sales: 0, outstanding: 0, total: 0, avg3: 0, m: 0, m1: 0 };
+        map[key] = { cabang: cbg, grup: grp, category: cat, sales: 0, outstanding: 0, total: 0, avg3: 0, m: 0, m1: 0 };
       }
 
       parsed.targetColumns.forEach(tc => {
@@ -381,16 +383,24 @@ export default function HistorySalesPage() {
       }
     }
 
+    const cabangTotalAvg3: Record<string, number> = {};
+    Object.values(map).forEach(item => {
+      cabangTotalAvg3[item.cabang] = (cabangTotalAvg3[item.cabang] || 0) + item.avg3;
+    });
+
     return Object.values(map).map(item => {
       const ratio = item.sales > 0 ? toExactFloat((item.outstanding / item.sales) * 100, 2) : 0;
       const growthM = item.avg3 > 0 ? toExactFloat(((item.m - item.avg3) / item.avg3) * 100, 2) : 0;
       const growthM1 = item.avg3 > 0 ? toExactFloat(((item.m1 - item.avg3) / item.avg3) * 100, 2) : 0;
-      return { ...item, ratio, growthM, growthM1 };
+      const totalCbgAvg3 = cabangTotalAvg3[item.cabang] || 0;
+      const kontribusi = totalCbgAvg3 > 0 ? toExactFloat((item.avg3 / totalCbgAvg3) * 100, 2) : 0;
+      return { ...item, ratio, growthM, growthM1, kontribusi };
     }).sort((a, b) => {
       if (a.cabang !== b.cabang) return a.cabang.localeCompare(b.cabang);
+      if (a.grup !== b.grup) return a.grup.localeCompare(b.grup);
       return b.sales - a.sales;
     });
-  }, [parsed, executiveSummary, filtered, colCabang, colCategory]);
+  }, [parsed, executiveSummary, filtered, colCabang, colGrup, colCategory]);
 
   // Supply vs Monthly Sales (M to M-5) computation
   const supplyVsMonthlySales = useMemo(() => {
@@ -534,9 +544,17 @@ export default function HistorySalesPage() {
     const categories = Array.from(catSet);
     const data = periods.map(p => {
       const entry: any = { period: p };
+      let totalQty = 0;
       categories.forEach(cat => {
-        entry[cat] = Math.round(periodMap[p][cat] || 0);
+        totalQty += (periodMap[p][cat] || 0);
       });
+      categories.forEach(cat => {
+        const rawQty = Math.round(periodMap[p][cat] || 0);
+        const pct = totalQty > 0 ? Number(((rawQty / totalQty) * 100).toFixed(2)) : 0;
+        entry[cat] = pct;
+        entry[`${cat}_qty`] = rawQty;
+      });
+      entry._totalQty = Math.round(totalQty);
       return entry;
     });
 
@@ -574,9 +592,11 @@ export default function HistorySalesPage() {
     if (!tableData || tableData.length === 0) return;
     const header = [
       'Cabang / Wilayah',
+      'Grup',
       'Kategori Item',
       'Total Volume Sales',
       'AVG Sales 3 Bln',
+      '% Kontribusi (per Cabang)',
       'Volume M',
       'Volume M-1',
       'Pertumbuhan M vs AVG (%)',
@@ -587,9 +607,11 @@ export default function HistorySalesPage() {
     tableData.forEach(row => {
       const line = [
         `"${String(row.cabang).replace(/"/g, '""')}"`,
+        `"${String(row.grup || '-').replace(/"/g, '""')}"`,
         `"${String(row.category).replace(/"/g, '""')}"`,
         toExactFloat(row.sales, 2),
         toExactFloat(row.avg3, 2),
+        toExactFloat(row.kontribusi, 2),
         toExactFloat(row.m, 2),
         toExactFloat(row.m1, 2),
         row.growthM,
@@ -965,10 +987,10 @@ export default function HistorySalesPage() {
           <div>
             <h3 className="text-lg font-bold text-white flex items-center gap-2.5">
               <FileSpreadsheet className="w-5 h-5 text-blue-400" />
-              Tabel Analisis Komparatif Sales vs Outstanding ({tableData.length} Kombinasi Cabang & Kategori)
+              Tabel Analisis Komparatif Sales vs Outstanding ({tableData.length} Kombinasi Cabang / Grup / Kategori)
             </h3>
             <p className="text-xs text-slate-400 mt-1">
-              Rincian performa penjualan dan rata-rata 3 bulan per Cabang & Kategori dengan zonasi status kewaspadaan secara real-time.
+              Rincian performa penjualan, rata-rata 3 bulan, serta % kontribusi per kombinasi Cabang, Grup, & Kategori secara real-time.
             </p>
           </div>
 
@@ -981,13 +1003,15 @@ export default function HistorySalesPage() {
         </div>
 
         <div className="overflow-x-auto rounded-xl border border-slate-800 max-h-[600px] overflow-y-auto">
-          <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[1250px]">
+          <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[1350px]">
             <thead className="bg-slate-950/90 text-slate-300 uppercase font-bold sticky top-0 z-20 shadow-md">
               <tr className="border-b border-slate-800 text-[11px] tracking-wider text-center">
                 <th className="py-3.5 px-4 text-left">Cabang / Wilayah</th>
+                <th className="py-3.5 px-4 border-l border-slate-800 text-slate-300">🏷️ Grup</th>
                 <th className="py-3.5 px-4 border-l border-slate-800 text-purple-300">📦 Kategori Item</th>
                 <th className="py-3.5 px-4 border-l border-slate-800 text-blue-400">📈 Total Volume Sales</th>
                 <th className="py-3.5 px-4 border-l border-slate-800 text-rose-400">📊 AVG Sales 3 Bln</th>
+                <th className="py-3.5 px-4 border-l border-slate-800 text-amber-300">✨ % Kontribusi (per Cabang)</th>
                 <th className="py-3.5 px-4 border-l border-slate-800 text-cyan-400">📅 Volume M & M-1</th>
                 <th className="py-3.5 px-4 border-l border-slate-800 text-emerald-400">📈 Pertumbuhan vs AVG 3 Bln</th>
                 <th className="py-3.5 px-4 border-l border-slate-800 text-amber-300">💡 Analisis Pertumbuhan</th>
@@ -1001,7 +1025,7 @@ export default function HistorySalesPage() {
 
                 return (
                   <tr
-                    key={`${row.cabang}-${row.category}-${idx}`}
+                    key={`${row.cabang}-${row.grup}-${row.category}-${idx}`}
                     className="hover:bg-slate-800/40 transition cursor-pointer font-medium"
                     onClick={() => setSelectedCabangForChart(row.cabang === selectedCabangForChart ? 'All' : row.cabang)}
                   >
@@ -1015,6 +1039,11 @@ export default function HistorySalesPage() {
                       <div className="text-[11px] text-slate-400 mt-0.5">Sales & Outstanding Track</div>
                     </td>
                     <td className="py-3.5 px-4 border-l border-slate-800 align-middle">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800/80 text-slate-200 border border-slate-700 font-bold text-xs">
+                        🏷️ {row.grup || '-'}
+                      </span>
+                    </td>
+                    <td className="py-3.5 px-4 border-l border-slate-800 align-middle">
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-purple-500/10 text-purple-300 border border-purple-500/20 font-bold text-xs">
                         📦 {row.category}
                       </span>
@@ -1024,6 +1053,9 @@ export default function HistorySalesPage() {
                     </td>
                     <td className="py-3.5 px-4 border-l border-slate-800 font-extrabold text-rose-400 text-base font-mono align-middle">
                       {row.avg3.toLocaleString('id-ID')}
+                    </td>
+                    <td className="py-3.5 px-4 border-l border-slate-800 font-black text-amber-400 text-base font-mono align-middle">
+                      {row.kontribusi.toFixed(2)}%
                     </td>
                     <td className="py-3.5 px-4 border-l border-slate-800 text-xs align-middle">
                       <div className="font-mono text-cyan-300 font-bold">M: {row.m.toLocaleString('id-ID')}</div>
@@ -1076,22 +1108,34 @@ export default function HistorySalesPage() {
             {/* Grafik Bar Category Insentif Stacked per Periode */}
             <div className="h-[400px] w-full bg-slate-950/60 p-5 rounded-2xl border border-slate-800 shadow-inner flex flex-col justify-between">
               <h4 className="text-xs font-bold uppercase tracking-wider text-purple-300 mb-2 text-center flex items-center justify-center gap-2">
-                📊 Persebaran Hasil Penjualan per Category Insentif (Sumbu X: M s/d M-5)
+                📊 Proporsi Volume Penjualan per Category Insentif (100% Stacked • Sumbu X: M s/d M-5)
               </h4>
               <div className="flex-1 w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={insentifChartData.data} margin={{ top: 15, right: 20, left: 10, bottom: 25 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.4} />
                     <XAxis dataKey="period" stroke="#94a3b8" tick={{ fill: '#ffffff', fontSize: 14, fontWeight: 800 }} />
-                    <YAxis stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 11 }} tickFormatter={(val) => Number(val).toLocaleString('id-ID')} />
+                    <YAxis domain={[0, 100]} stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 11 }} tickFormatter={(val) => `${Number(val)}%`} />
                     <Tooltip
                       contentStyle={{ backgroundColor: '#0f172a', borderColor: '#a855f7', borderRadius: '12px', boxShadow: '0 15px 35px rgba(0,0,0,0.8)' }}
                       labelStyle={{ color: '#d8b4fe', fontWeight: 'bold', borderBottom: '1px solid #334155', paddingBottom: '4px' }}
-                      formatter={(val: any, name: any) => [Number(val).toLocaleString('id-ID') + ' Unit', name]}
+                      formatter={(val: any, name: any, props: any) => {
+                        const rawQty = props?.payload?.[`${name}_qty`] || 0;
+                        return [`${Number(rawQty).toLocaleString('id-ID')} Unit (${Number(val).toFixed(1)}%)`, name];
+                      }}
                     />
                     <Legend wrapperStyle={{ paddingTop: '15px', fontSize: '12px', fontWeight: 'bold' }} />
                     {insentifChartData.categories.map((cat, idx) => (
-                      <Bar key={cat} dataKey={cat} name={cat} stackId="insentif_stack" fill={COLORS[idx % COLORS.length]} maxBarSize={70} />
+                      <Bar key={cat} dataKey={cat} name={cat} stackId="insentif_stack" fill={COLORS[idx % COLORS.length]} maxBarSize={70}>
+                        <LabelList
+                          dataKey={cat}
+                          position="center"
+                          fill="#ffffff"
+                          fontSize={11}
+                          fontWeight="bold"
+                          formatter={(val: any) => (Number(val) > 4 ? `${Math.round(Number(val))}%` : '')}
+                        />
+                      </Bar>
                     ))}
                   </BarChart>
                 </ResponsiveContainer>

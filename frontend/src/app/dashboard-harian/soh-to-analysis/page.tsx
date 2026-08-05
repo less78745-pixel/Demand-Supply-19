@@ -118,6 +118,9 @@ const calculateStockCondition = (onHand: number, totalTO: number, totalVessel: n
   }
   const exactRatio = totalSupply / effectiveTarget;
   const ratio = toExactFloat(exactRatio, 2);
+  if (ratio > 1.5 || exactRatio > 1.500001) {
+    return { ratio, status: 'Overstock', badge: '🟣 OVERSTOCK', color: 'bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-sm shadow-purple-500/10' };
+  }
   if (ratio > 1.25 || exactRatio > 1.250001) {
     return { ratio, status: 'Aman', badge: '🟢 AMAN', color: 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' };
   }
@@ -733,7 +736,7 @@ export default function SOHAnalysisPage() {
   // Executive Calculation Summary & Condition Breakdown
   const calculationSummary = useMemo(() => {
     if (!detailedTableData || detailedTableData.length === 0) {
-      return { totalOH: 0, totalTO: 0, totalVessel: 0, totalSupply: 0, totalTargetSales: 0, totalOutstanding: 0, totalSalesBerjalan: 0, totalEffectiveTarget: 0, globalRatio: 0, globalStatus: 'N/A', badgeColor: 'bg-slate-700/50 text-slate-300 border-slate-600', countAman: 0, countHati: 0, countBahaya: 0, totalItems: 0 };
+      return { totalOH: 0, totalTO: 0, totalVessel: 0, totalSupply: 0, totalTargetSales: 0, totalOutstanding: 0, totalSalesBerjalan: 0, totalEffectiveTarget: 0, globalRatio: 0, globalStatus: 'N/A', badgeColor: 'bg-slate-700/50 text-slate-300 border-slate-600', countOverstock: 0, countAman: 0, countHati: 0, countBahaya: 0, totalItems: 0 };
     }
     let totalOH = 0;
     let totalTO = 0;
@@ -741,6 +744,7 @@ export default function SOHAnalysisPage() {
     let totalTargetSales = 0;
     let totalOutstanding = 0;
     let totalSalesBerjalan = 0;
+    let countOverstock = 0;
     let countAman = 0;
     let countHati = 0;
     let countBahaya = 0;
@@ -752,7 +756,8 @@ export default function SOHAnalysisPage() {
       totalTargetSales += (row['Target Sales'] || 0);
       totalOutstanding += (row['Outstanding Target'] || 0);
       totalSalesBerjalan += (row['Sales Berjalan'] || 0);
-      if (row.status === 'Aman') countAman++;
+      if (row.status === 'Overstock') countOverstock++;
+      else if (row.status === 'Aman') countAman++;
       else if (row.status === 'Hati-Hati') countHati++;
       else if (row.status === 'Bahaya') countBahaya++;
     }
@@ -763,8 +768,11 @@ export default function SOHAnalysisPage() {
     
     let globalStatus = '⚪ N/A (Target <= 0)';
     let badgeColor = 'bg-slate-700/50 text-slate-300 border border-slate-600';
-    if (globalRatio > 1.25) {
-      globalStatus = '🟢 AMAN (Rasio > 1.25)';
+    if (globalRatio > 1.5) {
+      globalStatus = '🟣 OVERSTOCK (Rasio > 1.50)';
+      badgeColor = 'bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-lg shadow-purple-500/20';
+    } else if (globalRatio > 1.25) {
+      globalStatus = '🟢 AMAN (Rasio 1.25 - 1.50)';
       badgeColor = 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40';
     } else if (globalRatio >= 1.0) {
       globalStatus = '🟡 HATI-HATI (Rasio 1.0 - 1.25)';
@@ -786,6 +794,7 @@ export default function SOHAnalysisPage() {
       globalRatio,
       globalStatus,
       badgeColor,
+      countOverstock,
       countAman,
       countHati,
       countBahaya,
@@ -1440,7 +1449,8 @@ export default function SOHAnalysisPage() {
           <div className="p-4 rounded-xl bg-slate-800/60 border border-slate-700/60 shadow-inner">
             <span className="text-xs font-bold text-slate-400 block mb-1">📊 Rincian Kesimpulan Baris</span>
             <div className="flex flex-wrap items-center gap-1 mt-1 font-mono text-[11px] font-black">
-              <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" title="Aman (>1.25)">🟢 {calculationSummary.countAman}</span>
+              <span className="px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30" title="Overstock (>1.50)">🟣 {calculationSummary.countOverstock}</span>
+              <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" title="Aman (1.25-1.50)">🟢 {calculationSummary.countAman}</span>
               <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30" title="Hati-Hati (1.0-1.25)">🟡 {calculationSummary.countHati}</span>
               <span className="px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30" title="Bahaya (<1.0)">🔴 {calculationSummary.countBahaya}</span>
             </div>
@@ -1450,7 +1460,7 @@ export default function SOHAnalysisPage() {
         <div className="p-3.5 rounded-xl bg-slate-950/90 border border-slate-800 text-xs text-slate-300 flex flex-wrap items-center justify-between gap-3">
           <span className="flex items-center gap-2 font-medium">
             <Info className="w-4 h-4 text-cyan-400 shrink-0" />
-            <span><b>Logika Evaluasi Kondisi:</b> 🟢 <b>Aman</b> = Rasio &gt; 1.25 | 🟡 <b>Hati-Hati</b> = Rasio 1.00 s/d 1.25 | 🔴 <b>Bahaya</b> = Rasio &lt; 1.00 (Pasokan Tidak Mencukupi Sisa Target)</span>
+            <span><b>Logika Evaluasi Kondisi:</b> 🟣 <b>Overstock</b> = Rasio &gt; 1.50 | 🟢 <b>Aman</b> = Rasio 1.25 s/d 1.50 | 🟡 <b>Hati-Hati</b> = Rasio 1.00 s/d 1.25 | 🔴 <b>Bahaya</b> = Rasio &lt; 1.00 (Pasokan Tidak Mencukupi Sisa Target)</span>
           </span>
         </div>
       </GlassCard>
@@ -1726,7 +1736,7 @@ export default function SOHAnalysisPage() {
                     {Math.round(row['PLAN LOADING'] || 0).toLocaleString('id-ID')}
                   </td>
                   <td className="py-3 px-3 border-l border-slate-800 font-bold text-amber-300 font-mono text-sm bg-slate-950/40">
-                    {row['Outstanding Target Sales'] > 0 ? Math.round(row['Outstanding Target Sales']).toLocaleString('id-ID') : '-'}
+                    {row['Outstanding Target'] > 0 ? Math.round(row['Outstanding Target']).toLocaleString('id-ID') : '-'}
                   </td>
                   <td className="py-3 px-3 border-l border-slate-800 font-bold text-cyan-300 font-mono text-sm bg-slate-950/40">
                     {row['Sales Berjalan'] > 0 ? Math.round(row['Sales Berjalan']).toLocaleString('id-ID') : '-'}
