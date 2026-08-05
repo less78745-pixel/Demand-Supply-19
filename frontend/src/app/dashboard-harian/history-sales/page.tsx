@@ -10,7 +10,7 @@ import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import {
   TrendingUp, BarChart3, Download, Sparkles,
   AlertCircle, Award, Layers, HelpCircle, FileSpreadsheet, AlertTriangle,
-  Filter, Search, X, RefreshCw
+  Filter, Search, X, RefreshCw, CheckCircle2, Info, ArrowUpRight, ArrowDownRight, ShieldAlert, Zap
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
@@ -561,6 +561,184 @@ export default function HistorySalesPage() {
     return { data, categories };
   }, [parsed, filtered, colCategoryInsentif]);
 
+  // 1. ABC-XYZ Analysis calculation (M s/d M-5)
+  const abcXyzAnalysis = useMemo(() => {
+    if (!parsed || filtered.length === 0) return null;
+    const periodNames = ['M', 'M-1', 'M-2', 'M-3', 'M-4', 'M-5'];
+    const periodCols: Record<string, string | undefined> = {};
+    periodNames.forEach(p => {
+      const found = parsed.headers.find(h => h.trim().toUpperCase() === p.toUpperCase());
+      if (found) periodCols[p] = found;
+    });
+
+    const itemMap: Record<string, any> = {};
+    for (const row of filtered) {
+      const cab = colCabang ? (row[colCabang] || 'All') : 'All';
+      const cat = colCategory ? (row[colCategory] || 'Umum') : 'Umum';
+      const itemDesc = row['NAMA BARANG'] || row['Item'] || row[colCategory || ''] || 'Item';
+      const key = `${cab}___${itemDesc}`;
+
+      if (!itemMap[key]) {
+        itemMap[key] = { key, cabang: cab, category: cat, name: itemDesc, periods: [], totalVol: 0 };
+      }
+
+      periodNames.forEach((p, idx) => {
+        const colName = periodCols[p];
+        const val = colName && row[colName] !== undefined ? Number(String(row[colName] || 0).replace(/[^0-9.-]+/g, '')) || 0 : 0;
+        itemMap[key].periods[idx] = (itemMap[key].periods[idx] || 0) + val;
+      });
+    }
+
+    const rawItems = Object.values(itemMap).map(item => {
+      const totalVol = item.periods.reduce((a: number, b: number) => a + b, 0);
+      const mean = totalVol / 6;
+      let variance = 0;
+      item.periods.forEach((val: number) => {
+        variance += Math.pow(val - mean, 2);
+      });
+      const stdDev = Math.sqrt(variance / 6);
+      const cv = mean > 0 ? stdDev / mean : 0;
+      let xyz = 'Z';
+      if (cv <= 0.20) xyz = 'X';
+      else if (cv <= 0.50) xyz = 'Y';
+
+      return { ...item, totalVol, mean, stdDev, cv: Number(cv.toFixed(2)), xyz };
+    }).sort((a, b) => b.totalVol - a.totalVol);
+
+    const grandTotalVol = rawItems.reduce((a, b) => a + b.totalVol, 0);
+    let cumVol = 0;
+    const classifiedItems = rawItems.map(item => {
+      cumVol += item.totalVol;
+      const cumPct = grandTotalVol > 0 ? (cumVol / grandTotalVol) * 100 : 100;
+      let abc = 'C';
+      if (cumPct <= 80 || (item.totalVol > 0 && cumVol === item.totalVol && cumPct > 80)) abc = 'A';
+      else if (cumPct <= 95) abc = 'B';
+      const matrix = `${abc}${item.xyz}`;
+      return { ...item, abc, cumPct: Number(cumPct.toFixed(1)), matrix };
+    });
+
+    const matrixCount: Record<string, { count: number; volume: number }> = {
+      'AX': { count: 0, volume: 0 }, 'AY': { count: 0, volume: 0 }, 'AZ': { count: 0, volume: 0 },
+      'BX': { count: 0, volume: 0 }, 'BY': { count: 0, volume: 0 }, 'BZ': { count: 0, volume: 0 },
+      'CX': { count: 0, volume: 0 }, 'CY': { count: 0, volume: 0 }, 'CZ': { count: 0, volume: 0 }
+    };
+
+    classifiedItems.forEach(item => {
+      if (matrixCount[item.matrix]) {
+        matrixCount[item.matrix].count += 1;
+        matrixCount[item.matrix].volume += item.totalVol;
+      }
+    });
+
+    const chartData = Object.entries(matrixCount).map(([matrix, data]) => ({
+      matrix,
+      count: data.count,
+      volume: Math.round(data.volume),
+      fill: matrix.startsWith('A') ? '#10b981' : matrix.startsWith('B') ? '#3b82f6' : '#f59e0b'
+    }));
+
+    const topAZ = classifiedItems.filter(i => i.matrix === 'AZ' || i.matrix === 'AY').slice(0, 3);
+    const topAX = classifiedItems.filter(i => i.matrix === 'AX' || i.matrix === 'BX').slice(0, 3);
+
+    return { classifiedItems, matrixCount, chartData, grandTotalVol, topAZ, topAX };
+  }, [parsed, filtered, colCabang, colCategory]);
+
+  // 2. Cabang Supply (SOH + TO + Vessel) vs AVG 3 Bulan calculation & insight
+  const cabangSupplyVsAvg3 = useMemo(() => {
+    if (!parsed || filtered.length === 0) return null;
+    const map: Record<string, { cabang: string; soh: number; to: number; vessel: number; totalSupply: number; avg3: number; ratio: number; diff: number }> = {};
+
+    const colSOH = findColumn(parsed.headers, ['soh', 'on hand', 'stock on hand']);
+    const colTO = findColumn(parsed.headers, ['to', 'transfer order']);
+    const colVessel = findColumn(parsed.headers, ['on vessel', 'vessel', 'in transit', 'on_vessel']);
+    const colAvg = findColumn(parsed.headers, ['avg sales 3 bln', 'avg sales', 'avg']);
+
+    for (const row of filtered) {
+      const cab = colCabang ? String(row[colCabang] || 'Unknown') : 'All';
+      if (!map[cab]) {
+        map[cab] = { cabang: cab, soh: 0, to: 0, vessel: 0, totalSupply: 0, avg3: 0, ratio: 0, diff: 0 };
+      }
+      const soh = colSOH ? Number(String(row[colSOH] || 0).replace(/[^0-9.-]+/g, '')) || 0 : 0;
+      const to = colTO ? Number(String(row[colTO] || 0).replace(/[^0-9.-]+/g, '')) || 0 : 0;
+      const vessel = colVessel ? Number(String(row[colVessel] || 0).replace(/[^0-9.-]+/g, '')) || 0 : 0;
+      const avg3 = colAvg ? Number(String(row[colAvg] || 0).replace(/[^0-9.-]+/g, '')) || 0 : 0;
+
+      map[cab].soh += soh;
+      map[cab].to += to;
+      map[cab].vessel += vessel;
+      map[cab].totalSupply += (soh + to + vessel);
+      map[cab].avg3 += avg3;
+    }
+
+    const list = Object.values(map).map(item => {
+      const ratio = item.avg3 > 0 ? Number(((item.totalSupply / item.avg3) * 100).toFixed(1)) : 0;
+      const diff = item.totalSupply - item.avg3;
+      return { ...item, ratio, diff };
+    });
+
+    const underAvg = list.filter(item => item.totalSupply < item.avg3 && item.avg3 > 0).sort((a, b) => a.ratio - b.ratio);
+    const over125 = list.filter(item => item.totalSupply > (1.25 * item.avg3)).sort((a, b) => b.ratio - a.ratio);
+    const normalRange = list.filter(item => item.totalSupply >= item.avg3 && item.totalSupply <= (1.25 * item.avg3));
+
+    return { underAvg, over125, normalRange, list };
+  }, [parsed, filtered, colCabang]);
+
+  // 3. Table Sales vs Outstanding Insights
+  const tableSalesVsOutInsights = useMemo(() => {
+    if (!tableData || tableData.length === 0) return null;
+    let countPositiveGrowth = 0;
+    let countNegativeGrowth = 0;
+    let totalSalesVol = 0;
+    let totalOutVol = 0;
+    let highestOutRatioItem: any = null;
+
+    tableData.forEach(row => {
+      totalSalesVol += row.sales;
+      totalOutVol += row.outstanding;
+      if (row.growthM > 0) countPositiveGrowth++;
+      else if (row.growthM < 0) countNegativeGrowth++;
+
+      if (row.sales > 50 && (!highestOutRatioItem || row.ratio > highestOutRatioItem.ratio)) {
+        highestOutRatioItem = row;
+      }
+    });
+
+    const globalOutRatio = totalSalesVol > 0 ? Number(((totalOutVol / totalSalesVol) * 100).toFixed(1)) : 0;
+    const topContributors = [...tableData].sort((a, b) => b.kontribusi - a.kontribusi).slice(0, 3);
+
+    return {
+      countPositiveGrowth,
+      countNegativeGrowth,
+      globalOutRatio,
+      highestOutRatioItem,
+      topContributors
+    };
+  }, [tableData]);
+
+  // 4. Insentif Analysis Insights
+  const insentifInsights = useMemo(() => {
+    if (!insentifAnalysis || insentifAnalysis.length === 0) return null;
+    let topTier: any = null;
+    let highestOutTier: any = null;
+    let totalTierSales = 0;
+    let totalTierOut = 0;
+
+    insentifAnalysis.forEach(item => {
+      totalTierSales += item.totalSales;
+      totalTierOut += item.totalOutstanding;
+      if (!topTier || item.totalSales > topTier.totalSales) {
+        topTier = item;
+      }
+      if (!highestOutTier || (item.ratio > highestOutTier.ratio && item.totalSales > 100)) {
+        highestOutTier = item;
+      }
+    });
+
+    const avgTierRatio = totalTierSales > 0 ? Number(((totalTierOut / totalTierSales) * 100).toFixed(1)) : 0;
+
+    return { topTier, highestOutTier, avgTierRatio };
+  }, [insentifAnalysis]);
+
   const currentRawUniqueValues = useMemo(() => {
     if (!activeRawColModal || !parsed) return [];
     const set = new Set<string>();
@@ -795,6 +973,117 @@ export default function HistorySalesPage() {
         </div>
       </GlassCard>
 
+      {/* ─── ANALISIS ABC-XYZ (DATA M s/d M-5) ─── */}
+      {abcXyzAnalysis && abcXyzAnalysis.classifiedItems.length > 0 && (
+        <GlassCard className="p-6 border-indigo-500/40 bg-gradient-to-br from-slate-900 via-indigo-950/20 to-slate-950 shadow-2xl overflow-hidden">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-slate-800 pb-4 mb-6 gap-4">
+            <div>
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-black bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 uppercase tracking-widest mb-2 shadow-sm">
+                <Sparkles className="w-3.5 h-3.5 text-indigo-400" /> Advanced Analytics • Matriks ABC-XYZ (M s/d M-5)
+              </div>
+              <h3 className="text-lg sm:text-xl font-black text-white flex items-center gap-2.5">
+                <BarChart3 className="w-6 h-6 text-indigo-400" />
+                Grafik &amp; Analisa Matriks ABC-XYZ (Volume vs Fluktuasi Permintaan)
+              </h3>
+              <p className="text-xs text-slate-300 mt-1 max-w-3xl leading-relaxed">
+                Menggabungkan klasifikasi <b>ABC</b> (kontribusi volume sales) dengan <b>XYZ</b> (koefisien variasi permintaan M s/d M-5) untuk menentukan strategi stok yang presisi.
+              </p>
+            </div>
+            <div className="flex flex-col items-end gap-1 font-mono text-xs text-slate-300 bg-slate-950/80 p-3 rounded-xl border border-slate-800 shrink-0">
+              <span className="text-slate-400 text-[10px]">TOTAL ITEMS DIANALISA</span>
+              <strong className="text-indigo-400 text-base font-extrabold">{abcXyzAnalysis.classifiedItems.length} Item / Kombinasi</strong>
+              <span className="text-[10px] text-emerald-400">X: Stabil (CV &le; 20%) | Y: Sedang | Z: Fluktuatif (CV &gt; 50%)</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
+            {/* Chart: Distribusi Matriks ABC-XYZ */}
+            <div className="lg:col-span-6 flex flex-col bg-slate-950/70 p-5 rounded-2xl border border-slate-800 shadow-inner">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-300 mb-4 text-center flex items-center justify-center gap-1.5">
+                📊 Jumlah Item dalam 9 Kuadran Matriks ABC-XYZ
+              </h4>
+              <div className="h-[280px] w-full flex-1">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={abcXyzAnalysis.chartData} margin={{ top: 15, right: 15, left: 0, bottom: 20 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.4} />
+                    <XAxis dataKey="matrix" stroke="#94a3b8" tick={{ fill: '#e2e8f0', fontSize: 13, fontWeight: 'bold' }} />
+                    <YAxis stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 12 }} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: '#0f172a', borderColor: '#6366f1', borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.8)' }}
+                      formatter={(val: any, name: any, props: any) => [
+                        `${Number(val).toLocaleString('id-ID')} Item (Vol: ${props.payload.volume.toLocaleString('id-ID')} Unit)`,
+                        'Jumlah Item'
+                      ]}
+                      labelStyle={{ color: '#818cf8', fontWeight: 'bold' }}
+                    />
+                    <Bar dataKey="count" name="Jumlah Item" radius={[6, 6, 0, 0]} maxBarSize={50}>
+                      {abcXyzAnalysis.chartData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.fill} stroke="#ffffff" strokeWidth={1} />
+                      ))}
+                      <LabelList dataKey="count" position="top" fill="#ffffff" fontSize={12} fontWeight="bold" />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="flex justify-center items-center gap-4 mt-3 text-[11px] font-semibold">
+                <span className="flex items-center gap-1.5 text-emerald-400"><span className="w-2.5 h-2.5 rounded bg-emerald-500"></span> A (Top 80% Vol)</span>
+                <span className="flex items-center gap-1.5 text-blue-400"><span className="w-2.5 h-2.5 rounded bg-blue-500"></span> B (15% Vol)</span>
+                <span className="flex items-center gap-1.5 text-amber-400"><span className="w-2.5 h-2.5 rounded bg-amber-500"></span> C (5% Vol)</span>
+              </div>
+            </div>
+
+            {/* Insight & Rekomendasi ABC-XYZ */}
+            <div className="lg:col-span-6 flex flex-col justify-between gap-4">
+              {/* Box 1: Sorotan Risiko (AZ & AY - Volume Tinggi, Permintaan Tidak Menentu) */}
+              <div className="p-4 rounded-xl bg-amber-950/20 border border-amber-500/30">
+                <div className="flex items-center gap-2 text-amber-300 font-extrabold text-xs uppercase tracking-wider mb-2.5">
+                  <AlertCircle className="w-4 h-4 text-amber-400" />
+                  <span>Sorotan Risiko Kritis: Kelompok AY &amp; AZ (High Vol, High Fluctuation)</span>
+                </div>
+                <p className="text-xs text-slate-300 mb-3 leading-relaxed">
+                  Item dalam kuadran <b>AZ &amp; AY</b> adalah penyumbang omzet terbesar namun memiliki fluktuasi permintaan tinggi di 6 bulan terakhir. Rentan mengalami stockout drastis atau overstock!
+                </p>
+                {abcXyzAnalysis.topAZ.length > 0 ? (
+                  <div className="space-y-1.5">
+                    {abcXyzAnalysis.topAZ.map((it, idx) => (
+                      <div key={idx} className="p-2 rounded-lg bg-slate-950/90 border border-amber-500/20 flex items-center justify-between text-xs">
+                        <div className="truncate pr-2">
+                          <span className="font-bold text-white block">📍 {it.cabang} - {it.name}</span>
+                          <span className="text-[10px] text-slate-400">Avg Vol: {Math.round(it.mean).toLocaleString('id-ID')} /bln | CV: {it.cv}</span>
+                        </div>
+                        <span className="px-2 py-1 bg-amber-500/20 text-amber-300 font-mono font-black text-xs rounded border border-amber-500/30">
+                          {it.matrix}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-xs text-slate-400 font-medium py-2">Semua item volume tinggi memiliki permintaan cukup stabil.</div>
+                )}
+              </div>
+
+              {/* Box 2: Strategi Optimasi (AX & BX - Stabil & Predictable) */}
+              <div className="p-4 rounded-xl bg-emerald-950/20 border border-emerald-500/30">
+                <div className="flex items-center gap-2 text-emerald-400 font-extrabold text-xs uppercase tracking-wider mb-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  <span>Rekomendasi Strategi Pengelolaan Matriks</span>
+                </div>
+                <ul className="text-xs text-slate-300 space-y-2 font-normal">
+                  <li className="flex items-start gap-2">
+                    <span className="text-emerald-400 font-black">✔</span>
+                    <span><b>Kuadran AX &amp; BX (Stabil):</b> Terapkan sistem pemesanan otomatis dengan safety stock rendah. Ketersediaan stok di gudang harus dijamin 99% karena permintaan konstan dan dapat diprediksi.</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-amber-400 font-black">▲</span>
+                    <span><b>Kuadran AZ &amp; BZ (Fluktuatif/Sporadik):</b> Jangan gunakan average sederhana. Siapkan buffer stok fleksibel dan pantau pesanan TO/Vessel secara berkala agar tidak bottleneck saat lonjakan musim.</span>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </GlassCard>
+      )}
+
       {/* ─── VISUALIZATION CHART: SALES VS OUTSTANDING ─── */}
       {chartData && chartData.length > 0 && (
         <GlassCard className="p-6 border-blue-500/30 bg-gradient-to-b from-slate-900/90 to-slate-950/90 shadow-2xl">
@@ -906,6 +1195,105 @@ export default function HistorySalesPage() {
               </ComposedChart>
             </ResponsiveContainer>
           </div>
+
+          {/* ─── INSIGHT CABANG: SOH + TO + VESSEL VS AVG SALES 3 BULAN ─── */}
+          {cabangSupplyVsAvg3 && (
+            <div className="mt-8 p-5 rounded-2xl bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 border border-blue-500/30 shadow-lg">
+              <div className="flex items-center gap-2.5 border-b border-slate-800 pb-3 mb-4">
+                <span className="p-2 rounded-xl bg-blue-500/20 text-blue-400">
+                  <ShieldAlert className="w-5 h-5 text-blue-400 animate-pulse" />
+                </span>
+                <div>
+                  <h4 className="font-extrabold text-white text-sm sm:text-base tracking-wide flex items-center gap-2">
+                    Insight Analitis: Komparasi Total Pasokan (SOH + TO + Vessel) vs Rata-Rata Sales 3 Bulan
+                  </h4>
+                  <p className="text-xs text-slate-400">
+                    Evaluasi ketahanan stok cabang terhadap kebutuhan rata-rata 3 bulan historis (AVG 3 Bln).
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {/* Box 1: Cabang Kurang dari AVG 3 Bulan */}
+                <div className="p-4 rounded-xl bg-rose-950/20 border border-rose-500/30 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between mb-3 border-b border-rose-500/20 pb-2">
+                      <span className="text-rose-300 font-black text-xs uppercase tracking-wider flex items-center gap-1.5">
+                        <ArrowDownRight className="w-4 h-4 text-rose-400" /> Cabang Pasokan Kurang dari AVG 3 Bln (&lt;100%)
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 font-mono font-extrabold text-[11px] border border-rose-500/30">
+                        {cabangSupplyVsAvg3.underAvg.length} Cabang Kritis
+                      </span>
+                    </div>
+                    {cabangSupplyVsAvg3.underAvg.length > 0 ? (
+                      <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                        {cabangSupplyVsAvg3.underAvg.map((item, idx) => (
+                          <div key={idx} className="p-2.5 rounded-xl bg-slate-950/90 border border-rose-500/20 flex items-center justify-between text-xs">
+                            <div>
+                              <div className="font-bold text-white text-sm">📍 {item.cabang}</div>
+                              <div className="text-[11px] text-slate-400 mt-0.5">
+                                Pasokan: <span className="text-rose-300 font-mono">{Math.round(item.totalSupply).toLocaleString('id-ID')}</span> | AVG 3 Bln: <span className="text-slate-200 font-mono">{Math.round(item.avg3).toLocaleString('id-ID')}</span>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="font-mono font-black text-rose-400 text-sm">{item.ratio}%</div>
+                              <div className="text-[10px] text-rose-300 font-semibold">Defisit: {Math.round(item.diff).toLocaleString('id-ID')}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="py-6 text-center text-emerald-400 font-bold text-xs">
+                        🎉 Semua cabang memiliki pasokan melebihi kebutuhan rata-rata 3 bulan!
+                      </div>
+                    )}
+                  </div>
+                  <div className="mt-3.5 pt-2.5 border-t border-rose-500/20 text-[11px] text-rose-300 leading-relaxed">
+                    ⚠️ <strong>Peringatan Kritis:</strong> Cabang di atas berpotensi kehabisan stok sebelum siklus bulan depan. Segera alokasikan kiriman TO tambahan atau percepat jadwal kapal!
+                  </div>
+                </div>
+
+                {/* Box 2: Cabang Melebihi 125% dari AVG 3 Bulan */}
+                <div className="p-4 rounded-xl bg-emerald-950/20 border border-emerald-500/30 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between mb-3 border-b border-emerald-500/20 pb-2">
+                      <span className="text-emerald-400 font-black text-xs uppercase tracking-wider flex items-center gap-1.5">
+                        <ArrowUpRight className="w-4 h-4 text-emerald-400" /> Cabang Melebihi 125% dari AVG 3 Bln (&gt;125%)
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono font-extrabold text-[11px] border border-emerald-500/30">
+                        {cabangSupplyVsAvg3.over125.length} Cabang Surplus / Buffer
+                      </span>
+                    </div>
+                    {cabangSupplyVsAvg3.over125.length > 0 ? (
+                      <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                        {cabangSupplyVsAvg3.over125.map((item, idx) => (
+                          <div key={idx} className="p-2.5 rounded-xl bg-slate-950/90 border border-emerald-500/20 flex items-center justify-between text-xs">
+                            <div>
+                              <div className="font-bold text-white text-sm">📍 {item.cabang}</div>
+                              <div className="text-[11px] text-slate-400 mt-0.5">
+                                Pasokan: <span className="text-emerald-300 font-mono">{Math.round(item.totalSupply).toLocaleString('id-ID')}</span> | AVG 3 Bln: <span className="text-slate-200 font-mono">{Math.round(item.avg3).toLocaleString('id-ID')}</span>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="font-mono font-black text-emerald-400 text-sm">{item.ratio}%</div>
+                              <div className="text-[10px] text-emerald-300 font-semibold">Surplus: +{Math.round(item.diff).toLocaleString('id-ID')}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="py-6 text-center text-slate-400 font-bold text-xs">
+                        Tidak ada cabang yang pasokannya melebihi batas buffer 125%.
+                      </div>
+                    )}
+                  </div>
+                  <div className="mt-3.5 pt-2.5 border-t border-emerald-500/20 text-[11px] text-emerald-300 leading-relaxed">
+                    🟢 <strong>Status: Buffer Sangat Aman / Overstocked.</strong> Cabang ini memiliki ketahanan suplai di atas 1,25 bulan. Sangat cocok sebagai sumber redistribusri (Transfer Order) jika ada cabang terdekat yang mengalami krisis suplai.
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </GlassCard>
       )}
 
@@ -1001,6 +1389,55 @@ export default function HistorySalesPage() {
             <Download className="w-4 h-4" /> Ekspor Hasil ke Excel / CSV
           </button>
         </div>
+
+        {/* ─── INSIGHT TABEL SALES VS OUTSTANDING ─── */}
+        {tableSalesVsOutInsights && (
+          <div className="mb-6 p-5 rounded-2xl bg-gradient-to-r from-blue-950/40 via-slate-900 to-slate-950 border border-blue-500/30 shadow-lg">
+            <div className="flex items-center gap-2 text-blue-400 font-extrabold text-sm sm:text-base mb-3 border-b border-blue-500/20 pb-2.5">
+              <Sparkles className="w-5 h-5 text-blue-400" />
+              <span>Insight Evaluasi Komparatif Sales vs Outstanding Order</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+              <div className="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800">
+                <span className="text-slate-400 font-bold text-[10px] uppercase block mb-1">Tren Pertumbuhan (M vs AVG 3 Bln)</span>
+                <div className="flex items-center justify-between text-sm font-extrabold mt-2">
+                  <span className="text-emerald-400 flex items-center gap-1">▲ {tableSalesVsOutInsights.countPositiveGrowth} Kombinasi Positif</span>
+                  <span className="text-rose-400 flex items-center gap-1">▼ {tableSalesVsOutInsights.countNegativeGrowth} Melambat</span>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-2 leading-tight">
+                  Menunjukkan perbandingan persentase item yang mengalami pertumbuhan volume pada bulan berjalan dibanding rata-rata 3 bulan.
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-amber-950/20 border border-amber-500/30">
+                <span className="text-amber-300 font-bold text-[10px] uppercase block mb-1">Rasio Outstanding Tertinggi (Bottleneck)</span>
+                {tableSalesVsOutInsights.highestOutRatioItem ? (
+                  <div>
+                    <div className="font-extrabold text-white text-sm truncate mt-1">📍 {tableSalesVsOutInsights.highestOutRatioItem.cabang} ({tableSalesVsOutInsights.highestOutRatioItem.category})</div>
+                    <div className="text-xs font-mono font-black text-amber-400 mt-1">Rasio Out/Sales: {tableSalesVsOutInsights.highestOutRatioItem.ratio.toFixed(1)}% ({tableSalesVsOutInsights.highestOutRatioItem.outstanding.toLocaleString('id-ID')} Unit Hold)</div>
+                    <p className="text-[11px] text-amber-200 mt-1.5 leading-tight">
+                      ⚠️ Kombinasi ini mengalami tunggakan pesanan paling tinggi terhadap penjualan aktual. Perlu intervensi logistik segera!
+                    </p>
+                  </div>
+                ) : (
+                  <span className="text-slate-400 text-xs">Tidak ada data outstanding signifikan.</span>
+                )}
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-purple-950/20 border border-purple-500/30">
+                <span className="text-purple-300 font-bold text-[10px] uppercase block mb-1">Top Kontributor Terhadap AVG Sales</span>
+                <div className="space-y-1.5 mt-2">
+                  {tableSalesVsOutInsights.topContributors.map((tc, idx) => (
+                    <div key={idx} className="flex justify-between items-center text-xs">
+                      <span className="text-white font-bold truncate pr-2">🏆 {tc.cabang} ({tc.category})</span>
+                      <span className="text-purple-300 font-mono font-black shrink-0">{tc.kontribusi.toFixed(1)}% Vol</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="overflow-x-auto rounded-xl border border-slate-800 max-h-[600px] overflow-y-auto">
           <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[1350px]">
@@ -1103,6 +1540,69 @@ export default function HistorySalesPage() {
               </p>
             </div>
           </div>
+
+          {/* ─── INSIGHT PERFORMA INSENTIF & OUTSTANDING ─── */}
+          {insentifInsights && (
+            <div className="mb-6 p-5 rounded-2xl bg-gradient-to-r from-purple-950/50 via-slate-900 to-slate-950 border border-purple-500/40 shadow-xl">
+              <div className="flex items-center gap-2 text-purple-300 font-extrabold text-sm sm:text-base mb-3 border-b border-purple-500/20 pb-2.5">
+                <Zap className="w-5 h-5 text-purple-400 animate-pulse" />
+                <span>Insight Eksekutif: Performa Penjualan &amp; Kendala Outstanding per Kategori Insentif</span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-xs">
+                <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 flex flex-col justify-between">
+                  <div>
+                    <span className="text-purple-300 font-extrabold uppercase tracking-wider text-[11px] flex items-center gap-1.5 mb-2">
+                      <Award className="w-4 h-4 text-purple-400" /> Kontributor Insentif Utama (Tier Dominan)
+                    </span>
+                    {insentifInsights.topTier ? (
+                      <div className="mt-2">
+                        <div className="text-base font-black text-white flex items-center gap-2">
+                          <span>💎 {insentifInsights.topTier.categoryInsentif}</span>
+                          <span className="text-xs font-semibold text-slate-400">({insentifInsights.topTier.cabang})</span>
+                        </div>
+                        <div className="text-sm font-mono font-extrabold text-cyan-300 mt-1">
+                          Total Volume Sales: {Math.round(insentifInsights.topTier.totalSales).toLocaleString('id-ID')} Unit
+                        </div>
+                        <p className="text-[11px] text-slate-300 mt-2 leading-relaxed">
+                          Kombinasi ini merupakan motor penggerak utama volume penjualan insentif. Pastikan alokasi stok untuk kategori ini selalu menjadi prioritas di gudang cabang agar ritme pencapaian insentif tim sales terjaga.
+                        </p>
+                      </div>
+                    ) : (
+                      <span className="text-slate-400">Belum ada data insentif.</span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-xl bg-amber-950/20 border border-amber-500/30 flex flex-col justify-between">
+                  <div>
+                    <span className="text-amber-300 font-extrabold uppercase tracking-wider text-[11px] flex items-center gap-1.5 mb-2">
+                      <AlertTriangle className="w-4 h-4 text-amber-400" /> Peringatan Outstanding Pada Produk Insentif
+                    </span>
+                    {insentifInsights.highestOutTier ? (
+                      <div className="mt-2">
+                        <div className="text-base font-black text-white flex items-center gap-2">
+                          <span>⚠️ {insentifInsights.highestOutTier.categoryInsentif}</span>
+                          <span className="text-xs font-semibold text-slate-400">({insentifInsights.highestOutTier.cabang})</span>
+                        </div>
+                        <div className="text-sm font-mono font-extrabold text-amber-400 mt-1">
+                          Rasio Outstanding: {insentifInsights.highestOutTier.ratio.toFixed(1)}% ({Math.round(insentifInsights.highestOutTier.totalOutstanding).toLocaleString('id-ID')} Unit Tertunda)
+                        </div>
+                        <p className="text-[11px] text-amber-200/90 mt-2 leading-relaxed">
+                          🚨 <strong>Perhatian:</strong> Terdapat tunggakan pesanan signifikan pada kategori bernilai insentif ini! Keterlambatan pengiriman (Hold Delivery/Vessel) berisiko menurunkan pencapaian KPI sales bulanan dan omzet riil.
+                        </p>
+                      </div>
+                    ) : (
+                      <span className="text-slate-400">Semua pesanan insentif terdistribusi lancar tanpa tunggakan tinggi.</span>
+                    )}
+                  </div>
+                  <div className="mt-3.5 pt-2.5 border-t border-amber-500/20 text-[11px] text-amber-300">
+                    💡 <strong>Rekomendasi Tindakan:</strong> Koordinasi intensif dengan tim logistik dan gudang untuk melakukan release barang-barang <i>Tier 1 &amp; Tier 2</i> yang masih berstatus Hold atau Plan Loading.
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="space-y-8">
             {/* Grafik Bar Category Insentif Stacked per Periode */}

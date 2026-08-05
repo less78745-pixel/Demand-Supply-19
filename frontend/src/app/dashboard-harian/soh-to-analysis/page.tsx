@@ -802,6 +802,60 @@ export default function SOHAnalysisPage() {
     };
   }, [detailedTableData]);
 
+  // Calculation Insights for Ratio from detailedTableData
+  const ratioInsights = useMemo(() => {
+    if (!detailedTableData || detailedTableData.length === 0) return null;
+    const totalItems = detailedTableData.length;
+    let overstockCount = 0;
+    let amanCount = 0;
+    let hatiCount = 0;
+    let bahayaCount = 0;
+    let totalSurplusQty = 0;
+    let totalDefisitQty = 0;
+
+    const criticalItems: any[] = [];
+    const overstockItems: any[] = [];
+
+    detailedTableData.forEach(item => {
+      const diff = (item.totalSupply || 0) - (item.effectiveTarget || 0);
+      if (item.status === 'Overstock') {
+        overstockCount++;
+        totalSurplusQty += Math.max(0, diff);
+        overstockItems.push({ ...item, surplus: diff });
+      } else if (item.status === 'Aman') {
+        amanCount++;
+      } else if (item.status === 'Hati-Hati') {
+        hatiCount++;
+      } else if (item.status === 'Bahaya') {
+        bahayaCount++;
+        totalDefisitQty += Math.abs(Math.min(0, diff));
+        criticalItems.push({ ...item, defisit: Math.abs(diff) });
+      }
+    });
+
+    criticalItems.sort((a, b) => (a.ratio - b.ratio) || (b.defisit - a.defisit));
+    overstockItems.sort((a, b) => (b.ratio - a.ratio) || (b.surplus - a.surplus));
+
+    const topCritical = criticalItems.slice(0, 3);
+    const topOverstock = overstockItems.slice(0, 3);
+    const bahayaPct = Number(((bahayaCount / totalItems) * 100).toFixed(1));
+    const overstockPct = Number(((overstockCount / totalItems) * 100).toFixed(1));
+
+    return {
+      totalItems,
+      overstockCount,
+      amanCount,
+      hatiCount,
+      bahayaCount,
+      bahayaPct,
+      overstockPct,
+      totalSurplusQty,
+      totalDefisitQty,
+      topCritical,
+      topOverstock
+    };
+  }, [detailedTableData]);
+
   const handleExport = () => {
     if (!currentData || !currentData.data || displayedSohTableData.length === 0) return;
     const header = [
@@ -1590,6 +1644,120 @@ export default function SOHAnalysisPage() {
                   >
                     Terapkan
                   </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ─── INSIGHT DARI HASIL HITUNGAN RATIO ─── */}
+        {ratioInsights && (
+          <div className="mb-6 p-5 rounded-2xl bg-gradient-to-br from-emerald-950/40 via-slate-900/90 to-slate-950/95 border border-emerald-500/30 shadow-lg shadow-emerald-500/5">
+            <div className="flex items-center gap-2.5 border-b border-emerald-500/20 pb-3 mb-4">
+              <span className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400">
+                <Sparkles className="w-5 h-5 animate-pulse" />
+              </span>
+              <div>
+                <h4 className="font-extrabold text-white text-sm sm:text-base tracking-wide flex items-center gap-2">
+                  Insight Strategis Evaluasi Rasio Ketersediaan (SOH & TO vs Target)
+                </h4>
+                <p className="text-[11px] sm:text-xs text-slate-400">
+                  Analisis otomatis keseimbangan stok berdasarkan rasio pasokan terhadap sisa target operasional.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+              {/* Box 1: Distribusi Status Rasio */}
+              <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 flex flex-col justify-between">
+                <div>
+                  <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px] mb-2 flex items-center gap-1.5">
+                    <BarChart3 className="w-3.5 h-3.5 text-blue-400" /> Distribusi Kondisi Stok
+                  </span>
+                  <div className="space-y-1.5 mt-2">
+                    <div className="flex justify-between items-center text-slate-300">
+                      <span>🟢 Aman (1.25 - 1.50x):</span>
+                      <strong className="text-emerald-400 font-mono">{ratioInsights.amanCount} Item</strong>
+                    </div>
+                    <div className="flex justify-between items-center text-slate-300">
+                      <span>🟡 Hati-Hati (1.00 - 1.25x):</span>
+                      <strong className="text-amber-400 font-mono">{ratioInsights.hatiCount} Item</strong>
+                    </div>
+                    <div className="flex justify-between items-center text-slate-300">
+                      <span>🟣 Overstock (&gt;1.50x):</span>
+                      <strong className="text-purple-300 font-mono">{ratioInsights.overstockCount} ({ratioInsights.overstockPct}%)</strong>
+                    </div>
+                    <div className="flex justify-between items-center text-slate-300">
+                      <span>🔴 Bahaya (&lt;1.00x):</span>
+                      <strong className="text-rose-400 font-mono">{ratioInsights.bahayaCount} ({ratioInsights.bahayaPct}%)</strong>
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-3 pt-2.5 border-t border-slate-800/80 text-[11px] text-slate-400">
+                  Total Surplus Qty: <strong className="text-purple-300">{ratioInsights.totalSurplusQty.toLocaleString('id-ID')}</strong> | Defisit: <strong className="text-rose-400">{ratioInsights.totalDefisitQty.toLocaleString('id-ID')}</strong>
+                </div>
+              </div>
+
+              {/* Box 2: Sorotan Kritis (Bahaya / Defisit) */}
+              <div className="p-4 rounded-xl bg-rose-950/20 border border-rose-500/30 flex flex-col justify-between">
+                <div>
+                  <span className="text-rose-300 font-bold uppercase tracking-wider text-[10px] mb-2 flex items-center gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5 text-rose-400" /> Cabang & Kategori Defisit Kritis (Rasio &lt; 1.0x)
+                  </span>
+                  {ratioInsights.topCritical.length > 0 ? (
+                    <div className="space-y-2 mt-2">
+                      {ratioInsights.topCritical.map((item, idx) => (
+                        <div key={idx} className="p-2 rounded-lg bg-rose-950/40 border border-rose-500/20 flex flex-col gap-0.5">
+                          <div className="flex justify-between items-center font-bold text-white text-[11px]">
+                            <span>📍 {item.cabang}</span>
+                            <span className="text-rose-400 font-mono px-1.5 py-0.5 rounded bg-rose-500/10 border border-rose-500/20">{item.ratio}x</span>
+                          </div>
+                          <div className="text-[10px] text-slate-300 truncate">📦 {item.category}</div>
+                          <div className="text-[10px] text-rose-300 font-mono">Defisit Pasokan: -{item.defisit.toLocaleString('id-ID')} Unit</div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="py-6 text-center text-emerald-400 font-bold flex flex-col items-center gap-1">
+                      <CheckCircle2 className="w-6 h-6" />
+                      <span>Semua cabang & kategori memiliki pasokan mencukupi!</span>
+                    </div>
+                  )}
+                </div>
+                {ratioInsights.topCritical.length > 0 && (
+                  <div className="mt-3 pt-2.5 border-t border-rose-500/20 text-[10px] text-rose-300">
+                    ⚠️ <strong>Action Required:</strong> Segera percepat jadwal Vessel & Plan Loading untuk item di atas!
+                  </div>
+                )}
+              </div>
+
+              {/* Box 3: Sorotan Overstock & Rekomendasi Rebalancing */}
+              <div className="p-4 rounded-xl bg-purple-950/20 border border-purple-500/30 flex flex-col justify-between">
+                <div>
+                  <span className="text-purple-300 font-bold uppercase tracking-wider text-[10px] mb-2 flex items-center gap-1.5">
+                    <TrendingUp className="w-3.5 h-3.5 text-purple-400" /> Potensi Rebalancing (Overstock &gt; 1.5x)
+                  </span>
+                  {ratioInsights.topOverstock.length > 0 ? (
+                    <div className="space-y-2 mt-2">
+                      {ratioInsights.topOverstock.map((item, idx) => (
+                        <div key={idx} className="p-2 rounded-lg bg-purple-950/40 border border-purple-500/20 flex flex-col gap-0.5">
+                          <div className="flex justify-between items-center font-bold text-white text-[11px]">
+                            <span>📍 {item.cabang}</span>
+                            <span className="text-purple-300 font-mono px-1.5 py-0.5 rounded bg-purple-500/10 border border-purple-500/20">{item.ratio}x</span>
+                          </div>
+                          <div className="text-[10px] text-slate-300 truncate">📦 {item.category}</div>
+                          <div className="text-[10px] text-purple-300 font-mono">Surplus Pasokan: +{item.surplus.toLocaleString('id-ID')} Unit</div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="py-6 text-center text-slate-400 font-semibold">
+                      Tidak ditemukan penumpukan stok ekstrem.
+                    </div>
+                  )}
+                </div>
+                <div className="mt-3 pt-2.5 border-t border-purple-500/20 text-[10px] text-purple-300">
+                  💡 <strong>Rekomendasi:</strong> Lakukan <b>Transfer Order (TO)</b> antar-cabang dari area surplus ke cabang yang defisit guna menekan holding cost.
                 </div>
               </div>
             </div>
