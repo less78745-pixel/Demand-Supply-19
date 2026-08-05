@@ -1171,7 +1171,7 @@ export default function SOHAnalysisPage() {
                     contentStyle={{ backgroundColor: '#020617', borderColor: '#f97316', borderRadius: '12px', boxShadow: '0 10px 30px rgba(0,0,0,0.9)', color: '#ffffff', opacity: 1, padding: '12px', zIndex: 100 }}
                     labelStyle={{ color: '#38bdf8', fontWeight: 'bold', borderBottom: '1px solid #334155', paddingBottom: '6px', marginBottom: '6px' }}
                     itemStyle={{ color: '#f8fafc', fontWeight: 700, padding: '2px 0' }}
-                    formatter={(value: any) => [`${Number(value).toLocaleString('id-ID')} ${unitLabel}`, undefined]}
+                    formatter={(value: any, name: any) => [`${Number(value || 0).toLocaleString('id-ID')} ${unitLabel}`, name || '']}
                   />
                   <Legend wrapperStyle={{ paddingTop: '16px', fontSize: '11px', fontWeight: 'bold' }} />
                   {categories.filter(c => c !== 'All').map((cat, idx) => (
@@ -1210,7 +1210,7 @@ export default function SOHAnalysisPage() {
                     contentStyle={{ backgroundColor: '#020617', borderColor: '#10b981', borderRadius: '12px', boxShadow: '0 10px 30px rgba(0,0,0,0.9)', color: '#ffffff', opacity: 1, padding: '12px', zIndex: 100 }}
                     labelStyle={{ color: '#38bdf8', fontWeight: 'bold', borderBottom: '1px solid #334155', paddingBottom: '6px', marginBottom: '6px' }}
                     itemStyle={{ color: '#f8fafc', fontWeight: 700, padding: '2px 0' }}
-                    formatter={(value: any) => [`${Number(value).toLocaleString('id-ID')} ${unitLabel}`, undefined]}
+                    formatter={(value: any, name: any) => [`${Number(value || 0).toLocaleString('id-ID')} ${unitLabel}`, name || '']}
                   />
                   <Legend wrapperStyle={{ paddingTop: '16px', fontSize: '12px' }} />
                   <Bar dataKey="On Hand" name="On Hand (Fisik)" fill="#10b981" stackId="a" />

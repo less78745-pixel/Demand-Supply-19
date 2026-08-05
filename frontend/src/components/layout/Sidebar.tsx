@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Activity, LineChart, Package,
   FileBarChart, TrendingUp, ClipboardList,
   Network, ShieldCheck, ArrowLeftRight, Ship, Radar,
-  ChevronDown, CalendarClock, Calculator, Layers, Route, Anchor, X, GitMerge
+  ChevronRight, CalendarClock, Calculator, Layers, Route, Anchor, X, GitMerge
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthStore, canAccess } from '@/stores/useAuthStore';
@@ -59,18 +59,7 @@ const MENU_ITEMS: MenuItem[] = [
 export function Sidebar({ mobileOpen = false, onCloseMobile }: { mobileOpen?: boolean; onCloseMobile?: () => void } = {}) {
   const pathname = usePathname();
   const { user } = useAuthStore();
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
-    // Auto-open groups if user is on a page within them
-    return {
-      '/dashboard-harian': pathname.startsWith('/dashboard-harian'),
-      '/kalkulator-dsp': pathname.startsWith('/kalkulator-dsp'),
-      '/scm-analytic': pathname.startsWith('/scm-analytic'),
-    };
-  });
-
-  const toggleGroup = (href: string) => {
-    setOpenGroups((prev) => ({ ...prev, [href]: !prev[href] }));
-  };
+  const [activePopup, setActivePopup] = useState<string | null>(null);
 
   // Filter menu items based on user role
   const visibleMenus = MENU_ITEMS.map((item) => {
@@ -87,7 +76,7 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: { mobileOpen?: bo
   });
 
   return (
-    <aside className={`fixed lg:static inset-y-0 left-0 z-40 w-64 bg-card/95 lg:bg-card/50 backdrop-blur-xl lg:backdrop-blur-sm flex-shrink-0 min-h-screen flex flex-col border-r border-border transition-transform duration-300 ease-in-out ${
+    <aside className={`fixed lg:static inset-y-0 left-0 z-50 w-64 bg-card/95 lg:bg-card/50 backdrop-blur-xl lg:backdrop-blur-sm flex-shrink-0 min-h-screen flex flex-col border-r border-border transition-transform duration-300 ease-in-out overflow-visible ${
       mobileOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full lg:translate-x-0'
     }`}>
       {/* Logo Area */}
@@ -123,73 +112,94 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: { mobileOpen?: bo
       )}
 
       {/* Navigation */}
-      <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
+      <nav className="flex-1 py-4 px-3 space-y-1.5 overflow-visible">
         {visibleMenus.map((item) => {
           const hasChildren = item.children && item.children.length > 0;
-          const isGroupOpen = openGroups[item.href] ?? false;
+          const isPopupOpen = activePopup === item.href;
           const isActive = pathname.startsWith(item.href);
           const Icon = item.icon;
 
           if (hasChildren) {
             return (
-              <div key={item.href}>
+              <div
+                key={item.href}
+                className="relative"
+                onMouseEnter={() => setActivePopup(item.href)}
+                onMouseLeave={() => setActivePopup(null)}
+              >
                 {/* Parent button */}
                 <button
-                  onClick={() => toggleGroup(item.href)}
-                  className={`w-full relative flex items-center px-3 py-2.5 rounded-md transition-all duration-200 ${
-                    isActive
-                      ? 'text-primary bg-primary/10 font-semibold'
-                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                  onClick={() => setActivePopup(isPopupOpen ? null : item.href)}
+                  className={`w-full relative flex items-center px-3 py-2.5 rounded-xl transition-all duration-200 ${
+                    isActive || isPopupOpen
+                      ? 'text-primary bg-primary/15 font-bold shadow-md shadow-primary/5 border border-primary/30'
+                      : 'text-muted-foreground hover:bg-muted hover:text-foreground border border-transparent'
                   }`}
                 >
                   {isActive && (
                     <motion.div
                       layoutId="active-nav-parent"
-                      className="absolute left-0 w-1 h-full bg-primary rounded-r-full"
+                      className="absolute left-0 w-1 h-full bg-primary rounded-r-full shadow-md shadow-primary"
                       initial={false}
                       transition={{ type: "spring", stiffness: 300, damping: 30 }}
                     />
                   )}
-                  <Icon className={`w-4 h-4 mr-3 ${isActive ? 'text-primary' : ''}`} />
+                  <Icon className={`w-4 h-4 mr-3 ${isActive || isPopupOpen ? 'text-primary' : ''}`} />
                   <span className="text-sm tracking-wide flex-1 text-left">{item.name}</span>
-                  <motion.div
-                    animate={{ rotate: isGroupOpen ? 180 : 0 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    <ChevronDown className="w-3.5 h-3.5" />
-                  </motion.div>
+                  <ChevronRight className={`w-4 h-4 transition-transform duration-200 ${
+                    isPopupOpen ? 'rotate-90 lg:rotate-0 lg:translate-x-0.5 text-primary' : ''
+                  }`} />
                 </button>
 
-                {/* Children */}
-                <AnimatePresence initial={false}>
-                  {isGroupOpen && (
+                {/* Pop-up Submenu / Flyout Card */}
+                <AnimatePresence>
+                  {isPopupOpen && (
                     <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.2, ease: 'easeInOut' }}
-                      className="overflow-hidden"
+                      initial={{ opacity: 0, x: -8, scale: 0.96 }}
+                      animate={{ opacity: 1, x: 0, scale: 1 }}
+                      exit={{ opacity: 0, x: -8, scale: 0.96 }}
+                      transition={{ duration: 0.15, ease: 'easeOut' }}
+                      className="z-50 lg:absolute lg:left-full lg:top-0 lg:pl-3 w-full lg:w-72 mt-1.5 lg:mt-0"
                     >
-                      <div className="ml-4 mt-1 pl-3 border-l border-border/50 space-y-0.5">
-                        {item.children!.map((child) => {
-                          const isChildActive = pathname === child.href;
-                          const ChildIcon = child.icon;
-                          return (
-                            <Link
-                              key={child.href}
-                              href={child.href}
-                              onClick={onCloseMobile}
-                              className={`relative flex items-center px-3 py-2 rounded-md transition-all duration-200 ${
-                                isChildActive
-                                  ? 'text-primary bg-primary/10 font-semibold'
-                                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                              }`}
-                            >
-                              <ChildIcon className={`w-3.5 h-3.5 mr-2.5 ${isChildActive ? 'text-primary' : ''}`} />
-                              <span className="text-xs tracking-wide">{child.name}</span>
-                            </Link>
-                          );
-                        })}
+                      <div className="p-3 bg-slate-900/95 lg:bg-slate-950/95 border border-slate-800 lg:border-slate-700/90 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.95)] rounded-2xl backdrop-blur-2xl text-white">
+                        <div className="px-2 py-1.5 border-b border-slate-800 mb-2 flex items-center justify-between">
+                          <span className="text-xs font-black uppercase tracking-wider text-cyan-400 flex items-center gap-2">
+                            <Icon className="w-3.5 h-3.5 text-cyan-400" />
+                            {item.name}
+                          </span>
+                          <span className="text-[10px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30 px-2 py-0.5 rounded-full">
+                            {item.children!.length} Modul
+                          </span>
+                        </div>
+                        
+                        <div className="space-y-1">
+                          {item.children!.map((child) => {
+                            const isChildActive = pathname === child.href;
+                            const ChildIcon = child.icon;
+                            return (
+                              <Link
+                                key={child.href}
+                                href={child.href}
+                                onClick={() => {
+                                  setActivePopup(null);
+                                  if (onCloseMobile) onCloseMobile();
+                                }}
+                                className={`group/item flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs transition-all duration-200 border ${
+                                  isChildActive
+                                    ? 'bg-gradient-to-r from-blue-600/90 to-indigo-600/90 text-white font-bold shadow-lg shadow-blue-600/30 border-blue-400/50 scale-[1.02]'
+                                    : 'text-slate-300 hover:bg-slate-800/90 hover:text-white border-transparent hover:border-slate-700/80 hover:translate-x-1 font-semibold'
+                                }`}
+                              >
+                                <div className={`p-1.5 rounded-lg transition-transform duration-200 ${
+                                  isChildActive ? 'bg-white/20 text-white' : 'bg-slate-800 text-blue-400 group-hover/item:scale-110 group-hover/item:bg-blue-500/20 group-hover/item:text-blue-300'
+                                }`}>
+                                  <ChildIcon className="w-4 h-4" />
+                                </div>
+                                <span className="flex-1 tracking-wide leading-snug">{child.name}</span>
+                              </Link>
+                            );
+                          })}
+                        </div>
                       </div>
                     </motion.div>
                   )}
@@ -202,23 +212,26 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: { mobileOpen?: bo
             <Link
               key={item.href}
               href={item.href}
-              onClick={onCloseMobile}
-              className={`relative flex items-center px-3 py-2.5 rounded-md transition-all duration-200 ${
+              onClick={() => {
+                setActivePopup(null);
+                if (onCloseMobile) onCloseMobile();
+              }}
+              className={`relative flex items-center px-3 py-2.5 rounded-xl transition-all duration-200 ${
                 isActive
-                  ? 'text-primary bg-primary/10 font-semibold'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                  ? 'text-primary bg-primary/15 font-bold shadow-md shadow-primary/5 border border-primary/30'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground border border-transparent'
               }`}
             >
               {isActive && (
                 <motion.div
                   layoutId="active-nav"
-                  className="absolute left-0 w-1 h-full bg-primary rounded-r-full"
+                  className="absolute left-0 w-1 h-full bg-primary rounded-r-full shadow-md shadow-primary"
                   initial={false}
                   transition={{ type: "spring", stiffness: 300, damping: 30 }}
                 />
               )}
               <Icon className={`w-4 h-4 mr-3 ${isActive ? 'text-primary' : ''}`} />
-              <span className="text-sm tracking-wide">{item.name}</span>
+              <span className="text-sm tracking-wide flex-1">{item.name}</span>
             </Link>
           );
         })}
