@@ -87,21 +87,21 @@ export function MultiSelect({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex w-full min-h-[44px] items-center justify-between gap-3 rounded-xl border border-slate-700 bg-slate-950/90 px-4 py-2.5 text-slate-200 shadow-lg hover:border-sky-500 hover:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500/50 transition-all font-semibold text-sm cursor-pointer"
+        className="flex w-full min-h-[44px] items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-2.5 text-foreground shadow-sm hover:border-primary hover:bg-muted/50 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all font-semibold text-sm cursor-pointer"
       >
-        <span className="truncate text-left text-white">{displayValue()}</span>
-        <ChevronDown className={cn("h-4 w-4 text-sky-400 shrink-0 transition-transform duration-200", isOpen ? "rotate-180 text-amber-300" : "")} />
+        <span className="truncate text-left text-foreground">{displayValue()}</span>
+        <ChevronDown className={cn("h-4 w-4 text-primary shrink-0 transition-transform duration-200", isOpen ? "rotate-180 text-primary" : "")} />
       </button>
 
       {isOpen && (
-        <div className="absolute left-0 z-[9999] mt-2 max-h-[380px] min-w-full w-max max-w-[500px] overflow-auto rounded-xl border border-slate-700 bg-slate-900 text-slate-100 shadow-[0_25px_60px_rgba(0,0,0,0.9)] ring-1 ring-white/15 py-2 backdrop-blur-2xl">
+        <div className="absolute left-0 z-[9999] mt-2 max-h-[380px] min-w-full w-max max-w-[500px] overflow-auto rounded-xl border border-border bg-card text-foreground shadow-[0_20px_50px_rgba(0,0,0,0.15)] ring-1 ring-black/5 py-2 backdrop-blur-2xl">
           <div
             onClick={() => toggleOption("All")}
-            className="flex cursor-pointer items-center px-4 py-2.5 text-slate-100 hover:bg-slate-800/90 hover:text-sky-300 transition-colors border-b border-slate-800/80 font-bold"
+            className="flex cursor-pointer items-center px-4 py-2.5 text-foreground hover:bg-muted/80 hover:text-primary transition-colors border-b border-border font-bold"
           >
             <div className={cn(
               "flex h-4 w-4 items-center justify-center border rounded mr-3 shrink-0 transition-all shadow-inner",
-              selected.includes("All") ? "border-sky-500 bg-sky-500 text-white shadow-sky-500/50" : "border-slate-600 bg-slate-950"
+              selected.includes("All") ? "border-primary bg-primary text-white shadow-primary/30" : "border-border bg-background"
             )}>
               {selected.includes("All") && <Check className="h-3 w-3 stroke-[3]" />}
             </div>
@@ -116,11 +116,11 @@ export function MultiSelect({
                   <div
                     key={option}
                     onClick={() => toggleOption(option)}
-                    className="flex cursor-pointer items-center px-4 py-2.5 text-slate-200 hover:bg-slate-800/80 hover:text-white transition-colors text-sm font-medium"
+                    className="flex cursor-pointer items-center px-4 py-2.5 text-foreground hover:bg-muted/70 hover:text-primary transition-colors text-sm font-medium"
                   >
                     <div className={cn(
                       "flex h-4 w-4 items-center justify-center border rounded mr-3 shrink-0 transition-all",
-                      checked ? "border-sky-500 bg-sky-600 text-white shadow-sm" : "border-slate-600 bg-slate-950"
+                      checked ? "border-primary bg-primary text-white shadow-sm" : "border-border bg-background"
                     )}>
                       {checked && <Check className="h-3 w-3 stroke-[3]" />}
                     </div>
@@ -129,7 +129,7 @@ export function MultiSelect({
                 );
               })
             ) : (
-              <div className="px-4 py-3 text-slate-400 text-xs italic text-center">Tidak ada opsi tersedia</div>
+              <div className="px-4 py-3 text-muted-foreground text-xs italic text-center">Tidak ada opsi tersedia</div>
             )}
           </div>
         </div>

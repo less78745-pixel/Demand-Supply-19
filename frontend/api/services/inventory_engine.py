@@ -3,6 +3,7 @@ import numpy as np
 import math
 import io
 from openpyxl import load_workbook
+from datetime import datetime, timedelta
 
 def _safe_float(v):
     """Safely cast to float and replace NaN or Inf with 0.0 to avoid JSON serialization errors."""
@@ -34,7 +35,7 @@ def run_inventory_from_mrp_bytes(file_bytes: bytes) -> dict:
     for rec in records:
         bf = compute_balance_series(rec, n_weeks, "forecast")
         for w in range(n_weeks):
-            synth_date = f"2026-01-{(w % 28) + 1:02d}"
+            synth_date = (datetime(2026, 1, 1) + timedelta(weeks=w)).strftime("%Y-%m-%d")
             inv_rows.append({
                 "Cabang": rec.cabang,
                 "Category": f"{rec.grup} - {rec.category}",

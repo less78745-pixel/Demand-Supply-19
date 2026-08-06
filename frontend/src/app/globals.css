@@ -4,23 +4,23 @@
 
 @layer base {
   :root {
-    --background: 220 20% 97%;
-    --foreground: 220 20% 10%;
+    --background: 0 0% 100%;
+    --foreground: 222 47% 11%;
 
     --card: 0 0% 100%;
-    --card-foreground: 220 20% 10%;
+    --card-foreground: 222 47% 11%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 220 20% 10%;
+    --popover-foreground: 222 47% 11%;
 
     --primary: 25 95% 53%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 220 14% 96%;
-    --secondary-foreground: 220 20% 10%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
 
-    --muted: 220 14% 96%;
-    --muted-foreground: 220 10% 46%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
 
     --accent: 25 95% 53%;
     --accent-foreground: 0 0% 100%;
@@ -28,11 +28,11 @@
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 220 13% 91%;
-    --input: 220 13% 91%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
     --ring: 25 95% 53%;
 
-    --radius: 0.5rem;
+    --radius: 0.75rem;
   }
 
   .dark {
@@ -79,13 +79,13 @@
 /* ═══ ScrewFast-inspired design utilities ═══ */
 @layer utilities {
   .glass {
-    @apply bg-card/80 backdrop-blur-sm border border-border;
+    @apply bg-card/90 backdrop-blur-md border border-border shadow-sm;
   }
   .glass-card {
-    @apply bg-card/80 backdrop-blur-sm border border-border shadow-sm;
+    @apply bg-card border border-border shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_30px_-4px_rgba(0,0,0,0.08)] transition-all duration-300;
   }
   .glass-card-hover {
-    @apply hover:border-primary/50 hover:shadow-primary/5 hover:shadow-lg transition-all duration-300;
+    @apply hover:border-primary/40 hover:shadow-primary/5 hover:shadow-lg transition-all duration-300;
   }
   .glass-alert {
     @apply bg-destructive/10 border border-destructive/50 text-destructive;
@@ -147,4 +147,36 @@ button, a, input, select, textarea {
     linear-gradient(hsl(var(--border) / 0.3) 1px, transparent 1px),
     linear-gradient(90deg, hsl(var(--border) / 0.3) 1px, transparent 1px);
   background-size: 60px 60px;
+}
+
+/* ═══ Universal Light Theme Overrides ═══ */
+@layer utilities {
+  :root:not(.dark) [class*="bg-slate-900"]:not([class*="bg-gradient"]),
+  :root:not(.dark) [class*="bg-slate-950"]:not([class*="bg-gradient"]),
+  :root:not(.dark) [class*="bg-[#0B1120]"]:not([class*="bg-gradient"]) {
+    background-color: hsl(var(--card)) !important;
+    color: hsl(var(--foreground));
+  }
+
+  :root:not(.dark) [class*="bg-slate-800"]:not([class*="bg-gradient"]) {
+    background-color: hsl(var(--muted)) !important;
+    color: hsl(var(--foreground));
+  }
+
+  :root:not(.dark) [class*="border-slate-800"],
+  :root:not(.dark) [class*="border-slate-700"],
+  :root:not(.dark) [class*="border-white/10"],
+  :root:not(.dark) [class*="border-white/5"] {
+    border-color: hsl(var(--border)) !important;
+  }
+
+  :root:not(.dark) [class*="text-slate-200"],
+  :root:not(.dark) [class*="text-slate-100"] {
+    color: hsl(var(--foreground)) !important;
+  }
+
+  :root:not(.dark) [class*="text-slate-300"],
+  :root:not(.dark) [class*="text-slate-400"] {
+    color: hsl(var(--muted-foreground)) !important;
+  }
 }

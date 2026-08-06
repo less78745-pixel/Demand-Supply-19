@@ -42,6 +42,60 @@ const SCENARIOS = [
   }
 ];
 
+function PaginatedTable<T>({
+  data,
+  pageSize = 50,
+  renderTable,
+}: {
+  data: T[];
+  pageSize?: number;
+  renderTable: (currentData: T[], page: number, totalPages: number) => React.ReactNode;
+}) {
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(data.length / pageSize));
+
+  useEffect(() => {
+    if (page > totalPages) setPage(1);
+  }, [data.length, totalPages, page]);
+
+  const currentData = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return data.slice(start, start + pageSize);
+  }, [data, page, pageSize]);
+
+  return (
+    <div className="w-full">
+      {renderTable(currentData, page, totalPages)}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between px-4 py-3 bg-muted/30 border-t border-border mt-2 rounded-b-lg text-foreground">
+          <div className="text-xs text-muted-foreground font-medium">
+            Menampilkan {(page - 1) * pageSize + 1} - {Math.min(page * pageSize, data.length)} dari {data.length.toLocaleString()} data
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="px-3 py-1 text-xs font-semibold rounded border border-border bg-background hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              Sebelumnya
+            </button>
+            <span className="text-xs font-bold px-2.5 py-1 bg-muted rounded">
+              {page} / {totalPages}
+            </span>
+            <button
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              className="px-3 py-1 text-xs font-semibold rounded border border-border bg-background hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              Selanjutnya
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function generateDemoOccupancy() {
   const dates = ['JAN-1', 'JAN-2', 'JAN-3', 'JAN-4', 'FEB-1', 'FEB-2'];
   const branches = [
@@ -702,26 +756,32 @@ export default function OccupancyPage() {
                   <h3 className="text-lg font-bold text-orange-500 mb-4 flex items-center gap-2 uppercase tracking-wide">
                     <AlertTriangle className="w-5 h-5" /> Over Occupancy (&gt; 100%)
                   </h3>
-                  <div className="overflow-x-auto max-h-48 overflow-y-auto">
-                    <table className="w-full text-sm text-left text-muted-foreground">
-                      <thead className="text-xs text-foreground uppercase bg-muted/50 border-b border-border sticky top-0 font-bold tracking-wider">
-                        <tr>
-                          <th className="px-4 py-3">Cabang</th>
-                          <th className="px-4 py-3">Tanggal</th>
-                          <th className="px-4 py-3 text-right">Occupancy</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {insights.over.map((a: any, i: number) => (
-                          <tr key={i} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                            <td className="px-4 py-3 font-medium text-foreground">{a.cabang}</td>
-                            <td className="px-4 py-3">{a.date}</td>
-                            <td className="px-4 py-3 text-right font-bold text-orange-500">{a.occupancy_pct}%</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <PaginatedTable
+                    data={insights.over}
+                    pageSize={25}
+                    renderTable={(slicedData) => (
+                      <div className="overflow-x-auto max-h-64 overflow-y-auto">
+                        <table className="w-full text-sm text-left text-muted-foreground">
+                          <thead className="text-xs text-foreground uppercase bg-muted/50 border-b border-border sticky top-0 font-bold tracking-wider">
+                            <tr>
+                              <th className="px-4 py-3">Cabang</th>
+                              <th className="px-4 py-3">Tanggal</th>
+                              <th className="px-4 py-3 text-right">Occupancy</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {slicedData.map((a: any, i: number) => (
+                              <tr key={i} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
+                                <td className="px-4 py-3 font-medium text-foreground">{a.cabang}</td>
+                                <td className="px-4 py-3">{a.date}</td>
+                                <td className="px-4 py-3 text-right font-bold text-orange-500">{a.occupancy_pct}%</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  />
                 </GlassCard>
               )}
 
@@ -730,26 +790,32 @@ export default function OccupancyPage() {
                   <h3 className="text-lg font-bold text-blue-500 mb-4 flex items-center gap-2 uppercase tracking-wide">
                     <Info className="w-5 h-5" /> Lower Occupancy (&lt; 50%)
                   </h3>
-                  <div className="overflow-x-auto max-h-48 overflow-y-auto">
-                    <table className="w-full text-sm text-left text-muted-foreground">
-                      <thead className="text-xs text-foreground uppercase bg-muted/50 border-b border-border sticky top-0 font-bold tracking-wider">
-                        <tr>
-                          <th className="px-4 py-3">Cabang</th>
-                          <th className="px-4 py-3">Tanggal</th>
-                          <th className="px-4 py-3 text-right">Occupancy</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {insights.lower.map((a: any, i: number) => (
-                          <tr key={i} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                            <td className="px-4 py-3 font-medium text-foreground">{a.cabang}</td>
-                            <td className="px-4 py-3">{a.date}</td>
-                            <td className="px-4 py-3 text-right font-bold text-blue-500">{a.occupancy_pct}%</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <PaginatedTable
+                    data={insights.lower}
+                    pageSize={25}
+                    renderTable={(slicedData) => (
+                      <div className="overflow-x-auto max-h-64 overflow-y-auto">
+                        <table className="w-full text-sm text-left text-muted-foreground">
+                          <thead className="text-xs text-foreground uppercase bg-muted/50 border-b border-border sticky top-0 font-bold tracking-wider">
+                            <tr>
+                              <th className="px-4 py-3">Cabang</th>
+                              <th className="px-4 py-3">Tanggal</th>
+                              <th className="px-4 py-3 text-right">Occupancy</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {slicedData.map((a: any, i: number) => (
+                              <tr key={i} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
+                                <td className="px-4 py-3 font-medium text-foreground">{a.cabang}</td>
+                                <td className="px-4 py-3">{a.date}</td>
+                                <td className="px-4 py-3 text-right font-bold text-blue-500">{a.occupancy_pct}%</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  />
                 </GlassCard>
               )}
             </div>
@@ -811,28 +877,34 @@ export default function OccupancyPage() {
               <h3 className="text-lg font-bold text-destructive mb-4 flex items-center gap-2 uppercase tracking-wide">
                 <AlertTriangle className="w-5 h-5" /> Shortage Alerts (Mengikuti Filter)
               </h3>
-              <div className="overflow-x-auto max-h-64 overflow-y-auto">
-                <table className="w-full text-sm text-left text-muted-foreground">
-                  <thead className="text-xs text-foreground uppercase bg-muted/50 border-b border-border sticky top-0 font-bold tracking-wider">
-                    <tr>
-                      <th className="px-4 py-3">Cabang</th>
-                      <th className="px-4 py-3">Category</th>
-                      <th className="px-4 py-3">Tanggal</th>
-                      <th className="px-4 py-3 text-right">Deficit</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredShortageAlerts.map((a: any, i: number) => (
-                      <tr key={i} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                        <td className="px-4 py-3 font-medium text-foreground">{a.cabang}</td>
-                        <td className="px-4 py-3 font-medium text-foreground">{a.category}</td>
-                        <td className="px-4 py-3">{a.date}</td>
-                        <td className="px-4 py-3 text-right text-destructive font-bold">{Number(a.deficit).toFixed(0)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <PaginatedTable
+                data={filteredShortageAlerts}
+                pageSize={50}
+                renderTable={(slicedData) => (
+                  <div className="overflow-x-auto max-h-96 overflow-y-auto">
+                    <table className="w-full text-sm text-left text-muted-foreground">
+                      <thead className="text-xs text-foreground uppercase bg-muted/50 border-b border-border sticky top-0 font-bold tracking-wider">
+                        <tr>
+                          <th className="px-4 py-3">Cabang</th>
+                          <th className="px-4 py-3">Category</th>
+                          <th className="px-4 py-3">Tanggal</th>
+                          <th className="px-4 py-3 text-right">Deficit</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {slicedData.map((a: any, i: number) => (
+                          <tr key={i} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
+                            <td className="px-4 py-3 font-medium text-foreground">{a.cabang}</td>
+                            <td className="px-4 py-3 font-medium text-foreground">{a.category}</td>
+                            <td className="px-4 py-3">{a.date}</td>
+                            <td className="px-4 py-3 text-right text-destructive font-bold">{Number(a.deficit).toFixed(0)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              />
             </GlassCard>
           )}
 
@@ -1106,71 +1178,77 @@ export default function OccupancyPage() {
                   <h3 className="text-lg font-bold text-foreground mb-4 uppercase tracking-wide">
                     Detailed Insights — Semua Kombinasi Cabang × Kategori
                   </h3>
-                  <div className="overflow-x-auto max-h-[520px] overflow-y-auto">
-                    <table className="w-full text-xs text-left text-muted-foreground min-w-[1100px]">
-                      <thead className="text-xs text-foreground uppercase bg-muted/50 border-b border-border sticky top-0 font-bold tracking-wider">
-                        <tr>
-                          <th className="px-3 py-3">Cabang</th>
-                          <th className="px-3 py-3">Category</th>
-                          <th className="px-3 py-3 text-center">Class</th>
-                          <th className="px-3 py-3 text-right">Volume</th>
-                          <th className="px-3 py-3 text-right">Mean Sales</th>
-                          <th className="px-3 py-3 text-right">CV</th>
-                          <th className="px-3 py-3 text-right">DOH</th>
-                          <th className="px-3 py-3 text-right">On Hand</th>
-                          <th className="px-3 py-3 text-center">Trend</th>
-                          <th className="px-3 py-3 text-center">Risk</th>
-                          <th className="px-3 py-3">Strategy</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredInvData.map((row: any, idx: number) => {
-                          const abcColor =
-                            row.abc === 'A' ? 'text-primary font-bold' :
-                            row.abc === 'B' ? 'text-orange-500' : 'text-muted-foreground';
-                          const xyzColor =
-                            row.xyz === 'X' ? 'text-blue-500' :
-                            row.xyz === 'Y' ? 'text-yellow-500' : 'text-destructive';
-                          const dohColor = row.doh > 90 ? 'text-destructive font-bold' :
-                                           row.doh < 14 ? 'text-orange-500 font-bold' : 'text-foreground';
-                          const trendColor = row.trend_pct > 5 ? 'text-primary' :
-                                             row.trend_pct < -5 ? 'text-destructive' : 'text-muted-foreground';
-
-                          return (
-                            <tr key={idx} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                              <td className="px-3 py-3 font-medium text-foreground">{row.cabang}</td>
-                              <td className="px-3 py-3 font-medium text-foreground">{row.category}</td>
-                              <td className="px-3 py-3 text-center">
-                                <span className={`font-mono font-bold text-sm ${abcColor}`}>{row.abc}</span>
-                                <span className={`font-mono font-bold text-sm ${xyzColor}`}>{row.xyz}</span>
-                              </td>
-                              <td className="px-3 py-3 text-right font-medium text-foreground">{Number(row.volume).toLocaleString()}</td>
-                              <td className="px-3 py-3 text-right font-medium text-foreground">{Number(row.mean_sales).toLocaleString()}</td>
-                              <td className="px-3 py-3 text-right text-muted-foreground">{Number(row.cv).toFixed(2)}</td>
-                              <td className={`px-3 py-3 text-right ${dohColor}`}>{row.doh}</td>
-                              <td className="px-3 py-3 text-right font-medium text-foreground">{Number(row.on_hand).toLocaleString()}</td>
-                              <td className={`px-3 py-3 text-center font-medium ${trendColor}`}>
-                                {row.trend_pct > 0 ? '▲' : row.trend_pct < 0 ? '▼' : '—'}
-                                {' '}{Math.abs(row.trend_pct).toFixed(1)}%
-                              </td>
-                              <td className="px-3 py-3 text-center">
-                                {row.stockout_risk && (
-                                  <span className="bg-destructive/10 text-destructive text-xs px-1.5 py-0.5 rounded font-bold mr-1">STOCKOUT</span>
-                                )}
-                                {row.overstock && (
-                                  <span className="bg-orange-500/10 text-orange-600 text-xs px-1.5 py-0.5 rounded font-bold">OVERSTOCK</span>
-                                )}
-                                {!row.stockout_risk && !row.overstock && (
-                                  <span className="text-muted-foreground font-semibold text-xs">OK</span>
-                                )}
-                              </td>
-                              <td className="px-3 py-3 text-muted-foreground text-xs max-w-xs leading-relaxed">{row.strategy}</td>
+                  <PaginatedTable
+                    data={filteredInvData}
+                    pageSize={50}
+                    renderTable={(slicedData) => (
+                      <div className="overflow-x-auto max-h-[620px] overflow-y-auto">
+                        <table className="w-full text-xs text-left text-muted-foreground min-w-[1100px]">
+                          <thead className="text-xs text-foreground uppercase bg-muted/50 border-b border-border sticky top-0 font-bold tracking-wider">
+                            <tr>
+                              <th className="px-3 py-3">Cabang</th>
+                              <th className="px-3 py-3">Category</th>
+                              <th className="px-3 py-3 text-center">Class</th>
+                              <th className="px-3 py-3 text-right">Volume</th>
+                              <th className="px-3 py-3 text-right">Mean Sales</th>
+                              <th className="px-3 py-3 text-right">CV</th>
+                              <th className="px-3 py-3 text-right">DOH</th>
+                              <th className="px-3 py-3 text-right">On Hand</th>
+                              <th className="px-3 py-3 text-center">Trend</th>
+                              <th className="px-3 py-3 text-center">Risk</th>
+                              <th className="px-3 py-3">Strategy</th>
                             </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+                          </thead>
+                          <tbody>
+                            {slicedData.map((row: any, idx: number) => {
+                              const abcColor =
+                                row.abc === 'A' ? 'text-primary font-bold' :
+                                row.abc === 'B' ? 'text-orange-500' : 'text-muted-foreground';
+                              const xyzColor =
+                                row.xyz === 'X' ? 'text-blue-500' :
+                                row.xyz === 'Y' ? 'text-yellow-500' : 'text-destructive';
+                              const dohColor = row.doh > 90 ? 'text-destructive font-bold' :
+                                               row.doh < 14 ? 'text-orange-500 font-bold' : 'text-foreground';
+                              const trendColor = row.trend_pct > 5 ? 'text-primary' :
+                                                 row.trend_pct < -5 ? 'text-destructive' : 'text-muted-foreground';
+
+                              return (
+                                <tr key={idx} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
+                                  <td className="px-3 py-3 font-medium text-foreground">{row.cabang}</td>
+                                  <td className="px-3 py-3 font-medium text-foreground">{row.category}</td>
+                                  <td className="px-3 py-3 text-center">
+                                    <span className={`font-mono font-bold text-sm ${abcColor}`}>{row.abc}</span>
+                                    <span className={`font-mono font-bold text-sm ${xyzColor}`}>{row.xyz}</span>
+                                  </td>
+                                  <td className="px-3 py-3 text-right font-medium text-foreground">{Number(row.volume).toLocaleString()}</td>
+                                  <td className="px-3 py-3 text-right font-medium text-foreground">{Number(row.mean_sales).toLocaleString()}</td>
+                                  <td className="px-3 py-3 text-right text-muted-foreground">{Number(row.cv).toFixed(2)}</td>
+                                  <td className={`px-3 py-3 text-right ${dohColor}`}>{row.doh}</td>
+                                  <td className="px-3 py-3 text-right font-medium text-foreground">{Number(row.on_hand).toLocaleString()}</td>
+                                  <td className={`px-3 py-3 text-center font-medium ${trendColor}`}>
+                                    {row.trend_pct > 0 ? '▲' : row.trend_pct < 0 ? '▼' : '—'}
+                                    {' '}{Math.abs(row.trend_pct).toFixed(1)}%
+                                  </td>
+                                  <td className="px-3 py-3 text-center">
+                                    {row.stockout_risk && (
+                                      <span className="bg-destructive/10 text-destructive text-xs px-1.5 py-0.5 rounded font-bold mr-1">STOCKOUT</span>
+                                    )}
+                                    {row.overstock && (
+                                      <span className="bg-orange-500/10 text-orange-600 text-xs px-1.5 py-0.5 rounded font-bold">OVERSTOCK</span>
+                                    )}
+                                    {!row.stockout_risk && !row.overstock && (
+                                      <span className="text-muted-foreground font-semibold text-xs">OK</span>
+                                    )}
+                                  </td>
+                                  <td className="px-3 py-3 text-muted-foreground text-xs max-w-xs leading-relaxed">{row.strategy}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  />
                 </GlassCard>
               </div>
             </>

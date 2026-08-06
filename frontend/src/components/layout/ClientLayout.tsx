@@ -73,7 +73,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
       <>
         {children}
         <Toaster position="top-right" toastOptions={{
-          className: '!bg-slate-800 !text-white !border !border-white/10 !backdrop-blur-md',
+          className: '!bg-white !text-slate-900 !border !border-slate-200 !shadow-lg !rounded-xl !backdrop-blur-md',
         }} />
       </>
     );
@@ -84,7 +84,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
       {/* Mobile Backdrop Overlay */}
       {mobileMenuOpen && (
         <div
-          className="fixed inset-0 bg-slate-950/75 z-30 lg:hidden backdrop-blur-xs transition-opacity duration-300"
+          className="fixed inset-0 bg-slate-900/40 z-30 lg:hidden backdrop-blur-xs transition-opacity duration-300"
           onClick={() => setMobileMenuOpen(false)}
         />
       )}
@@ -96,7 +96,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
         <main className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 relative">
           {children}
           <Toaster position="top-right" toastOptions={{
-            className: '!bg-slate-800 !text-white !border !border-white/10 !backdrop-blur-md text-xs sm:text-sm',
+            className: '!bg-white !text-slate-900 !border !border-slate-200 !shadow-lg !rounded-xl !backdrop-blur-md text-xs sm:text-sm',
           }} />
         </main>
       </div>

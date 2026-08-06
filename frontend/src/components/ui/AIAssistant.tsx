@@ -54,15 +54,15 @@ export function AIAssistant() {
             initial={{ opacity: 0, y: 20, scale: 0.9 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.9 }}
-            className="absolute bottom-16 right-0 w-80 h-96 bg-slate-900/95 border border-primary/30 shadow-[0_0_30px_hsl(var(--primary)/0.15)] backdrop-blur-xl rounded-2xl flex flex-col overflow-hidden"
+            className="absolute bottom-16 right-0 w-80 h-96 bg-card/95 border border-primary/30 shadow-[0_10px_30px_rgba(0,0,0,0.15)] backdrop-blur-xl rounded-2xl flex flex-col overflow-hidden"
           >
             {/* Header */}
-            <div className="p-4 border-b border-white/10 bg-gradient-to-r from-primary/20 to-slate-900 flex justify-between items-center">
+            <div className="p-4 border-b border-border bg-gradient-to-r from-primary/10 to-card flex justify-between items-center">
               <div className="flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-primary" />
-                <span className="font-semibold text-white">WMS AI Assistant</span>
+                <span className="font-semibold text-foreground">WMS AI Assistant</span>
               </div>
-              <button onClick={() => setIsOpen(false)} className="text-slate-400 hover:text-white transition">
+              <button onClick={() => setIsOpen(false)} className="text-muted-foreground hover:text-foreground transition">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -71,14 +71,14 @@ export function AIAssistant() {
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {messages.map((msg, i) => (
                 <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[85%] p-3 rounded-2xl text-sm ${msg.role === 'user' ? 'bg-primary text-primary-foreground rounded-br-none' : 'bg-slate-800 border border-white/5 text-slate-200 rounded-bl-none'}`}>
+                  <div className={`max-w-[85%] p-3 rounded-2xl text-sm ${msg.role === 'user' ? 'bg-primary text-primary-foreground rounded-br-none shadow-sm' : 'bg-muted border border-border text-foreground rounded-bl-none shadow-sm'}`}>
                     {msg.content}
                   </div>
                 </div>
               ))}
               {isTyping && (
                 <div className="flex justify-start">
-                  <div className="bg-slate-800 border border-white/5 p-3 rounded-2xl rounded-bl-none flex gap-1 items-center">
+                  <div className="bg-muted border border-border p-3 rounded-2xl rounded-bl-none flex gap-1 items-center shadow-sm">
                     <span className="w-2 h-2 bg-primary rounded-full animate-bounce"></span>
                     <span className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
                     <span className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
@@ -89,7 +89,7 @@ export function AIAssistant() {
             </div>
             
             {/* Input */}
-            <div className="p-3 border-t border-white/10 bg-slate-950/50">
+            <div className="p-3 border-t border-border bg-card">
               <div className="flex gap-2">
                 <input 
                   type="text" 
@@ -97,11 +97,11 @@ export function AIAssistant() {
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSend()}
                   placeholder="Tanya sesuatu..."
-                  className="flex-1 bg-slate-800 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-primary/50"
+                  className="flex-1 bg-background border border-border rounded-xl px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50"
                 />
                 <button 
                   onClick={handleSend}
-                  className="bg-primary text-primary-foreground p-2 rounded-xl hover:bg-primary/80 transition"
+                  className="bg-primary text-primary-foreground p-2 rounded-xl hover:bg-primary/90 transition shadow-sm"
                 >
                   <Send className="w-4 h-4" />
                 </button>

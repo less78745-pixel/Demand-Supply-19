@@ -66,7 +66,6 @@ export const ROLE_ACCESS: Record<UserRole, string[]> = {
     '/dashboard-harian',
     '/kalkulator-dsp/forecast',
     '/kalkulator-dsp/ddmrp',
-    '/kalkulator-dsp/ddmrp-phase2',
     // Legacy routes (redirect)
     '/forecast',
     '/soh-to-analysis',
@@ -77,7 +76,6 @@ export const ROLE_ACCESS: Record<UserRole, string[]> = {
     '/dashboard-harian',
     '/kalkulator-dsp/forecast',
     '/kalkulator-dsp/ddmrp',
-    '/kalkulator-dsp/ddmrp-phase2',
     // Legacy routes (redirect)
     '/forecast',
     '/soh-to-analysis',

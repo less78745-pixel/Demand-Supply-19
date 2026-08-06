@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Activity, LineChart, Package,
   FileBarChart, TrendingUp, ClipboardList,
   Network, ShieldCheck, ArrowLeftRight, Ship, Radar,
-  ChevronRight, CalendarClock, Calculator, Layers, Route, Anchor, X, GitMerge
+  ChevronRight, CalendarClock, Calculator, Layers, Route, Anchor, X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthStore, canAccess } from '@/stores/useAuthStore';
@@ -39,7 +39,6 @@ const MENU_ITEMS: MenuItem[] = [
       { name: 'Occupancy & Inventory', href: '/kalkulator-dsp/occupancy', icon: Activity },
       { name: 'Sales Forecasting', href: '/kalkulator-dsp/forecast', icon: LineChart },
       { name: 'DDMRP Buffer', href: '/kalkulator-dsp/ddmrp', icon: Layers },
-      { name: 'DDMRP Phase 2 (Rolling)', href: '/kalkulator-dsp/ddmrp-phase2', icon: GitMerge },
       { name: 'Route Optimization', href: '/kalkulator-dsp/route-optimization', icon: Route },
     ],
   },
@@ -161,13 +160,13 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: { mobileOpen?: bo
                       transition={{ duration: 0.15, ease: 'easeOut' }}
                       className="z-50 lg:absolute lg:left-full lg:top-0 lg:pl-3 w-full lg:w-72 mt-1.5 lg:mt-0"
                     >
-                      <div className="p-3 bg-slate-900/95 lg:bg-slate-950/95 border border-slate-800 lg:border-slate-700/90 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.95)] rounded-2xl backdrop-blur-2xl text-white">
-                        <div className="px-2 py-1.5 border-b border-slate-800 mb-2 flex items-center justify-between">
-                          <span className="text-xs font-black uppercase tracking-wider text-cyan-400 flex items-center gap-2">
-                            <Icon className="w-3.5 h-3.5 text-cyan-400" />
+                      <div className="p-3 bg-card/95 border border-border shadow-[0_15px_40px_rgba(0,0,0,0.15)] rounded-2xl backdrop-blur-2xl text-foreground">
+                        <div className="px-2 py-1.5 border-b border-border mb-2 flex items-center justify-between">
+                          <span className="text-xs font-black uppercase tracking-wider text-primary flex items-center gap-2">
+                            <Icon className="w-3.5 h-3.5 text-primary" />
                             {item.name}
                           </span>
-                          <span className="text-[10px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30 px-2 py-0.5 rounded-full">
+                          <span className="text-[10px] font-bold bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded-full">
                             {item.children!.length} Modul
                           </span>
                         </div>
@@ -186,12 +185,12 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: { mobileOpen?: bo
                                 }}
                                 className={`group/item flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs transition-all duration-200 border ${
                                   isChildActive
-                                    ? 'bg-gradient-to-r from-blue-600/90 to-indigo-600/90 text-white font-bold shadow-lg shadow-blue-600/30 border-blue-400/50 scale-[1.02]'
-                                    : 'text-slate-300 hover:bg-slate-800/90 hover:text-white border-transparent hover:border-slate-700/80 hover:translate-x-1 font-semibold'
+                                    ? 'bg-primary text-primary-foreground font-bold shadow-md shadow-primary/25 border-primary scale-[1.02]'
+                                    : 'text-muted-foreground hover:bg-muted/80 hover:text-foreground border-transparent hover:border-border hover:translate-x-1 font-semibold'
                                 }`}
                               >
                                 <div className={`p-1.5 rounded-lg transition-transform duration-200 ${
-                                  isChildActive ? 'bg-white/20 text-white' : 'bg-slate-800 text-blue-400 group-hover/item:scale-110 group-hover/item:bg-blue-500/20 group-hover/item:text-blue-300'
+                                  isChildActive ? 'bg-white/20 text-white' : 'bg-muted text-primary group-hover/item:scale-110 group-hover/item:bg-primary/15'
                                 }`}>
                                   <ChildIcon className="w-4 h-4" />
                                 </div>

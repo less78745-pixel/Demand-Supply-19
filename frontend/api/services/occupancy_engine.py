@@ -2,7 +2,7 @@ import os
 import io
 import math
 import base64
-from datetime import datetime
+from datetime import datetime, timedelta
 import pandas as pd
 import numpy as np
 
@@ -52,13 +52,11 @@ def period_label(week_number: int) -> str:
     return label
 
 def read_week_awal(ws_wh: Worksheet, default: int = 1) -> int:
-    for row in ws_wh.iter_rows():
-        for cell in row:
-            val = cell.value
+    for row in ws_wh.iter_rows(values_only=True):
+        for i, val in enumerate(row):
             if isinstance(val, str) and val.strip().lower() == "week awal":
-                next_cell = ws_wh.cell(row=cell.row, column=cell.column + 1)
-                if isinstance(next_cell.value, (int, float)):
-                    return int(next_cell.value)
+                if i + 1 < len(row) and isinstance(row[i + 1], (int, float)):
+                    return int(row[i + 1])
     return default
 
 def detect_week_count(ws_raw: Worksheet) -> int:
@@ -73,24 +71,24 @@ def raw_week_cols(w: int):
 
 def get_raw_rows(ws_raw: Worksheet):
     rows = []
-    for r in range(3, ws_raw.max_row + 1):
-        val1 = ws_raw.cell(row=r, column=1).value
-        val2 = ws_raw.cell(row=r, column=2).value
+    for idx, row in enumerate(ws_raw.iter_rows(min_row=3, max_col=2, values_only=True), start=3):
+        val1 = row[0] if len(row) > 0 else None
+        val2 = row[1] if len(row) > 1 else None
         if val1 in (None, "") and val2 in (None, ""):
             continue
         if str(val2).strip().lower() in ("cabang", "branch", "grup"):
             continue
-        rows.append(r)
+        rows.append(idx)
     return rows
 
 def get_wh_rows(ws_wh: Worksheet):
     rows = []
-    for r in range(2, ws_wh.max_row + 1):
-        val = ws_wh.cell(row=r, column=1).value
-        cabang = ws_wh.cell(row=r, column=2).value
-        if val in (None, "") or cabang in (None, ""):
+    for idx, row in enumerate(ws_wh.iter_rows(min_row=2, max_col=2, values_only=True), start=2):
+        val1 = row[0] if len(row) > 0 else None
+        cabang = row[1] if len(row) > 1 else None
+        if val1 in (None, "") or cabang in (None, ""):
             continue
-        rows.append(r)
+        rows.append(idx)
     return rows
 
 class RawRecord:
@@ -113,35 +111,50 @@ class RawRecord:
 
 def read_raw_records(ws_raw: Worksheet, n_weeks: int):
     records = []
-    for r in get_raw_rows(ws_raw):
-        onhand = ws_raw.cell(row=r, column=ONHAND_COL).value or 0
+    for row_vals in ws_raw.iter_rows(min_row=3, values_only=True):
+        val1 = row_vals[0] if len(row_vals) > 0 else None
+        val2 = row_vals[1] if len(row_vals) > 1 else None
+        if val1 in (None, "") and val2 in (None, ""):
+            continue
+        if str(val2).strip().lower() in ("cabang", "branch", "grup"):
+            continue
+
+        def get_val(col_idx_1_based):
+            idx = col_idx_1_based - 1
+            return row_vals[idx] if idx < len(row_vals) and row_vals[idx] is not None else 0
+
+        onhand = get_val(ONHAND_COL)
         to, vessel, forecast, target = [], [], [], []
         for w in range(n_weeks):
             c_to, c_vessel, c_forecast, c_target = raw_week_cols(w)
-            to.append(ws_raw.cell(row=r, column=c_to).value or 0)
-            vessel.append(ws_raw.cell(row=r, column=c_vessel).value or 0)
-            forecast.append(ws_raw.cell(row=r, column=c_forecast).value or 0)
-            target.append(ws_raw.cell(row=r, column=c_target).value or 0)
+            to.append(get_val(c_to))
+            vessel.append(get_val(c_vessel))
+            forecast.append(get_val(c_forecast))
+            target.append(get_val(c_target))
+
         records.append(RawRecord(
-            no=ws_raw.cell(row=r, column=1).value,
-            cabang=ws_raw.cell(row=r, column=2).value,
-            grup=ws_raw.cell(row=r, column=3).value,
-            category=ws_raw.cell(row=r, column=4).value,
+            no=val1,
+            cabang=val2,
+            grup=row_vals[2] if len(row_vals) > 2 else None,
+            category=row_vals[3] if len(row_vals) > 3 else None,
             onhand=onhand, to=to, vessel=vessel, forecast=forecast, target=target,
         ))
     return records
 
 def read_wh_capacity(ws_wh: Worksheet):
     result = []
-    for r in get_wh_rows(ws_wh):
-        cabang = str(ws_wh.cell(row=r, column=2).value)
-        existing = ws_wh.cell(row=r, column=3).value or 0
-        tambahan = ws_wh.cell(row=r, column=4).value or 0
+    for row in ws_wh.iter_rows(min_row=2, max_col=4, values_only=True):
+        val = row[0] if len(row) > 0 else None
+        cabang = row[1] if len(row) > 1 else None
+        if val in (None, "") or cabang in (None, ""):
+            continue
+        existing = row[2] if len(row) > 2 and row[2] is not None else 0
+        tambahan = row[3] if len(row) > 3 and row[3] is not None else 0
         try:
             total_cap = float(existing) + float(tambahan)
         except (ValueError, TypeError):
             total_cap = 0.0
-        result.append((cabang, total_cap))
+        result.append((str(cabang), total_cap))
     return result
 
 def compute_balance_series(record: RawRecord, n_weeks: int, demand_kind: str):
@@ -230,40 +243,42 @@ def build_hasil_sheet(wb, sheet_name, ws_raw, raw_rows, n_weeks, demand_kind, pe
     for w in range(n_weeks):
         style_header_cell(ws, 2, col_ratio_start + w, period_labels[w], FILL_HEADER2)
 
+    perhitungan_col_letters = [get_column_letter(col_perhitungan_start + w) for w in range(n_weeks)]
+    raw_col_letters = []
+    for w in range(n_weeks):
+        col_to, col_vessel, col_forecast, col_target = raw_week_cols(w)
+        raw_col_letters.append({
+            "to": get_column_letter(col_to),
+            "vessel": get_column_letter(col_vessel),
+            "demand": get_column_letter(col_forecast if demand_kind == "forecast" else col_target)
+        })
+
     out_row = 3
     for raw_row in raw_rows:
-        ws.cell(row=out_row, column=1, value=f"=Raw!A{raw_row}")
-        ws.cell(row=out_row, column=2, value=f"=Raw!B{raw_row}")
-        ws.cell(row=out_row, column=3, value=f"=Raw!C{raw_row}")
-        ws.cell(row=out_row, column=4, value=f"=Raw!D{raw_row}")
-        perhitungan_col_letters = []
+        row_vals = [f"=Raw!A{raw_row}", f"=Raw!B{raw_row}", f"=Raw!C{raw_row}", f"=Raw!D{raw_row}"]
         for w in range(n_weeks):
-            col_to, col_vessel, col_forecast, col_target = raw_week_cols(w)
-            col_demand = col_forecast if demand_kind == "forecast" else col_target
-            L_to, L_vessel, L_demand = get_column_letter(col_to), get_column_letter(col_vessel), get_column_letter(col_demand)
-            out_col = col_perhitungan_start + w
+            L_to = raw_col_letters[w]["to"]
+            L_vessel = raw_col_letters[w]["vessel"]
+            L_demand = raw_col_letters[w]["demand"]
             if w == 0:
                 formula = f"=SUM(Raw!E{raw_row},Raw!{L_to}{raw_row},Raw!{L_vessel}{raw_row})-Raw!{L_demand}{raw_row}"
             else:
                 prev_letter = perhitungan_col_letters[w - 1]
                 formula = f"=SUM({prev_letter}{out_row},Raw!{L_to}{raw_row},Raw!{L_vessel}{raw_row})-Raw!{L_demand}{raw_row}"
-            ws.cell(row=out_row, column=out_col, value=formula)
-            perhitungan_col_letters.append(get_column_letter(out_col))
+            row_vals.append(formula)
 
         for w in range(n_weeks):
-            out_col = col_ratio_start + w
             if w + 1 < n_weeks:
                 perhitungan_letter = perhitungan_col_letters[w]
-                _, _, col_forecast_next, col_target_next = raw_week_cols(w + 1)
-                col_demand_next = col_forecast_next if demand_kind == "forecast" else col_target_next
-                L_demand_next = get_column_letter(col_demand_next)
+                L_demand_next = raw_col_letters[w + 1]["demand"]
                 formula = f'=IFERROR(IF(OR(Raw!{L_demand_next}{raw_row}="",Raw!{L_demand_next}{raw_row}=0),"",{perhitungan_letter}{out_row}/Raw!{L_demand_next}{raw_row}),"")'
-                ws.cell(row=out_row, column=out_col, value=formula)
-                ws.cell(row=out_row, column=out_col).number_format = "0.0%"
+                row_vals.append(formula)
             else:
-                ws.cell(row=out_row, column=out_col, value=None)
-        for c in range(1, total_cols + 1):
-            ws.cell(row=out_row, column=c).border = BORDER
+                row_vals.append(None)
+        ws.append(row_vals)
+        for w in range(n_weeks):
+            if w + 1 < n_weeks:
+                ws.cell(row=out_row, column=col_ratio_start + w).number_format = "0.0%"
         out_row += 1
 
     ws.column_dimensions["A"].width = 6
@@ -274,6 +289,7 @@ def build_hasil_sheet(wb, sheet_name, ws_raw, raw_rows, n_weeks, demand_kind, pe
         ws.column_dimensions[get_column_letter(c)].width = 12
 
     ws.freeze_panes = "E3"
+    ws.views.sheetView[0].showGridLines = True
     return ws, col_perhitungan_start, out_row - 1
 
 def build_occupancy_sheet(wb, sheet_name, ws_wh, wh_rows, hasil_sheet_name,
@@ -285,17 +301,16 @@ def build_occupancy_sheet(wb, sheet_name, ws_wh, wh_rows, hasil_sheet_name,
     for i, t in enumerate(titles, start=1):
         style_header_cell(ws, 1, i, t, FILL_HEADER2)
     out_row = 2
+    perhitungan_col_letters = [get_column_letter(perhitungan_col_start + w) for w in range(n_weeks)]
     for wh_row in wh_rows:
-        ws.cell(row=out_row, column=1, value=f"=WH!A{wh_row}")
-        ws.cell(row=out_row, column=2, value=f"=WH!B{wh_row}")
+        row_vals = [f"=WH!A{wh_row}", f"=WH!B{wh_row}"]
         for w in range(n_weeks):
-            col_letter = get_column_letter(perhitungan_col_start + w)
-            out_col = 3 + w
+            col_letter = perhitungan_col_letters[w]
             formula = f"=IFERROR(IF(WH!$E{wh_row}=0,0,SUMIF('{hasil_sheet_name}'!$B$3:$B${hasil_last_row},$B{out_row},'{hasil_sheet_name}'!${col_letter}$3:${col_letter}${hasil_last_row})/WH!$E{wh_row}),0)"
-            ws.cell(row=out_row, column=out_col, value=formula)
-            ws.cell(row=out_row, column=out_col).number_format = "0.0%"
-        for c in range(1, 3 + n_weeks):
-            ws.cell(row=out_row, column=c).border = BORDER
+            row_vals.append(formula)
+        ws.append(row_vals)
+        for w in range(n_weeks):
+            ws.cell(row=out_row, column=3 + w).number_format = "0.0%"
         out_row += 1
 
     ws.column_dimensions["A"].width = 6
@@ -304,6 +319,7 @@ def build_occupancy_sheet(wb, sheet_name, ws_wh, wh_rows, hasil_sheet_name,
         ws.column_dimensions[get_column_letter(3 + w)].width = 13
 
     ws.freeze_panes = "C2"
+    ws.views.sheetView[0].showGridLines = True
     return ws
 
 def generate_excel_workbook(wb: Workbook):
@@ -512,7 +528,7 @@ def calculate_mrp_occupancy_from_bytes(file_bytes: bytes) -> dict:
     for rec in records:
         bf = bal_f[id(rec)]
         for w in range(n_weeks):
-            synth_date = f"2026-01-{(w % 28) + 1:02d}"
+            synth_date = (datetime(2026, 1, 1) + timedelta(weeks=w)).strftime("%Y-%m-%d")
             inv_rows.append({
                 "Cabang": rec.cabang,
                 "Category": f"{rec.grup} - {rec.category}",
