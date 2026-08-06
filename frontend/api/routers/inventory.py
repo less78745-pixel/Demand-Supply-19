@@ -12,7 +12,20 @@ async def analyze_inventory(file: UploadFile = File(...)):
         
     try:
         contents = await file.read()
-        if file.filename.lower().endswith('.csv'):
+        if file.filename.lower().endswith(('.xlsx', '.xls')):
+            import openpyxl
+            try:
+                wb = openpyxl.load_workbook(io.BytesIO(contents), read_only=True)
+                sheet_names = wb.sheetnames
+                wb.close()
+                if "Raw" in sheet_names and "WH" in sheet_names:
+                    from ddmrp_program import process_ddmrp_in_memory
+                    res = process_ddmrp_in_memory(contents)
+                    return res.get("inventory_analysis", {})
+            except Exception:
+                pass
+            df = pd.read_excel(io.BytesIO(contents))
+        elif file.filename.lower().endswith('.csv'):
             try:
                 # auto-detect comma vs semicolon
                 df = pd.read_csv(io.BytesIO(contents), sep=None, engine='python')

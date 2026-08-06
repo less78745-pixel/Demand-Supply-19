@@ -423,24 +423,32 @@ export default function OccupancyPage() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm text-slate-300">
             <div>
-              <h4 className="font-semibold text-white mb-2">📌 Skema Kolom Diperlukan:</h4>
-              <ul className="grid grid-cols-2 gap-2 text-xs text-slate-300">
-                {['Cabang','Category','On Hand (stok awal)','In (masuk)','Out (keluar / penjualan)','Capacity (kapasitas cabang)','Date'].map(col => (
-                  <li key={col} className="flex items-center gap-2 font-mono bg-white/5 p-2 rounded border border-white/10">
-                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0" />
-                    <span>{col}</span>
-                  </li>
-                ))}
-              </ul>
+              <h4 className="font-semibold text-white mb-2">📌 Skema Kolom Diperlukan (2 Pilihan Format):</h4>
+              <div className="space-y-2 mb-3">
+                <p className="text-xs font-bold text-indigo-400">Option 1: Format Multi-Sheet DDMRP (Terbaru)</p>
+                <p className="text-xs text-slate-400">• Sheet <code>Raw</code>: No, Cabang, Grup, Category, On Hand + blok mingguan [TO, Vessel, Forecast, Target].</p>
+                <p className="text-xs text-slate-400">• Sheet <code>WH</code>: No, Cabang, Kapasitas Existing, Tambahan, dan sel <code>Week Awal</code> (cth: 1 untuk JAN-1).</p>
+              </div>
+              <div className="space-y-2">
+                <p className="text-xs font-bold text-teal-400">Option 2: Format Tabel Tunggal (Legacy CSV/XLSX)</p>
+                <ul className="grid grid-cols-2 gap-2 text-xs text-slate-300">
+                  {['Cabang','Category','On Hand (stok awal)','In (masuk)','Out (keluar / penjualan)','Capacity (kapasitas cabang)','Date'].map(col => (
+                    <li key={col} className="flex items-center gap-2 font-mono bg-white/5 p-2 rounded border border-white/10">
+                      <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0" />
+                      <span>{col}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
             <div className="space-y-3">
               <h4 className="font-semibold text-white">⚙️ Proxy Penjualan & Klasifikasi ABC-XYZ:</h4>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Kolom <code>Out</code> diproses sebagai proxy <b>Penjualan</b> untuk memetakan inventory ke kelas ABC (Volume) dan XYZ (Variabilitas/Coefficient of Variation), sehingga Anda mengetahui risiko Stockout dan Dead Stock.
+                Kolom <code>Out</code> atau demand <code>Forecast/Target</code> diproses sebagai proxy <b>Penjualan</b> untuk memetakan inventory ke kelas ABC (Volume) dan XYZ (Variabilitas/Coefficient of Variation), sehingga Anda mengetahui risiko Stockout dan Dead Stock secara otomatis.
               </p>
               <div className="p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-xl text-xs text-indigo-300 flex items-center gap-2">
                 <Info className="w-4 h-4 shrink-0 text-indigo-400" />
-                <span>Mendukung upload format native XLSX berkat engine ArrayBuffer.</span>
+                <span>Mendukung penggabungan sheet Hasil Forecast/Target & Occupancy secara dinamis!</span>
               </div>
             </div>
           </div>
@@ -754,6 +762,84 @@ export default function OccupancyPage() {
                   </tbody>
                 </table>
               </div>
+            </GlassCard>
+          )}
+
+          {/* ═══ DDMRP AUTOMATED ANALYSIS SECTION (WHEN MULTI-SHEET EXCEL UPLOADED) ═══ */}
+          {results.ddmrp_results && (
+            <GlassCard className="p-6 border-indigo-500/30 bg-gradient-to-br from-slate-900/90 via-indigo-950/20 to-slate-900/90 shadow-2xl relative z-30 mb-10">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-indigo-500/20 pb-5 mb-6">
+                <div>
+                  <h3 className="text-xl font-extrabold text-white uppercase tracking-wide flex items-center gap-2.5">
+                    <Sparkles className="w-6 h-6 text-indigo-400 animate-pulse" />
+                    Analisa &amp; Grafik DDMRP (Skenario Forecast vs Target)
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-1 font-medium">
+                    Hasil kalkulasi otomatis balance mingguan, rasio demand, dan occupancy gudang per periode ({results.ddmrp_results.period_labels?.join(', ')}).
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-3 shrink-0">
+                  {results.ddmrp_results.excel_base64 && (
+                    <button
+                      onClick={() => {
+                        const link = document.createElement('a');
+                        link.href = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${results.ddmrp_results.excel_base64}`;
+                        link.download = getStandardFilename('ddmrp_hasil_perhitungan', 'xlsx');
+                        link.click();
+                        toast.success('File Excel DDMRP dengan rumus berhasil diunduh!');
+                      }}
+                      className="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl shadow-lg transition text-xs flex items-center gap-2"
+                    >
+                      <FileSpreadsheet className="w-4 h-4" /> Download Excel Hasil (Rumus &amp; Ratio)
+                    </button>
+                  )}
+                  {results.ddmrp_results.html_report && (
+                    <button
+                      onClick={() => {
+                        const blob = new Blob([results.ddmrp_results.html_report], { type: 'text/html;charset=utf-8;' });
+                        const url = URL.createObjectURL(blob);
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.download = getStandardFilename('ddmrp_analysis_report', 'html');
+                        link.click();
+                        toast.success('Laporan HTML Analisa DDMRP berhasil diunduh!');
+                      }}
+                      className="px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold rounded-xl shadow-lg transition text-xs flex items-center gap-2"
+                    >
+                      <Download className="w-4 h-4" /> Download Laporan Analisa HTML
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Matplotlib Generated Charts Grid */}
+              {results.ddmrp_results.charts && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {Object.entries(results.ddmrp_results.charts).map(([key, b64]: [string, any], idx) => {
+                    if (!b64) return null;
+                    const titleMap: Record<string, string> = {
+                      balance_forecast: "📈 Tren Balance - Skenario Forecast",
+                      balance_target: "📈 Tren Balance - Skenario Target",
+                      occupancy_forecast: "🏢 Occupancy Gudang - Skenario Forecast",
+                      occupancy_target: "🏢 Occupancy Gudang - Skenario Target"
+                    };
+                    return (
+                      <div key={idx} className="bg-slate-900/80 border border-white/10 rounded-2xl p-4 shadow-inner">
+                        <h4 className="text-sm font-bold text-slate-200 mb-3 flex items-center gap-2 border-b border-white/5 pb-2">
+                          {titleMap[key] || key}
+                        </h4>
+                        <div className="overflow-hidden rounded-xl bg-white/5 flex items-center justify-center">
+                          <img
+                            src={`data:image/png;base64,${b64}`}
+                            alt={titleMap[key] || key}
+                            className="w-full h-auto object-contain rounded-lg hover:scale-[1.02] transition-transform duration-300"
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </GlassCard>
           )}
 
