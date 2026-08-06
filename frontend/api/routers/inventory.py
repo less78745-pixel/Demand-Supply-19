@@ -1,7 +1,7 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException
 import pandas as pd
 import io
-from services.inventory_engine import run_inventory_analysis
+from services.inventory_engine import run_inventory_analysis, run_inventory_from_ddmrp_bytes
 
 router = APIRouter()
 
@@ -19,9 +19,7 @@ async def analyze_inventory(file: UploadFile = File(...)):
                 sheet_names = wb.sheetnames
                 wb.close()
                 if "Raw" in sheet_names and "WH" in sheet_names:
-                    from ddmrp_program import process_ddmrp_in_memory
-                    res = process_ddmrp_in_memory(contents)
-                    return res.get("inventory_analysis", {})
+                    return run_inventory_from_ddmrp_bytes(contents)
             except Exception:
                 pass
             df = pd.read_excel(io.BytesIO(contents))

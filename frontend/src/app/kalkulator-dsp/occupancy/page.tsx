@@ -43,7 +43,7 @@ const SCENARIOS = [
 ];
 
 function generateDemoOccupancy() {
-  const dates = ['2026-08-01', '2026-08-02', '2026-08-03'];
+  const dates = ['JAN-1', 'JAN-2', 'JAN-3', 'JAN-4', 'FEB-1', 'FEB-2'];
   const branches = [
     { name: 'DC Jakarta', capacity: 10000, hand: 8500 },
     { name: 'DC Surabaya', capacity: 6000, hand: 6300 },
@@ -52,14 +52,17 @@ function generateDemoOccupancy() {
   ];
   const daily_data: any[] = [];
   branches.forEach(b => {
-    dates.forEach(dt => {
-      const pct = Math.round((b.hand / b.capacity) * 100 * 10) / 10;
+    dates.forEach((dt, idx) => {
+      const variation = (idx % 2 === 0 ? 1 : 1.05);
+      const currentHand = Math.round(b.hand * variation);
+      const pct = Math.round((currentHand / b.capacity) * 100 * 10) / 10;
       daily_data.push({
         date: dt,
         cabang: b.name,
-        total_on_hand: b.hand,
+        total_on_hand: currentHand,
         capacity: b.capacity,
-        occupancy_pct: pct
+        occupancy_pct: pct,
+        is_shortage: currentHand < 0
       });
     });
   });
@@ -67,22 +70,29 @@ function generateDemoOccupancy() {
   return {
     processed_at: new Date().toISOString(),
     daily_data,
-    kpi_summary: { avg_occupancy: 82.3, max_occupancy: 105.0, categories_at_risk: 2 },
+    kpi_summary: { avg_occupancy: 83.5, max_occupancy: 110.3, categories_at_risk: 2 },
     shortage_alerts: [
-      { cabang: 'DC Surabaya', category: 'Fast Moving Consumer', date: '2026-08-03', deficit: 350 },
-      { cabang: 'DC Jakarta', category: 'Electronics & Spareparts', date: '2026-08-03', deficit: 120 }
+      { cabang: 'DC Surabaya', category: 'Fast Moving Consumer', date: 'JAN-2', deficit: 350 },
+      { cabang: 'DC Jakarta', category: 'Electronics & Spareparts', date: 'FEB-1', deficit: 120 }
     ],
     inventory_analysis: {
       matrix_data: [
-        { cabang: 'DC Jakarta', category: 'Electronics & Spareparts', class: 'A-X', volume: 5200, mean_sales: 140, cv: 0.2, doh: 22, on_hand: 3080, trend_pct: 5, stockout_risk: true, strategy: 'Continuous Replenishment' },
-        { cabang: 'DC Surabaya', category: 'Fast Moving Consumer', class: 'A-Z', volume: 3800, mean_sales: 110, cv: 0.75, doh: 12, on_hand: 1320, trend_pct: -2, stockout_risk: true, strategy: 'Dynamic Buffer & Fast Track' },
-        { cabang: 'DC Medan', category: 'Apparel & Textiles', class: 'C-Z', volume: 800, mean_sales: 5, cv: 1.2, doh: 115, on_hand: 575, trend_pct: -15, stockout_risk: false, strategy: 'Clearance & Markdown' }
+        { cabang: 'DC Jakarta', category: 'Electronics & Spareparts', class: 'A-X', volume: 5200, mean_sales: 140, cv: 0.2, doh: 22, on_hand: 3080, trend_pct: 5, stockout_risk: true, strategy: 'Continuous Review, tight safety stock. High value, predictable.' },
+        { cabang: 'DC Surabaya', category: 'Fast Moving Consumer', class: 'A-Z', volume: 3800, mean_sales: 110, cv: 0.75, doh: 12, on_hand: 1320, trend_pct: -2, stockout_risk: true, strategy: 'Collaborative forecasting needed. Risk of high-cost stockouts.' },
+        { cabang: 'DC Medan', category: 'Apparel & Textiles', class: 'C-Z', volume: 800, mean_sales: 5, cv: 1.2, doh: 115, on_hand: 575, trend_pct: -15, stockout_risk: false, strategy: 'Candidate for discontinuation or consignment stock.' }
       ],
       dead_stock: [
         { cabang: 'DC Medan', category: 'Apparel & Textiles', doh: 115, on_hand: 575, class: 'C-Z' }
       ]
     },
-    over_occupancy_insights: ['DC Surabaya mendeteksi Over Capacity (105.0%) pada periode Agustus 2026. Disarankan realokasi ke depo terdekat atau ekspansi rak simpan.']
+    over_occupancy_insights: [
+      'RISIKO OVER KAPASITAS GUDANG (Forecast) - Cabang DC Surabaya pada periode JAN-2: occupancy 110% dari kapasitas gudang (kelebihan 10 poin persen).',
+      'TREN - DC Jakarta-Electronics & Spareparts (Forecast): balance turun signifikan, perubahan -32%. Cek risiko kekurangan stok.'
+    ],
+    ddmrp_results: {
+      week_awal: 1,
+      period_labels: dates
+    }
   };
 }
 

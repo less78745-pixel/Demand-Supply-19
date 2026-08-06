@@ -3,7 +3,7 @@ import pandas as pd
 import io
 from utils.validators import validate_occupancy_schema
 from utils.imputation import clean_occupancy_data
-from services.occupancy_engine import calculate_occupancy
+from services.occupancy_engine import calculate_occupancy, calculate_ddmrp_occupancy_from_bytes
 
 router = APIRouter()
 
@@ -21,8 +21,7 @@ async def analyze_occupancy(file: UploadFile = File(...)):
                 sheet_names = wb.sheetnames
                 wb.close()
                 if "Raw" in sheet_names and "WH" in sheet_names:
-                    from ddmrp_program import process_ddmrp_in_memory
-                    return process_ddmrp_in_memory(contents)
+                    return calculate_ddmrp_occupancy_from_bytes(contents)
             except Exception:
                 pass
             df = pd.read_excel(io.BytesIO(contents))

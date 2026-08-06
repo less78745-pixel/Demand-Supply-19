@@ -1,6 +1,8 @@
 import pandas as pd
 import numpy as np
 import math
+import io
+from openpyxl import load_workbook
 
 def _safe_float(v):
     """Safely cast to float and replace NaN or Inf with 0.0 to avoid JSON serialization errors."""
@@ -11,6 +13,40 @@ def _safe_float(v):
         return val
     except Exception:
         return 0.0
+
+def run_inventory_from_ddmrp_bytes(file_bytes: bytes) -> dict:
+    """
+    Ekstrak data mingguan dari sheet Raw & WH DDMRP untuk diolah ke dalam ABC-XYZ Inventory Intelligence.
+    """
+    wb = load_workbook(io.BytesIO(file_bytes), data_only=True)
+    if "Raw" not in wb.sheetnames or "WH" not in wb.sheetnames:
+        raise ValueError("File tidak memiliki sheet 'Raw' dan 'WH'")
+    
+    from services.occupancy_engine import detect_week_count, read_raw_records, compute_balance_series, read_week_awal, build_period_labels
+    ws_raw = wb["Raw"]
+    ws_wh = wb["WH"]
+    n_weeks = detect_week_count(ws_raw)
+    week_awal = read_week_awal(ws_wh, default=1)
+    period_labels = build_period_labels(week_awal, n_weeks)
+    records = read_raw_records(ws_raw, n_weeks)
+    
+    inv_rows = []
+    for rec in records:
+        bf = compute_balance_series(rec, n_weeks, "forecast")
+        for w in range(n_weeks):
+            synth_date = f"2026-01-{(w % 28) + 1:02d}"
+            inv_rows.append({
+                "Cabang": rec.cabang,
+                "Category": f"{rec.grup} - {rec.category}",
+                "Date": synth_date,
+                "Penjualan": rec.forecast[w],
+                "On Hand": bf[w],
+                "PeriodLabel": period_labels[w]
+            })
+            
+    df_inv = pd.DataFrame(inv_rows)
+    return run_inventory_analysis(df_inv)
+
 
 def run_inventory_analysis(df: pd.DataFrame) -> dict:
     """
@@ -30,49 +66,42 @@ def run_inventory_analysis(df: pd.DataFrame) -> dict:
     df['Category'] = df['Category'].astype(str)
 
     results = []
-
     cabangs = df['Cabang'].unique()
 
     for cabang in cabangs:
         cabang_df = df[df['Cabang'] == cabang]
         categories = cabang_df['Category'].unique()
 
-        for cat in categories:                                          # ← inner loop CORRECTLY indented
+        for cat in categories:
             cat_df = cabang_df[cabang_df['Category'] == cat].sort_values('Date')
-
             if cat_df.empty:
                 continue
 
-            # ── Volume & Variability ──
-            sales       = pd.to_numeric(cat_df['Penjualan'], errors='coerce').fillna(0)
+            sales        = pd.to_numeric(cat_df['Penjualan'], errors='coerce').fillna(0)
             total_volume = _safe_float(sales.sum())
             mean_sales   = _safe_float(sales.mean())
-            std_sales    = _safe_float(sales.std(ddof=0))          # population std, safe for small n
+            std_sales    = _safe_float(sales.std(ddof=0))
 
-            # ── XYZ (Coefficient of Variation) ──
             cv = std_sales / mean_sales if mean_sales > 0 else 0
             if cv <= 0.5:
-                xyz = 'X'    # Stable demand
+                xyz = 'X'
             elif cv <= 1.0:
-                xyz = 'Y'    # Moderate variability
+                xyz = 'Y'
             else:
-                xyz = 'Z'    # High variability / unpredictable
+                xyz = 'Z'
 
-            # ── Days-on-Hand (DOH) ──
             on_hand_col = 'On Hand' if 'On Hand' in cat_df.columns else None
-            current_on_hand = _safe_float(pd.to_numeric(cat_df[on_hand_col], errors='coerce').iloc[-1]) \
-                              if on_hand_col else 0.0
+            current_on_hand = _safe_float(pd.to_numeric(cat_df[on_hand_col], errors='coerce').iloc[-1]) if on_hand_col else 0.0
             daily_sales = mean_sales / 30 if mean_sales > 0 else 0
             doh = current_on_hand / daily_sales if daily_sales > 0 else 9999
 
-            # ── Derived insights ──
-            stockout_risk = doh < 14          # < 2 weeks
-            overstock     = doh > 60          # > 2 months
+            stockout_risk = doh < 14
+            overstock     = doh > 60
             
-            # ── Monthly trend (last 3 vs prev 3 avg) ──
             if len(sales) >= 6:
-                trend_pct = ((sales.iloc[-3:].mean() - sales.iloc[-6:-3].mean())
-                             / (sales.iloc[-6:-3].mean() + 1e-9)) * 100
+                trend_pct = ((sales.iloc[-3:].mean() - sales.iloc[-6:-3].mean()) / (sales.iloc[-6:-3].mean() + 1e-9)) * 100
+            elif len(sales) >= 2:
+                trend_pct = ((sales.iloc[-1] - sales.iloc[0]) / (abs(sales.iloc[0]) + 1e-9)) * 100
             else:
                 trend_pct = 0.0
 
@@ -94,10 +123,7 @@ def run_inventory_analysis(df: pd.DataFrame) -> dict:
     if not results:
         return {"error": "No valid data after processing"}
 
-    # ── ABC Classification (per Cabang, not cross-cabang) ──
-    final_results = []
-    dead_stock    = []
-
+    final_results, dead_stock = [], []
     for cabang in cabangs:
         cab_res = [r for r in results if r['cabang'] == cabang]
         if not cab_res:
@@ -121,11 +147,7 @@ def run_inventory_analysis(df: pd.DataFrame) -> dict:
 
         for _, row in df_cab.iterrows():
             abc_xyz = f"{row['abc_class']}{row['xyz_class']}"
-
-            # ── Human-readable strategy recommendation ──
-            strategy = _recommend_strategy(row['abc_class'], row['xyz_class'],
-                                           bool(row['stockout_risk']), bool(row['overstock']))
-
+            strategy = _recommend_strategy(row['abc_class'], row['xyz_class'], bool(row['stockout_risk']), bool(row['overstock']))
             entry = {
                 "cabang":        str(row['cabang']),
                 "category":      str(row['category']),
@@ -153,7 +175,6 @@ def run_inventory_analysis(df: pd.DataFrame) -> dict:
                     "class":    abc_xyz
                 })
 
-    # ── KPI Summary ──
     a_count    = sum(1 for x in final_results if x['abc'] == 'A')
     z_count    = sum(1 for x in final_results if x['xyz'] == 'Z')
     risk_count = sum(1 for x in final_results if x['stockout_risk'])
@@ -172,7 +193,6 @@ def run_inventory_analysis(df: pd.DataFrame) -> dict:
 
 
 def _recommend_strategy(abc: str, xyz: str, stockout: bool, overstock: bool) -> str:
-    """Return a short supply-chain strategy recommendation."""
     matrix = {
         ('A', 'X'): "Continuous review, tight safety stock. High value, predictable.",
         ('A', 'Y'): "Periodic review with buffer. Monitor lead-time closely.",

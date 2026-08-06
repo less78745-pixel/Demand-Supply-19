@@ -1,9 +1,22 @@
+import os
+import io
+import math
+import base64
+from datetime import datetime
 import pandas as pd
 import numpy as np
-import math
+
+from openpyxl import load_workbook, Workbook
+from openpyxl.utils import get_column_letter
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.worksheet.worksheet import Worksheet
+
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
 
 def _safe_float(v):
-    """Safely cast to float and replace NaN or Inf with 0.0 to avoid JSON serialization errors."""
     try:
         val = float(v)
         if math.isnan(val) or math.isinf(val):
@@ -12,179 +25,574 @@ def _safe_float(v):
     except Exception:
         return 0.0
 
-def calculate_occupancy(df: pd.DataFrame) -> dict:
-    """
-    Calculate daily occupancy per category per branch.
-    Also runs ABC-XYZ inventory analysis on the same data.
-    
-    Logic:
-    - Balance = On_Hand_start + In - Out  per category per date
-    - Occupancy% = balance / branch_capacity * 100
-    - Capacity is ONE value per Cabang (total warehouse capacity for that branch)
-    - Forward-fill missing dates for each category to carry forward previous balances.
-    """
-    if df.empty:
-        return {
-            "daily_data": [],
-            "branch_date_summary": [],
-            "shortage_alerts": [],
-            "kpi_summary": {"avg_occupancy": 0, "max_occupancy": 0, "categories_at_risk": 0},
-            "inventory_analysis": None
-        }
+# ============================================================================
+# CORE DDMRP LOGIC (Sheet Raw & WH, Week Awal, Periode Dinamis)
+# ============================================================================
 
-    if 'Cabang' not in df.columns:
-        df['Cabang'] = 'Unknown'
-    if 'Category' not in df.columns:
-        df['Category'] = 'Unknown'
+FIXED_RAW_COLS = 4
+ONHAND_COL = 5
+FIRST_WEEK_BLOCK_COL = 6
+COLS_PER_WEEK = 4
 
-    df = df.copy()
-    df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
-    df = df.dropna(subset=['Date'])
-    df['Cabang'] = df['Cabang'].astype(str).str.strip()
-    df['Category'] = df['Category'].astype(str).str.strip()
-    df = df.sort_values(by=['Cabang', 'Category', 'Date'])
+MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN",
+          "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
+WEEKS_PER_MONTH = 4
 
-    cabangs = df['Cabang'].unique()
-    
-    # ── Langkah 1-3: Kalkulasi Saldo Berjalan per Kategori ──
-    category_balances = []
-    for cabang in cabangs:
-        cabang_df = df[df['Cabang'] == cabang]
-        categories = cabang_df['Category'].unique()
+def period_label(week_number: int) -> str:
+    if week_number < 1:
+        week_number = 1
+    zero_based = week_number - 1
+    month_index = zero_based // WEEKS_PER_MONTH
+    week_in_month = (zero_based % WEEKS_PER_MONTH) + 1
+    year_offset = month_index // 12
+    month_name = MONTHS[month_index % 12]
+    label = f"{month_name}-{week_in_month}"
+    if year_offset > 0:
+        label += f" (Y+{year_offset})"
+    return label
 
-        for cat in categories:
-            cat_df = cabang_df[cabang_df['Category'] == cat].copy()
-            cat_df = cat_df.groupby('Date').agg({'In': 'sum', 'Out': 'sum', 'On Hand': 'first'}).reset_index()
-            cat_df = cat_df.sort_values('Date')
-            
-            prev_balance = 0
-            for idx, row in cat_df.iterrows():
-                inbound = _safe_float(row.get('In', 0))
-                outbound = _safe_float(row.get('Out', 0))
-                
-                if idx == 0:
-                    current_balance = _safe_float(row.get('On Hand', 0))
-                else:
-                    current_balance = prev_balance + inbound - outbound
-                
-                prev_balance = current_balance
-                
-                category_balances.append({
-                    'Cabang': cabang,
-                    'Category': cat,
-                    'Date': row['Date'],
-                    'running_balance': current_balance
-                })
+def read_week_awal(ws_wh: Worksheet, default: int = 1) -> int:
+    for row in ws_wh.iter_rows():
+        for cell in row:
+            val = cell.value
+            if isinstance(val, str) and val.strip().lower() == "week awal":
+                next_cell = ws_wh.cell(row=cell.row, column=cell.column + 1)
+                if isinstance(next_cell.value, (int, float)):
+                    return int(next_cell.value)
+    return default
 
-    df_cat_balances = pd.DataFrame(category_balances)
-    
+def detect_week_count(ws_raw: Worksheet) -> int:
+    max_col = ws_raw.max_column
+    remaining = max_col - (FIRST_WEEK_BLOCK_COL - 1)
+    n_weeks = remaining // COLS_PER_WEEK
+    return max(1, n_weeks)
+
+def raw_week_cols(w: int):
+    base = FIRST_WEEK_BLOCK_COL + COLS_PER_WEEK * w
+    return base, base + 1, base + 2, base + 3
+
+def get_raw_rows(ws_raw: Worksheet):
+    rows = []
+    for r in range(2, ws_raw.max_row + 1):
+        if ws_raw.cell(row=r, column=1).value in (None, "") and ws_raw.cell(row=r, column=2).value in (None, ""):
+            continue
+        rows.append(r)
+    return rows
+
+def get_wh_rows(ws_wh: Worksheet):
+    rows = []
+    for r in range(2, ws_wh.max_row + 1):
+        val = ws_wh.cell(row=r, column=1).value
+        cabang = ws_wh.cell(row=r, column=2).value
+        if val in (None, "") or cabang in (None, ""):
+            continue
+        rows.append(r)
+    return rows
+
+class RawRecord:
+    __slots__ = ("no", "cabang", "grup", "category", "onhand", "to", "vessel", "forecast", "target")
+
+    def __init__(self, no, cabang, grup, category, onhand, to, vessel, forecast, target):
+        self.no = no
+        self.cabang = str(cabang) if cabang is not None else "Unknown"
+        self.grup = str(grup) if grup is not None else "General"
+        self.category = str(category) if category is not None else "General"
+        self.onhand = float(onhand) if onhand is not None else 0.0
+        self.to = [float(x) if x is not None else 0.0 for x in to]
+        self.vessel = [float(x) if x is not None else 0.0 for x in vessel]
+        self.forecast = [float(x) if x is not None else 0.0 for x in forecast]
+        self.target = [float(x) if x is not None else 0.0 for x in target]
+
+    @property
+    def label(self):
+        return f"{self.cabang}-{self.grup}-{self.category}"
+
+def read_raw_records(ws_raw: Worksheet, n_weeks: int):
+    records = []
+    for r in get_raw_rows(ws_raw):
+        onhand = ws_raw.cell(row=r, column=ONHAND_COL).value or 0
+        to, vessel, forecast, target = [], [], [], []
+        for w in range(n_weeks):
+            c_to, c_vessel, c_forecast, c_target = raw_week_cols(w)
+            to.append(ws_raw.cell(row=r, column=c_to).value or 0)
+            vessel.append(ws_raw.cell(row=r, column=c_vessel).value or 0)
+            forecast.append(ws_raw.cell(row=r, column=c_forecast).value or 0)
+            target.append(ws_raw.cell(row=r, column=c_target).value or 0)
+        records.append(RawRecord(
+            no=ws_raw.cell(row=r, column=1).value,
+            cabang=ws_raw.cell(row=r, column=2).value,
+            grup=ws_raw.cell(row=r, column=3).value,
+            category=ws_raw.cell(row=r, column=4).value,
+            onhand=onhand, to=to, vessel=vessel, forecast=forecast, target=target,
+        ))
+    return records
+
+def read_wh_capacity(ws_wh: Worksheet):
+    result = []
+    for r in get_wh_rows(ws_wh):
+        cabang = str(ws_wh.cell(row=r, column=2).value)
+        existing = ws_wh.cell(row=r, column=3).value or 0
+        tambahan = ws_wh.cell(row=r, column=4).value or 0
+        try:
+            total_cap = float(existing) + float(tambahan)
+        except (ValueError, TypeError):
+            total_cap = 0.0
+        result.append((cabang, total_cap))
+    return result
+
+def compute_balance_series(record: RawRecord, n_weeks: int, demand_kind: str):
+    demand = record.forecast if demand_kind == "forecast" else record.target
+    balances = []
+    prev = 0.0
+    for w in range(n_weeks):
+        if w == 0:
+            bal = record.onhand + record.to[0] + record.vessel[0] - demand[0]
+        else:
+            bal = prev + record.to[w] + record.vessel[w] - demand[w]
+        balances.append(bal)
+        prev = bal
+    return balances
+
+def compute_ratio_series(balances, record: RawRecord, n_weeks: int, demand_kind: str):
+    demand = record.forecast if demand_kind == "forecast" else record.target
+    ratios = []
+    for w in range(n_weeks):
+        if w + 1 < n_weeks and demand[w + 1]:
+            ratios.append(balances[w] / demand[w + 1])
+        else:
+            ratios.append(None)
+    return ratios
+
+def compute_occupancy(records, balances_by_record, wh_capacity):
+    if not balances_by_record:
+        return {}
+    n_weeks = len(next(iter(balances_by_record.values())))
+    occupancy = {}
+    for cabang, capacity in wh_capacity:
+        totals = [0.0] * n_weeks
+        for rec in records:
+            if rec.cabang == cabang:
+                bals = balances_by_record[id(rec)]
+                for w in range(n_weeks):
+                    totals[w] += bals[w]
+        occupancy[cabang] = [t / capacity if capacity else None for t in totals]
+    return occupancy
+
+def build_period_labels(week_awal: int, n_weeks: int):
+    return [period_label(week_awal + w) for w in range(n_weeks)]
+
+# ============================================================================
+# EXCEL SHEET BUILDERS & CHARTS & HTML REPORT
+# ============================================================================
+
+FILL_JUDUL = PatternFill("solid", fgColor="D9D9D9")
+FILL_PERHITUNGAN = PatternFill("solid", fgColor="FCE4D6")
+FILL_RATIO = PatternFill("solid", fgColor="CFE2F3")
+FILL_HEADER2 = PatternFill("solid", fgColor="F2F2F2")
+BOLD = Font(bold=True)
+CENTER = Alignment(horizontal="center", vertical="center", wrap_text=True)
+THIN = Side(style="thin", color="BFBFBF")
+BORDER = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
+
+def style_header_cell(ws, row, col, text, fill=None):
+    c = ws.cell(row=row, column=col, value=text)
+    c.font = BOLD
+    c.alignment = CENTER
+    c.border = BORDER
+    if fill:
+        c.fill = fill
+    return c
+
+def build_hasil_sheet(wb, sheet_name, ws_raw, raw_rows, n_weeks, demand_kind, period_labels):
+    if sheet_name in wb.sheetnames:
+        del wb[sheet_name]
+    ws = wb.create_sheet(sheet_name)
+    col_perhitungan_start = FIXED_RAW_COLS + 1
+    col_ratio_start = col_perhitungan_start + n_weeks
+    total_cols = col_ratio_start + n_weeks - 1
+
+    for c in range(1, FIXED_RAW_COLS + 1):
+        style_header_cell(ws, 1, c, "Judul", FILL_JUDUL)
+    for w in range(n_weeks):
+        style_header_cell(ws, 1, col_perhitungan_start + w, "Perhitungan", FILL_PERHITUNGAN)
+    for w in range(n_weeks):
+        style_header_cell(ws, 1, col_ratio_start + w, "Ratio", FILL_RATIO)
+
+    fixed_titles = ["No", "Cabang", "Grup", "Category"]
+    for i, t in enumerate(fixed_titles, start=1):
+        style_header_cell(ws, 2, i, t, FILL_HEADER2)
+    for w in range(n_weeks):
+        style_header_cell(ws, 2, col_perhitungan_start + w, period_labels[w], FILL_HEADER2)
+    for w in range(n_weeks):
+        style_header_cell(ws, 2, col_ratio_start + w, period_labels[w], FILL_HEADER2)
+
+    out_row = 3
+    for raw_row in raw_rows:
+        ws.cell(row=out_row, column=1, value=f"=Raw!A{raw_row}")
+        ws.cell(row=out_row, column=2, value=f"=Raw!B{raw_row}")
+        ws.cell(row=out_row, column=3, value=f"=Raw!C{raw_row}")
+        ws.cell(row=out_row, column=4, value=f"=Raw!D{raw_row}")
+        perhitungan_col_letters = []
+        for w in range(n_weeks):
+            col_to, col_vessel, col_forecast, col_target = raw_week_cols(w)
+            col_demand = col_forecast if demand_kind == "forecast" else col_target
+            L_to, L_vessel, L_demand = get_column_letter(col_to), get_column_letter(col_vessel), get_column_letter(col_demand)
+            out_col = col_perhitungan_start + w
+            if w == 0:
+                formula = f"=Raw!E{raw_row}+Raw!{L_to}{raw_row}+Raw!{L_vessel}{raw_row}-Raw!{L_demand}{raw_row}"
+            else:
+                prev_letter = perhitungan_col_letters[w - 1]
+                formula = f"={prev_letter}{out_row}+Raw!{L_to}{raw_row}+Raw!{L_vessel}{raw_row}-Raw!{L_demand}{raw_row}"
+            ws.cell(row=out_row, column=out_col, value=formula)
+            perhitungan_col_letters.append(get_column_letter(out_col))
+
+        for w in range(n_weeks):
+            out_col = col_ratio_start + w
+            if w + 1 < n_weeks:
+                perhitungan_letter = perhitungan_col_letters[w]
+                _, _, col_forecast_next, col_target_next = raw_week_cols(w + 1)
+                col_demand_next = col_forecast_next if demand_kind == "forecast" else col_target_next
+                L_demand_next = get_column_letter(col_demand_next)
+                formula = f'=IF(Raw!{L_demand_next}{raw_row}=0,"",{perhitungan_letter}{out_row}/Raw!{L_demand_next}{raw_row})'
+                ws.cell(row=out_row, column=out_col, value=formula)
+                ws.cell(row=out_row, column=out_col).number_format = "0.0%"
+            else:
+                ws.cell(row=out_row, column=out_col, value=None)
+        for c in range(1, total_cols + 1):
+            ws.cell(row=out_row, column=c).border = BORDER
+        out_row += 1
+
+    ws.freeze_panes = "E3"
+    return ws, col_perhitungan_start, out_row - 1
+
+def build_occupancy_sheet(wb, sheet_name, ws_wh, wh_rows, hasil_sheet_name,
+                            perhitungan_col_start, n_weeks, hasil_last_row, period_labels):
+    if sheet_name in wb.sheetnames:
+        del wb[sheet_name]
+    ws = wb.create_sheet(sheet_name)
+    titles = ["No", "Cabang"] + period_labels
+    for i, t in enumerate(titles, start=1):
+        style_header_cell(ws, 1, i, t, FILL_HEADER2)
+    out_row = 2
+    for wh_row in wh_rows:
+        ws.cell(row=out_row, column=1, value=f"=WH!A{wh_row}")
+        ws.cell(row=out_row, column=2, value=f"=WH!B{wh_row}")
+        for w in range(n_weeks):
+            col_letter = get_column_letter(perhitungan_col_start + w)
+            out_col = 3 + w
+            formula = f"=SUMIF('{hasil_sheet_name}'!$B$3:$B${hasil_last_row},$B{out_row},'{hasil_sheet_name}'!${col_letter}$3:${col_letter}${hasil_last_row})/WH!$E{wh_row}"
+            ws.cell(row=out_row, column=out_col, value=formula)
+            ws.cell(row=out_row, column=out_col).number_format = "0.0%"
+        for c in range(1, 3 + n_weeks):
+            ws.cell(row=out_row, column=c).border = BORDER
+        out_row += 1
+    ws.freeze_panes = "C2"
+    return ws
+
+def generate_excel_workbook(wb: Workbook):
+    ws_raw, ws_wh = wb["Raw"], wb["WH"]
+    n_weeks = detect_week_count(ws_raw)
+    raw_rows, wh_rows = get_raw_rows(ws_raw), get_wh_rows(ws_wh)
+    week_awal = read_week_awal(ws_wh, default=1)
+    period_labels = build_period_labels(week_awal, n_weeks)
+
+    for r in wh_rows:
+        ws_wh.cell(row=r, column=5, value=f"=C{r}+D{r}")
+
+    _, hf_start, hf_last = build_hasil_sheet(wb, "Hasil Forecast", ws_raw, raw_rows, n_weeks, "forecast", period_labels)
+    _, ht_start, ht_last = build_hasil_sheet(wb, "Hasil Target", ws_raw, raw_rows, n_weeks, "target", period_labels)
+    build_occupancy_sheet(wb, "Occupancy Forecast", ws_wh, wh_rows, "Hasil Forecast", hf_start, n_weeks, hf_last, period_labels)
+    build_occupancy_sheet(wb, "Occupancy Target", ws_wh, wh_rows, "Hasil Target", ht_start, n_weeks, ht_last, period_labels)
+
+    order = ["Raw", "WH", "Hasil Forecast", "Hasil Target", "Occupancy Forecast", "Occupancy Target"]
+    wb._sheets.sort(key=lambda s: order.index(s.title) if s.title in order else 999)
+    return wb, period_labels, week_awal, n_weeks
+
+CATEGORICAL = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#4a3aa7", "#e34948"]
+SURFACE, INK_PRIMARY, INK_SECONDARY, INK_MUTED, GRIDLINE, BASELINE, STATUS_CRITICAL = "#fcfcfb", "#0b0b0b", "#52514e", "#898781", "#e1e0d9", "#c3c2b7", "#d03b3b"
+
+def _style_axes(ax):
+    ax.grid(axis="y", which="major")
+    ax.grid(axis="x", visible=False)
+    ax.spines["left"].set_color(BASELINE)
+    ax.spines["bottom"].set_color(BASELINE)
+
+def plot_balance_chart_b64(records, balances_by_record, period_labels, title):
+    fig, ax = plt.subplots(figsize=(9.5, 5))
+    _style_axes(ax)
+    for i, rec in enumerate(records):
+        ax.plot(period_labels, balances_by_record[id(rec)], marker="o", markersize=5, linewidth=2, color=CATEGORICAL[i % len(CATEGORICAL)], label=rec.label)
+    ax.axhline(0, color=STATUS_CRITICAL, linewidth=1, linestyle="--", alpha=0.6)
+    ax.set_ylabel("Balance (unit)")
+    ax.set_title(title, fontsize=13, fontweight="bold", color=INK_PRIMARY, loc="left")
+    ax.legend(loc="upper left", bbox_to_anchor=(1.0, 1.0), frameon=False, fontsize=9)
+    fig.subplots_adjust(right=0.78)
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=150, facecolor=SURFACE)
+    plt.close(fig)
+    buf.seek(0)
+    return base64.b64encode(buf.read()).decode("ascii")
+
+def plot_occupancy_chart_b64(occupancy, period_labels, title):
+    fig, ax = plt.subplots(figsize=(8.5, 5))
+    _style_axes(ax)
+    for i, cabang in enumerate(occupancy.keys()):
+        y = [v * 100 if v is not None else None for v in occupancy[cabang]]
+        ax.plot(period_labels, y, marker="o", markersize=6, linewidth=2.2, color=CATEGORICAL[i % len(CATEGORICAL)], label=cabang)
+    ax.axhline(100, color=STATUS_CRITICAL, linewidth=1.4, linestyle="--")
+    ax.text(0.01, 100, " Kapasitas 100% ", color=STATUS_CRITICAL, fontsize=9, va="bottom", ha="left", transform=ax.get_yaxis_transform())
+    ax.yaxis.set_major_formatter(mticker.PercentFormatter())
+    ax.set_ylabel("Occupancy (%)")
+    ax.set_title(title, fontsize=13, fontweight="bold", color=INK_PRIMARY, loc="left")
+    ax.legend(loc="upper left", bbox_to_anchor=(1.0, 1.0), frameon=False, fontsize=9)
+    fig.subplots_adjust(right=0.8)
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=150, facecolor=SURFACE)
+    plt.close(fig)
+    buf.seek(0)
+    return base64.b64encode(buf.read()).decode("ascii")
+
+def generate_insights(records, bal_f, bal_t, ratio_f, ratio_t, occ_f, occ_t, period_labels, n_weeks):
+    insights = []
+    for rec in records:
+        for w, r in enumerate(ratio_f[id(rec)]):
+            if r is not None and r < 1:
+                insights.append(f"RISIKO KEKURANGAN (Forecast) - {rec.label}: pada periode {period_labels[w]}, balance hanya {r*100:.0f}% dari kebutuhan forecast periode {period_labels[w+1]}. Perlu tambahan TO/Vessel masuk.")
+    for rec in records:
+        for w, r in enumerate(ratio_t[id(rec)]):
+            if r is not None and r < 1:
+                insights.append(f"RISIKO KEKURANGAN (Target) - {rec.label}: pada periode {period_labels[w]}, balance hanya {r*100:.0f}% dari target periode {period_labels[w+1]}.")
+    for cabang, series in occ_f.items():
+        for w, v in enumerate(series):
+            if v is not None and v > 1:
+                insights.append(f"RISIKO OVER KAPASITAS GUDANG (Forecast) - Cabang {cabang} pada periode {period_labels[w]}: occupancy {v*100:.0f}% dari kapasitas gudang (kelebihan {(v-1)*100:.0f} poin persen).")
+    for cabang, series in occ_t.items():
+        for w, v in enumerate(series):
+            if v is not None and v > 1:
+                insights.append(f"RISIKO OVER KAPASITAS GUDANG (Target) - Cabang {cabang} pada periode {period_labels[w]}: occupancy {v*100:.0f}% dari kapasitas gudang.")
+    for rec in records:
+        yf = bal_f[id(rec)]
+        delta = yf[-1] - yf[0]
+        pct = (delta / abs(yf[0]) * 100) if yf[0] else None
+        arah = "naik" if delta > 0 else ("turun" if delta < 0 else "stabil")
+        if pct is not None and abs(pct) >= 30:
+            insights.append(f"TREN - {rec.label} (Forecast): balance {arah} signifikan dari {yf[0]:.1f} ({period_labels[0]}) menjadi {yf[-1]:.1f} ({period_labels[-1]}), perubahan {pct:+.0f}%. " + ("Cek risiko overstock." if delta > 0 else "Cek risiko kekurangan stok."))
+    for rec in records:
+        yf, yt = bal_f[id(rec)][-1], bal_t[id(rec)][-1]
+        gap = yf - yt
+        if abs(gap) > 0.5:
+            lebih_besar = "Forecast" if gap > 0 else "Target"
+            insights.append(f"PERBANDINGAN SKENARIO - {rec.label}: pada periode {period_labels[-1]}, balance skenario {lebih_besar} lebih tinggi (selisih {abs(gap):.1f} unit) dibanding skenario lainnya. Artinya asumsi demand {lebih_besar.lower()} menghasilkan buffer yang lebih besar.")
+    if not insights:
+        insights.append("Tidak ditemukan indikasi risiko kekurangan stok atau over-kapasitas gudang pada rentang periode yang dianalisis.")
+    return insights
+
+def build_html_report_string(charts_data, insights, period_labels, week_awal):
+    imgs_html = "".join(f'<div class="chart"><h3>{title}</h3><img src="data:image/png;base64,{b64}" alt="{title}"/></div>' for title, b64 in charts_data)
+    insight_items = "".join(f"<li>{i}</li>" for i in insights)
+    return f"""<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8"/>
+<title>DDMRP Analysis Report</title>
+<style>
+  body {{ font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background:#f9f9f7; color:#0b0b0b; margin:0; padding:32px; }}
+  h1 {{ font-size: 22px; margin-bottom:4px; }}
+  .sub {{ color:#52514e; margin-bottom:28px; }}
+  .chart {{ background:#fcfcfb; border:1px solid #e1e0d9; border-radius:10px; padding:16px; margin-bottom:24px; }}
+  .chart h3 {{ margin-top:0; font-size:15px; }}
+  .chart img {{ max-width:100%; display:block; }}
+  .insights {{ background:#fcfcfb; border:1px solid #e1e0d9; border-radius:10px; padding:20px 28px; }}
+  .insights li {{ margin-bottom:10px; line-height:1.5; }}
+  .grid {{ display:grid; grid-template-columns: 1fr 1fr; gap:20px; }}
+  @media (max-width: 900px) {{ .grid {{ grid-template-columns: 1fr; }} }}
+</style>
+</head>
+<body>
+  <h1>DDMRP Balance &amp; Occupancy - Analysis Report</h1>
+  <div class="sub">Periode: {period_labels[0]} - {period_labels[-1]} (Week Awal = {week_awal})</div>
+  <div class="grid">{imgs_html}</div>
+  <h2>Insight &amp; Rekomendasi</h2>
+  <div class="insights"><ul>{insight_items}</ul></div>
+</body>
+</html>"""
+
+def calculate_ddmrp_occupancy_from_bytes(file_bytes: bytes) -> dict:
+    wb_data = load_workbook(io.BytesIO(file_bytes), data_only=True)
+    if "Raw" not in wb_data.sheetnames or "WH" not in wb_data.sheetnames:
+        raise ValueError("File Excel harus memiliki sheet 'Raw' dan 'WH' untuk pemrosesan DDMRP.")
+
+    ws_raw, ws_wh = wb_data["Raw"], wb_data["WH"]
+    n_weeks = detect_week_count(ws_raw)
+    week_awal = read_week_awal(ws_wh, default=1)
+    period_labels = build_period_labels(week_awal, n_weeks)
+
+    records = read_raw_records(ws_raw, n_weeks)
+    wh_capacity = read_wh_capacity(ws_wh)
+
+    bal_f, bal_t, ratio_f, ratio_t = {}, {}, {}, {}
+    for rec in records:
+        bf = compute_balance_series(rec, n_weeks, "forecast")
+        bt = compute_balance_series(rec, n_weeks, "target")
+        bal_f[id(rec)], bal_t[id(rec)] = bf, bt
+        ratio_f[id(rec)] = compute_ratio_series(bf, rec, n_weeks, "forecast")
+        ratio_t[id(rec)] = compute_ratio_series(bt, rec, n_weeks, "target")
+
+    occ_f = compute_occupancy(records, bal_f, wh_capacity)
+    occ_t = compute_occupancy(records, bal_t, wh_capacity)
+
+    b64_bal_f = plot_balance_chart_b64(records, bal_f, period_labels, "Tren Balance - Skenario Forecast")
+    b64_bal_t = plot_balance_chart_b64(records, bal_t, period_labels, "Tren Balance - Skenario Target")
+    b64_occ_f = plot_occupancy_chart_b64(occ_f, period_labels, "Occupancy Gudang - Skenario Forecast")
+    b64_occ_t = plot_occupancy_chart_b64(occ_t, period_labels, "Occupancy Gudang - Skenario Target")
+
+    insights = generate_insights(records, bal_f, bal_t, ratio_f, ratio_t, occ_f, occ_t, period_labels, n_weeks)
+    html_report = build_html_report_string([
+        ("Balance - Skenario Forecast", b64_bal_f),
+        ("Balance - Skenario Target", b64_bal_t),
+        ("Occupancy - Skenario Forecast", b64_occ_f),
+        ("Occupancy - Skenario Target", b64_occ_t),
+    ], insights, period_labels, week_awal)
+
+    wb_form = load_workbook(io.BytesIO(file_bytes), data_only=False)
+    wb_form, _, _, _ = generate_excel_workbook(wb_form)
+    out_buf = io.BytesIO()
+    wb_form.save(out_buf)
+    out_buf.seek(0)
+    excel_base64 = base64.b64encode(out_buf.read()).decode("ascii")
+
     daily_data = []
+    for cabang, cap_val in wh_capacity:
+        series_occ = occ_f.get(cabang, [0.0] * n_weeks)
+        for w in range(n_weeks):
+            occ_pct = series_occ[w] if series_occ[w] is not None else 0.0
+            tot_bal = occ_pct * cap_val if cap_val else 0.0
+            daily_data.append({
+                "cabang": str(cabang),
+                "date": period_labels[w],
+                "total_on_hand": round(tot_bal, 2),
+                "capacity": round(cap_val, 2),
+                "occupancy_pct": round(occ_pct * 100, 2),
+                "is_shortage": tot_bal < 0
+            })
+
     shortage_alerts = []
-
-    # ── Langkah 4: Forward-fill tanggal yang kosong dan agregasi ──
-    if not df_cat_balances.empty:
-        min_date = df_cat_balances['Date'].min()
-        max_date = df_cat_balances['Date'].max()
-        all_dates = pd.date_range(start=min_date, end=max_date, freq='D')
-
-        pivoted = df_cat_balances.pivot(index='Date', columns=['Cabang', 'Category'], values='running_balance')
-        pivoted = pivoted.reindex(all_dates)
-        pivoted = pivoted.ffill()
-        pivoted = pivoted.fillna(0)
-        pivoted.index.name = 'Date'
-        
-        filled_cat_balances = pivoted.unstack().reset_index(name='running_balance')
-        
-        for cabang in cabangs:
-            cabang_orig_df = df[df['Cabang'] == cabang]
-            cap_series = pd.to_numeric(cabang_orig_df.get('Capacity', pd.Series()), errors='coerce').dropna()
-            capacity_val = _safe_float(cap_series.iloc[0]) if len(cap_series) > 0 else 0.0
-
-            c_balances = filled_cat_balances[filled_cat_balances['Cabang'] == cabang]
-            if c_balances.empty: continue
-            
-            b_agg = c_balances.groupby('Date')['running_balance'].sum().reset_index()
-            b_agg = b_agg.sort_values('Date')
-
-            if capacity_val <= 0:
-                max_hist = max(b_agg['running_balance'].max(), 1.0)
-                capacity_val = float(max_hist * 1.2)
-            
-            for _, row in b_agg.iterrows():
-                date_str = row['Date'].strftime('%Y-%m-%d')
-                total_balance = _safe_float(row['running_balance'])
-                occupancy_pct = _safe_float(round((total_balance / capacity_val) * 100, 4))
-                is_shortage = total_balance < 0
-
-                daily_data.append({
-                    'cabang':        str(cabang),
-                    'date':          date_str,
-                    'total_on_hand': total_balance,
-                    'capacity':      capacity_val,
-                    'occupancy_pct': occupancy_pct,
-                    'is_shortage':   is_shortage
-                })
-
-        # Find shortages per category
-        for _, row in filled_cat_balances.iterrows():
-            rb = _safe_float(row['running_balance'])
-            if rb < 0:
+    for rec in records:
+        bf = bal_f[id(rec)]
+        for w in range(n_weeks):
+            if bf[w] < 0:
                 shortage_alerts.append({
-                    'cabang': str(row['Cabang']),
-                    'category': str(row['Category']),
-                    'date': row['Date'].strftime('%Y-%m-%d'),
-                    'deficit': round(rb, 2)
+                    "cabang": rec.cabang,
+                    "category": f"{rec.grup} - {rec.category}",
+                    "date": period_labels[w],
+                    "deficit": round(abs(bf[w]), 2)
                 })
 
-    branch_date_summary = daily_data.copy()
+    avg_occ = sum(d["occupancy_pct"] for d in daily_data) / len(daily_data) if daily_data else 0
+    max_occ = max(d["occupancy_pct"] for d in daily_data) if daily_data else 0
 
-    # ── KPIs ──
-    if daily_data:
-        avg_occ = sum(d['occupancy_pct'] for d in daily_data) / len(daily_data)
-        max_occ = max(d['occupancy_pct'] for d in daily_data)
-        cats_at_risk = len(shortage_alerts)
-    else:
-        avg_occ = max_occ = cats_at_risk = 0
+    inv_rows = []
+    for rec in records:
+        bf = bal_f[id(rec)]
+        for w in range(n_weeks):
+            synth_date = f"2026-01-{(w % 28) + 1:02d}"
+            inv_rows.append({
+                "Cabang": rec.cabang,
+                "Category": f"{rec.grup} - {rec.category}",
+                "Date": synth_date,
+                "Penjualan": rec.forecast[w],
+                "On Hand": bf[w]
+            })
 
-    # ── Run Inventory Analysis (ABC-XYZ) on same data ──
-    inventory_result = None
-    try:
-        inventory_result = _run_inventory_from_occupancy(df)
-    except Exception:
-        pass
+    from services.inventory_engine import run_inventory_analysis
+    inv_df = pd.DataFrame(inv_rows)
+    inventory_result = run_inventory_analysis(inv_df) if not inv_df.empty else None
 
     return {
-        "daily_data":          daily_data,
-        "branch_date_summary": branch_date_summary,
-        "shortage_alerts":     shortage_alerts,
+        "processed_at": datetime.now().isoformat(),
+        "daily_data": daily_data,
+        "branch_date_summary": daily_data,
+        "shortage_alerts": shortage_alerts,
         "kpi_summary": {
-            "avg_occupancy":      round(avg_occ, 2),
-            "max_occupancy":      round(max_occ, 2),
-            "categories_at_risk": cats_at_risk
+            "avg_occupancy": round(avg_occ, 1),
+            "max_occupancy": round(max_occ, 1),
+            "categories_at_risk": len(shortage_alerts)
         },
-        "inventory_analysis":  inventory_result
+        "over_occupancy_insights": insights,
+        "inventory_analysis": inventory_result,
+        "ddmrp_results": {
+            "week_awal": week_awal,
+            "period_labels": period_labels,
+            "charts": {
+                "balance_forecast": b64_bal_f,
+                "balance_target": b64_bal_t,
+                "occupancy_forecast": b64_occ_f,
+                "occupancy_target": b64_occ_t,
+            },
+            "html_report": html_report,
+            "excel_base64": excel_base64
+        }
     }
 
 
-def _run_inventory_from_occupancy(df: pd.DataFrame) -> dict:
+def calculate_occupancy(df: pd.DataFrame) -> dict:
     """
-    Run ABC-XYZ classification using occupancy data.
-    Maps: Out → Penjualan (sales proxy), On Hand stays.
+    Fallback untuk format dataframe / CSV legacy reguler jika file yang diunggah bukan format multi-sheet Raw & WH.
     """
+    if df.empty:
+        return {
+            "daily_data": [], "branch_date_summary": [], "shortage_alerts": [],
+            "kpi_summary": {"avg_occupancy": 0, "max_occupancy": 0, "categories_at_risk": 0},
+            "inventory_analysis": None
+        }
+    if 'Cabang' not in df.columns: df['Cabang'] = 'Unknown'
+    if 'Category' not in df.columns: df['Category'] = 'Unknown'
+    df = df.copy()
+    df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+    df = df.dropna(subset=['Date']).sort_values(by=['Cabang', 'Category', 'Date'])
+    cabangs = df['Cabang'].unique()
+    
+    category_balances = []
+    for cabang in cabangs:
+        cabang_df = df[df['Cabang'] == cabang]
+        for cat in cabang_df['Category'].unique():
+            cat_df = cabang_df[cabang_df['Category'] == cat].copy()
+            cat_df = cat_df.groupby('Date').agg({'In': 'sum', 'Out': 'sum', 'On Hand': 'first'}).reset_index().sort_values('Date')
+            prev_balance = 0
+            for idx, row in cat_df.iterrows():
+                current_balance = _safe_float(row.get('On Hand', 0)) if idx == 0 else prev_balance + _safe_float(row.get('In', 0)) - _safe_float(row.get('Out', 0))
+                prev_balance = current_balance
+                category_balances.append({'Cabang': cabang, 'Category': cat, 'Date': row['Date'], 'running_balance': current_balance})
+
+    df_cat_balances = pd.DataFrame(category_balances)
+    daily_data, shortage_alerts = [], []
+    if not df_cat_balances.empty:
+        all_dates = pd.date_range(start=df_cat_balances['Date'].min(), end=df_cat_balances['Date'].max(), freq='D')
+        pivoted = df_cat_balances.pivot(index='Date', columns=['Cabang', 'Category'], values='running_balance').reindex(all_dates).ffill().fillna(0)
+        filled_cat_balances = pivoted.unstack().reset_index(name='running_balance')
+        for cabang in cabangs:
+            cap_series = pd.to_numeric(df[df['Cabang'] == cabang].get('Capacity', pd.Series()), errors='coerce').dropna()
+            capacity_val = _safe_float(cap_series.iloc[0]) if len(cap_series) > 0 else 0.0
+            c_balances = filled_cat_balances[filled_cat_balances['Cabang'] == cabang]
+            if c_balances.empty: continue
+            b_agg = c_balances.groupby('Date')['running_balance'].sum().reset_index().sort_values('Date')
+            if capacity_val <= 0: capacity_val = float(max(b_agg['running_balance'].max(), 1.0) * 1.2)
+            for _, row in b_agg.iterrows():
+                total_balance = _safe_float(row['running_balance'])
+                daily_data.append({'cabang': str(cabang), 'date': row['Date'].strftime('%Y-%m-%d'), 'total_on_hand': total_balance, 'capacity': capacity_val, 'occupancy_pct': _safe_float(round((total_balance / capacity_val) * 100, 4)), 'is_shortage': total_balance < 0})
+        for _, row in filled_cat_balances.iterrows():
+            rb = _safe_float(row['running_balance'])
+            if rb < 0: shortage_alerts.append({'cabang': str(row['Cabang']), 'category': str(row['Category']), 'date': row['Date'].strftime('%Y-%m-%d'), 'deficit': round(rb, 2)})
+
+    avg_occ = sum(d['occupancy_pct'] for d in daily_data) / len(daily_data) if daily_data else 0
+    max_occ = max(d['occupancy_pct'] for d in daily_data) if daily_data else 0
     from services.inventory_engine import run_inventory_analysis
-
     inv_df = df.copy()
-    # Map occupancy columns to inventory columns
-    if 'Out' in inv_df.columns and 'Penjualan' not in inv_df.columns:
-        inv_df['Penjualan'] = inv_df['Out']
-    
-    # Ensure required columns exist
-    required = ['Category', 'Date', 'Penjualan', 'On Hand']
-    missing = [c for c in required if c not in inv_df.columns]
-    if missing:
-        return None
-    
-    if 'Cabang' not in inv_df.columns:
-        inv_df['Cabang'] = 'Unknown'
+    if 'Out' in inv_df.columns and 'Penjualan' not in inv_df.columns: inv_df['Penjualan'] = inv_df['Out']
+    inventory_result = run_inventory_analysis(inv_df) if all(c in inv_df.columns for c in ['Category', 'Date', 'Penjualan', 'On Hand']) else None
 
-    return run_inventory_analysis(inv_df)
+    return {
+        "daily_data": daily_data, "branch_date_summary": daily_data, "shortage_alerts": shortage_alerts,
+        "kpi_summary": {"avg_occupancy": round(avg_occ, 2), "max_occupancy": round(max_occ, 2), "categories_at_risk": len(shortage_alerts)},
+        "inventory_analysis": inventory_result
+    }
