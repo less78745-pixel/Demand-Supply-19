@@ -51,7 +51,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 export function OccupancyChart({ data }: OccupancyChartProps) {
-  const chartData = data.map((d) => ({
+  const chartData = data.slice(0, 50).map((d) => ({
     ...d,
     label: `${d.cabang} - ${d.date}`
   }));
@@ -86,6 +86,7 @@ export function OccupancyChart({ data }: OccupancyChartProps) {
             name="Occupancy %"
             fill="hsl(var(--primary))"
             radius={[4, 4, 0, 0]}
+            isAnimationActive={chartData.length <= 25}
           />
         </BarChart>
       </ResponsiveContainer>

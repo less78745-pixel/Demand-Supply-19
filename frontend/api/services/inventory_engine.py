@@ -70,69 +70,64 @@ def run_inventory_analysis(df: pd.DataFrame) -> dict:
     df['Category'] = df['Category'].astype(str)
 
     results = []
-    cabangs = df['Cabang'].unique()
+    for (cabang, cat), group_df in df.groupby(['Cabang', 'Category'], sort=False):
+        cat_df = group_df.sort_values('Date')
+        if cat_df.empty:
+            continue
 
-    for cabang in cabangs:
-        cabang_df = df[df['Cabang'] == cabang]
-        categories = cabang_df['Category'].unique()
+        sales        = pd.to_numeric(cat_df['Penjualan'], errors='coerce').fillna(0)
+        total_volume = _safe_float(sales.sum())
+        mean_sales   = _safe_float(sales.mean())
+        std_sales    = _safe_float(sales.std(ddof=0))
 
-        for cat in categories:
-            cat_df = cabang_df[cabang_df['Category'] == cat].sort_values('Date')
-            if cat_df.empty:
-                continue
+        cv = std_sales / mean_sales if mean_sales > 0 else 0
+        if cv <= 0.5:
+            xyz = 'X'
+        elif cv <= 1.0:
+            xyz = 'Y'
+        else:
+            xyz = 'Z'
 
-            sales        = pd.to_numeric(cat_df['Penjualan'], errors='coerce').fillna(0)
-            total_volume = _safe_float(sales.sum())
-            mean_sales   = _safe_float(sales.mean())
-            std_sales    = _safe_float(sales.std(ddof=0))
+        on_hand_col = 'On Hand' if 'On Hand' in cat_df.columns else None
+        current_on_hand = _safe_float(pd.to_numeric(cat_df[on_hand_col], errors='coerce').iloc[-1]) if on_hand_col else 0.0
+        daily_sales = mean_sales / 30 if mean_sales > 0 else 0
+        doh = current_on_hand / daily_sales if daily_sales > 0 else 9999
 
-            cv = std_sales / mean_sales if mean_sales > 0 else 0
-            if cv <= 0.5:
-                xyz = 'X'
-            elif cv <= 1.0:
-                xyz = 'Y'
-            else:
-                xyz = 'Z'
+        stockout_risk = doh < 14
+        overstock     = doh > 60
+        
+        if len(sales) >= 6:
+            trend_pct = ((sales.iloc[-3:].mean() - sales.iloc[-6:-3].mean()) / (sales.iloc[-6:-3].mean() + 1e-9)) * 100
+        elif len(sales) >= 2:
+            trend_pct = ((sales.iloc[-1] - sales.iloc[0]) / (abs(sales.iloc[0]) + 1e-9)) * 100
+        else:
+            trend_pct = 0.0
 
-            on_hand_col = 'On Hand' if 'On Hand' in cat_df.columns else None
-            current_on_hand = _safe_float(pd.to_numeric(cat_df[on_hand_col], errors='coerce').iloc[-1]) if on_hand_col else 0.0
-            daily_sales = mean_sales / 30 if mean_sales > 0 else 0
-            doh = current_on_hand / daily_sales if daily_sales > 0 else 9999
-
-            stockout_risk = doh < 14
-            overstock     = doh > 60
-            
-            if len(sales) >= 6:
-                trend_pct = ((sales.iloc[-3:].mean() - sales.iloc[-6:-3].mean()) / (sales.iloc[-6:-3].mean() + 1e-9)) * 100
-            elif len(sales) >= 2:
-                trend_pct = ((sales.iloc[-1] - sales.iloc[0]) / (abs(sales.iloc[0]) + 1e-9)) * 100
-            else:
-                trend_pct = 0.0
-
-            results.append({
-                "cabang":         str(cabang),
-                "category":       str(cat),
-                "volume":         _safe_float(total_volume),
-                "xyz_class":      xyz,
-                "cv":             _safe_float(round(cv, 4)),
-                "doh":            _safe_float(round(doh, 1)),
-                "on_hand":        _safe_float(current_on_hand),
-                "mean_sales":     _safe_float(round(mean_sales, 2)),
-                "std_sales":      _safe_float(round(std_sales, 2)),
-                "stockout_risk":  bool(stockout_risk),
-                "overstock":      bool(overstock),
-                "trend_pct":      _safe_float(round(trend_pct, 2)),
-            })
+        results.append({
+            "cabang":         str(cabang),
+            "category":       str(cat),
+            "volume":         _safe_float(total_volume),
+            "xyz_class":      xyz,
+            "cv":             _safe_float(round(cv, 4)),
+            "doh":            _safe_float(round(doh, 1)),
+            "on_hand":        _safe_float(current_on_hand),
+            "mean_sales":     _safe_float(round(mean_sales, 2)),
+            "std_sales":      _safe_float(round(std_sales, 2)),
+            "stockout_risk":  bool(stockout_risk),
+            "overstock":      bool(overstock),
+            "trend_pct":      _safe_float(round(trend_pct, 2)),
+        })
 
     if not results:
         return {"error": "No valid data after processing"}
 
-    final_results, dead_stock = [], []
-    for cabang in cabangs:
-        cab_res = [r for r in results if r['cabang'] == cabang]
-        if not cab_res:
-            continue
+    from collections import defaultdict
+    by_cabang = defaultdict(list)
+    for r in results:
+        by_cabang[r['cabang']].append(r)
 
+    final_results, dead_stock = [], []
+    for cabang, cab_res in by_cabang.items():
         df_cab = pd.DataFrame(cab_res).sort_values('volume', ascending=False).reset_index(drop=True)
         total_vol = df_cab['volume'].sum()
 

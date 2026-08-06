@@ -278,7 +278,8 @@ def build_hasil_sheet(wb, sheet_name, ws_raw, raw_rows, n_weeks, demand_kind, pe
         ws.append(row_vals)
         for w in range(n_weeks):
             if w + 1 < n_weeks:
-                ws.cell(row=out_row, column=col_ratio_start + w).number_format = "0.0%"
+                if out_row <= 100:
+                    ws.cell(row=out_row, column=col_ratio_start + w).number_format = "0.0%"
         out_row += 1
 
     ws.column_dimensions["A"].width = 6
@@ -353,7 +354,8 @@ def _style_axes(ax):
 def plot_balance_chart_b64(records, balances_by_record, period_labels, title):
     fig, ax = plt.subplots(figsize=(9.5, 5))
     _style_axes(ax)
-    for i, rec in enumerate(records):
+    plot_records = records[:15] if len(records) > 15 else records
+    for i, rec in enumerate(plot_records):
         ax.plot(period_labels, balances_by_record[id(rec)], marker="o", markersize=5, linewidth=2, color=CATEGORICAL[i % len(CATEGORICAL)], label=rec.label)
     ax.axhline(0, color=STATUS_CRITICAL, linewidth=1, linestyle="--", alpha=0.6)
     ax.set_ylabel("Balance (unit)")
@@ -418,7 +420,7 @@ def generate_insights(records, bal_f, bal_t, ratio_f, ratio_t, occ_f, occ_t, per
             insights.append(f"PERBANDINGAN SKENARIO - {rec.label}: pada periode {period_labels[-1]}, balance skenario {lebih_besar} lebih tinggi (selisih {abs(gap):.1f} unit) dibanding skenario lainnya. Artinya asumsi demand {lebih_besar.lower()} menghasilkan buffer yang lebih besar.")
     if not insights:
         insights.append("Tidak ditemukan indikasi risiko kekurangan stok atau over-kapasitas gudang pada rentang periode yang dianalisis.")
-    return insights
+    return insights[:50]
 
 def build_html_report_string(charts_data, insights, period_labels, week_awal):
     imgs_html = "".join(f'<div class="chart"><h3>{title}</h3><img src="data:image/png;base64,{b64}" alt="{title}"/></div>' for title, b64 in charts_data)
