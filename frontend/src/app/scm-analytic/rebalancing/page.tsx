@@ -270,10 +270,10 @@ export default function RebalancingPage() {
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase tracking-widest">
               <ArrowLeftRight className="w-3.5 h-3.5" /> SCM Analytic • Multi-Echelon Logistics
             </div>
-            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white flex items-center gap-3">
+            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-slate-900 flex items-center gap-3">
               Stock Rebalancing <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-300">Optimizer</span>
             </h1>
-            <p className="text-slate-300 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
+            <p className="text-slate-700 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
               Optimasi pemindahan stok silang antar-cabang dengan biaya logistik terendah dan waktu kirim tercepat. Perhitungan dipartisi ketat per entitas perusahaan tujuan.
             </p>
           </div>
@@ -293,15 +293,15 @@ export default function RebalancingPage() {
 
       {/* ─── PANDUAN & UPLOAD SECTION ─── */}
       {showHowTo && (
-        <GlassCard className="p-6 border-emerald-500/30 bg-slate-900/80 backdrop-blur-xl animate-fade-in">
-          <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-6">
-            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+        <GlassCard className="p-6 border-emerald-500/30 bg-white backdrop-blur-xl animate-fade-in">
+          <div className="flex items-center justify-between border-b border-slate-200 pb-4 mb-6">
+            <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
               <FileSpreadsheet className="w-5 h-5 text-emerald-400" /> Upload 3 File Matriks & Panduan Rebalancing
             </h3>
             <div className="flex flex-wrap gap-2">
               <button
                 onClick={handleGenerateDemo}
-                className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-emerald-500/20"
+                className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-slate-900 font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-emerald-500/20"
               >
                 <Zap className="w-4 h-4" /> Gunakan Data Demo
               </button>
@@ -317,7 +317,7 @@ export default function RebalancingPage() {
           </div>
           <div className="flex justify-center">
             <button onClick={handleAnalyze} disabled={isProcessing || !stockFile || !demandFile || !freightFile}
-              className="px-8 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-500 disabled:opacity-50 transition text-sm font-bold uppercase tracking-wide flex items-center gap-2 shadow-lg shadow-emerald-600/20">
+              className="px-8 py-3 bg-emerald-600 text-slate-900 rounded-xl hover:bg-emerald-500 disabled:opacity-50 transition text-sm font-bold uppercase tracking-wide flex items-center gap-2 shadow-lg shadow-emerald-600/20">
               {isProcessing ? (
                 <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Memproses...</>
               ) : (
@@ -325,7 +325,7 @@ export default function RebalancingPage() {
               )}
             </button>
           </div>
-          <div className="mt-6 p-4 bg-emerald-500/10 rounded-xl border border-emerald-500/20 text-xs text-slate-300">
+          <div className="mt-6 p-4 bg-emerald-500/10 rounded-xl border border-emerald-500/20 text-xs text-slate-700">
             <p><strong>💡 Catatan Sistem:</strong> Pembatasan hak entitas dipatuhi secara ketat (stok PT Alpha hanya dialokasikan untuk demand PT Alpha). Opsi pengiriman yang melebihi Max Lead Time otomatis tereliminasi.</p>
           </div>
         </GlassCard>
@@ -337,7 +337,7 @@ export default function RebalancingPage() {
           <h2 className="text-sm font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-2">
             <Zap className="w-4 h-4" /> Pilih 3 Jalur Simulasi Alokasi & Mode Logistik:
           </h2>
-          <span className="text-xs text-slate-400 italic hidden sm:inline">Klik tab untuk membandingkan ongkir termurah vs kecepatan kargo udara!</span>
+          <span className="text-xs text-slate-600 italic hidden sm:inline">Klik tab untuk membandingkan ongkir termurah vs kecepatan kargo udara!</span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -353,22 +353,22 @@ export default function RebalancingPage() {
                 }}
                 className={`relative group p-4 sm:p-5 rounded-2xl transition-all duration-300 text-left border overflow-hidden shadow-lg ${
                   isSelected
-                    ? `bg-gradient-to-br ${sc.color} text-white border-transparent ring-2 ring-white/20 shadow-emerald-500/25 scale-[1.02]`
-                    : 'bg-slate-900/70 hover:bg-slate-800/80 text-slate-300 border-slate-700 hover:border-slate-600'
+                    ? `bg-gradient-to-br ${sc.color} text-slate-900 border-transparent ring-2 ring-white/20 shadow-emerald-500/25 scale-[1.02]`
+                    : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 hover:border-slate-600'
                 }`}
               >
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-bold text-base tracking-wide flex items-center gap-2.5">
-                    <Icon className={`w-5 h-5 ${isSelected ? 'text-white' : 'text-emerald-400'}`} />
+                    <Icon className={`w-5 h-5 ${isSelected ? 'text-slate-900' : 'text-emerald-400'}`} />
                     {sc.title}
                   </span>
                   {isSelected && (
-                    <span className="px-2 py-0.5 rounded-full bg-white/20 text-white text-xs font-black uppercase tracking-wider">
+                    <span className="px-2 py-0.5 rounded-full bg-white/20 text-slate-900 text-xs font-black uppercase tracking-wider">
                       Aktif
                     </span>
                   )}
                 </div>
-                <p className={`text-xs sm:text-sm leading-relaxed ${isSelected ? 'text-slate-100 font-medium' : 'text-slate-400'}`}>
+                <p className={`text-xs sm:text-sm leading-relaxed ${isSelected ? 'text-slate-900 font-medium' : 'text-slate-600'}`}>
                   {sc.desc}
                 </p>
               </button>
@@ -378,19 +378,19 @@ export default function RebalancingPage() {
       </div>
 
       {/* ─── ACTION BAR KETIKA RESULTS ADA ─── */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-slate-900/90 p-6 rounded-2xl border border-slate-800 shadow-xl relative z-30 overflow-visible mb-10">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-white p-6 rounded-2xl border border-slate-200 shadow-xl relative z-30 overflow-visible mb-10">
         <div className="flex flex-col sm:flex-row sm:items-center gap-4 flex-1">
           <span className="text-xs font-bold text-emerald-300 uppercase tracking-wider whitespace-nowrap">🏢 Filter Entity / Cabang:</span>
           <div className="w-full max-w-xs">
             <MultiSelect options={entityOptions} selected={selectedEntity} onChange={setSelectedEntity} selectAllLabel="Semua Entity" placeholder="Pilih Entity..." />
           </div>
-          <button onClick={handleExportSTO} className="px-5 py-2.5 bg-emerald-600 text-white rounded-xl hover:bg-emerald-500 transition text-xs sm:text-sm font-bold flex items-center justify-center gap-2 uppercase tracking-wide shadow-lg">
+          <button onClick={handleExportSTO} className="px-5 py-2.5 bg-emerald-600 text-slate-900 rounded-xl hover:bg-emerald-500 transition text-xs sm:text-sm font-bold flex items-center justify-center gap-2 uppercase tracking-wide shadow-lg">
             <Download className="w-4 h-4" /> Download Draft STO
           </button>
         </div>
         <button
           onClick={handleGenerateDemo}
-          className="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-bold rounded-xl shadow-lg transition flex items-center justify-center gap-2 text-xs sm:text-sm"
+          className="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-slate-900 font-bold rounded-xl shadow-lg transition flex items-center justify-center gap-2 text-xs sm:text-sm"
         >
           <Zap className="w-4 h-4" /> Gunakan Data Demo
         </button>

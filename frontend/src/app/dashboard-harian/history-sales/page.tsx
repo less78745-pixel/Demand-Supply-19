@@ -818,10 +818,10 @@ export default function HistorySalesPage() {
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20 uppercase tracking-widest">
               <TrendingUp className="w-3.5 h-3.5" /> Dashboard Data Harian • History Sales
             </div>
-            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white flex items-center gap-3">
+            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-slate-900 flex items-center gap-3">
               History Sales & Outstanding <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-sky-400 to-cyan-300">(Analytics Engine)</span>
             </h1>
-            <p className="text-slate-300 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
+            <p className="text-slate-700 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
               Pemantauan performa penjualan historis terhadap pesanan tertunggak (outstanding). Menganalisa metrik otomatis dari sheet Data Compile secara aktual dan riil.
             </p>
           </div>
@@ -841,44 +841,44 @@ export default function HistorySalesPage() {
 
       {/* ─── PANDUAN, TEMPLATE & UPLOAD SECTION ─── */}
       {showHowTo && (
-        <GlassCard className="p-6 border-blue-500/30 bg-slate-900/80 backdrop-blur-xl animate-fade-in">
-          <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-6">
-            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+        <GlassCard className="p-6 border-blue-500/30 bg-white backdrop-blur-xl animate-fade-in">
+          <div className="flex items-center justify-between border-b border-slate-200 pb-4 mb-6">
+            <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
               <FileSpreadsheet className="w-5 h-5 text-blue-400" /> Panduan Upload Data History Sales (Excel / CSV)
             </h3>
             <div className="flex flex-wrap gap-2">
               <button
                 onClick={handleDownloadTemplate}
-                className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-sky-600/20"
+                className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-slate-900 font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-sky-600/20"
               >
                 <Download className="w-4 h-4" /> Unduh Template CSV
               </button>
               <button
                 onClick={handleGenerateDemo}
-                className="px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-blue-500/20"
+                className="px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-slate-900 font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-blue-500/20"
               >
                 <Sparkles className="w-4 h-4" /> Gunakan Data Demo
               </button>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm text-slate-300 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm text-slate-700 mb-6">
             <div className="space-y-2">
-              <h4 className="font-semibold text-white">📌 Analisis Sales vs Outstanding:</h4>
-              <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
+              <h4 className="font-semibold text-slate-900">📌 Analisis Sales vs Outstanding:</h4>
+              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
                 Modul ini otomatis mendeteksi kolom metrik berlabel <i>Sales, AVG Sales,</i> atau <i>Jual</i> sebagai Volume Penjualan, dan metrik lainnya sebagai <i>Outstanding Order / Hold Delivery</i>.
               </p>
             </div>
             <div className="space-y-2">
-              <h4 className="font-semibold text-white">⚙️ Engine Pembacaan Excel (XLSX & CSV):</h4>
-              <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
+              <h4 className="font-semibold text-slate-900">⚙️ Engine Pembacaan Excel (XLSX & CSV):</h4>
+              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
                 Didukung parser XLSX ArrayBuffer, Anda dapat mengunggah file Excel (.xlsx) langsung dari ERP atau Google Sheet tanpa kekhawatiran error karakter binari atau pemisahan desimal yang keliru.
               </p>
             </div>
           </div>
 
-          <div className="pt-4 border-t border-white/10">
-            <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Unggah File Data Compile Anda:</h4>
+          <div className="pt-4 border-t border-slate-200">
+            <h4 className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">Unggah File Data Compile Anda:</h4>
             <FileUploader
               onFileUpload={handleFileUpload}
               isLoading={isProcessing}
@@ -925,10 +925,10 @@ export default function HistorySalesPage() {
       )}
 
       {/* ─── FILTER CONTROLS & SELECTION (EXPANDED & OVERFLOW-VISIBLE) ─── */}
-      <GlassCard allowOverflow={true} className="p-6 border-slate-800 bg-slate-900/90 backdrop-blur-xl mb-10 shadow-xl">
+      <GlassCard allowOverflow={true} className="p-6 border-slate-200 bg-white backdrop-blur-xl mb-10 shadow-xl">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-300 block uppercase tracking-wider">🏢 Filter Cabang:</label>
+            <label className="text-xs font-bold text-slate-700 block uppercase tracking-wider">🏢 Filter Cabang:</label>
             <MultiSelect
               options={cabangs}
               selected={selectedCabang}
@@ -938,7 +938,7 @@ export default function HistorySalesPage() {
             />
           </div>
           <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-300 block uppercase tracking-wider">📦 Filter Kategori Item:</label>
+            <label className="text-xs font-bold text-slate-700 block uppercase tracking-wider">📦 Filter Kategori Item:</label>
             <MultiSelect
               options={categories}
               selected={selectedCategory}
@@ -958,11 +958,11 @@ export default function HistorySalesPage() {
             />
           </div>
           <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-300 block uppercase tracking-wider">📍 Sorot Grafik Cabang:</label>
+            <label className="text-xs font-bold text-slate-700 block uppercase tracking-wider">📍 Sorot Grafik Cabang:</label>
             <select
               value={selectedCabangForChart}
               onChange={(e) => setSelectedCabangForChart(e.target.value)}
-              className="w-full min-h-[44px] rounded-xl border border-slate-700 bg-slate-950/90 px-3 py-2 text-sm text-slate-200 focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30 outline-none transition font-semibold cursor-pointer shadow-md"
+              className="w-full min-h-[44px] rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30 outline-none transition font-semibold cursor-pointer shadow-md"
             >
               <option value="All">📊 Semua Cabang (Gabungan)</option>
               {cabangs.filter(c => c !== 'All').map(c => (
@@ -976,21 +976,21 @@ export default function HistorySalesPage() {
       {/* ─── ANALISIS ABC-XYZ (DATA M s/d M-5) ─── */}
       {abcXyzAnalysis && abcXyzAnalysis.classifiedItems.length > 0 && (
         <GlassCard className="p-6 border-indigo-500/40 bg-gradient-to-br from-slate-900 via-indigo-950/20 to-slate-950 shadow-2xl overflow-hidden">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-slate-800 pb-4 mb-6 gap-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-slate-200 pb-4 mb-6 gap-4">
             <div>
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-black bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 uppercase tracking-widest mb-2 shadow-sm">
                 <Sparkles className="w-3.5 h-3.5 text-indigo-400" /> Advanced Analytics • Matriks ABC-XYZ (M s/d M-5)
               </div>
-              <h3 className="text-lg sm:text-xl font-black text-white flex items-center gap-2.5">
+              <h3 className="text-lg sm:text-xl font-black text-slate-900 flex items-center gap-2.5">
                 <BarChart3 className="w-6 h-6 text-indigo-400" />
                 Grafik &amp; Analisa Matriks ABC-XYZ (Volume vs Fluktuasi Permintaan)
               </h3>
-              <p className="text-xs text-slate-300 mt-1 max-w-3xl leading-relaxed">
+              <p className="text-xs text-slate-700 mt-1 max-w-3xl leading-relaxed">
                 Menggabungkan klasifikasi <b>ABC</b> (kontribusi volume sales) dengan <b>XYZ</b> (koefisien variasi permintaan M s/d M-5) untuk menentukan strategi stok yang presisi.
               </p>
             </div>
-            <div className="flex flex-col items-end gap-1 font-mono text-xs text-slate-300 bg-slate-950/80 p-3 rounded-xl border border-slate-800 shrink-0">
-              <span className="text-slate-400 text-[10px]">TOTAL ITEMS DIANALISA</span>
+            <div className="flex flex-col items-end gap-1 font-mono text-xs text-slate-700 bg-slate-50 p-3 rounded-xl border border-slate-200 shrink-0">
+              <span className="text-slate-600 text-[10px]">TOTAL ITEMS DIANALISA</span>
               <strong className="text-indigo-400 text-base font-extrabold">{abcXyzAnalysis.classifiedItems.length} Item / Kombinasi</strong>
               <span className="text-[10px] text-emerald-400">X: Stabil (CV &le; 20%) | Y: Sedang | Z: Fluktuatif (CV &gt; 50%)</span>
             </div>
@@ -998,7 +998,7 @@ export default function HistorySalesPage() {
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
             {/* Chart: Distribusi Matriks ABC-XYZ */}
-            <div className="lg:col-span-6 flex flex-col bg-slate-950/70 p-5 rounded-2xl border border-slate-800 shadow-inner">
+            <div className="lg:col-span-6 flex flex-col bg-slate-50 p-5 rounded-2xl border border-slate-200 shadow-inner">
               <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-300 mb-4 text-center flex items-center justify-center gap-1.5">
                 📊 Jumlah Item dalam 9 Kuadran Matriks ABC-XYZ
               </h4>
@@ -1040,16 +1040,16 @@ export default function HistorySalesPage() {
                   <AlertCircle className="w-4 h-4 text-amber-400" />
                   <span>Sorotan Risiko Kritis: Kelompok AY &amp; AZ (High Vol, High Fluctuation)</span>
                 </div>
-                <p className="text-xs text-slate-300 mb-3 leading-relaxed">
+                <p className="text-xs text-slate-700 mb-3 leading-relaxed">
                   Item dalam kuadran <b>AZ &amp; AY</b> adalah penyumbang omzet terbesar namun memiliki fluktuasi permintaan tinggi di 6 bulan terakhir. Rentan mengalami stockout drastis atau overstock!
                 </p>
                 {abcXyzAnalysis.topAZ.length > 0 ? (
                   <div className="space-y-1.5">
                     {abcXyzAnalysis.topAZ.map((it, idx) => (
-                      <div key={idx} className="p-2 rounded-lg bg-slate-950/90 border border-amber-500/20 flex items-center justify-between text-xs">
+                      <div key={idx} className="p-2 rounded-lg bg-slate-50 border border-amber-500/20 flex items-center justify-between text-xs">
                         <div className="truncate pr-2">
-                          <span className="font-bold text-white block">📍 {it.cabang} - {it.name}</span>
-                          <span className="text-[10px] text-slate-400">Avg Vol: {Math.round(it.mean).toLocaleString('id-ID')} /bln | CV: {it.cv}</span>
+                          <span className="font-bold text-slate-900 block">📍 {it.cabang} - {it.name}</span>
+                          <span className="text-[10px] text-slate-600">Avg Vol: {Math.round(it.mean).toLocaleString('id-ID')} /bln | CV: {it.cv}</span>
                         </div>
                         <span className="px-2 py-1 bg-amber-500/20 text-amber-300 font-mono font-black text-xs rounded border border-amber-500/30">
                           {it.matrix}
@@ -1058,7 +1058,7 @@ export default function HistorySalesPage() {
                     ))}
                   </div>
                 ) : (
-                  <div className="text-xs text-slate-400 font-medium py-2">Semua item volume tinggi memiliki permintaan cukup stabil.</div>
+                  <div className="text-xs text-slate-600 font-medium py-2">Semua item volume tinggi memiliki permintaan cukup stabil.</div>
                 )}
               </div>
 
@@ -1068,7 +1068,7 @@ export default function HistorySalesPage() {
                   <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                   <span>Rekomendasi Strategi Pengelolaan Matriks</span>
                 </div>
-                <ul className="text-xs text-slate-300 space-y-2 font-normal">
+                <ul className="text-xs text-slate-700 space-y-2 font-normal">
                   <li className="flex items-start gap-2">
                     <span className="text-emerald-400 font-black">✔</span>
                     <span><b>Kuadran AX &amp; BX (Stabil):</b> Terapkan sistem pemesanan otomatis dengan safety stock rendah. Ketersediaan stok di gudang harus dijamin 99% karena permintaan konstan dan dapat diprediksi.</span>
@@ -1087,22 +1087,22 @@ export default function HistorySalesPage() {
       {/* ─── VISUALIZATION CHART: SALES VS OUTSTANDING ─── */}
       {chartData && chartData.length > 0 && (
         <GlassCard className="p-6 border-blue-500/30 bg-gradient-to-b from-slate-900/90 to-slate-950/90 shadow-2xl">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-4 mb-6 gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 pb-4 mb-6 gap-3">
             <div>
-              <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+              <h3 className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2">
                 <BarChart3 className="w-5 h-5 text-blue-400" />
                 Grafik Komparasi Volume Sales vs Outstanding per Cabang
               </h3>
-              <p className="text-xs text-slate-400 mt-1">
+              <p className="text-xs text-slate-600 mt-1">
                 Sorotan: <b className="text-cyan-400">{selectedCabangForChart === 'All' ? 'Seluruh Cabang' : selectedCabangForChart}</b> • Data Mode: <b className="text-emerald-300">AKTUAL & RIIL</b>
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-1.5 bg-slate-800/80 p-1.5 rounded-xl border border-slate-700 shrink-0">
+            <div className="flex flex-wrap gap-1.5 bg-slate-100 p-1.5 rounded-xl border border-slate-200 shrink-0">
               <button
                 onClick={() => setChartFilter('all')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 ${
-                  chartFilter === 'all' ? 'bg-blue-600 text-white shadow-md scale-105' : 'text-slate-300 hover:text-white'
+                  chartFilter === 'all' ? 'bg-blue-600 text-slate-900 shadow-md scale-105' : 'text-slate-700 hover:text-slate-900'
                 }`}
               >
                 <Layers className="w-3.5 h-3.5" /> Semua Metrik
@@ -1110,7 +1110,7 @@ export default function HistorySalesPage() {
               <button
                 onClick={() => setChartFilter('sales')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 ${
-                  chartFilter === 'sales' ? 'bg-emerald-600 text-white shadow-md scale-105' : 'text-slate-400 hover:text-emerald-400'
+                  chartFilter === 'sales' ? 'bg-emerald-600 text-slate-900 shadow-md scale-105' : 'text-slate-600 hover:text-emerald-400'
                 }`}
               >
                 📈 Fokus Sales
@@ -1118,7 +1118,7 @@ export default function HistorySalesPage() {
               <button
                 onClick={() => setChartFilter('outstanding')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 ${
-                  chartFilter === 'outstanding' ? 'bg-amber-600 text-white shadow-md scale-105' : 'text-slate-400 hover:text-amber-400'
+                  chartFilter === 'outstanding' ? 'bg-amber-600 text-slate-900 shadow-md scale-105' : 'text-slate-600 hover:text-amber-400'
                 }`}
               >
                 ⚠️ Fokus Outstanding
@@ -1126,7 +1126,7 @@ export default function HistorySalesPage() {
               <button
                 onClick={() => setChartFilter('avg3')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 ${
-                  chartFilter === 'avg3' ? 'bg-rose-600 text-white shadow-md scale-105' : 'text-slate-400 hover:text-rose-400'
+                  chartFilter === 'avg3' ? 'bg-rose-600 text-slate-900 shadow-md scale-105' : 'text-slate-600 hover:text-rose-400'
                 }`}
               >
                 📈 AVG 3 Bulan (Garis)
@@ -1199,15 +1199,15 @@ export default function HistorySalesPage() {
           {/* ─── INSIGHT CABANG: SOH + TO + VESSEL VS AVG SALES 3 BULAN ─── */}
           {cabangSupplyVsAvg3 && (
             <div className="mt-8 p-5 rounded-2xl bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 border border-blue-500/30 shadow-lg">
-              <div className="flex items-center gap-2.5 border-b border-slate-800 pb-3 mb-4">
+              <div className="flex items-center gap-2.5 border-b border-slate-200 pb-3 mb-4">
                 <span className="p-2 rounded-xl bg-blue-500/20 text-blue-400">
                   <ShieldAlert className="w-5 h-5 text-blue-400 animate-pulse" />
                 </span>
                 <div>
-                  <h4 className="font-extrabold text-white text-sm sm:text-base tracking-wide flex items-center gap-2">
+                  <h4 className="font-extrabold text-slate-900 text-sm sm:text-base tracking-wide flex items-center gap-2">
                     Insight Analitis: Komparasi Total Pasokan (SOH + TO + Vessel) vs Rata-Rata Sales 3 Bulan
                   </h4>
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-slate-600">
                     Evaluasi ketahanan stok cabang terhadap kebutuhan rata-rata 3 bulan historis (AVG 3 Bln).
                   </p>
                 </div>
@@ -1228,11 +1228,11 @@ export default function HistorySalesPage() {
                     {cabangSupplyVsAvg3.underAvg.length > 0 ? (
                       <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
                         {cabangSupplyVsAvg3.underAvg.map((item, idx) => (
-                          <div key={idx} className="p-2.5 rounded-xl bg-slate-950/90 border border-rose-500/20 flex items-center justify-between text-xs">
+                          <div key={idx} className="p-2.5 rounded-xl bg-slate-50 border border-rose-500/20 flex items-center justify-between text-xs">
                             <div>
-                              <div className="font-bold text-white text-sm">📍 {item.cabang}</div>
-                              <div className="text-[11px] text-slate-400 mt-0.5">
-                                Pasokan: <span className="text-rose-300 font-mono">{Math.round(item.totalSupply).toLocaleString('id-ID')}</span> | AVG 3 Bln: <span className="text-slate-200 font-mono">{Math.round(item.avg3).toLocaleString('id-ID')}</span>
+                              <div className="font-bold text-slate-900 text-sm">📍 {item.cabang}</div>
+                              <div className="text-[11px] text-slate-600 mt-0.5">
+                                Pasokan: <span className="text-rose-300 font-mono">{Math.round(item.totalSupply).toLocaleString('id-ID')}</span> | AVG 3 Bln: <span className="text-slate-800 font-mono">{Math.round(item.avg3).toLocaleString('id-ID')}</span>
                               </div>
                             </div>
                             <div className="text-right">
@@ -1267,11 +1267,11 @@ export default function HistorySalesPage() {
                     {cabangSupplyVsAvg3.over125.length > 0 ? (
                       <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
                         {cabangSupplyVsAvg3.over125.map((item, idx) => (
-                          <div key={idx} className="p-2.5 rounded-xl bg-slate-950/90 border border-emerald-500/20 flex items-center justify-between text-xs">
+                          <div key={idx} className="p-2.5 rounded-xl bg-slate-50 border border-emerald-500/20 flex items-center justify-between text-xs">
                             <div>
-                              <div className="font-bold text-white text-sm">📍 {item.cabang}</div>
-                              <div className="text-[11px] text-slate-400 mt-0.5">
-                                Pasokan: <span className="text-emerald-300 font-mono">{Math.round(item.totalSupply).toLocaleString('id-ID')}</span> | AVG 3 Bln: <span className="text-slate-200 font-mono">{Math.round(item.avg3).toLocaleString('id-ID')}</span>
+                              <div className="font-bold text-slate-900 text-sm">📍 {item.cabang}</div>
+                              <div className="text-[11px] text-slate-600 mt-0.5">
+                                Pasokan: <span className="text-emerald-300 font-mono">{Math.round(item.totalSupply).toLocaleString('id-ID')}</span> | AVG 3 Bln: <span className="text-slate-800 font-mono">{Math.round(item.avg3).toLocaleString('id-ID')}</span>
                               </div>
                             </div>
                             <div className="text-right">
@@ -1282,7 +1282,7 @@ export default function HistorySalesPage() {
                         ))}
                       </div>
                     ) : (
-                      <div className="py-6 text-center text-slate-400 font-bold text-xs">
+                      <div className="py-6 text-center text-slate-600 font-bold text-xs">
                         Tidak ada cabang yang pasokannya melebihi batas buffer 125%.
                       </div>
                     )}
@@ -1300,26 +1300,26 @@ export default function HistorySalesPage() {
       {/* ─── NEW VISUALIZATION: ON HAND + VESSEL + TO VS HISTORY M s/d M-5 ─── */}
       {supplyVsMonthlySales && (
         <GlassCard className="p-6 border-amber-500/40 bg-gradient-to-b from-slate-900/95 via-slate-950/90 to-slate-900/95 shadow-2xl">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-4 mb-6 gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 pb-4 mb-6 gap-3">
             <div>
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[11px] font-black bg-amber-500/10 text-amber-400 border border-amber-500/30 uppercase tracking-widest mb-2">
                 <Layers className="w-3.5 h-3.5" /> Kapasitas Stok vs History Penjualan
               </div>
-              <h3 className="text-lg sm:text-xl font-black text-white flex items-center gap-2.5">
+              <h3 className="text-lg sm:text-xl font-black text-slate-900 flex items-center gap-2.5">
                 <BarChart3 className="w-5 h-5 text-amber-400" />
                 Komparasi Stok (SOH + TO + Vessel) Terhadap Penjualan Bulanan (M s/d M-5)
               </h3>
-              <p className="text-xs text-slate-300 mt-1">
+              <p className="text-xs text-slate-700 mt-1">
                 Visualisasi terpadu membandingkan volume transaksi penjualan dari 6 bulan terakhir (M s/d M-5) dengan kapasitas posisi stok aktual dan perjalanan.
               </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 bg-slate-950/80 p-2.5 rounded-xl border border-slate-800 text-xs font-mono font-bold">
-              <span className="px-2.5 py-1 rounded bg-slate-700/50 text-slate-200">SOH: {supplyVsMonthlySales.totalSOH.toLocaleString('id-ID')}</span>
+            <div className="flex flex-wrap items-center gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-xs font-mono font-bold">
+              <span className="px-2.5 py-1 rounded bg-slate-700/50 text-slate-800">SOH: {supplyVsMonthlySales.totalSOH.toLocaleString('id-ID')}</span>
               <span className="text-slate-500">+</span>
               <span className="px-2.5 py-1 rounded bg-blue-500/20 text-blue-300">TO: {supplyVsMonthlySales.totalTO.toLocaleString('id-ID')}</span>
               <span className="text-slate-500">+</span>
-              <span className="px-2.5 py-1 rounded bg-slate-200/20 text-slate-200">Vessel: {supplyVsMonthlySales.totalVessel.toLocaleString('id-ID')}</span>
+              <span className="px-2.5 py-1 rounded bg-slate-200/20 text-slate-800">Vessel: {supplyVsMonthlySales.totalVessel.toLocaleString('id-ID')}</span>
               <span className="text-slate-500">=</span>
               <span className="px-3 py-1 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">Total: {supplyVsMonthlySales.totalSupply.toLocaleString('id-ID')}</span>
             </div>
@@ -1370,21 +1370,21 @@ export default function HistorySalesPage() {
       )}
 
       {/* ─── TABEL COMPLEMENTARY: ANALISIS PERFORMANCE & ZONASI OUTSTANDING ─── */}
-      <GlassCard className="p-6 border-slate-800 bg-slate-900/80 shadow-2xl overflow-hidden">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-slate-800 pb-4 mb-6 gap-4">
+      <GlassCard className="p-6 border-slate-200 bg-white shadow-2xl overflow-hidden">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-slate-200 pb-4 mb-6 gap-4">
           <div>
-            <h3 className="text-lg font-bold text-white flex items-center gap-2.5">
+            <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2.5">
               <FileSpreadsheet className="w-5 h-5 text-blue-400" />
               Tabel Analisis Komparatif Sales vs Outstanding ({tableData.length} Kombinasi Cabang / Grup / Kategori)
             </h3>
-            <p className="text-xs text-slate-400 mt-1">
+            <p className="text-xs text-slate-600 mt-1">
               Rincian performa penjualan, rata-rata 3 bulan, serta % kontribusi per kombinasi Cabang, Grup, & Kategori secara real-time.
             </p>
           </div>
 
           <button
             onClick={handleExport}
-            className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-blue-600/20 shrink-0"
+            className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-slate-900 font-semibold text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-blue-600/20 shrink-0"
           >
             <Download className="w-4 h-4" /> Ekspor Hasil ke Excel / CSV
           </button>
@@ -1398,13 +1398,13 @@ export default function HistorySalesPage() {
               <span>Insight Evaluasi Komparatif Sales vs Outstanding Order</span>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-              <div className="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800">
-                <span className="text-slate-400 font-bold text-[10px] uppercase block mb-1">Tren Pertumbuhan (M vs AVG 3 Bln)</span>
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                <span className="text-slate-600 font-bold text-[10px] uppercase block mb-1">Tren Pertumbuhan (M vs AVG 3 Bln)</span>
                 <div className="flex items-center justify-between text-sm font-extrabold mt-2">
                   <span className="text-emerald-400 flex items-center gap-1">▲ {tableSalesVsOutInsights.countPositiveGrowth} Kombinasi Positif</span>
                   <span className="text-rose-400 flex items-center gap-1">▼ {tableSalesVsOutInsights.countNegativeGrowth} Melambat</span>
                 </div>
-                <p className="text-[11px] text-slate-400 mt-2 leading-tight">
+                <p className="text-[11px] text-slate-600 mt-2 leading-tight">
                   Menunjukkan perbandingan persentase item yang mengalami pertumbuhan volume pada bulan berjalan dibanding rata-rata 3 bulan.
                 </p>
               </div>
@@ -1413,14 +1413,14 @@ export default function HistorySalesPage() {
                 <span className="text-amber-300 font-bold text-[10px] uppercase block mb-1">Rasio Outstanding Tertinggi (Bottleneck)</span>
                 {tableSalesVsOutInsights.highestOutRatioItem ? (
                   <div>
-                    <div className="font-extrabold text-white text-sm truncate mt-1">📍 {tableSalesVsOutInsights.highestOutRatioItem.cabang} ({tableSalesVsOutInsights.highestOutRatioItem.category})</div>
+                    <div className="font-extrabold text-slate-900 text-sm truncate mt-1">📍 {tableSalesVsOutInsights.highestOutRatioItem.cabang} ({tableSalesVsOutInsights.highestOutRatioItem.category})</div>
                     <div className="text-xs font-mono font-black text-amber-400 mt-1">Rasio Out/Sales: {tableSalesVsOutInsights.highestOutRatioItem.ratio.toFixed(1)}% ({tableSalesVsOutInsights.highestOutRatioItem.outstanding.toLocaleString('id-ID')} Unit Hold)</div>
                     <p className="text-[11px] text-amber-200 mt-1.5 leading-tight">
                       ⚠️ Kombinasi ini mengalami tunggakan pesanan paling tinggi terhadap penjualan aktual. Perlu intervensi logistik segera!
                     </p>
                   </div>
                 ) : (
-                  <span className="text-slate-400 text-xs">Tidak ada data outstanding signifikan.</span>
+                  <span className="text-slate-600 text-xs">Tidak ada data outstanding signifikan.</span>
                 )}
               </div>
 
@@ -1429,7 +1429,7 @@ export default function HistorySalesPage() {
                 <div className="space-y-1.5 mt-2">
                   {tableSalesVsOutInsights.topContributors.map((tc, idx) => (
                     <div key={idx} className="flex justify-between items-center text-xs">
-                      <span className="text-white font-bold truncate pr-2">🏆 {tc.cabang} ({tc.category})</span>
+                      <span className="text-slate-900 font-bold truncate pr-2">🏆 {tc.cabang} ({tc.category})</span>
                       <span className="text-purple-300 font-mono font-black shrink-0">{tc.kontribusi.toFixed(1)}% Vol</span>
                     </div>
                   ))}
@@ -1439,22 +1439,22 @@ export default function HistorySalesPage() {
           </div>
         )}
 
-        <div className="overflow-x-auto rounded-xl border border-slate-800 max-h-[600px] overflow-y-auto">
+        <div className="overflow-x-auto rounded-xl border border-slate-200 max-h-[600px] overflow-y-auto">
           <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[1350px]">
-            <thead className="bg-slate-950/90 text-slate-300 uppercase font-bold sticky top-0 z-20 shadow-md">
-              <tr className="border-b border-slate-800 text-[11px] tracking-wider text-center">
+            <thead className="bg-slate-50 text-slate-700 uppercase font-bold sticky top-0 z-20 shadow-md">
+              <tr className="border-b border-slate-200 text-[11px] tracking-wider text-center">
                 <th className="py-3.5 px-4 text-left">Cabang / Wilayah</th>
-                <th className="py-3.5 px-4 border-l border-slate-800 text-slate-300">🏷️ Grup</th>
-                <th className="py-3.5 px-4 border-l border-slate-800 text-purple-300">📦 Kategori Item</th>
-                <th className="py-3.5 px-4 border-l border-slate-800 text-blue-400">📈 Total Volume Sales</th>
-                <th className="py-3.5 px-4 border-l border-slate-800 text-rose-400">📊 AVG Sales 3 Bln</th>
-                <th className="py-3.5 px-4 border-l border-slate-800 text-amber-300">✨ % Kontribusi (per Cabang)</th>
-                <th className="py-3.5 px-4 border-l border-slate-800 text-cyan-400">📅 Volume M & M-1</th>
-                <th className="py-3.5 px-4 border-l border-slate-800 text-emerald-400">📈 Pertumbuhan vs AVG 3 Bln</th>
-                <th className="py-3.5 px-4 border-l border-slate-800 text-amber-300">💡 Analisis Pertumbuhan</th>
+                <th className="py-3.5 px-4 border-l border-slate-200 text-slate-700">🏷️ Grup</th>
+                <th className="py-3.5 px-4 border-l border-slate-200 text-purple-300">📦 Kategori Item</th>
+                <th className="py-3.5 px-4 border-l border-slate-200 text-blue-400">📈 Total Volume Sales</th>
+                <th className="py-3.5 px-4 border-l border-slate-200 text-rose-400">📊 AVG Sales 3 Bln</th>
+                <th className="py-3.5 px-4 border-l border-slate-200 text-amber-300">✨ % Kontribusi (per Cabang)</th>
+                <th className="py-3.5 px-4 border-l border-slate-200 text-cyan-400">📅 Volume M & M-1</th>
+                <th className="py-3.5 px-4 border-l border-slate-200 text-emerald-400">📈 Pertumbuhan vs AVG 3 Bln</th>
+                <th className="py-3.5 px-4 border-l border-slate-200 text-amber-300">💡 Analisis Pertumbuhan</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/80 text-slate-300 text-center">
+            <tbody className="divide-y divide-slate-800/80 text-slate-700 text-center">
               {tableData.map((row, idx) => {
                 const isCritical = row.ratio > 30;
                 const isWarning = row.ratio > 15 && !isCritical;
@@ -1463,42 +1463,42 @@ export default function HistorySalesPage() {
                 return (
                   <tr
                     key={`${row.cabang}-${row.grup}-${row.category}-${idx}`}
-                    className="hover:bg-slate-800/40 transition cursor-pointer font-medium"
+                    className="hover:bg-slate-100 transition cursor-pointer font-medium"
                     onClick={() => setSelectedCabangForChart(row.cabang === selectedCabangForChart ? 'All' : row.cabang)}
                   >
                     <td className="py-3.5 px-4 text-left align-middle">
-                      <div className="font-bold text-white text-sm flex items-center gap-2">
+                      <div className="font-bold text-slate-900 text-sm flex items-center gap-2">
                         {row.cabang}
                         {row.cabang === executiveSummary?.topCabang?.name && (
                           <span className="text-[10px] px-2 py-0.5 bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded-full font-bold">🏆 TOP</span>
                         )}
                       </div>
-                      <div className="text-[11px] text-slate-400 mt-0.5">Sales & Outstanding Track</div>
+                      <div className="text-[11px] text-slate-600 mt-0.5">Sales & Outstanding Track</div>
                     </td>
-                    <td className="py-3.5 px-4 border-l border-slate-800 align-middle">
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800/80 text-slate-200 border border-slate-700 font-bold text-xs">
+                    <td className="py-3.5 px-4 border-l border-slate-200 align-middle">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-800 border border-slate-200 font-bold text-xs">
                         🏷️ {row.grup || '-'}
                       </span>
                     </td>
-                    <td className="py-3.5 px-4 border-l border-slate-800 align-middle">
+                    <td className="py-3.5 px-4 border-l border-slate-200 align-middle">
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-purple-500/10 text-purple-300 border border-purple-500/20 font-bold text-xs">
                         📦 {row.category}
                       </span>
                     </td>
-                    <td className="py-3.5 px-4 border-l border-slate-800 font-extrabold text-blue-400 text-base font-mono align-middle">
+                    <td className="py-3.5 px-4 border-l border-slate-200 font-extrabold text-blue-400 text-base font-mono align-middle">
                       {row.sales.toLocaleString('id-ID')}
                     </td>
-                    <td className="py-3.5 px-4 border-l border-slate-800 font-extrabold text-rose-400 text-base font-mono align-middle">
+                    <td className="py-3.5 px-4 border-l border-slate-200 font-extrabold text-rose-400 text-base font-mono align-middle">
                       {row.avg3.toLocaleString('id-ID')}
                     </td>
-                    <td className="py-3.5 px-4 border-l border-slate-800 font-black text-amber-400 text-base font-mono align-middle">
+                    <td className="py-3.5 px-4 border-l border-slate-200 font-black text-amber-400 text-base font-mono align-middle">
                       {row.kontribusi.toFixed(2)}%
                     </td>
-                    <td className="py-3.5 px-4 border-l border-slate-800 text-xs align-middle">
+                    <td className="py-3.5 px-4 border-l border-slate-200 text-xs align-middle">
                       <div className="font-mono text-cyan-300 font-bold">M: {row.m.toLocaleString('id-ID')}</div>
-                      <div className="font-mono text-slate-400 mt-1">M-1: {row.m1.toLocaleString('id-ID')}</div>
+                      <div className="font-mono text-slate-600 mt-1">M-1: {row.m1.toLocaleString('id-ID')}</div>
                     </td>
-                    <td className="py-3.5 px-4 border-l border-slate-800 text-xs align-middle">
+                    <td className="py-3.5 px-4 border-l border-slate-200 text-xs align-middle">
                       <div className={`font-mono font-bold ${row.growthM >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                         M vs AVG: {row.growthM >= 0 ? '▲ +' : '▼ '}{row.growthM.toFixed(1)}%
                       </div>
@@ -1506,7 +1506,7 @@ export default function HistorySalesPage() {
                         M-1 vs AVG: {row.growthM1 >= 0 ? '▲ +' : '▼ '}{row.growthM1.toFixed(1)}%
                       </div>
                     </td>
-                    <td className="py-3.5 px-4 border-l border-slate-800 align-middle">
+                    <td className="py-3.5 px-4 border-l border-slate-200 align-middle">
                       <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider inline-block ${
                         row.growthM >= 5 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' :
                         row.growthM <= -5 ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30' :
@@ -1526,16 +1526,16 @@ export default function HistorySalesPage() {
       {/* ─── ANALISIS TAMPILAN TAMBAHAN: GROUP BY CATEGORY INSENTIF & CABANG ─── */}
       {insentifAnalysis && insentifAnalysis.length > 0 && (
         <GlassCard className="p-6 border-purple-500/40 bg-gradient-to-b from-slate-900/95 via-purple-950/30 to-slate-950/95 shadow-2xl overflow-hidden">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-4 mb-6 gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 pb-4 mb-6 gap-3">
             <div>
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[11px] font-black bg-purple-500/20 text-purple-300 border border-purple-500/40 uppercase tracking-widest mb-2 shadow-sm">
                 <Award className="w-3.5 h-3.5" /> Analisis Tambahan • Group by Cabang & Category Insentif
               </div>
-              <h3 className="text-lg sm:text-xl font-extrabold text-white flex items-center gap-2.5">
+              <h3 className="text-lg sm:text-xl font-extrabold text-slate-900 flex items-center gap-2.5">
                 <BarChart3 className="w-5 h-5 text-purple-400" />
                 Performa Volume Sales & Outstanding per Category Insentif
               </h3>
-              <p className="text-xs text-slate-300 mt-1">
+              <p className="text-xs text-slate-700 mt-1">
                 Pengelompokan riwayat penjualan dari <b>M sampai M-5</b> dan pesanan tertunggak berdasarkan kombinasi <b>Cabang & Kategori Insentif</b>.
               </p>
             </div>
@@ -1550,26 +1550,26 @@ export default function HistorySalesPage() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-xs">
-                <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 flex flex-col justify-between">
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col justify-between">
                   <div>
                     <span className="text-purple-300 font-extrabold uppercase tracking-wider text-[11px] flex items-center gap-1.5 mb-2">
                       <Award className="w-4 h-4 text-purple-400" /> Kontributor Insentif Utama (Tier Dominan)
                     </span>
                     {insentifInsights.topTier ? (
                       <div className="mt-2">
-                        <div className="text-base font-black text-white flex items-center gap-2">
+                        <div className="text-base font-black text-slate-900 flex items-center gap-2">
                           <span>💎 {insentifInsights.topTier.categoryInsentif}</span>
-                          <span className="text-xs font-semibold text-slate-400">({insentifInsights.topTier.cabang})</span>
+                          <span className="text-xs font-semibold text-slate-600">({insentifInsights.topTier.cabang})</span>
                         </div>
                         <div className="text-sm font-mono font-extrabold text-cyan-300 mt-1">
                           Total Volume Sales: {Math.round(insentifInsights.topTier.totalSales).toLocaleString('id-ID')} Unit
                         </div>
-                        <p className="text-[11px] text-slate-300 mt-2 leading-relaxed">
+                        <p className="text-[11px] text-slate-700 mt-2 leading-relaxed">
                           Kombinasi ini merupakan motor penggerak utama volume penjualan insentif. Pastikan alokasi stok untuk kategori ini selalu menjadi prioritas di gudang cabang agar ritme pencapaian insentif tim sales terjaga.
                         </p>
                       </div>
                     ) : (
-                      <span className="text-slate-400">Belum ada data insentif.</span>
+                      <span className="text-slate-600">Belum ada data insentif.</span>
                     )}
                   </div>
                 </div>
@@ -1581,9 +1581,9 @@ export default function HistorySalesPage() {
                     </span>
                     {insentifInsights.highestOutTier ? (
                       <div className="mt-2">
-                        <div className="text-base font-black text-white flex items-center gap-2">
+                        <div className="text-base font-black text-slate-900 flex items-center gap-2">
                           <span>⚠️ {insentifInsights.highestOutTier.categoryInsentif}</span>
-                          <span className="text-xs font-semibold text-slate-400">({insentifInsights.highestOutTier.cabang})</span>
+                          <span className="text-xs font-semibold text-slate-600">({insentifInsights.highestOutTier.cabang})</span>
                         </div>
                         <div className="text-sm font-mono font-extrabold text-amber-400 mt-1">
                           Rasio Outstanding: {insentifInsights.highestOutTier.ratio.toFixed(1)}% ({Math.round(insentifInsights.highestOutTier.totalOutstanding).toLocaleString('id-ID')} Unit Tertunda)
@@ -1593,7 +1593,7 @@ export default function HistorySalesPage() {
                         </p>
                       </div>
                     ) : (
-                      <span className="text-slate-400">Semua pesanan insentif terdistribusi lancar tanpa tunggakan tinggi.</span>
+                      <span className="text-slate-600">Semua pesanan insentif terdistribusi lancar tanpa tunggakan tinggi.</span>
                     )}
                   </div>
                   <div className="mt-3.5 pt-2.5 border-t border-amber-500/20 text-[11px] text-amber-300">
@@ -1606,7 +1606,7 @@ export default function HistorySalesPage() {
 
           <div className="space-y-8">
             {/* Grafik Bar Category Insentif Stacked per Periode */}
-            <div className="h-[400px] w-full bg-slate-950/60 p-5 rounded-2xl border border-slate-800 shadow-inner flex flex-col justify-between">
+            <div className="h-[400px] w-full bg-slate-50 p-5 rounded-2xl border border-slate-200 shadow-inner flex flex-col justify-between">
               <h4 className="text-xs font-bold uppercase tracking-wider text-purple-300 mb-2 text-center flex items-center justify-center gap-2">
                 📊 Proporsi Volume Penjualan per Category Insentif (100% Stacked • Sumbu X: M s/d M-5)
               </h4>
@@ -1643,60 +1643,60 @@ export default function HistorySalesPage() {
             </div>
 
             {/* Tabel Ringkasan Insentif dengan M s/d M-5 */}
-            <div className="overflow-x-auto rounded-2xl border border-slate-800 max-h-[450px] overflow-y-auto bg-slate-950/60 shadow-lg">
+            <div className="overflow-x-auto rounded-2xl border border-slate-200 max-h-[450px] overflow-y-auto bg-slate-50 shadow-lg">
               <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[1000px]">
-                <thead className="bg-slate-950 text-slate-300 uppercase font-extrabold sticky top-0 z-20 shadow-md border-b border-slate-800">
+                <thead className="bg-slate-50 text-slate-700 uppercase font-extrabold sticky top-0 z-20 shadow-md border-b border-slate-200">
                   <tr className="text-[11px] tracking-wider text-center">
                     <th className="py-3.5 px-4 text-left">Cabang / Wilayah</th>
-                    <th className="py-3.5 px-4 border-l border-slate-800 text-purple-300 text-left">Category Insentif</th>
-                    <th className="py-3.5 px-3 border-l border-slate-800 text-cyan-300">M</th>
-                    <th className="py-3.5 px-3 border-l border-slate-800 text-cyan-400">M-1</th>
-                    <th className="py-3.5 px-3 border-l border-slate-800 text-cyan-400">M-2</th>
-                    <th className="py-3.5 px-3 border-l border-slate-800 text-cyan-500">M-3</th>
-                    <th className="py-3.5 px-3 border-l border-slate-800 text-cyan-500">M-4</th>
-                    <th className="py-3.5 px-3 border-l border-slate-800 text-cyan-600">M-5</th>
-                    <th className="py-3.5 px-4 border-l border-slate-800 bg-purple-950/40 text-purple-300 font-extrabold">📈 Total Sales Vol</th>
-                    <th className="py-3.5 px-4 border-l border-slate-800 bg-amber-950/40 text-amber-300 font-extrabold">⏳ Total Out Vol</th>
-                    <th className="py-3.5 px-4 border-l border-slate-800">Rasio Out/Sales</th>
+                    <th className="py-3.5 px-4 border-l border-slate-200 text-purple-300 text-left">Category Insentif</th>
+                    <th className="py-3.5 px-3 border-l border-slate-200 text-cyan-300">M</th>
+                    <th className="py-3.5 px-3 border-l border-slate-200 text-cyan-400">M-1</th>
+                    <th className="py-3.5 px-3 border-l border-slate-200 text-cyan-400">M-2</th>
+                    <th className="py-3.5 px-3 border-l border-slate-200 text-cyan-500">M-3</th>
+                    <th className="py-3.5 px-3 border-l border-slate-200 text-cyan-500">M-4</th>
+                    <th className="py-3.5 px-3 border-l border-slate-200 text-cyan-600">M-5</th>
+                    <th className="py-3.5 px-4 border-l border-slate-200 bg-purple-950/40 text-purple-300 font-extrabold">📈 Total Sales Vol</th>
+                    <th className="py-3.5 px-4 border-l border-slate-200 bg-amber-950/40 text-amber-300 font-extrabold">⏳ Total Out Vol</th>
+                    <th className="py-3.5 px-4 border-l border-slate-200">Rasio Out/Sales</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800 text-slate-200 text-center font-medium">
+                <tbody className="divide-y divide-slate-800 text-slate-800 text-center font-medium">
                   {insentifAnalysis.map((item) => {
                     const isAlert = item.ratio > 25;
                     return (
-                      <tr key={item.key} className="hover:bg-slate-800/60 transition">
-                        <td className="py-3 px-4 text-left font-extrabold text-white text-sm">
+                      <tr key={item.key} className="hover:bg-slate-100 transition">
+                        <td className="py-3 px-4 text-left font-extrabold text-slate-900 text-sm">
                           {item.cabang}
                         </td>
-                        <td className="py-3 px-4 border-l border-slate-800 text-left font-extrabold text-purple-300 flex items-center gap-2">
+                        <td className="py-3 px-4 border-l border-slate-200 text-left font-extrabold text-purple-300 flex items-center gap-2">
                           <span className="w-2.5 h-2.5 rounded-full bg-gradient-to-tr from-purple-500 to-pink-400 shrink-0 shadow-sm shadow-purple-500/50" />
                           <span>{item.categoryInsentif}</span>
                         </td>
-                        <td className="py-3 px-3 border-l border-slate-800 font-mono text-cyan-300 font-bold">
+                        <td className="py-3 px-3 border-l border-slate-200 font-mono text-cyan-300 font-bold">
                           {Math.round(item.periods['M'] || 0).toLocaleString('id-ID')}
                         </td>
-                        <td className="py-3 px-3 border-l border-slate-800 font-mono text-slate-300">
+                        <td className="py-3 px-3 border-l border-slate-200 font-mono text-slate-700">
                           {Math.round(item.periods['M-1'] || 0).toLocaleString('id-ID')}
                         </td>
-                        <td className="py-3 px-3 border-l border-slate-800 font-mono text-slate-300">
+                        <td className="py-3 px-3 border-l border-slate-200 font-mono text-slate-700">
                           {Math.round(item.periods['M-2'] || 0).toLocaleString('id-ID')}
                         </td>
-                        <td className="py-3 px-3 border-l border-slate-800 font-mono text-slate-400">
+                        <td className="py-3 px-3 border-l border-slate-200 font-mono text-slate-600">
                           {Math.round(item.periods['M-3'] || 0).toLocaleString('id-ID')}
                         </td>
-                        <td className="py-3 px-3 border-l border-slate-800 font-mono text-slate-400">
+                        <td className="py-3 px-3 border-l border-slate-200 font-mono text-slate-600">
                           {Math.round(item.periods['M-4'] || 0).toLocaleString('id-ID')}
                         </td>
-                        <td className="py-3 px-3 border-l border-slate-800 font-mono text-slate-400">
+                        <td className="py-3 px-3 border-l border-slate-200 font-mono text-slate-600">
                           {Math.round(item.periods['M-5'] || 0).toLocaleString('id-ID')}
                         </td>
-                        <td className="py-3 px-4 border-l border-slate-800 bg-purple-950/20 font-mono font-extrabold text-purple-300 text-sm">
+                        <td className="py-3 px-4 border-l border-slate-200 bg-purple-950/20 font-mono font-extrabold text-purple-300 text-sm">
                           {Math.round(item.totalSales).toLocaleString('id-ID')}
                         </td>
-                        <td className="py-3 px-4 border-l border-slate-800 bg-amber-950/20 font-mono font-bold text-amber-400 text-sm">
+                        <td className="py-3 px-4 border-l border-slate-200 bg-amber-950/20 font-mono font-bold text-amber-400 text-sm">
                           {Math.round(item.totalOutstanding).toLocaleString('id-ID')}
                         </td>
-                        <td className="py-3 px-4 border-l border-slate-800 font-mono font-bold">
+                        <td className="py-3 px-4 border-l border-slate-200 font-mono font-bold">
                           <span className={`px-2.5 py-1 rounded-md text-xs font-black uppercase inline-block ${isAlert ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'}`}>
                             {item.ratio.toFixed(1)}%
                           </span>
@@ -1713,11 +1713,11 @@ export default function HistorySalesPage() {
 
       {/* ─── FULL DATA TABLE (SEMUA KOLOM RAW DATA DENGAN FILTER ALA EXCEL) ─── */}
       {parsed && parsed.headers && (
-        <GlassCard className="p-6 border-slate-800 bg-slate-900/80 shadow-2xl overflow-hidden">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-4 mb-6 gap-4">
+        <GlassCard className="p-6 border-slate-200 bg-white shadow-2xl overflow-hidden">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 pb-4 mb-6 gap-4">
             <div>
               <div className="flex items-center gap-3">
-                <h3 className="text-lg font-bold text-white flex items-center gap-2.5">
+                <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2.5">
                   <BarChart3 className="w-5 h-5 text-emerald-400" />
                   Data Detail (Semua 32 Kolom Raw Data - Terintegrasi M-12 s/d M) ({displayedRawData.length} dari {filtered.length} baris)
                 </h3>
@@ -1730,7 +1730,7 @@ export default function HistorySalesPage() {
                   </button>
                 )}
               </div>
-              <p className="text-xs text-slate-400 mt-1">
+              <p className="text-xs text-slate-600 mt-1">
                 Dilengkapi <b className="text-emerald-400">Filter Kolom ala Excel</b> (klik ikon filter di setiap header untuk cari & pilih data pada seluruh 32 kolom).
               </p>
             </div>
@@ -1739,35 +1739,35 @@ export default function HistorySalesPage() {
           {/* Excel Filter Modal Popover for Raw Data */}
           {activeRawColModal && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
-              <div className="bg-slate-900 border border-slate-700 rounded-2xl p-5 max-w-sm w-full shadow-2xl text-slate-200">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
-                  <h4 className="font-bold text-sm text-white flex items-center gap-2">
+              <div className="bg-white border border-slate-200 rounded-2xl p-5 max-w-sm w-full shadow-2xl text-slate-800">
+                <div className="flex items-center justify-between border-b border-slate-200 pb-3 mb-4">
+                  <h4 className="font-bold text-sm text-slate-900 flex items-center gap-2">
                     <Filter className="w-4 h-4 text-emerald-400" /> Filter Kolom: <span className="text-emerald-400">{activeRawColModal}</span>
                   </h4>
-                  <button onClick={() => setActiveRawColModal(null)} className="text-slate-400 hover:text-white transition">
+                  <button onClick={() => setActiveRawColModal(null)} className="text-slate-600 hover:text-slate-900 transition">
                     <X className="w-5 h-5" />
                   </button>
                 </div>
 
                 <div className="space-y-4">
                   <div className="relative">
-                    <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+                    <Search className="w-4 h-4 absolute left-3 top-3 text-slate-600" />
                     <input
                       type="text"
                       value={rawModalSearchInput}
                       onChange={e => setRawModalSearchInput(e.target.value)}
                       placeholder={`Cari dalam ${activeRawColModal}...`}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-900 placeholder-slate-500 focus:outline-none focus:border-emerald-500"
                     />
                     {rawModalSearchInput && (
-                      <button onClick={() => setRawModalSearchInput('')} className="absolute right-3 top-2.5 text-slate-500 hover:text-white text-xs">
+                      <button onClick={() => setRawModalSearchInput('')} className="absolute right-3 top-2.5 text-slate-500 hover:text-slate-900 text-xs">
                         Hapus
                       </button>
                     )}
                   </div>
 
-                  <div className="max-h-48 overflow-y-auto border border-slate-800 rounded-xl bg-slate-950/50 p-2 space-y-1 text-xs">
-                    <div className="text-[11px] font-semibold text-slate-400 mb-1 px-1 flex justify-between">
+                  <div className="max-h-48 overflow-y-auto border border-slate-200 rounded-xl bg-slate-50 p-2 space-y-1 text-xs">
+                    <div className="text-[11px] font-semibold text-slate-600 mb-1 px-1 flex justify-between">
                       <span>Daftar Nilai Unik ({currentRawUniqueValues.length}):</span>
                     </div>
                     {currentRawUniqueValues.filter(val => !rawModalSearchInput || val.toLowerCase().includes(rawModalSearchInput.toLowerCase())).slice(0, 50).map((val, idx) => {
@@ -1775,7 +1775,7 @@ export default function HistorySalesPage() {
                       return (
                         <label
                           key={idx}
-                          className="flex items-center gap-2 py-1 px-2 rounded hover:bg-slate-800/60 cursor-pointer text-slate-300 truncate"
+                          className="flex items-center gap-2 py-1 px-2 rounded hover:bg-slate-100 cursor-pointer text-slate-700 truncate"
                         >
                           <input
                             type="checkbox"
@@ -1796,7 +1796,7 @@ export default function HistorySalesPage() {
                                 [activeRawColModal]: { ...rawColFilters[activeRawColModal], selected: nextSelected }
                               });
                             }}
-                            className="rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-emerald-500/30"
+                            className="rounded border-slate-200 bg-white text-emerald-500 focus:ring-emerald-500/30"
                           />
                           <span className="truncate" title={val}>{val || '(Kosong)'}</span>
                         </label>
@@ -1804,7 +1804,7 @@ export default function HistorySalesPage() {
                     })}
                   </div>
 
-                  <div className="flex items-center gap-2 pt-2 border-t border-slate-800">
+                  <div className="flex items-center gap-2 pt-2 border-t border-slate-200">
                     <button
                       onClick={() => {
                         const next = { ...rawColFilters };
@@ -1813,7 +1813,7 @@ export default function HistorySalesPage() {
                         setRawModalSearchInput('');
                         toast.success(`Filter kolom ${activeRawColModal} direset!`);
                       }}
-                      className="flex-1 py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 font-bold text-xs text-slate-300 hover:text-white transition"
+                      className="flex-1 py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-700 font-bold text-xs text-slate-700 hover:text-slate-900 transition"
                     >
                       Reset
                     </button>
@@ -1836,27 +1836,27 @@ export default function HistorySalesPage() {
             </div>
           )}
 
-          <div className="overflow-x-auto rounded-xl border border-slate-800 max-h-[600px] overflow-y-auto">
+          <div className="overflow-x-auto rounded-xl border border-slate-200 max-h-[600px] overflow-y-auto">
             <table className="w-full text-left text-xs border-collapse min-w-[1200px]">
-              <thead className="bg-slate-950/90 text-slate-300 uppercase font-bold sticky top-0 z-20 shadow-md">
-                <tr className="border-b border-slate-800 text-[10px] tracking-wider text-center">
+              <thead className="bg-slate-50 text-slate-700 uppercase font-bold sticky top-0 z-20 shadow-md">
+                <tr className="border-b border-slate-200 text-[10px] tracking-wider text-center">
                   {parsed.headers.map((h) => (
-                    <th key={h} className="py-3 px-3 border-l border-slate-800 whitespace-nowrap">
+                    <th key={h} className="py-3 px-3 border-l border-slate-200 whitespace-nowrap">
                       <div className="flex items-center gap-1.5 justify-between">
                         <span>{h}</span>
-                        <button onClick={() => { setActiveRawColModal(h); setRawModalSearchInput(rawColFilters[h]?.search || ''); }} className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition"><Filter className="w-3.5 h-3.5 text-emerald-400" /></button>
+                        <button onClick={() => { setActiveRawColModal(h); setRawModalSearchInput(rawColFilters[h]?.search || ''); }} className="p-1 hover:bg-slate-100 rounded text-slate-600 hover:text-slate-900 transition"><Filter className="w-3.5 h-3.5 text-emerald-400" /></button>
                       </div>
                     </th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/80 text-slate-300 text-center">
+              <tbody className="divide-y divide-slate-800/80 text-slate-700 text-center">
                 {displayedRawData.slice(0, 100).map((row, idx) => (
-                  <tr key={idx} className="hover:bg-slate-800/40 transition">
+                  <tr key={idx} className="hover:bg-slate-100 transition">
                     {parsed.headers.map((h) => {
                       const val = row[h];
                       return (
-                        <td key={h} className="py-2.5 px-3 border-l border-slate-800 whitespace-nowrap">
+                        <td key={h} className="py-2.5 px-3 border-l border-slate-200 whitespace-nowrap">
                           {typeof val === 'number' ? val.toLocaleString('id-ID') : (val || '-')}
                         </td>
                       );
@@ -1867,7 +1867,7 @@ export default function HistorySalesPage() {
             </table>
           </div>
           {displayedRawData.length > 100 && (
-            <p className="text-xs text-slate-400 mt-4 italic">
+            <p className="text-xs text-slate-600 mt-4 italic">
               * Menampilkan 100 baris pertama dari total {displayedRawData.length} baris data (setelah filter)...
             </p>
           )}

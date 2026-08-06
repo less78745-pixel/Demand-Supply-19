@@ -114,7 +114,7 @@ const calculateStockCondition = (onHand: number, totalTO: number, totalVessel: n
   const totalSupply = toExactFloat(onHand + totalTO + totalVessel, 4);
   const effectiveTarget = Math.max(0, toExactFloat((outstandingTarget || 0) - (salesBerjalan || 0), 4));
   if (!effectiveTarget || effectiveTarget <= 0) {
-    return { ratio: 0, status: 'N/A (Target <= 0)', badge: '⚪ N/A (Target <= 0)', color: 'bg-slate-700/50 text-slate-300 border border-slate-600' };
+    return { ratio: 0, status: 'N/A (Target <= 0)', badge: '⚪ N/A (Target <= 0)', color: 'bg-slate-700/50 text-slate-700 border border-slate-600' };
   }
   const exactRatio = totalSupply / effectiveTarget;
   const ratio = toExactFloat(exactRatio, 2);
@@ -736,7 +736,7 @@ export default function SOHAnalysisPage() {
   // Executive Calculation Summary & Condition Breakdown
   const calculationSummary = useMemo(() => {
     if (!detailedTableData || detailedTableData.length === 0) {
-      return { totalOH: 0, totalTO: 0, totalVessel: 0, totalSupply: 0, totalTargetSales: 0, totalOutstanding: 0, totalSalesBerjalan: 0, totalEffectiveTarget: 0, globalRatio: 0, globalStatus: 'N/A', badgeColor: 'bg-slate-700/50 text-slate-300 border-slate-600', countOverstock: 0, countAman: 0, countHati: 0, countBahaya: 0, totalItems: 0 };
+      return { totalOH: 0, totalTO: 0, totalVessel: 0, totalSupply: 0, totalTargetSales: 0, totalOutstanding: 0, totalSalesBerjalan: 0, totalEffectiveTarget: 0, globalRatio: 0, globalStatus: 'N/A', badgeColor: 'bg-slate-700/50 text-slate-700 border-slate-600', countOverstock: 0, countAman: 0, countHati: 0, countBahaya: 0, totalItems: 0 };
     }
     let totalOH = 0;
     let totalTO = 0;
@@ -767,7 +767,7 @@ export default function SOHAnalysisPage() {
     const globalRatio = totalEffectiveTarget > 0 ? Number((totalSupply / totalEffectiveTarget).toFixed(2)) : 0;
     
     let globalStatus = '⚪ N/A (Target <= 0)';
-    let badgeColor = 'bg-slate-700/50 text-slate-300 border border-slate-600';
+    let badgeColor = 'bg-slate-700/50 text-slate-700 border border-slate-600';
     if (globalRatio > 1.5) {
       globalStatus = '🟣 OVERSTOCK (Rasio > 1.50)';
       badgeColor = 'bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-lg shadow-purple-500/20';
@@ -923,10 +923,10 @@ export default function SOHAnalysisPage() {
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase tracking-widest">
               <ClipboardList className="w-3.5 h-3.5" /> Dashboard Data Harian • SOH-TO-Vessel
             </div>
-            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white flex items-center gap-3">
+            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-slate-900 flex items-center gap-3">
               SOH-TO-Vessel <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-cyan-400 to-teal-300">(Weekly Grouping Analytics)</span>
             </h1>
-            <p className="text-slate-300 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
+            <p className="text-slate-700 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
               Analisis persediaan terstruktur dengan pengelompokan mingguan: <b>On Hand ➔ TO Week 1-4 ➔ Vessel Week 1-4 ➔ Plan Loading</b>.
               Dilengkapi evaluasi ketahanan stok dan grafik perbandingan TO vs Vessel.
             </p>
@@ -947,31 +947,31 @@ export default function SOHAnalysisPage() {
 
       {/* ─── PANDUAN, TEMPLATE & UPLOAD SECTION ─── */}
       {showHowTo && (
-        <GlassCard className="p-6 border-emerald-500/30 bg-slate-900/80 backdrop-blur-xl animate-fade-in">
-          <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-6">
-            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+        <GlassCard className="p-6 border-emerald-500/30 bg-white backdrop-blur-xl animate-fade-in">
+          <div className="flex items-center justify-between border-b border-slate-200 pb-4 mb-6">
+            <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
               <FileSpreadsheet className="w-5 h-5 text-emerald-400" /> Panduan Raw Data & Upload SOH (Excel / CSV)
             </h3>
             <div className="flex flex-wrap gap-2">
               <button
                 onClick={handleDownloadTemplate}
-                className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-cyan-600/20"
+                className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-slate-900 font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-cyan-600/20"
               >
                 <Download className="w-4 h-4" /> Unduh Template CSV
               </button>
               <button
                 onClick={handleGenerateDemo}
-                className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-emerald-500/20"
+                className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-slate-900 font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-emerald-500/20"
               >
                 <Sparkles className="w-4 h-4" /> Gunakan Data Demo 5-Pilar
               </button>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm text-slate-300 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm text-slate-700 mb-6">
             <div className="space-y-2">
-              <h4 className="font-semibold text-white">📌 Pengelompakan 5 Pilar Inbound:</h4>
-              <ul className="list-disc pl-5 space-y-1.5 text-xs sm:text-sm text-slate-400">
+              <h4 className="font-semibold text-slate-900">📌 Pengelompakan 5 Pilar Inbound:</h4>
+              <ul className="list-disc pl-5 space-y-1.5 text-xs sm:text-sm text-slate-600">
                 <li><b>On Hand:</b> Stok fisik siap jual di gudang masing-masing cabang.</li>
                 <li><b>Vessel (Kapal):</b> Stok yang sedang dalam perjalanan muat laut/kapal barang.</li>
                 <li><b>TO (Transfer Order):</b> Stok dalam pengiriman darat antar cabang atau gudang pusat.</li>
@@ -979,15 +979,15 @@ export default function SOHAnalysisPage() {
               </ul>
             </div>
             <div className="space-y-2">
-              <h4 className="font-semibold text-white">⚙️ Fitur Pembacaan Excel Pintar (XLSX):</h4>
-              <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
+              <h4 className="font-semibold text-slate-900">⚙️ Fitur Pembacaan Excel Pintar (XLSX):</h4>
+              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
                 Modul ini kini dilengkapi engine parsing <b>XLSX & CSV ArrayBuffer</b>. Anda bebas mengunggah file Excel (.xlsx) maupun CSV hasil unduhan ERP/Google Sheet tanpa keraguan error karakter atau salah baca angka!
               </p>
             </div>
           </div>
 
-          <div className="pt-4 border-t border-white/10">
-            <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Unggah File Data SOH Anda (Excel / CSV):</h4>
+          <div className="pt-4 border-t border-slate-200">
+            <h4 className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">Unggah File Data SOH Anda (Excel / CSV):</h4>
             <FileUploader
               onFileUpload={handleFileUpload}
               isLoading={isProcessing}
@@ -1002,11 +1002,11 @@ export default function SOHAnalysisPage() {
       {parsed?.sheetNames && parsed.sheetNames.length > 0 && (
         <div className="p-5 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-950 to-slate-900 border border-emerald-500/30 shadow-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="space-y-1">
-            <h3 className="text-base font-black text-white flex items-center gap-2">
+            <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
               <FileSpreadsheet className="w-5 h-5 text-emerald-400" />
               Pilih Sumber Data / Sheet Evaluasi ({unitLabel}):
             </h3>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-600">
               Beralih secara instan antara sheet <span className="text-emerald-400 font-bold">Nilai QTY</span> dan <span className="text-cyan-400 font-bold">Nilai VALUE (Rp)</span> untuk analisis komparatif pasokan terhadap target penjualan.
             </p>
           </div>
@@ -1024,12 +1024,12 @@ export default function SOHAnalysisPage() {
                   className={`flex-1 sm:flex-none px-5 py-3 rounded-xl font-black text-xs sm:text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-2.5 shadow-xl border ${
                     isActive
                       ? isValue
-                        ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white border-cyan-400 scale-105 shadow-cyan-500/25'
-                        : 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-emerald-400 scale-105 shadow-emerald-500/25'
-                      : 'bg-slate-900 text-slate-300 border-slate-700 hover:border-slate-500 hover:bg-slate-800'
+                        ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-slate-900 border-cyan-400 scale-105 shadow-cyan-500/25'
+                        : 'bg-gradient-to-r from-emerald-600 to-teal-600 text-slate-900 border-emerald-400 scale-105 shadow-emerald-500/25'
+                      : 'bg-white text-slate-700 border-slate-200 hover:border-slate-500 hover:bg-slate-100'
                   }`}
                 >
-                  <FileSpreadsheet className={`w-4 h-4 ${isActive ? 'text-white' : isValue ? 'text-cyan-400' : 'text-emerald-400'}`} />
+                  <FileSpreadsheet className={`w-4 h-4 ${isActive ? 'text-slate-900' : isValue ? 'text-cyan-400' : 'text-emerald-400'}`} />
                   {sheet}
                 </button>
               );
@@ -1044,7 +1044,7 @@ export default function SOHAnalysisPage() {
           <h2 className="text-sm font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-2">
             <Zap className="w-4 h-4" /> Pilih 3 Jalur Evaluasi & Simulasi SOH:
           </h2>
-          <span className="text-xs text-slate-400 italic hidden sm:inline">Klik tab untuk menguji ketahanan stok fisik secara instan!</span>
+          <span className="text-xs text-slate-600 italic hidden sm:inline">Klik tab untuk menguji ketahanan stok fisik secara instan!</span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -1060,22 +1060,22 @@ export default function SOHAnalysisPage() {
                 }}
                 className={`relative group p-4 sm:p-5 rounded-2xl transition-all duration-300 text-left border overflow-hidden shadow-lg ${
                   isSelected
-                    ? `bg-gradient-to-br ${sc.color} text-white border-transparent ring-2 ring-white/20 shadow-emerald-500/25 scale-[1.02]`
-                    : 'bg-slate-900/70 hover:bg-slate-800/80 text-slate-300 border-slate-700 hover:border-slate-600'
+                    ? `bg-gradient-to-br ${sc.color} text-slate-900 border-transparent ring-2 ring-white/20 shadow-emerald-500/25 scale-[1.02]`
+                    : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 hover:border-slate-600'
                 }`}
               >
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-bold text-base tracking-wide flex items-center gap-2.5">
-                    <Icon className={`w-5 h-5 ${isSelected ? 'text-white' : 'text-emerald-400'}`} />
+                    <Icon className={`w-5 h-5 ${isSelected ? 'text-slate-900' : 'text-emerald-400'}`} />
                     {sc.title}
                   </span>
                   {isSelected && (
-                    <span className="px-2 py-0.5 rounded-full bg-white/20 text-white text-xs font-black uppercase tracking-wider">
+                    <span className="px-2 py-0.5 rounded-full bg-white/20 text-slate-900 text-xs font-black uppercase tracking-wider">
                       Aktif
                     </span>
                   )}
                 </div>
-                <p className={`text-xs sm:text-sm leading-relaxed ${isSelected ? 'text-slate-100 font-medium' : 'text-slate-400'}`}>
+                <p className={`text-xs sm:text-sm leading-relaxed ${isSelected ? 'text-slate-900 font-medium' : 'text-slate-600'}`}>
                   {sc.desc}
                 </p>
               </button>
@@ -1103,10 +1103,10 @@ export default function SOHAnalysisPage() {
       </div>
 
       {/* ─── FILTER CONTROLS & SELECTION (EXPANDED & OVERFLOW-VISIBLE) ─── */}
-      <GlassCard allowOverflow={true} className="p-6 border-slate-800 bg-slate-900/90 backdrop-blur-xl mb-10 shadow-xl">
+      <GlassCard allowOverflow={true} className="p-6 border-slate-200 bg-white backdrop-blur-xl mb-10 shadow-xl">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-300 mb-1 block uppercase tracking-wider">🏢 Filter Cabang:</label>
+            <label className="text-xs font-bold text-slate-700 mb-1 block uppercase tracking-wider">🏢 Filter Cabang:</label>
             <MultiSelect
               options={cabangs}
               selected={selectedCabang}
@@ -1116,7 +1116,7 @@ export default function SOHAnalysisPage() {
             />
           </div>
           <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-300 mb-1 block uppercase tracking-wider">📦 Filter Kategori:</label>
+            <label className="text-xs font-bold text-slate-700 mb-1 block uppercase tracking-wider">📦 Filter Kategori:</label>
             <MultiSelect
               options={categories}
               selected={selectedCategory}
@@ -1126,7 +1126,7 @@ export default function SOHAnalysisPage() {
             />
           </div>
           <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-300 mb-1 block uppercase tracking-wider">🔖 Filter Status DOI:</label>
+            <label className="text-xs font-bold text-slate-700 mb-1 block uppercase tracking-wider">🔖 Filter Status DOI:</label>
             <MultiSelect
               options={dois}
               selected={selectedDoi}
@@ -1136,7 +1136,7 @@ export default function SOHAnalysisPage() {
             />
           </div>
           <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-300 mb-1 block uppercase tracking-wider">🏆 Filter Insentif:</label>
+            <label className="text-xs font-bold text-slate-700 mb-1 block uppercase tracking-wider">🏆 Filter Insentif:</label>
             <MultiSelect
               options={insentifs}
               selected={selectedInsentif}
@@ -1146,11 +1146,11 @@ export default function SOHAnalysisPage() {
             />
           </div>
           <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-300 mb-1 block uppercase tracking-wider">📍 Sorot Grafik Cabang:</label>
+            <label className="text-xs font-bold text-slate-700 mb-1 block uppercase tracking-wider">📍 Sorot Grafik Cabang:</label>
             <select
               value={selectedCabangForChart}
               onChange={(e) => setSelectedCabangForChart(e.target.value)}
-              className="w-full min-h-[44px] rounded-xl border border-slate-700 bg-slate-950/90 px-3.5 py-2.5 text-xs text-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/30 outline-none transition font-semibold cursor-pointer shadow-md"
+              className="w-full min-h-[44px] rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-800 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/30 outline-none transition font-semibold cursor-pointer shadow-md"
             >
               <option value="All">📊 Semua Cabang (Gabungan)</option>
               {cabangs.filter(c => c !== 'All').map(c => (
@@ -1164,22 +1164,22 @@ export default function SOHAnalysisPage() {
       {/* ─── VISUALIZATION CHART: WEEKLY & PIVOT PER CABANG ─── */}
       {pivotData && pivotData.length > 0 && (
         <GlassCard className="p-6 border-emerald-500/30 bg-gradient-to-b from-slate-900/90 to-slate-950/90 shadow-2xl">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-4 mb-6 gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 pb-4 mb-6 gap-3">
             <div>
-              <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+              <h3 className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2">
                 <BarChart3 className="w-5 h-5 text-emerald-400" />
                 {chartMode === 'weekly' ? 'Grafik Grouping Mingguan: TO vs Vessel per Kategori (W1 - W4)' : chartMode === 'stock' ? 'Detail On Hand (Fisik) per Kategori Barang' : 'Grafik Komparasi Pilar SOH & Inbound per Cabang'}
               </h3>
-              <p className="text-xs text-slate-400 mt-1">
+              <p className="text-xs text-slate-600 mt-1">
                 Sorotan: <b className="text-cyan-400">{selectedCabangForChart === 'All' ? 'Seluruh Cabang' : selectedCabangForChart}</b> • Skenario Aktif: <b className="text-amber-300">{activeScenario.toUpperCase()}</b> • Satuan: <b className="text-emerald-400">{unitLabel}</b>
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-1.5 bg-slate-800/80 p-1.5 rounded-xl border border-slate-700 shrink-0">
+            <div className="flex flex-wrap gap-1.5 bg-slate-100 p-1.5 rounded-xl border border-slate-200 shrink-0">
               <button
                 onClick={() => setChartMode('weekly')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 ${
-                  chartMode === 'weekly' ? 'bg-gradient-to-r from-orange-500 to-blue-600 text-white shadow-md scale-105' : 'text-slate-300 hover:text-white'
+                  chartMode === 'weekly' ? 'bg-gradient-to-r from-orange-500 to-blue-600 text-slate-900 shadow-md scale-105' : 'text-slate-700 hover:text-slate-900'
                 }`}
               >
                 📅 Grouping per Week (W1-W4)
@@ -1187,7 +1187,7 @@ export default function SOHAnalysisPage() {
               <button
                 onClick={() => setChartMode('summary')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 ${
-                  chartMode === 'summary' ? 'bg-emerald-500 text-white shadow-md scale-105' : 'text-slate-300 hover:text-white'
+                  chartMode === 'summary' ? 'bg-emerald-500 text-slate-900 shadow-md scale-105' : 'text-slate-700 hover:text-slate-900'
                 }`}
               >
                 <Layers className="w-3.5 h-3.5" /> Summary Cabang
@@ -1195,7 +1195,7 @@ export default function SOHAnalysisPage() {
               <button
                 onClick={() => setChartMode('stock')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 ${
-                  chartMode === 'stock' ? 'bg-emerald-600 text-white shadow-md scale-105' : 'text-slate-400 hover:text-emerald-400'
+                  chartMode === 'stock' ? 'bg-emerald-600 text-slate-900 shadow-md scale-105' : 'text-slate-600 hover:text-emerald-400'
                 }`}
               >
                 📦 On Hand
@@ -1204,12 +1204,12 @@ export default function SOHAnalysisPage() {
           </div>
 
           {chartMode === 'weekly' && (
-            <div className="mb-4 p-3 rounded-xl bg-slate-800/60 border border-slate-700/60 flex flex-wrap items-center justify-between gap-2 text-xs">
-              <span className="text-slate-300 flex items-center gap-2 font-medium">
+            <div className="mb-4 p-3 rounded-xl bg-slate-100 border border-slate-200/60 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <span className="text-slate-700 flex items-center gap-2 font-medium">
                 <Info className="w-4 h-4 text-cyan-400 shrink-0" />
                 <b>Batang Kembar per Minggu:</b> Batang Kiri = Stack Transfer Order (TO) | Batang Kanan (Garis Biru) = Stack On Vessel (Kapal)
               </span>
-              <span className="text-slate-400 text-[11px] italic">Warna segmen mewakili breakdown per kategori barang</span>
+              <span className="text-slate-600 text-[11px] italic">Warna segmen mewakili breakdown per kategori barang</span>
             </div>
           )}
 
@@ -1282,11 +1282,11 @@ export default function SOHAnalysisPage() {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
+            <h2 className="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2">
               <Layers className="w-5 h-5 text-purple-400" />
               Analisis Kontribusi & Proporsi Pasokan (Kategori Item, Status DOI & Status Insentif)
             </h2>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs text-slate-600 mt-0.5">
               Proporsi total stok pasokan (On Hand + Semua TO + Semua Vessel) dalam satuan <b className="text-emerald-400">{unitLabel}</b> di <b className="text-cyan-400">{selectedCabangForChart === 'All' ? 'Seluruh Cabang' : selectedCabangForChart}</b>.
             </p>
           </div>
@@ -1296,7 +1296,7 @@ export default function SOHAnalysisPage() {
           {/* PIE 1: KATEGORI */}
           {pieCategoryData && pieCategoryData.length > 0 && (
             <GlassCard className="p-5 border-purple-500/30 bg-gradient-to-b from-slate-900/95 to-slate-950/95 shadow-2xl flex flex-col">
-              <h3 className="text-sm font-black text-purple-300 border-b border-slate-800 pb-3 mb-3 flex items-center gap-2">
+              <h3 className="text-sm font-black text-purple-300 border-b border-slate-200 pb-3 mb-3 flex items-center gap-2">
                 🏷️ Porsi per Kategori Item
               </h3>
               <div className="h-[240px] w-full shrink-0">
@@ -1329,14 +1329,14 @@ export default function SOHAnalysisPage() {
               </div>
               <div className="space-y-2 mt-3 flex-1 overflow-y-auto max-h-[220px] pr-1">
                 {pieCategoryData.map((item) => (
-                  <div key={item.name} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-800/60 border border-slate-700/50 hover:border-slate-600 transition text-xs">
+                  <div key={item.name} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-100 border border-slate-200/50 hover:border-slate-600 transition text-xs">
                     <div className="flex items-center gap-2.5 truncate pr-2">
                       <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
-                      <span className="font-bold text-white truncate" title={item.name}>{item.name}</span>
+                      <span className="font-bold text-slate-900 truncate" title={item.name}>{item.name}</span>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
-                      <span className="font-mono font-extrabold text-slate-300">{item.value.toLocaleString('id-ID')}</span>
-                      <span className="px-1.5 py-0.5 rounded-md text-[10px] font-black text-white font-mono" style={{ backgroundColor: item.color }}>{item.percentage}%</span>
+                      <span className="font-mono font-extrabold text-slate-700">{item.value.toLocaleString('id-ID')}</span>
+                      <span className="px-1.5 py-0.5 rounded-md text-[10px] font-black text-slate-900 font-mono" style={{ backgroundColor: item.color }}>{item.percentage}%</span>
                     </div>
                   </div>
                 ))}
@@ -1347,7 +1347,7 @@ export default function SOHAnalysisPage() {
           {/* PIE 2: STATUS DOI */}
           {pieDoiData && pieDoiData.length > 0 && (
             <GlassCard className="p-5 border-blue-500/30 bg-gradient-to-b from-slate-900/95 to-slate-950/95 shadow-2xl flex flex-col">
-              <h3 className="text-sm font-black text-blue-300 border-b border-slate-800 pb-3 mb-3 flex items-center gap-2">
+              <h3 className="text-sm font-black text-blue-300 border-b border-slate-200 pb-3 mb-3 flex items-center gap-2">
                 🔖 Porsi per Status DOI
               </h3>
               <div className="h-[240px] w-full shrink-0">
@@ -1380,14 +1380,14 @@ export default function SOHAnalysisPage() {
               </div>
               <div className="space-y-2 mt-3 flex-1 overflow-y-auto max-h-[220px] pr-1">
                 {pieDoiData.map((item) => (
-                  <div key={item.name} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-800/60 border border-slate-700/50 hover:border-slate-600 transition text-xs">
+                  <div key={item.name} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-100 border border-slate-200/50 hover:border-slate-600 transition text-xs">
                     <div className="flex items-center gap-2.5 truncate pr-2">
                       <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
-                      <span className="font-bold text-white truncate" title={item.name}>{item.name}</span>
+                      <span className="font-bold text-slate-900 truncate" title={item.name}>{item.name}</span>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
-                      <span className="font-mono font-extrabold text-slate-300">{item.value.toLocaleString('id-ID')}</span>
-                      <span className="px-1.5 py-0.5 rounded-md text-[10px] font-black text-white font-mono" style={{ backgroundColor: item.color }}>{item.percentage}%</span>
+                      <span className="font-mono font-extrabold text-slate-700">{item.value.toLocaleString('id-ID')}</span>
+                      <span className="px-1.5 py-0.5 rounded-md text-[10px] font-black text-slate-900 font-mono" style={{ backgroundColor: item.color }}>{item.percentage}%</span>
                     </div>
                   </div>
                 ))}
@@ -1398,7 +1398,7 @@ export default function SOHAnalysisPage() {
           {/* PIE 3: STATUS INSENTIF */}
           {pieInsentifData && pieInsentifData.length > 0 && (
             <GlassCard className="p-5 border-emerald-500/30 bg-gradient-to-b from-slate-900/95 to-slate-950/95 shadow-2xl flex flex-col">
-              <h3 className="text-sm font-black text-emerald-300 border-b border-slate-800 pb-3 mb-3 flex items-center gap-2">
+              <h3 className="text-sm font-black text-emerald-300 border-b border-slate-200 pb-3 mb-3 flex items-center gap-2">
                 🏆 Porsi per Status Insentif
               </h3>
               <div className="h-[240px] w-full shrink-0">
@@ -1431,14 +1431,14 @@ export default function SOHAnalysisPage() {
               </div>
               <div className="space-y-2 mt-3 flex-1 overflow-y-auto max-h-[220px] pr-1">
                 {pieInsentifData.map((item) => (
-                  <div key={item.name} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-800/60 border border-slate-700/50 hover:border-slate-600 transition text-xs">
+                  <div key={item.name} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-100 border border-slate-200/50 hover:border-slate-600 transition text-xs">
                     <div className="flex items-center gap-2.5 truncate pr-2">
                       <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
-                      <span className="font-bold text-white truncate" title={item.name}>{item.name}</span>
+                      <span className="font-bold text-slate-900 truncate" title={item.name}>{item.name}</span>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
-                      <span className="font-mono font-extrabold text-slate-300">{item.value.toLocaleString('id-ID')}</span>
-                      <span className="px-1.5 py-0.5 rounded-md text-[10px] font-black text-white font-mono" style={{ backgroundColor: item.color }}>{item.percentage}%</span>
+                      <span className="font-mono font-extrabold text-slate-700">{item.value.toLocaleString('id-ID')}</span>
+                      <span className="px-1.5 py-0.5 rounded-md text-[10px] font-black text-slate-900 font-mono" style={{ backgroundColor: item.color }}>{item.percentage}%</span>
                     </div>
                   </div>
                 ))}
@@ -1450,21 +1450,21 @@ export default function SOHAnalysisPage() {
 
       {/* ─── HASIL KESIMPULAN HITUNGAN (EXECUTIVE CALCULATION CONCLUSION) ─── */}
       <GlassCard className="p-6 border-amber-500/40 bg-gradient-to-r from-slate-900 via-slate-950 to-slate-900 shadow-2xl">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between border-b border-slate-800 pb-4 mb-6 gap-4">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between border-b border-slate-200 pb-4 mb-6 gap-4">
           <div>
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider bg-amber-500/10 text-amber-400 border border-amber-500/20 mb-2.5">
               <Sparkles className="w-3.5 h-3.5" /> Hasil Kesimpulan Hitungan Otomatis ({unitLabel})
             </div>
-            <h3 className="text-lg sm:text-xl font-black text-white flex items-center gap-2">
+            <h3 className="text-lg sm:text-xl font-black text-slate-900 flex items-center gap-2">
               Kesimpulan Rasio Pasokan vs Target Efektif (Outstanding - Sales Berjalan)
             </h3>
-            <p className="text-xs text-slate-400 mt-1">
-              Rumus Hitungan: <code className="px-2 py-0.5 bg-slate-800 text-amber-300 font-mono rounded font-bold">(On Hand + Semua TO + Semua Vessel) ÷ (Outstanding Target - Sales Berjalan)</code>
+            <p className="text-xs text-slate-600 mt-1">
+              Rumus Hitungan: <code className="px-2 py-0.5 bg-slate-100 text-amber-300 font-mono rounded font-bold">(On Hand + Semua TO + Semua Vessel) ÷ (Outstanding Target - Sales Berjalan)</code>
             </p>
           </div>
 
           <div className="flex flex-col items-start md:items-end shrink-0">
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Kesimpulan Kondisi Keseluruhan:</span>
+            <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">Kesimpulan Kondisi Keseluruhan:</span>
             <span className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-black uppercase tracking-wider shadow-xl ${calculationSummary.badgeColor}`}>
               {calculationSummary.globalStatus}
             </span>
@@ -1472,36 +1472,36 @@ export default function SOHAnalysisPage() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-          <div className="p-4 rounded-xl bg-slate-800/60 border border-slate-700/60 shadow-inner">
-            <span className="text-xs font-bold text-slate-400 block mb-1">📦 Total Pasokan (SOH+TO+Vessel)</span>
+          <div className="p-4 rounded-xl bg-slate-100 border border-slate-200/60 shadow-inner">
+            <span className="text-xs font-bold text-slate-600 block mb-1">📦 Total Pasokan (SOH+TO+Vessel)</span>
             <span className="text-base sm:text-lg font-black font-mono text-emerald-400">
               {calculationSummary.totalSupply.toLocaleString('id-ID')} {unitLabel}
             </span>
-            <span className="text-[11px] text-slate-400 block mt-1">Stok Fisik + Dalam Perjalanan</span>
+            <span className="text-[11px] text-slate-600 block mt-1">Stok Fisik + Dalam Perjalanan</span>
           </div>
-          <div className="p-4 rounded-xl bg-slate-800/60 border border-slate-700/60 shadow-inner">
-            <span className="text-xs font-bold text-slate-400 block mb-1">🎯 Outstanding Target</span>
+          <div className="p-4 rounded-xl bg-slate-100 border border-slate-200/60 shadow-inner">
+            <span className="text-xs font-bold text-slate-600 block mb-1">🎯 Outstanding Target</span>
             <span className="text-base sm:text-lg font-black font-mono text-amber-300">
               {calculationSummary.totalOutstanding.toLocaleString('id-ID')} {unitLabel}
             </span>
-            <span className="text-[11px] text-slate-400 block mt-1">Target Belum Tercapai Awal</span>
+            <span className="text-[11px] text-slate-600 block mt-1">Target Belum Tercapai Awal</span>
           </div>
-          <div className="p-4 rounded-xl bg-slate-800/60 border border-slate-700/60 shadow-inner">
-            <span className="text-xs font-bold text-slate-400 block mb-1">🛒 Sales Berjalan</span>
+          <div className="p-4 rounded-xl bg-slate-100 border border-slate-200/60 shadow-inner">
+            <span className="text-xs font-bold text-slate-600 block mb-1">🛒 Sales Berjalan</span>
             <span className="text-base sm:text-lg font-black font-mono text-cyan-400">
               {calculationSummary.totalSalesBerjalan.toLocaleString('id-ID')} {unitLabel}
             </span>
-            <span className="text-[11px] text-slate-400 block mt-1">Penjualan Aktual Berlangsung</span>
+            <span className="text-[11px] text-slate-600 block mt-1">Penjualan Aktual Berlangsung</span>
           </div>
-          <div className="p-4 rounded-xl bg-slate-800/60 border border-slate-700/60 shadow-inner">
-            <span className="text-xs font-bold text-slate-400 block mb-1">⚖️ Hasil Rasio vs Target Efektif</span>
-            <span className="text-base sm:text-xl font-black font-mono text-white">
+          <div className="p-4 rounded-xl bg-slate-100 border border-slate-200/60 shadow-inner">
+            <span className="text-xs font-bold text-slate-600 block mb-1">⚖️ Hasil Rasio vs Target Efektif</span>
+            <span className="text-base sm:text-xl font-black font-mono text-slate-900">
               {calculationSummary.globalRatio}x
             </span>
             <span className="text-[11px] text-cyan-300 font-medium block mt-1">Target Efektif: {calculationSummary.totalEffectiveTarget.toLocaleString('id-ID')}</span>
           </div>
-          <div className="p-4 rounded-xl bg-slate-800/60 border border-slate-700/60 shadow-inner">
-            <span className="text-xs font-bold text-slate-400 block mb-1">📊 Rincian Kesimpulan Baris</span>
+          <div className="p-4 rounded-xl bg-slate-100 border border-slate-200/60 shadow-inner">
+            <span className="text-xs font-bold text-slate-600 block mb-1">📊 Rincian Kesimpulan Baris</span>
             <div className="flex flex-wrap items-center gap-1 mt-1 font-mono text-[11px] font-black">
               <span className="px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30" title="Overstock (>1.50)">🟣 {calculationSummary.countOverstock}</span>
               <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" title="Aman (1.25-1.50)">🟢 {calculationSummary.countAman}</span>
@@ -1511,7 +1511,7 @@ export default function SOHAnalysisPage() {
           </div>
         </div>
 
-        <div className="p-3.5 rounded-xl bg-slate-950/90 border border-slate-800 text-xs text-slate-300 flex flex-wrap items-center justify-between gap-3">
+        <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-700 flex flex-wrap items-center justify-between gap-3">
           <span className="flex items-center gap-2 font-medium">
             <Info className="w-4 h-4 text-cyan-400 shrink-0" />
             <span><b>Logika Evaluasi Kondisi:</b> 🟣 <b>Overstock</b> = Rasio &gt; 1.50 | 🟢 <b>Aman</b> = Rasio 1.25 s/d 1.50 | 🟡 <b>Hati-Hati</b> = Rasio 1.00 s/d 1.25 | 🔴 <b>Bahaya</b> = Rasio &lt; 1.00 (Pasokan Tidak Mencukupi Sisa Target)</span>
@@ -1520,11 +1520,11 @@ export default function SOHAnalysisPage() {
       </GlassCard>
 
       {/* ─── TABEL ANALISIS KOMPARATIF SOH & TO — DETAIL CABANG PER KATEGORI ─── */}
-      <GlassCard className="p-6 border-slate-800 bg-slate-900/80 shadow-2xl overflow-hidden">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-slate-800 pb-4 mb-6 gap-4">
+      <GlassCard className="p-6 border-slate-200 bg-white shadow-2xl overflow-hidden">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-slate-200 pb-4 mb-6 gap-4">
           <div>
             <div className="flex items-center gap-3">
-              <h3 className="text-lg sm:text-xl font-black text-white flex items-center gap-2.5">
+              <h3 className="text-lg sm:text-xl font-black text-slate-900 flex items-center gap-2.5">
                 <FileSpreadsheet className="w-6 h-6 text-emerald-400" />
                 Tabel Analisis Komparatif SOH & TO — Detail Cabang per Kategori ({displayedSohTableData.length} dari {detailedTableData.length} baris)
               </h3>
@@ -1537,14 +1537,14 @@ export default function SOHAnalysisPage() {
                 </button>
               )}
             </div>
-            <p className="text-xs text-slate-400 mt-1">
+            <p className="text-xs text-slate-600 mt-1">
               Dilengkapi <b className="text-emerald-400">Filter Kolom ala Excel</b> (klik ikon filter di setiap header untuk cari & pilih data) guna menganalisis rincian persediaan dan kesimpulan hitungan rasio secara mandiri.
             </p>
           </div>
 
           <button
             onClick={handleExport}
-            className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-emerald-600/20 shrink-0"
+            className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-slate-900 font-semibold text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-emerald-600/20 shrink-0"
           >
             <Download className="w-4 h-4" /> Ekspor Hasil ke Excel / CSV ({displayedSohTableData.length} baris)
           </button>
@@ -1553,35 +1553,35 @@ export default function SOHAnalysisPage() {
         {/* Excel Filter Modal Popover */}
         {activeSohColModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
-            <div className="bg-slate-900 border border-slate-700 rounded-2xl p-5 max-w-sm w-full shadow-2xl text-slate-200">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
-                <h4 className="font-bold text-sm text-white flex items-center gap-2">
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 max-w-sm w-full shadow-2xl text-slate-800">
+              <div className="flex items-center justify-between border-b border-slate-200 pb-3 mb-4">
+                <h4 className="font-bold text-sm text-slate-900 flex items-center gap-2">
                   <Filter className="w-4 h-4 text-emerald-400" /> Filter Kolom: <span className="text-emerald-400">{activeSohColModal.name}</span>
                 </h4>
-                <button onClick={() => setActiveSohColModal(null)} className="text-slate-400 hover:text-white transition">
+                <button onClick={() => setActiveSohColModal(null)} className="text-slate-600 hover:text-slate-900 transition">
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
               <div className="space-y-4">
                 <div className="relative">
-                  <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+                  <Search className="w-4 h-4 absolute left-3 top-3 text-slate-600" />
                   <input
                     type="text"
                     value={sohModalSearchInput}
                     onChange={e => setSohModalSearchInput(e.target.value)}
                     placeholder={`Cari dalam ${activeSohColModal.name}...`}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-900 placeholder-slate-500 focus:outline-none focus:border-emerald-500"
                   />
                   {sohModalSearchInput && (
-                    <button onClick={() => setSohModalSearchInput('')} className="absolute right-3 top-2.5 text-slate-500 hover:text-white text-xs">
+                    <button onClick={() => setSohModalSearchInput('')} className="absolute right-3 top-2.5 text-slate-500 hover:text-slate-900 text-xs">
                       Hapus
                     </button>
                   )}
                 </div>
 
-                <div className="max-h-48 overflow-y-auto border border-slate-800 rounded-xl bg-slate-950/50 p-2 space-y-1 text-xs">
-                  <div className="text-[11px] font-semibold text-slate-400 mb-1 px-1 flex justify-between">
+                <div className="max-h-48 overflow-y-auto border border-slate-200 rounded-xl bg-slate-50 p-2 space-y-1 text-xs">
+                  <div className="text-[11px] font-semibold text-slate-600 mb-1 px-1 flex justify-between">
                     <span>Daftar Nilai Unik ({currentSohUniqueValues.length}):</span>
                   </div>
                   {currentSohUniqueValues.filter(val => !sohModalSearchInput || val.toLowerCase().includes(sohModalSearchInput.toLowerCase())).slice(0, 50).map((val, idx) => {
@@ -1589,7 +1589,7 @@ export default function SOHAnalysisPage() {
                     return (
                       <label
                         key={idx}
-                        className="flex items-center gap-2 py-1 px-2 rounded hover:bg-slate-800/60 cursor-pointer text-slate-300 truncate"
+                        className="flex items-center gap-2 py-1 px-2 rounded hover:bg-slate-100 cursor-pointer text-slate-700 truncate"
                       >
                         <input
                           type="checkbox"
@@ -1610,7 +1610,7 @@ export default function SOHAnalysisPage() {
                               [activeSohColModal.key]: { ...sohColFilters[activeSohColModal.key], selected: nextSelected }
                             });
                           }}
-                          className="rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-emerald-500/30"
+                          className="rounded border-slate-200 bg-white text-emerald-500 focus:ring-emerald-500/30"
                         />
                         <span className="truncate" title={val}>{val || '(Kosong)'}</span>
                       </label>
@@ -1618,7 +1618,7 @@ export default function SOHAnalysisPage() {
                   })}
                 </div>
 
-                <div className="flex items-center gap-2 pt-2 border-t border-slate-800">
+                <div className="flex items-center gap-2 pt-2 border-t border-slate-200">
                   <button
                     onClick={() => {
                       const next = { ...sohColFilters };
@@ -1627,7 +1627,7 @@ export default function SOHAnalysisPage() {
                       setSohModalSearchInput('');
                       toast.success(`Filter kolom ${activeSohColModal.name} direset!`);
                     }}
-                    className="flex-1 py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 font-bold text-xs text-slate-300 hover:text-white transition"
+                    className="flex-1 py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-700 font-bold text-xs text-slate-700 hover:text-slate-900 transition"
                   >
                     Reset
                   </button>
@@ -1658,10 +1658,10 @@ export default function SOHAnalysisPage() {
                 <Sparkles className="w-5 h-5 animate-pulse" />
               </span>
               <div>
-                <h4 className="font-extrabold text-white text-sm sm:text-base tracking-wide flex items-center gap-2">
+                <h4 className="font-extrabold text-slate-900 text-sm sm:text-base tracking-wide flex items-center gap-2">
                   Insight Strategis Evaluasi Rasio Ketersediaan (SOH & TO vs Target)
                 </h4>
-                <p className="text-[11px] sm:text-xs text-slate-400">
+                <p className="text-[11px] sm:text-xs text-slate-600">
                   Analisis otomatis keseimbangan stok berdasarkan rasio pasokan terhadap sisa target operasional.
                 </p>
               </div>
@@ -1669,31 +1669,31 @@ export default function SOHAnalysisPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
               {/* Box 1: Distribusi Status Rasio */}
-              <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 flex flex-col justify-between">
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col justify-between">
                 <div>
-                  <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px] mb-2 flex items-center gap-1.5">
+                  <span className="text-slate-600 font-bold uppercase tracking-wider text-[10px] mb-2 flex items-center gap-1.5">
                     <BarChart3 className="w-3.5 h-3.5 text-blue-400" /> Distribusi Kondisi Stok
                   </span>
                   <div className="space-y-1.5 mt-2">
-                    <div className="flex justify-between items-center text-slate-300">
+                    <div className="flex justify-between items-center text-slate-700">
                       <span>🟢 Aman (1.25 - 1.50x):</span>
                       <strong className="text-emerald-400 font-mono">{ratioInsights.amanCount} Item</strong>
                     </div>
-                    <div className="flex justify-between items-center text-slate-300">
+                    <div className="flex justify-between items-center text-slate-700">
                       <span>🟡 Hati-Hati (1.00 - 1.25x):</span>
                       <strong className="text-amber-400 font-mono">{ratioInsights.hatiCount} Item</strong>
                     </div>
-                    <div className="flex justify-between items-center text-slate-300">
+                    <div className="flex justify-between items-center text-slate-700">
                       <span>🟣 Overstock (&gt;1.50x):</span>
                       <strong className="text-purple-300 font-mono">{ratioInsights.overstockCount} ({ratioInsights.overstockPct}%)</strong>
                     </div>
-                    <div className="flex justify-between items-center text-slate-300">
+                    <div className="flex justify-between items-center text-slate-700">
                       <span>🔴 Bahaya (&lt;1.00x):</span>
                       <strong className="text-rose-400 font-mono">{ratioInsights.bahayaCount} ({ratioInsights.bahayaPct}%)</strong>
                     </div>
                   </div>
                 </div>
-                <div className="mt-3 pt-2.5 border-t border-slate-800/80 text-[11px] text-slate-400">
+                <div className="mt-3 pt-2.5 border-t border-slate-200/80 text-[11px] text-slate-600">
                   Total Surplus Qty: <strong className="text-purple-300">{ratioInsights.totalSurplusQty.toLocaleString('id-ID')}</strong> | Defisit: <strong className="text-rose-400">{ratioInsights.totalDefisitQty.toLocaleString('id-ID')}</strong>
                 </div>
               </div>
@@ -1708,11 +1708,11 @@ export default function SOHAnalysisPage() {
                     <div className="space-y-2 mt-2">
                       {ratioInsights.topCritical.map((item, idx) => (
                         <div key={idx} className="p-2 rounded-lg bg-rose-950/40 border border-rose-500/20 flex flex-col gap-0.5">
-                          <div className="flex justify-between items-center font-bold text-white text-[11px]">
+                          <div className="flex justify-between items-center font-bold text-slate-900 text-[11px]">
                             <span>📍 {item.cabang}</span>
                             <span className="text-rose-400 font-mono px-1.5 py-0.5 rounded bg-rose-500/10 border border-rose-500/20">{item.ratio}x</span>
                           </div>
-                          <div className="text-[10px] text-slate-300 truncate">📦 {item.category}</div>
+                          <div className="text-[10px] text-slate-700 truncate">📦 {item.category}</div>
                           <div className="text-[10px] text-rose-300 font-mono">Defisit Pasokan: -{item.defisit.toLocaleString('id-ID')} Unit</div>
                         </div>
                       ))}
@@ -1741,17 +1741,17 @@ export default function SOHAnalysisPage() {
                     <div className="space-y-2 mt-2">
                       {ratioInsights.topOverstock.map((item, idx) => (
                         <div key={idx} className="p-2 rounded-lg bg-purple-950/40 border border-purple-500/20 flex flex-col gap-0.5">
-                          <div className="flex justify-between items-center font-bold text-white text-[11px]">
+                          <div className="flex justify-between items-center font-bold text-slate-900 text-[11px]">
                             <span>📍 {item.cabang}</span>
                             <span className="text-purple-300 font-mono px-1.5 py-0.5 rounded bg-purple-500/10 border border-purple-500/20">{item.ratio}x</span>
                           </div>
-                          <div className="text-[10px] text-slate-300 truncate">📦 {item.category}</div>
+                          <div className="text-[10px] text-slate-700 truncate">📦 {item.category}</div>
                           <div className="text-[10px] text-purple-300 font-mono">Surplus Pasokan: +{item.surplus.toLocaleString('id-ID')} Unit</div>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <div className="py-6 text-center text-slate-400 font-semibold">
+                    <div className="py-6 text-center text-slate-600 font-semibold">
                       Tidak ditemukan penumpukan stok ekstrem.
                     </div>
                   )}
@@ -1764,158 +1764,158 @@ export default function SOHAnalysisPage() {
           </div>
         )}
 
-        <div className="overflow-x-auto rounded-xl border border-slate-800 max-h-[650px] overflow-y-auto">
+        <div className="overflow-x-auto rounded-xl border border-slate-200 max-h-[650px] overflow-y-auto">
           <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[1650px]">
-            <thead className="bg-slate-950/95 text-slate-300 uppercase font-bold sticky top-0 z-20 shadow-md text-[11px] tracking-wider text-center">
-              <tr className="border-b border-slate-800">
+            <thead className="bg-slate-50 text-slate-700 uppercase font-bold sticky top-0 z-20 shadow-md text-[11px] tracking-wider text-center">
+              <tr className="border-b border-slate-200">
                 <th className="py-3.5 px-3 text-left">
                   <div className="flex items-center gap-1.5 justify-between">
                     <span>Cabang & Lokasi</span>
-                    <button onClick={() => { setActiveSohColModal({ key: 'cabang', name: 'Cabang' }); setSohModalSearchInput(sohColFilters['cabang']?.search || ''); }} className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition"><Filter className="w-3.5 h-3.5 text-emerald-400" /></button>
+                    <button onClick={() => { setActiveSohColModal({ key: 'cabang', name: 'Cabang' }); setSohModalSearchInput(sohColFilters['cabang']?.search || ''); }} className="p-1 hover:bg-slate-100 rounded text-slate-600 hover:text-slate-900 transition"><Filter className="w-3.5 h-3.5 text-emerald-400" /></button>
                   </div>
                 </th>
-                <th className="py-3.5 px-2.5 border-l border-slate-800 text-left text-purple-400">
+                <th className="py-3.5 px-2.5 border-l border-slate-200 text-left text-purple-400">
                   <div className="flex items-center gap-1.5 justify-between">
                     <span>👥 Grup</span>
-                    <button onClick={() => { setActiveSohColModal({ key: 'grup', name: 'Grup' }); setSohModalSearchInput(sohColFilters['grup']?.search || ''); }} className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition"><Filter className="w-3.5 h-3.5 text-purple-400" /></button>
+                    <button onClick={() => { setActiveSohColModal({ key: 'grup', name: 'Grup' }); setSohModalSearchInput(sohColFilters['grup']?.search || ''); }} className="p-1 hover:bg-slate-100 rounded text-slate-600 hover:text-slate-900 transition"><Filter className="w-3.5 h-3.5 text-purple-400" /></button>
                   </div>
                 </th>
-                <th className="py-3.5 px-3 border-l border-slate-800 text-left text-cyan-400">
+                <th className="py-3.5 px-3 border-l border-slate-200 text-left text-cyan-400">
                   <div className="flex items-center gap-1.5 justify-between">
                     <span>🏷️ Kategori Item</span>
-                    <button onClick={() => { setActiveSohColModal({ key: 'category', name: 'Kategori Item' }); setSohModalSearchInput(sohColFilters['category']?.search || ''); }} className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition"><Filter className="w-3.5 h-3.5 text-cyan-400" /></button>
+                    <button onClick={() => { setActiveSohColModal({ key: 'category', name: 'Kategori Item' }); setSohModalSearchInput(sohColFilters['category']?.search || ''); }} className="p-1 hover:bg-slate-100 rounded text-slate-600 hover:text-slate-900 transition"><Filter className="w-3.5 h-3.5 text-cyan-400" /></button>
                   </div>
                 </th>
-                <th className="py-3.5 px-2.5 border-l border-slate-800 text-left text-emerald-300">
+                <th className="py-3.5 px-2.5 border-l border-slate-200 text-left text-emerald-300">
                   <div className="flex items-center gap-1.5 justify-between">
                     <span>🏆 Status Insentif</span>
-                    <button onClick={() => { setActiveSohColModal({ key: 'statusInsentif', name: 'Status Insentif' }); setSohModalSearchInput(sohColFilters['statusInsentif']?.search || ''); }} className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition"><Filter className="w-3.5 h-3.5 text-emerald-300" /></button>
+                    <button onClick={() => { setActiveSohColModal({ key: 'statusInsentif', name: 'Status Insentif' }); setSohModalSearchInput(sohColFilters['statusInsentif']?.search || ''); }} className="p-1 hover:bg-slate-100 rounded text-slate-600 hover:text-slate-900 transition"><Filter className="w-3.5 h-3.5 text-emerald-300" /></button>
                   </div>
                 </th>
-                <th className="py-3.5 px-2.5 border-l border-slate-800 text-left text-blue-300">
+                <th className="py-3.5 px-2.5 border-l border-slate-200 text-left text-blue-300">
                   <div className="flex items-center gap-1.5 justify-between">
                     <span>🔖 Status DOI</span>
-                    <button onClick={() => { setActiveSohColModal({ key: 'statusDoi', name: 'Status DOI' }); setSohModalSearchInput(sohColFilters['statusDoi']?.search || ''); }} className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition"><Filter className="w-3.5 h-3.5 text-blue-300" /></button>
+                    <button onClick={() => { setActiveSohColModal({ key: 'statusDoi', name: 'Status DOI' }); setSohModalSearchInput(sohColFilters['statusDoi']?.search || ''); }} className="p-1 hover:bg-slate-100 rounded text-slate-600 hover:text-slate-900 transition"><Filter className="w-3.5 h-3.5 text-blue-300" /></button>
                   </div>
                 </th>
-                <th className="py-3.5 px-2.5 border-l border-slate-800 text-emerald-400">
+                <th className="py-3.5 px-2.5 border-l border-slate-200 text-emerald-400">
                   <div className="flex items-center gap-1 justify-between">
                     <span>📦 On Hand</span>
-                    <button onClick={() => { setActiveSohColModal({ key: 'onHand', name: 'On Hand' }); setSohModalSearchInput(sohColFilters['onHand']?.search || ''); }} className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition"><Filter className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => { setActiveSohColModal({ key: 'onHand', name: 'On Hand' }); setSohModalSearchInput(sohColFilters['onHand']?.search || ''); }} className="p-1 hover:bg-slate-100 rounded text-slate-600 hover:text-slate-900 transition"><Filter className="w-3.5 h-3.5" /></button>
                   </div>
                 </th>
-                <th className="py-3.5 px-2.5 border-l border-slate-800 text-orange-400">
+                <th className="py-3.5 px-2.5 border-l border-slate-200 text-orange-400">
                   <div className="flex items-center gap-1 justify-between">
                     <span>🚚 TO (W1-W4)</span>
-                    <button onClick={() => { setActiveSohColModal({ key: 'to', name: 'TO' }); setSohModalSearchInput(sohColFilters['to']?.search || ''); }} className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition"><Filter className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => { setActiveSohColModal({ key: 'to', name: 'TO' }); setSohModalSearchInput(sohColFilters['to']?.search || ''); }} className="p-1 hover:bg-slate-100 rounded text-slate-600 hover:text-slate-900 transition"><Filter className="w-3.5 h-3.5" /></button>
                   </div>
                 </th>
-                <th className="py-3.5 px-2.5 border-l border-slate-800 text-blue-400">
+                <th className="py-3.5 px-2.5 border-l border-slate-200 text-blue-400">
                   <div className="flex items-center gap-1 justify-between">
                     <span>🚢 Vessel (W1-W4)</span>
-                    <button onClick={() => { setActiveSohColModal({ key: 'vessel', name: 'Vessel' }); setSohModalSearchInput(sohColFilters['vessel']?.search || ''); }} className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition"><Filter className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => { setActiveSohColModal({ key: 'vessel', name: 'Vessel' }); setSohModalSearchInput(sohColFilters['vessel']?.search || ''); }} className="p-1 hover:bg-slate-100 rounded text-slate-600 hover:text-slate-900 transition"><Filter className="w-3.5 h-3.5" /></button>
                   </div>
                 </th>
-                <th className="py-3.5 px-3 border-l border-slate-800 bg-emerald-950/40 text-emerald-300 font-extrabold">
+                <th className="py-3.5 px-3 border-l border-slate-200 bg-emerald-950/40 text-emerald-300 font-extrabold">
                   <div className="flex items-center gap-1 justify-between">
                     <span>🧮 Total Pasokan (OH+TO+Vessel)</span>
-                    <button onClick={() => { setActiveSohColModal({ key: 'totalSupply', name: 'Total Pasokan' }); setSohModalSearchInput(sohColFilters['totalSupply']?.search || ''); }} className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition"><Filter className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => { setActiveSohColModal({ key: 'totalSupply', name: 'Total Pasokan' }); setSohModalSearchInput(sohColFilters['totalSupply']?.search || ''); }} className="p-1 hover:bg-slate-100 rounded text-slate-600 hover:text-slate-900 transition"><Filter className="w-3.5 h-3.5" /></button>
                   </div>
                 </th>
-                <th className="py-3.5 px-2.5 border-l border-slate-800 text-purple-400">
+                <th className="py-3.5 px-2.5 border-l border-slate-200 text-purple-400">
                   <div className="flex items-center gap-1 justify-between">
                     <span>⚙️ Plan Loading</span>
-                    <button onClick={() => { setActiveSohColModal({ key: 'planLoading', name: 'Plan Loading' }); setSohModalSearchInput(sohColFilters['planLoading']?.search || ''); }} className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition"><Filter className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => { setActiveSohColModal({ key: 'planLoading', name: 'Plan Loading' }); setSohModalSearchInput(sohColFilters['planLoading']?.search || ''); }} className="p-1 hover:bg-slate-100 rounded text-slate-600 hover:text-slate-900 transition"><Filter className="w-3.5 h-3.5" /></button>
                   </div>
                 </th>
-                <th className="py-3.5 px-3 border-l border-slate-800 bg-slate-900 text-amber-300">
+                <th className="py-3.5 px-3 border-l border-slate-200 bg-white text-amber-300">
                   <div className="flex items-center gap-1 justify-between">
                     <span>🎯 Outstanding Target</span>
-                    <button onClick={() => { setActiveSohColModal({ key: 'target', name: 'Outstanding Target' }); setSohModalSearchInput(sohColFilters['target']?.search || ''); }} className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition"><Filter className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => { setActiveSohColModal({ key: 'target', name: 'Outstanding Target' }); setSohModalSearchInput(sohColFilters['target']?.search || ''); }} className="p-1 hover:bg-slate-100 rounded text-slate-600 hover:text-slate-900 transition"><Filter className="w-3.5 h-3.5" /></button>
                   </div>
                 </th>
-                <th className="py-3.5 px-3 border-l border-slate-800 bg-slate-900 text-cyan-300">
+                <th className="py-3.5 px-3 border-l border-slate-200 bg-white text-cyan-300">
                   <div className="flex items-center gap-1 justify-between">
                     <span>🛒 Sales Berjalan</span>
-                    <button onClick={() => { setActiveSohColModal({ key: 'salesBerjalan', name: 'Sales Berjalan' }); setSohModalSearchInput(sohColFilters['salesBerjalan']?.search || ''); }} className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition"><Filter className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => { setActiveSohColModal({ key: 'salesBerjalan', name: 'Sales Berjalan' }); setSohModalSearchInput(sohColFilters['salesBerjalan']?.search || ''); }} className="p-1 hover:bg-slate-100 rounded text-slate-600 hover:text-slate-900 transition"><Filter className="w-3.5 h-3.5" /></button>
                   </div>
                 </th>
-                <th className="py-3.5 px-3 border-l border-slate-800 bg-amber-950/30 text-amber-300 font-extrabold">
+                <th className="py-3.5 px-3 border-l border-slate-200 bg-amber-950/30 text-amber-300 font-extrabold">
                   <div className="flex items-center gap-1 justify-between">
                     <span>📊 Target Efektif</span>
-                    <button onClick={() => { setActiveSohColModal({ key: 'effectiveTarget', name: 'Target Efektif' }); setSohModalSearchInput(sohColFilters['effectiveTarget']?.search || ''); }} className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition"><Filter className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => { setActiveSohColModal({ key: 'effectiveTarget', name: 'Target Efektif' }); setSohModalSearchInput(sohColFilters['effectiveTarget']?.search || ''); }} className="p-1 hover:bg-slate-100 rounded text-slate-600 hover:text-slate-900 transition"><Filter className="w-3.5 h-3.5" /></button>
                   </div>
                 </th>
-                <th className="py-3.5 px-3 border-l border-slate-800 text-cyan-300">
+                <th className="py-3.5 px-3 border-l border-slate-200 text-cyan-300">
                   <div className="flex items-center gap-1 justify-between">
                     <span>📈 Hasil Hitungan (Rasio)</span>
-                    <button onClick={() => { setActiveSohColModal({ key: 'ratio', name: 'Rasio' }); setSohModalSearchInput(sohColFilters['ratio']?.search || ''); }} className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition"><Filter className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => { setActiveSohColModal({ key: 'ratio', name: 'Rasio' }); setSohModalSearchInput(sohColFilters['ratio']?.search || ''); }} className="p-1 hover:bg-slate-100 rounded text-slate-600 hover:text-slate-900 transition"><Filter className="w-3.5 h-3.5" /></button>
                   </div>
                 </th>
-                <th className="py-3.5 px-3 border-l border-slate-800 text-white">
+                <th className="py-3.5 px-3 border-l border-slate-200 text-slate-900">
                   <div className="flex items-center gap-1 justify-between">
                     <span>🛡️ Kesimpulan Kondisi</span>
-                    <button onClick={() => { setActiveSohColModal({ key: 'badge', name: 'Kesimpulan Kondisi' }); setSohModalSearchInput(sohColFilters['badge']?.search || ''); }} className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition"><Filter className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => { setActiveSohColModal({ key: 'badge', name: 'Kesimpulan Kondisi' }); setSohModalSearchInput(sohColFilters['badge']?.search || ''); }} className="p-1 hover:bg-slate-100 rounded text-slate-600 hover:text-slate-900 transition"><Filter className="w-3.5 h-3.5" /></button>
                   </div>
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/80 text-slate-300 text-center font-medium">
+            <tbody className="divide-y divide-slate-800/80 text-slate-700 text-center font-medium">
               {displayedSohTableData.map((row) => (
                 <tr
                   key={row.key}
-                  className="hover:bg-slate-800/60 transition cursor-pointer"
+                  className="hover:bg-slate-100 transition cursor-pointer"
                   onClick={() => setSelectedCabangForChart(row.cabang === selectedCabangForChart ? 'All' : row.cabang)}
                 >
-                  <td className="py-3 px-3 text-left align-middle font-black text-white text-sm">
+                  <td className="py-3 px-3 text-left align-middle font-black text-slate-900 text-sm">
                     {row.cabang}
                   </td>
-                  <td className="py-3 px-2.5 border-l border-slate-800 text-left align-middle font-semibold text-purple-300">
+                  <td className="py-3 px-2.5 border-l border-slate-200 text-left align-middle font-semibold text-purple-300">
                     {row.grup || '-'}
                   </td>
-                  <td className="py-3 px-3 border-l border-slate-800 text-left align-middle">
+                  <td className="py-3 px-3 border-l border-slate-200 text-left align-middle">
                     <span className="inline-block px-2.5 py-1 rounded-lg text-xs font-semibold text-cyan-300 bg-cyan-950/60 border border-cyan-800/50 truncate max-w-[180px]" title={row.category}>
                       {row.category}
                     </span>
                   </td>
-                  <td className="py-3 px-2.5 border-l border-slate-800 text-left align-middle">
+                  <td className="py-3 px-2.5 border-l border-slate-200 text-left align-middle">
                     <span className="inline-block px-2 py-0.5 rounded text-[11px] font-bold text-emerald-300 bg-emerald-950/40 border border-emerald-800/40 truncate max-w-[140px]" title={row.statusInsentif}>
                       {row.statusInsentif || '-'}
                     </span>
                   </td>
-                  <td className="py-3 px-2.5 border-l border-slate-800 text-left align-middle">
+                  <td className="py-3 px-2.5 border-l border-slate-200 text-left align-middle">
                     <span className="inline-block px-2 py-0.5 rounded text-[11px] font-bold text-blue-300 bg-blue-950/40 border border-blue-800/40 truncate max-w-[140px]" title={row.statusDoi}>
                       {row.statusDoi || '-'}
                     </span>
                   </td>
-                  <td className="py-3 px-2.5 border-l border-slate-800 font-extrabold text-emerald-400 text-sm font-mono">
+                  <td className="py-3 px-2.5 border-l border-slate-200 font-extrabold text-emerald-400 text-sm font-mono">
                     {Math.round(row['On Hand'] || 0).toLocaleString('id-ID')}
                   </td>
-                  <td className="py-3 px-2.5 border-l border-slate-800 font-mono text-orange-300 font-bold">
+                  <td className="py-3 px-2.5 border-l border-slate-200 font-mono text-orange-300 font-bold">
                     {Math.round(row['TO'] || 0).toLocaleString('id-ID')}
                   </td>
-                  <td className="py-3 px-2.5 border-l border-slate-800 font-mono text-blue-300 font-bold">
+                  <td className="py-3 px-2.5 border-l border-slate-200 font-mono text-blue-300 font-bold">
                     {Math.round(row['VESSEL'] || 0).toLocaleString('id-ID')}
                   </td>
-                  <td className="py-3 px-3 border-l border-slate-800 bg-emerald-950/20 font-black font-mono text-emerald-300 text-sm">
+                  <td className="py-3 px-3 border-l border-slate-200 bg-emerald-950/20 font-black font-mono text-emerald-300 text-sm">
                     {(row.totalSupply || (row['On Hand'] + row['TO'] + row['VESSEL']) || 0).toLocaleString('id-ID')}
                   </td>
-                  <td className="py-3 px-2.5 border-l border-slate-800 font-mono text-purple-300">
+                  <td className="py-3 px-2.5 border-l border-slate-200 font-mono text-purple-300">
                     {Math.round(row['PLAN LOADING'] || 0).toLocaleString('id-ID')}
                   </td>
-                  <td className="py-3 px-3 border-l border-slate-800 font-bold text-amber-300 font-mono text-sm bg-slate-950/40">
+                  <td className="py-3 px-3 border-l border-slate-200 font-bold text-amber-300 font-mono text-sm bg-slate-50">
                     {row['Outstanding Target'] > 0 ? Math.round(row['Outstanding Target']).toLocaleString('id-ID') : '-'}
                   </td>
-                  <td className="py-3 px-3 border-l border-slate-800 font-bold text-cyan-300 font-mono text-sm bg-slate-950/40">
+                  <td className="py-3 px-3 border-l border-slate-200 font-bold text-cyan-300 font-mono text-sm bg-slate-50">
                     {row['Sales Berjalan'] > 0 ? Math.round(row['Sales Berjalan']).toLocaleString('id-ID') : '-'}
                   </td>
-                  <td className="py-3 px-3 border-l border-slate-800 bg-amber-950/20 font-black font-mono text-amber-300 text-sm">
+                  <td className="py-3 px-3 border-l border-slate-200 bg-amber-950/20 font-black font-mono text-amber-300 text-sm">
                     {row.effectiveTarget > 0 ? Math.round(row.effectiveTarget).toLocaleString('id-ID') : (row.effectiveTarget < 0 ? `(${Math.round(Math.abs(row.effectiveTarget)).toLocaleString('id-ID')})` : '-')}
                   </td>
-                  <td className="py-3 px-3 border-l border-slate-800 font-black font-mono text-sm text-white">
+                  <td className="py-3 px-3 border-l border-slate-200 font-black font-mono text-sm text-slate-900">
                     {row.effectiveTarget > 0 ? `${row.ratio}x` : 'N/A'}
                   </td>
-                  <td className="py-3 px-3 border-l border-slate-800">
+                  <td className="py-3 px-3 border-l border-slate-200">
                     <div className="flex items-center justify-center">
                       <span className={`px-3.5 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider shadow-sm ${row.badgeColor}`}>
                         {row.badge}

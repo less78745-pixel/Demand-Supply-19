@@ -87,24 +87,24 @@ const CustomStackedTooltip = ({ active, payload, label }: any) => {
     const totalQty = validItems.reduce((sum: number, item: any) => sum + Number(item.value || 0), 0);
 
     return (
-      <div className="bg-[#090e1a] text-white p-3.5 rounded-xl border-2 border-purple-500 shadow-[0_15px_60px_rgba(0,0,0,1)] z-[999999] opacity-100 max-h-[300px] overflow-y-auto max-w-[340px] pointer-events-none select-none backdrop-blur-none" style={{ backgroundColor: '#090e1a', opacity: 1, zIndex: 999999 }}>
-        <div className="border-b border-slate-700/80 pb-2 mb-2 sticky -top-3.5 bg-[#090e1a] pt-1 z-10 flex items-center justify-between gap-3">
+      <div className="bg-[#090e1a] text-slate-900 p-3.5 rounded-xl border-2 border-purple-500 shadow-[0_15px_60px_rgba(0,0,0,1)] z-[999999] opacity-100 max-h-[300px] overflow-y-auto max-w-[340px] pointer-events-none select-none backdrop-blur-none" style={{ backgroundColor: '#090e1a', opacity: 1, zIndex: 999999 }}>
+        <div className="border-b border-slate-200/80 pb-2 mb-2 sticky -top-3.5 bg-[#090e1a] pt-1 z-10 flex items-center justify-between gap-3">
           <span className="text-sky-400 font-extrabold text-sm tracking-wide">{label}</span>
           <span className="text-xs px-2 py-0.5 bg-purple-950/90 border border-purple-500/50 rounded-md font-bold text-purple-300 shadow-sm">
             Total: {totalQty.toLocaleString('id-ID')} Qty
           </span>
         </div>
         {validItems.length === 0 ? (
-          <div className="text-xs text-slate-400 font-medium py-2">Tidak ada data kuantitas (0 Qty)</div>
+          <div className="text-xs text-slate-600 font-medium py-2">Tidak ada data kuantitas (0 Qty)</div>
         ) : (
           <div className="space-y-1.5 text-xs">
             {validItems.map((entry: any, index: number) => (
-              <div key={index} className="flex items-start justify-between gap-3 py-1 border-b border-slate-800/60 last:border-0 font-medium">
-                <span className="flex items-center gap-2 text-slate-200 flex-1 min-w-0">
+              <div key={index} className="flex items-start justify-between gap-3 py-1 border-b border-slate-200/60 last:border-0 font-medium">
+                <span className="flex items-center gap-2 text-slate-800 flex-1 min-w-0">
                   <span className="w-3 h-3 rounded-full inline-block shrink-0 border border-slate-600/50 shadow-sm mt-0.5" style={{ backgroundColor: entry.color }}></span>
                   <span className="whitespace-normal leading-tight font-semibold" title={entry.name}>{entry.name}</span>
                 </span>
-                <span className="font-extrabold text-white shrink-0 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
+                <span className="font-extrabold text-slate-900 shrink-0 bg-white px-2 py-0.5 rounded border border-slate-200">
                   {Number(entry.value).toLocaleString('id-ID')} Qty
                 </span>
               </div>
@@ -122,29 +122,29 @@ const CustomContainerTooltip = ({ active, payload, label }: any) => {
     const data = payload[0].payload;
     const poList: string[] = data.poList || [];
     return (
-      <div className="bg-[#090e1a] text-white p-4 rounded-xl border-2 border-cyan-500 shadow-[0_15px_60px_rgba(0,182,212,0.35)] z-[999999] max-w-[340px] pointer-events-none select-none">
-        <div className="border-b border-slate-700/80 pb-2 mb-2 flex items-center justify-between gap-3">
+      <div className="bg-[#090e1a] text-slate-900 p-4 rounded-xl border-2 border-cyan-500 shadow-[0_15px_60px_rgba(0,182,212,0.35)] z-[999999] max-w-[340px] pointer-events-none select-none">
+        <div className="border-b border-slate-200/80 pb-2 mb-2 flex items-center justify-between gap-3">
           <span className="text-cyan-400 font-extrabold text-sm tracking-wide">🏢 {label}</span>
           <span className="text-xs px-2 py-0.5 bg-cyan-950/90 border border-cyan-500/50 rounded-md font-bold text-cyan-300 shadow-sm">
             {data["Jumlah Container"]} Container
           </span>
         </div>
-        <div className="text-xs text-slate-300 font-medium space-y-2">
-          <div className="flex items-center justify-between bg-slate-900 px-3 py-2 rounded-lg border border-slate-800">
-            <span className="text-slate-400 font-semibold">Total Container (Distinct PO):</span>
-            <span className="font-extrabold text-white text-sm bg-cyan-500/20 px-2.5 py-0.5 rounded text-cyan-300 border border-cyan-500/40">
+        <div className="text-xs text-slate-700 font-medium space-y-2">
+          <div className="flex items-center justify-between bg-white px-3 py-2 rounded-lg border border-slate-200">
+            <span className="text-slate-600 font-semibold">Total Container (Distinct PO):</span>
+            <span className="font-extrabold text-slate-900 text-sm bg-cyan-500/20 px-2.5 py-0.5 rounded text-cyan-300 border border-cyan-500/40">
               {data["Jumlah Container"]} Unit
             </span>
           </div>
           {poList.length > 0 && (
             <div>
-              <div className="text-[11px] font-bold text-slate-400 mb-1">Daftar No. PO di Cabang Ini:</div>
-              <div className="max-h-[140px] overflow-y-auto bg-slate-950/90 p-2 rounded-lg border border-slate-800 space-y-1 font-mono text-[11px] text-amber-300">
+              <div className="text-[11px] font-bold text-slate-600 mb-1">Daftar No. PO di Cabang Ini:</div>
+              <div className="max-h-[140px] overflow-y-auto bg-slate-50 p-2 rounded-lg border border-slate-200 space-y-1 font-mono text-[11px] text-amber-300">
                 {poList.slice(0, 10).map((po, i) => (
                   <div key={i} className="truncate">• {po}</div>
                 ))}
                 {poList.length > 10 && (
-                  <div className="text-slate-400 font-sans italic text-[10px]">...+ {poList.length - 10} PO lainnya</div>
+                  <div className="text-slate-600 font-sans italic text-[10px]">...+ {poList.length - 10} PO lainnya</div>
                 )}
               </div>
             </div>
@@ -803,10 +803,10 @@ export default function PRUpdatePage() {
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-purple-500/10 text-purple-400 border border-purple-500/20 uppercase tracking-widest">
               <FileBarChart className="w-3.5 h-3.5" /> Dashboard Data Harian • PR Update & Tracking Container
             </div>
-            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white flex items-center gap-3">
+            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-slate-900 flex items-center gap-3">
               PR Update & Tracking Container <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-pink-400 to-amber-300">(Integrated Tracker)</span>
             </h1>
-            <p className="text-slate-300 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
+            <p className="text-slate-700 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
               Modul gabungan pemantauan Purchase Requisition dan Live Tracking Container kapal (On Vessel, SPJM, Hold) dengan format <b>13 kolom terpadu</b>. Kini dilengkapi grafik persebaran Category dan filter kolom ala Excel.
             </p>
           </div>
@@ -826,44 +826,44 @@ export default function PRUpdatePage() {
 
       {/* ─── PANDUAN, TEMPLATE & UPLOAD SECTION ─── */}
       {showHowTo && (
-        <GlassCard className="p-6 border-purple-500/30 bg-slate-900/80 backdrop-blur-xl animate-fade-in">
-          <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-6">
-            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+        <GlassCard className="p-6 border-purple-500/30 bg-white backdrop-blur-xl animate-fade-in">
+          <div className="flex items-center justify-between border-b border-slate-200 pb-4 mb-6">
+            <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
               <FileSpreadsheet className="w-5 h-5 text-purple-400" /> Panduan Upload Data PR Update (Excel / CSV)
             </h3>
             <div className="flex flex-wrap gap-2">
               <button
                 onClick={handleDownloadTemplate}
-                className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-purple-600/20"
+                className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-slate-900 font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-purple-600/20"
               >
                 <Download className="w-4 h-4" /> Unduh Template CSV
               </button>
               <button
                 onClick={handleGenerateDemo}
-                className="px-4 py-2 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-purple-500/20"
+                className="px-4 py-2 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-slate-900 font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-purple-500/20"
               >
                 <Sparkles className="w-4 h-4" /> Gunakan Data Demo (+ SPJM)
               </button>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm text-slate-300 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm text-slate-700 mb-6">
             <div className="space-y-2">
-              <h4 className="font-semibold text-white">📌 Pelacakan Status Pengadaan & SPJM:</h4>
-              <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
+              <h4 className="font-semibold text-slate-900">📌 Pelacakan Status Pengadaan & SPJM:</h4>
+              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
                 Modul ini memantau kolom <i>STATUS Compile</i> seperti <i>ON VESSEL, HOLD DELIVERY, SPJM, READY,</i> atau <i>PLAN LOADING</i> untuk mendeteksi bottleneck per cabang dan minggu ETA.
               </p>
             </div>
             <div className="space-y-2">
-              <h4 className="font-semibold text-white">⚙️ Engine Pembacaan Excel (XLSX & CSV):</h4>
-              <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
+              <h4 className="font-semibold text-slate-900">⚙️ Engine Pembacaan Excel (XLSX & CSV):</h4>
+              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
                 Dilengkapi parsing XLSX ArrayBuffer, Anda dapat mengunggah file Excel (.xlsx) maupun CSV hasil ekstraksi sistem procurement tanpa kendala kerusakan karakter atau format numerik.
               </p>
             </div>
           </div>
 
-          <div className="pt-4 border-t border-white/10">
-            <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Unggah File PR Update Anda:</h4>
+          <div className="pt-4 border-t border-slate-200">
+            <h4 className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">Unggah File PR Update Anda:</h4>
             <FileUploader
               onFileUpload={handleFileUpload}
               isLoading={isProcessing}
@@ -880,7 +880,7 @@ export default function PRUpdatePage() {
           <h2 className="text-sm font-bold uppercase tracking-wider text-purple-400 flex items-center gap-2">
             <Zap className="w-4 h-4" /> Pilih 3 Jalur Simulasi Rantai Pasok PR/PO:
           </h2>
-          <span className="text-xs text-slate-400 italic hidden sm:inline">Klik tab untuk memproyeksikan percepatan atau delay lead time!</span>
+          <span className="text-xs text-slate-600 italic hidden sm:inline">Klik tab untuk memproyeksikan percepatan atau delay lead time!</span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -896,22 +896,22 @@ export default function PRUpdatePage() {
                 }}
                 className={`relative group p-4 sm:p-5 rounded-2xl transition-all duration-300 text-left border overflow-hidden shadow-lg ${
                   isSelected
-                    ? `bg-gradient-to-br ${sc.color} text-white border-transparent ring-2 ring-white/20 shadow-purple-500/25 scale-[1.02]`
-                    : 'bg-slate-900/70 hover:bg-slate-800/80 text-slate-300 border-slate-700 hover:border-slate-600'
+                    ? `bg-gradient-to-br ${sc.color} text-slate-900 border-transparent ring-2 ring-white/20 shadow-purple-500/25 scale-[1.02]`
+                    : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 hover:border-slate-600'
                 }`}
               >
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-bold text-base tracking-wide flex items-center gap-2.5">
-                    <Icon className={`w-5 h-5 ${isSelected ? 'text-white' : 'text-purple-400'}`} />
+                    <Icon className={`w-5 h-5 ${isSelected ? 'text-slate-900' : 'text-purple-400'}`} />
                     {sc.title}
                   </span>
                   {isSelected && (
-                    <span className="px-2 py-0.5 rounded-full bg-white/20 text-white text-xs font-black uppercase tracking-wider">
+                    <span className="px-2 py-0.5 rounded-full bg-white/20 text-slate-900 text-xs font-black uppercase tracking-wider">
                       Aktif
                     </span>
                   )}
                 </div>
-                <p className={`text-xs sm:text-sm leading-relaxed ${isSelected ? 'text-slate-100 font-medium' : 'text-slate-400'}`}>
+                <p className={`text-xs sm:text-sm leading-relaxed ${isSelected ? 'text-slate-900 font-medium' : 'text-slate-600'}`}>
                   {sc.desc}
                 </p>
               </button>
@@ -954,10 +954,10 @@ export default function PRUpdatePage() {
       </div>
 
       {/* ─── FILTER CONTROLS & SELECTION (EXPANDED & OVERFLOW-VISIBLE) ─── */}
-      <GlassCard allowOverflow={true} className="p-6 border-slate-800 bg-slate-900/90 backdrop-blur-xl mb-10 shadow-xl">
+      <GlassCard allowOverflow={true} className="p-6 border-slate-200 bg-white backdrop-blur-xl mb-10 shadow-xl">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
           <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-300 mb-1 block uppercase tracking-wider">🏢 Filter Cabang:</label>
+            <label className="text-xs font-bold text-slate-700 mb-1 block uppercase tracking-wider">🏢 Filter Cabang:</label>
             <MultiSelect
               options={cabangs}
               selected={selectedCabang}
@@ -967,7 +967,7 @@ export default function PRUpdatePage() {
             />
           </div>
           <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-300 mb-1 block uppercase tracking-wider">📦 Filter Kategori / Grup:</label>
+            <label className="text-xs font-bold text-slate-700 mb-1 block uppercase tracking-wider">📦 Filter Kategori / Grup:</label>
             <MultiSelect
               options={categories}
               selected={selectedCategory}
@@ -977,7 +977,7 @@ export default function PRUpdatePage() {
             />
           </div>
           <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-300 mb-1 block uppercase tracking-wider">🗓️ Filter Week ETA:</label>
+            <label className="text-xs font-bold text-slate-700 mb-1 block uppercase tracking-wider">🗓️ Filter Week ETA:</label>
             <MultiSelect
               options={etas}
               selected={selectedEta}
@@ -987,7 +987,7 @@ export default function PRUpdatePage() {
             />
           </div>
           <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-300 mb-1 block uppercase tracking-wider">⚡ Filter Status Compile:</label>
+            <label className="text-xs font-bold text-slate-700 mb-1 block uppercase tracking-wider">⚡ Filter Status Compile:</label>
             <MultiSelect
               options={statusCompiles}
               selected={selectedStatusCompile}
@@ -997,11 +997,11 @@ export default function PRUpdatePage() {
             />
           </div>
           <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-300 mb-1 block uppercase tracking-wider">📍 Sorot Grafik Cabang:</label>
+            <label className="text-xs font-bold text-slate-700 mb-1 block uppercase tracking-wider">📍 Sorot Grafik Cabang:</label>
             <select
               value={selectedCabangForChart}
               onChange={(e) => setSelectedCabangForChart(e.target.value)}
-              className="w-full min-h-[44px] rounded-xl border border-slate-700 bg-slate-950/90 px-3.5 py-2 text-sm text-slate-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/30 outline-none transition font-semibold cursor-pointer shadow-md"
+              className="w-full min-h-[44px] rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-sm text-slate-800 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/30 outline-none transition font-semibold cursor-pointer shadow-md"
             >
               <option value="All">🌐 Seluruh Cabang (All)</option>
               {cabangs.filter(c => c !== 'All').map((cab) => (
@@ -1015,13 +1015,13 @@ export default function PRUpdatePage() {
       {/* ─── VISUALIZATION CHART: TERPADU WEEK ETA & STACKED CATEGORY ─── */}
       {((chartViewMode === 'eta' && chartEtaData.length > 0) || (chartViewMode === 'cabang' && chartData.length > 0) || (chartViewMode === 'container' && chartContainerData.length > 0)) && (
         <GlassCard className="p-6 border-purple-500/30 bg-gradient-to-b from-slate-900/90 to-slate-950/90 shadow-2xl">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between border-b border-slate-800 pb-4 mb-6 gap-4">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between border-b border-slate-200 pb-4 mb-6 gap-4">
             <div>
-              <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+              <h3 className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2">
                 <BarChart3 className="w-5 h-5 text-purple-400" />
                 Grafik Distribusi Status Compile & Persebaran Category ({chartViewMode === 'eta' ? 'per Week ETA' : chartViewMode === 'cabang' ? 'per Cabang' : 'Jumlah Container per Cabang'})
               </h3>
-              <p className="text-xs text-slate-400 mt-1">
+              <p className="text-xs text-slate-600 mt-1">
                 {chartViewMode === 'container' ? (
                   <>Sumbu X: <b className="text-emerald-400">Cabang</b> • Sumbu Y: <b className="text-cyan-300">Jumlah Container</b> (dihitung otomatis dari distinct count nomor PO per cabang).</>
                 ) : (
@@ -1031,11 +1031,11 @@ export default function PRUpdatePage() {
             </div>
             
             <div className="flex items-center gap-2.5 flex-wrap">
-              <div className="flex bg-slate-800/90 p-1 rounded-xl border border-slate-700 shadow-md">
+              <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 shadow-md">
                 <button
                   onClick={() => setChartViewMode('eta')}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
-                    chartViewMode === 'eta' ? 'bg-purple-600 text-white shadow-md ring-1 ring-purple-400' : 'text-slate-400 hover:text-white'
+                    chartViewMode === 'eta' ? 'bg-purple-600 text-slate-900 shadow-md ring-1 ring-purple-400' : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
                   🗓️ Week ETA
@@ -1043,7 +1043,7 @@ export default function PRUpdatePage() {
                 <button
                   onClick={() => setChartViewMode('cabang')}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
-                    chartViewMode === 'cabang' ? 'bg-purple-600 text-white shadow-md ring-1 ring-purple-400' : 'text-slate-400 hover:text-white'
+                    chartViewMode === 'cabang' ? 'bg-purple-600 text-slate-900 shadow-md ring-1 ring-purple-400' : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
                   🏢 Cabang
@@ -1051,7 +1051,7 @@ export default function PRUpdatePage() {
                 <button
                   onClick={() => setChartViewMode('container')}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
-                    chartViewMode === 'container' ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-md ring-1 ring-cyan-400' : 'text-slate-400 hover:text-white'
+                    chartViewMode === 'container' ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-slate-900 shadow-md ring-1 ring-cyan-400' : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
                   📦 Jumlah Container
@@ -1063,7 +1063,7 @@ export default function PRUpdatePage() {
                 <span>Jumlah Container: {totalContainers?.toLocaleString('id-ID') || 0} (Distinct PO)</span>
               </div>
 
-              <div className="flex items-center gap-2 text-xs text-slate-400 bg-slate-800/50 px-3 py-1.5 rounded-xl border border-slate-700">
+              <div className="flex items-center gap-2 text-xs text-slate-600 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200">
                 <span>🏷️ Menampilkan {chartViewMode === 'container' ? `${chartContainerData.length} cabang (Distinct PO)` : `${categoryList.length} kategori pada ${chartViewMode === 'eta' ? `${chartEtaData.length} periode ETA` : `${chartData.length} cabang`}`}</span>
               </div>
             </div>
@@ -1117,21 +1117,21 @@ export default function PRUpdatePage() {
       <GlassCard className="p-6 border-rose-500/40 bg-gradient-to-br from-slate-900 via-rose-950/20 to-slate-900 shadow-2xl overflow-hidden relative">
         <div className="absolute -top-12 -right-12 w-48 h-48 bg-rose-500/10 rounded-full blur-3xl pointer-events-none" />
         
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800/80 pb-4 mb-6 gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200/80 pb-4 mb-6 gap-4">
           <div className="space-y-1.5">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[11px] font-extrabold bg-rose-500/20 text-rose-300 border border-rose-500/40 uppercase tracking-wider mb-1 shadow-sm">
               <ShieldAlert className="w-3.5 h-3.5 text-rose-400 animate-pulse" /> Warning Supply Chain • Monitoring Keterlambatan Port & Vendor
             </div>
-            <h3 className="text-lg sm:text-xl font-black text-white flex items-center gap-2.5">
+            <h3 className="text-lg sm:text-xl font-black text-slate-900 flex items-center gap-2.5">
               Insight PO Overdue: SPJM, Hold Delivery & On Vessel
             </h3>
-            <p className="text-xs sm:text-sm text-slate-300">
+            <p className="text-xs sm:text-sm text-slate-700">
               Mendeteksi dokumen dengan status krusial yang <b className="text-rose-400 underline">sudah melewati Tanggal ETA</b> dari tanggal pengolahan raw data (<b>{rawDataProcessingDate.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}</b>).
             </p>
           </div>
           
           <div className="flex items-center gap-2 shrink-0">
-            <span className="px-4 py-2 rounded-xl bg-slate-900 border-2 border-amber-500/60 font-black text-xs sm:text-sm text-amber-300 shadow-lg flex items-center gap-2">
+            <span className="px-4 py-2 rounded-xl bg-white border-2 border-amber-500/60 font-black text-xs sm:text-sm text-amber-300 shadow-lg flex items-center gap-2">
               <Timer className="w-4 h-4 text-amber-400 animate-spin-slow" />
               Total Overdue: {overdueInsights.length} PO
             </span>
@@ -1145,7 +1145,7 @@ export default function PRUpdatePage() {
               <div className="text-xs text-purple-300 font-extrabold uppercase tracking-wider flex items-center gap-1.5">
                 <span>🟣 SPJM Overdue</span>
               </div>
-              <div className="text-xl sm:text-2xl font-black text-white mt-1.5">
+              <div className="text-xl sm:text-2xl font-black text-slate-900 mt-1.5">
                 {overdueInsights.filter(x => x.statusCategory === 'SPJM').length} <span className="text-xs font-semibold text-purple-300">Dokumen</span>
               </div>
               <div className="text-[11px] text-purple-300/90 font-mono font-bold mt-1 bg-purple-900/40 px-2 py-0.5 rounded border border-purple-500/30 inline-block">
@@ -1162,7 +1162,7 @@ export default function PRUpdatePage() {
               <div className="text-xs text-rose-300 font-extrabold uppercase tracking-wider flex items-center gap-1.5">
                 <span>🔴 Hold Delivery Overdue</span>
               </div>
-              <div className="text-xl sm:text-2xl font-black text-white mt-1.5">
+              <div className="text-xl sm:text-2xl font-black text-slate-900 mt-1.5">
                 {overdueInsights.filter(x => x.statusCategory === 'HOLD').length} <span className="text-xs font-semibold text-rose-300">Dokumen</span>
               </div>
               <div className="text-[11px] text-rose-300/90 font-mono font-bold mt-1 bg-rose-900/40 px-2 py-0.5 rounded border border-rose-500/30 inline-block">
@@ -1179,7 +1179,7 @@ export default function PRUpdatePage() {
               <div className="text-xs text-blue-300 font-extrabold uppercase tracking-wider flex items-center gap-1.5">
                 <span>🔵 On Vessel Overdue</span>
               </div>
-              <div className="text-xl sm:text-2xl font-black text-white mt-1.5">
+              <div className="text-xl sm:text-2xl font-black text-slate-900 mt-1.5">
                 {overdueInsights.filter(x => x.statusCategory === 'VESSEL').length} <span className="text-xs font-semibold text-blue-300">Dokumen</span>
               </div>
               <div className="text-[11px] text-blue-300/90 font-mono font-bold mt-1 bg-blue-900/40 px-2 py-0.5 rounded border border-blue-500/30 inline-block">
@@ -1193,24 +1193,24 @@ export default function PRUpdatePage() {
         </div>
 
         {/* Table of Overdue POs */}
-        <div className="overflow-x-auto rounded-xl border border-slate-800 max-h-[420px] overflow-y-auto shadow-inner">
+        <div className="overflow-x-auto rounded-xl border border-slate-200 max-h-[420px] overflow-y-auto shadow-inner">
           <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[1050px]">
-            <thead className="bg-slate-950/95 text-slate-300 uppercase font-bold sticky top-0 z-20 shadow-md text-center text-[11px] tracking-wider">
-              <tr className="border-b border-slate-800">
+            <thead className="bg-slate-50 text-slate-700 uppercase font-bold sticky top-0 z-20 shadow-md text-center text-[11px] tracking-wider">
+              <tr className="border-b border-slate-200">
                 <th className="py-3.5 px-3 text-left">Cabang</th>
-                <th className="py-3.5 px-3 border-l border-slate-800 text-amber-400">No. PO</th>
-                <th className="py-3.5 px-3 border-l border-slate-800 text-purple-400">Status Compile</th>
-                <th className="py-3.5 px-3 border-l border-slate-800 text-cyan-300">Tanggal ETA</th>
-                <th className="py-3.5 px-4 border-l border-slate-800 text-rose-400 bg-rose-950/40 font-extrabold">Durasi Terlewat</th>
-                <th className="py-3.5 px-3 border-l border-slate-800 text-left">Deskripsi & Kategori</th>
-                <th className="py-3.5 px-3 border-l border-slate-800 text-emerald-400">Total Qty</th>
-                <th className="py-3.5 px-4 border-l border-slate-800">Action & Rekomendasi</th>
+                <th className="py-3.5 px-3 border-l border-slate-200 text-amber-400">No. PO</th>
+                <th className="py-3.5 px-3 border-l border-slate-200 text-purple-400">Status Compile</th>
+                <th className="py-3.5 px-3 border-l border-slate-200 text-cyan-300">Tanggal ETA</th>
+                <th className="py-3.5 px-4 border-l border-slate-200 text-rose-400 bg-rose-950/40 font-extrabold">Durasi Terlewat</th>
+                <th className="py-3.5 px-3 border-l border-slate-200 text-left">Deskripsi & Kategori</th>
+                <th className="py-3.5 px-3 border-l border-slate-200 text-emerald-400">Total Qty</th>
+                <th className="py-3.5 px-4 border-l border-slate-200">Action & Rekomendasi</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/80 text-slate-300 text-center font-medium">
+            <tbody className="divide-y divide-slate-800/80 text-slate-700 text-center font-medium">
               {overdueInsights.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-emerald-400 font-bold bg-slate-950/30 text-sm">
+                  <td colSpan={8} className="py-12 text-center text-emerald-400 font-bold bg-slate-50 text-sm">
                     🎉 Tidak ada dokumen SPJM, Hold Delivery, atau On Vessel yang melewati Tanggal ETA! Seluruh rantai pasok tepat waktu.
                   </td>
                 </tr>
@@ -1218,14 +1218,14 @@ export default function PRUpdatePage() {
                 const isSevere = item.overdueDays >= 14;
                 const isMod = item.overdueDays >= 7 && !isSevere;
                 return (
-                  <tr key={idx} className="hover:bg-slate-800/60 transition font-semibold">
-                    <td className="py-3 px-3 text-left font-extrabold text-white align-middle">
+                  <tr key={idx} className="hover:bg-slate-100 transition font-semibold">
+                    <td className="py-3 px-3 text-left font-extrabold text-slate-900 align-middle">
                       {item.cabang}
                     </td>
-                    <td className="py-3 px-3 border-l border-slate-800 font-mono font-bold text-amber-300 align-middle text-sm">
+                    <td className="py-3 px-3 border-l border-slate-200 font-mono font-bold text-amber-300 align-middle text-sm">
                       {item.po}
                     </td>
-                    <td className="py-3 px-3 border-l border-slate-800 align-middle">
+                    <td className="py-3 px-3 border-l border-slate-200 align-middle">
                       <span className={`px-2.5 py-1 rounded-lg text-xs font-black inline-block shadow-sm ${
                         item.statusCategory === 'SPJM' ? 'bg-purple-950/90 text-purple-300 border border-purple-500/50' :
                         item.statusCategory === 'HOLD' ? 'bg-rose-950/90 text-rose-300 border border-rose-500/50' :
@@ -1234,28 +1234,28 @@ export default function PRUpdatePage() {
                         {item.status}
                       </span>
                     </td>
-                    <td className="py-3 px-3 border-l border-slate-800 font-mono text-cyan-300 align-middle font-bold">
+                    <td className="py-3 px-3 border-l border-slate-200 font-mono text-cyan-300 align-middle font-bold">
                       {item.etaFormatted}
                     </td>
-                    <td className="py-3 px-3 border-l border-slate-800 bg-rose-950/30 align-middle">
+                    <td className="py-3 px-3 border-l border-slate-200 bg-rose-950/30 align-middle">
                       <span className={`px-3 py-1 rounded-full text-xs font-black inline-flex items-center gap-1.5 shadow-md border ${
-                        isSevere ? 'bg-rose-600 text-white border-rose-400 animate-pulse' :
-                        isMod ? 'bg-orange-500 text-white border-orange-300' :
+                        isSevere ? 'bg-rose-600 text-slate-900 border-rose-400 animate-pulse' :
+                        isMod ? 'bg-orange-500 text-slate-900 border-orange-300' :
                         'bg-amber-500/30 text-amber-300 border-amber-500/50'
                       }`}>
                         <Timer className="w-3.5 h-3.5 shrink-0" />
                         Terlewat {item.overdueDays} Hari
                       </span>
                     </td>
-                    <td className="py-3 px-3 border-l border-slate-800 text-left align-middle max-w-[240px]">
-                      <div className="font-bold text-slate-100 truncate text-xs" title={item.deskripsi}>{item.deskripsi}</div>
+                    <td className="py-3 px-3 border-l border-slate-200 text-left align-middle max-w-[240px]">
+                      <div className="font-bold text-slate-900 truncate text-xs" title={item.deskripsi}>{item.deskripsi}</div>
                       <div className="text-[11px] text-purple-300 font-mono mt-0.5 truncate">{item.grup} • {item.category}</div>
                     </td>
-                    <td className="py-3 px-3 border-l border-slate-800 font-mono font-black text-emerald-400 text-base align-middle">
+                    <td className="py-3 px-3 border-l border-slate-200 font-mono font-black text-emerald-400 text-base align-middle">
                       {item.qty.toLocaleString('id-ID')}
                     </td>
-                    <td className="py-3 px-3 border-l border-slate-800 align-middle">
-                      <div className="text-[11px] font-extrabold px-2.5 py-1 rounded-lg bg-slate-800 text-slate-200 border border-slate-700 shadow-sm inline-block">
+                    <td className="py-3 px-3 border-l border-slate-200 align-middle">
+                      <div className="text-[11px] font-extrabold px-2.5 py-1 rounded-lg bg-slate-100 text-slate-800 border border-slate-200 shadow-sm inline-block">
                         {item.statusCategory === 'SPJM' ? '🚛 Desak Trucking Port' :
                          item.statusCategory === 'HOLD' ? '📞 Eskalasi Vendor/Port' :
                          '⚓ Cek Sandar / Bea Cukai'}
@@ -1270,11 +1270,11 @@ export default function PRUpdatePage() {
       </GlassCard>
 
       {/* ─── TABEL COMPLEMENTARY: ANALISIS KOMPARATIF PR & STATUS COMPILE (CABANG - PO - GRUP - CATEGORY - DESCRIPTION) ─── */}
-      <GlassCard className="p-6 border-slate-800 bg-slate-900/80 shadow-2xl overflow-hidden">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-slate-800 pb-4 mb-6 gap-4">
+      <GlassCard className="p-6 border-slate-200 bg-white shadow-2xl overflow-hidden">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-slate-200 pb-4 mb-6 gap-4">
           <div>
             <div className="flex items-center gap-3">
-              <h3 className="text-lg font-bold text-white flex items-center gap-2.5">
+              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2.5">
                 <FileSpreadsheet className="w-5 h-5 text-purple-400" />
                 Tabel Analisis Komparatif PR & Status Compile ({pivotData.length} Kombinasi Item)
               </h3>
@@ -1283,7 +1283,7 @@ export default function PRUpdatePage() {
                 className={`px-3 py-1 rounded-xl text-xs font-extrabold transition flex items-center gap-1.5 border shadow-md ${
                   onlyCrucialStatus
                     ? 'bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-300 border-amber-500/50'
-                    : 'bg-slate-800/80 text-slate-300 border-slate-600 hover:bg-slate-700'
+                    : 'bg-slate-100 text-slate-700 border-slate-600 hover:bg-slate-700'
                 }`}
                 title="Klik untuk mengubah filter status"
               >
@@ -1291,38 +1291,38 @@ export default function PRUpdatePage() {
                 <span>{onlyCrucialStatus ? '🎯 Khusus: On Vessel • Hold • SPJM' : '📋 Semua Status Compile'}</span>
               </button>
             </div>
-            <p className="text-xs text-slate-400 mt-1">
+            <p className="text-xs text-slate-600 mt-1">
               Diurutkan rapi berdasarkan: <b className="text-amber-300">Cabang (A-Z) ➔ No PO (A-Z)</b>. Menampilkan kuota dan zonasi tindak lanjut supply chain.
             </p>
           </div>
 
           <button
             onClick={handleExport}
-            className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-purple-600/20 shrink-0"
+            className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-slate-900 font-semibold text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-purple-600/20 shrink-0"
           >
             <Download className="w-4 h-4" /> Ekspor Hasil ke Excel / CSV
           </button>
         </div>
 
-        <div className="overflow-x-auto rounded-xl border border-slate-800 max-h-[600px] overflow-y-auto">
+        <div className="overflow-x-auto rounded-xl border border-slate-200 max-h-[600px] overflow-y-auto">
           <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[1100px]">
-            <thead className="bg-slate-950/90 text-slate-300 uppercase font-bold sticky top-0 z-20 shadow-md">
-              <tr className="border-b border-slate-800 text-[11px] tracking-wider text-center">
+            <thead className="bg-slate-50 text-slate-700 uppercase font-bold sticky top-0 z-20 shadow-md">
+              <tr className="border-b border-slate-200 text-[11px] tracking-wider text-center">
                 <th className="py-3.5 px-4 text-left">Cabang</th>
-                <th className="py-3.5 px-3 border-l border-slate-800 text-amber-400">No. PO</th>
-                <th className="py-3.5 px-4 border-l border-slate-800 text-left">Grup & Kategori</th>
-                <th className="py-3.5 px-4 border-l border-slate-800 text-left">Deskripsi Barang</th>
-                <th className="py-3.5 px-3 border-l border-slate-800 text-purple-400">Status Compile</th>
-                <th className="py-3.5 px-3 border-l border-slate-800 text-cyan-400">Week ETA</th>
-                <th className="py-3.5 px-4 border-l border-slate-800 text-emerald-400">Total Qty</th>
-                <th className="py-3.5 px-3 border-l border-slate-800 bg-slate-800 text-white">Jumlah Dokumen</th>
-                <th className="py-3.5 px-4 border-l border-slate-800">Zonasi Tindakan</th>
+                <th className="py-3.5 px-3 border-l border-slate-200 text-amber-400">No. PO</th>
+                <th className="py-3.5 px-4 border-l border-slate-200 text-left">Grup & Kategori</th>
+                <th className="py-3.5 px-4 border-l border-slate-200 text-left">Deskripsi Barang</th>
+                <th className="py-3.5 px-3 border-l border-slate-200 text-purple-400">Status Compile</th>
+                <th className="py-3.5 px-3 border-l border-slate-200 text-cyan-400">Week ETA</th>
+                <th className="py-3.5 px-4 border-l border-slate-200 text-emerald-400">Total Qty</th>
+                <th className="py-3.5 px-3 border-l border-slate-200 bg-slate-100 text-slate-900">Jumlah Dokumen</th>
+                <th className="py-3.5 px-4 border-l border-slate-200">Zonasi Tindakan</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/80 text-slate-300 text-center">
+            <tbody className="divide-y divide-slate-800/80 text-slate-700 text-center">
               {pivotData.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-12 text-center text-slate-400 font-medium">
+                  <td colSpan={9} className="py-12 text-center text-slate-600 font-medium">
                     Tidak ada item yang memenuhi kriteria filter. Cobalah nonaktifkan filter status krusial atau perluas filter cabang/ETA.
                   </td>
                 </tr>
@@ -1336,23 +1336,23 @@ export default function PRUpdatePage() {
                 return (
                   <tr
                     key={idx}
-                    className="hover:bg-slate-800/40 transition cursor-pointer font-medium"
+                    className="hover:bg-slate-100 transition cursor-pointer font-medium"
                     onClick={() => setSelectedCabangForChart(row['Cabang'] === selectedCabangForChart ? 'All' : row['Cabang'])}
                   >
-                    <td className="py-3 px-4 text-left font-bold text-white align-middle">
+                    <td className="py-3 px-4 text-left font-bold text-slate-900 align-middle">
                       {row['Cabang']}
                     </td>
-                    <td className="py-3 px-3 border-l border-slate-800 font-mono font-bold text-amber-300 align-middle">
+                    <td className="py-3 px-3 border-l border-slate-200 font-mono font-bold text-amber-300 align-middle">
                       {row['PO']}
                     </td>
-                    <td className="py-3 px-4 border-l border-slate-800 text-left align-middle">
-                      <div className="font-semibold text-slate-200 text-xs">{row['Grup']}</div>
+                    <td className="py-3 px-4 border-l border-slate-200 text-left align-middle">
+                      <div className="font-semibold text-slate-800 text-xs">{row['Grup']}</div>
                       <div className="text-[11px] text-purple-300 mt-0.5 font-mono">{row['Category']}</div>
                     </td>
-                    <td className="py-3 px-4 border-l border-slate-800 text-left text-slate-300 max-w-[220px] truncate align-middle" title={row['Deskripsi']}>
+                    <td className="py-3 px-4 border-l border-slate-200 text-left text-slate-700 max-w-[220px] truncate align-middle" title={row['Deskripsi']}>
                       {row['Deskripsi']}
                     </td>
-                    <td className="py-3 px-3 border-l border-slate-800 font-extrabold text-slate-200 align-middle">
+                    <td className="py-3 px-3 border-l border-slate-200 font-extrabold text-slate-800 align-middle">
                       <span className={`px-2 py-1 rounded-lg text-xs font-bold inline-block ${
                         isHold ? 'bg-rose-950/60 text-rose-300 border border-rose-500/30' :
                         isSpjm ? 'bg-purple-950/60 text-purple-300 border border-purple-500/30' :
@@ -1361,16 +1361,16 @@ export default function PRUpdatePage() {
                         {row['Status']}
                       </span>
                     </td>
-                    <td className="py-3 px-3 border-l border-slate-800 font-mono font-bold text-cyan-300 align-middle">
+                    <td className="py-3 px-3 border-l border-slate-200 font-mono font-bold text-cyan-300 align-middle">
                       {row['ETA']}
                     </td>
-                    <td className="py-3 px-4 border-l border-slate-800 font-mono font-black text-emerald-400 text-base align-middle">
+                    <td className="py-3 px-4 border-l border-slate-200 font-mono font-black text-emerald-400 text-base align-middle">
                       {Number(row['Total Qty']).toLocaleString('id-ID')}
                     </td>
-                    <td className="py-3 px-3 border-l border-slate-800 bg-slate-950/50 font-bold font-mono text-white text-base align-middle">
+                    <td className="py-3 px-3 border-l border-slate-200 bg-slate-50 font-bold font-mono text-slate-900 text-base align-middle">
                       {Number(row['Jumlah Dokumen']).toLocaleString('id-ID')}
                     </td>
-                    <td className="py-3 px-4 border-l border-slate-800 align-middle">
+                    <td className="py-3 px-4 border-l border-slate-200 align-middle">
                       <span className={`px-2.5 py-1 rounded-full text-[11px] font-black uppercase tracking-wider inline-block ${
                         isHold ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40 animate-pulse' :
                         isSpjm ? 'bg-purple-500/20 text-purple-400 border border-purple-500/40 shadow-sm' :
@@ -1388,7 +1388,7 @@ export default function PRUpdatePage() {
           </table>
         </div>
         {pivotData.length > 150 && (
-          <p className="text-xs text-slate-400 mt-4 italic text-center">
+          <p className="text-xs text-slate-600 mt-4 italic text-center">
             *Menampilkan 150 baris pertama dengan Qty terbesar dari total {pivotData.length} kombinasi item...
           </p>
         )}
@@ -1396,11 +1396,11 @@ export default function PRUpdatePage() {
 
       {/* ─── TABEL DETAIL PR UPDATE & LIVE TRACKING CONTAINER (DENGAN EXCEL-STYLE COLUMN FILTER) ─── */}
       {parsed && parsed.headers && (
-        <GlassCard className="p-6 border-slate-800 bg-slate-900/80 shadow-2xl overflow-hidden">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-slate-800 pb-4 mb-6 gap-4">
+        <GlassCard className="p-6 border-slate-200 bg-white shadow-2xl overflow-hidden">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-slate-200 pb-4 mb-6 gap-4">
             <div>
               <div className="flex items-center gap-3">
-                <h3 className="text-lg font-bold text-white flex items-center gap-2.5">
+                <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2.5">
                   <Globe className="w-5 h-5 text-sky-400" />
                   Tabel Detail PR & Live Tracking Container ({displayedDetailRows.length} dari {filtered.length} Dokumen)
                 </h3>
@@ -1413,14 +1413,14 @@ export default function PRUpdatePage() {
                   </button>
                 )}
               </div>
-              <p className="text-xs text-slate-400 mt-1">
+              <p className="text-xs text-slate-600 mt-1">
                 Dilengkapi <b className="text-emerald-400">Filter Kolom ala Excel</b> (klik ikon filter di setiap header untuk cari & pilih data) dan kolom <b className="text-teal-300">Shipping Line / Pelayarań</b>.
               </p>
             </div>
 
             <button
               onClick={handleExport}
-              className="px-5 py-2.5 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white font-semibold text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-sky-600/20 shrink-0"
+              className="px-5 py-2.5 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-slate-900 font-semibold text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-sky-600/20 shrink-0"
             >
               <Download className="w-4 h-4" /> Ekspor Data 13 Kolom ({displayedDetailRows.length} baris)
             </button>
@@ -1429,35 +1429,35 @@ export default function PRUpdatePage() {
           {/* Excel Filter Modal Popover */}
           {activeFilterModalCol && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
-              <div className="bg-slate-900 border border-slate-700 rounded-2xl p-5 max-w-sm w-full shadow-2xl text-slate-200">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
-                  <h4 className="font-bold text-sm text-white flex items-center gap-2">
+              <div className="bg-white border border-slate-200 rounded-2xl p-5 max-w-sm w-full shadow-2xl text-slate-800">
+                <div className="flex items-center justify-between border-b border-slate-200 pb-3 mb-4">
+                  <h4 className="font-bold text-sm text-slate-900 flex items-center gap-2">
                     <Filter className="w-4 h-4 text-emerald-400" /> Filter Kolom: <span className="text-emerald-400">{activeFilterModalCol}</span>
                   </h4>
-                  <button onClick={() => setActiveFilterModalCol(null)} className="text-slate-400 hover:text-white transition">
+                  <button onClick={() => setActiveFilterModalCol(null)} className="text-slate-600 hover:text-slate-900 transition">
                     <X className="w-5 h-5" />
                   </button>
                 </div>
 
                 <div className="space-y-4">
                   <div className="relative">
-                    <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+                    <Search className="w-4 h-4 absolute left-3 top-3 text-slate-600" />
                     <input
                       type="text"
                       value={modalSearchInput}
                       onChange={e => setModalSearchInput(e.target.value)}
                       placeholder={`Cari teks dalam ${activeFilterModalCol}...`}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-900 placeholder-slate-500 focus:outline-none focus:border-emerald-500"
                     />
                     {modalSearchInput && (
-                      <button onClick={() => setModalSearchInput('')} className="absolute right-3 top-2.5 text-slate-500 hover:text-white text-xs">
+                      <button onClick={() => setModalSearchInput('')} className="absolute right-3 top-2.5 text-slate-500 hover:text-slate-900 text-xs">
                         Hapus
                       </button>
                     )}
                   </div>
 
-                  <div className="max-h-48 overflow-y-auto border border-slate-800 rounded-xl bg-slate-950/50 p-2 space-y-1 text-xs">
-                    <div className="text-[11px] font-semibold text-slate-400 mb-1 px-1 flex justify-between">
+                  <div className="max-h-48 overflow-y-auto border border-slate-200 rounded-xl bg-slate-50 p-2 space-y-1 text-xs">
+                    <div className="text-[11px] font-semibold text-slate-600 mb-1 px-1 flex justify-between">
                       <span>Daftar Nilai Unik ({currentModalUniqueValues.length}):</span>
                     </div>
                     {currentModalUniqueValues.filter(val => !modalSearchInput || val.toLowerCase().includes(modalSearchInput.toLowerCase())).slice(0, 50).map((val, idx) => {
@@ -1465,7 +1465,7 @@ export default function PRUpdatePage() {
                       return (
                         <label
                           key={idx}
-                          className="flex items-center gap-2 py-1 px-2 rounded hover:bg-slate-800/60 cursor-pointer text-slate-300 truncate"
+                          className="flex items-center gap-2 py-1 px-2 rounded hover:bg-slate-100 cursor-pointer text-slate-700 truncate"
                           onClick={(e) => {
                             e.preventDefault();
                             const currentSel = colFilters[activeFilterModalCol]?.selected?.length
@@ -1480,7 +1480,7 @@ export default function PRUpdatePage() {
                             handleApplyModalFilter(currentSel);
                           }}
                         >
-                          <div className={`w-3.5 h-3.5 rounded flex items-center justify-center border ${isChecked ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-slate-600 bg-slate-900'}`}>
+                          <div className={`w-3.5 h-3.5 rounded flex items-center justify-center border ${isChecked ? 'bg-emerald-500 border-emerald-500 text-slate-900' : 'border-slate-600 bg-white'}`}>
                             {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
                           </div>
                           <span className="truncate">{val}</span>
@@ -1489,7 +1489,7 @@ export default function PRUpdatePage() {
                     })}
                   </div>
 
-                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
                     <button
                       onClick={() => {
                         setColFilters(prev => {
@@ -1501,13 +1501,13 @@ export default function PRUpdatePage() {
                         setModalSearchInput('');
                         toast.success(`Filter kolom ${activeFilterModalCol} dibersihkan.`);
                       }}
-                      className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition"
+                      className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-700 text-slate-700 text-xs font-semibold transition"
                     >
                       Reset Kolom Ini
                     </button>
                     <button
                       onClick={() => handleApplyModalFilter(colFilters[activeFilterModalCol]?.selected || [])}
-                      className="px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition shadow-lg shadow-emerald-600/20"
+                      className="px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-slate-900 text-xs font-bold transition shadow-lg shadow-emerald-600/20"
                     >
                       Terapkan Filter
                     </button>
@@ -1517,10 +1517,10 @@ export default function PRUpdatePage() {
             </div>
           )}
 
-          <div className="overflow-x-auto rounded-xl border border-slate-800 max-h-[580px] overflow-y-auto">
+          <div className="overflow-x-auto rounded-xl border border-slate-200 max-h-[580px] overflow-y-auto">
             <table className="w-full text-left text-xs border-collapse min-w-[1300px]">
-              <thead className="bg-slate-950/95 text-slate-300 uppercase font-bold sticky top-0 z-20 shadow-md">
-                <tr className="border-b border-slate-800 text-[11px] tracking-wider text-center">
+              <thead className="bg-slate-50 text-slate-700 uppercase font-bold sticky top-0 z-20 shadow-md">
+                <tr className="border-b border-slate-200 text-[11px] tracking-wider text-center">
                   {parsed.headers.map((h) => {
                     const isFiltered = colFilters[h]?.search || (colFilters[h]?.selected && colFilters[h]?.selected.length > 0);
                     const isShippingLine = h.toLowerCase().includes('shipping') || h.toLowerCase().includes('carrier') || h.toLowerCase().includes('pelayaran');
@@ -1529,7 +1529,7 @@ export default function PRUpdatePage() {
                     return (
                       <th
                         key={h}
-                        className={`py-3 px-3 border-l border-slate-800 whitespace-nowrap align-middle ${
+                        className={`py-3 px-3 border-l border-slate-200 whitespace-nowrap align-middle ${
                           isShippingLine ? 'text-teal-300 bg-teal-950/30' : isContainer ? 'text-sky-300 bg-sky-950/30' : ''
                         }`}
                       >
@@ -1541,7 +1541,7 @@ export default function PRUpdatePage() {
                               setModalSearchInput(colFilters[h]?.search || '');
                             }}
                             className={`p-1 rounded transition ${
-                              isFiltered ? 'bg-emerald-500 text-white shadow-sm ring-2 ring-emerald-400' : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                              isFiltered ? 'bg-emerald-500 text-slate-900 shadow-sm ring-2 ring-emerald-400' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                             }`}
                             title={`Filter Kolom ala Excel: ${h}`}
                           >
@@ -1556,13 +1556,13 @@ export default function PRUpdatePage() {
                       </th>
                     );
                   })}
-                  <th className="py-3 px-4 border-l border-slate-800 text-sky-400 bg-sky-950/50 align-middle">🛰️ Action Track</th>
+                  <th className="py-3 px-4 border-l border-slate-200 text-sky-400 bg-sky-950/50 align-middle">🛰️ Action Track</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/80 text-slate-300 text-center font-medium">
+              <tbody className="divide-y divide-slate-800/80 text-slate-700 text-center font-medium">
                 {displayedDetailRows.length === 0 ? (
                   <tr>
-                    <td colSpan={parsed.headers.length + 1} className="py-12 text-center text-slate-400 font-medium">
+                    <td colSpan={parsed.headers.length + 1} className="py-12 text-center text-slate-600 font-medium">
                       Tidak ada baris yang cocok dengan kombinasi filter kolom aktif. <span className="text-rose-400 underline cursor-pointer" onClick={() => setColFilters({})}>Klik di sini untuk mereset filter</span>.
                     </td>
                   </tr>
@@ -1573,7 +1573,7 @@ export default function PRUpdatePage() {
                   const trackInfo = hasCont ? getDirectTrackingUrl(contVal.trim(), carrierVal.trim()) : null;
 
                   return (
-                    <tr key={idx} className="hover:bg-slate-800/50 transition">
+                    <tr key={idx} className="hover:bg-slate-100 transition">
                       {parsed.headers.map((h) => {
                         let val = row[h];
                         const isShippingLine = h.toLowerCase().includes('shipping') || h.toLowerCase().includes('carrier') || h.toLowerCase().includes('pelayaran') || h === colCarrier;
@@ -1597,29 +1597,29 @@ export default function PRUpdatePage() {
                         return (
                           <td
                             key={h}
-                            className={`py-2.5 px-3 border-l border-slate-800 whitespace-nowrap ${
+                            className={`py-2.5 px-3 border-l border-slate-200 whitespace-nowrap ${
                               h === colContainer && hasCont ? 'font-mono font-bold text-sky-300' : 
                               isShippingLine ? 'font-semibold text-teal-300' : 
                               isBl ? 'font-mono text-purple-300 font-medium' : 
-                              h === colCabang || h.toLowerCase().includes('branch') || h.toLowerCase().includes('cabang') ? 'font-bold text-slate-200' : ''
+                              h === colCabang || h.toLowerCase().includes('branch') || h.toLowerCase().includes('cabang') ? 'font-bold text-slate-800' : ''
                             }`}
                           >
                             {h === colContainer && hasCont && trackInfo && trackInfo.url ? (
-                              <a href={trackInfo.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 hover:underline hover:text-white transition group font-bold" title={`Lacak ${val} di ${trackInfo.carrier}`}>
+                              <a href={trackInfo.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 hover:underline hover:text-slate-900 transition group font-bold" title={`Lacak ${val} di ${trackInfo.carrier}`}>
                                 <span>{val}</span>
-                                <ExternalLink className="w-3 h-3 text-sky-400 group-hover:text-white inline ml-0.5 shrink-0" />
+                                <ExternalLink className="w-3 h-3 text-sky-400 group-hover:text-slate-900 inline ml-0.5 shrink-0" />
                               </a>
                             ) : (val !== undefined && val !== null && val !== '' ? val : '-')}
                           </td>
                         );
                       })}
-                      <td className="py-2 px-4 border-l border-slate-800 bg-slate-950/30 whitespace-nowrap">
+                      <td className="py-2 px-4 border-l border-slate-200 bg-slate-50 whitespace-nowrap">
                         {hasCont && trackInfo && trackInfo.url ? (
                           <a
                             href={trackInfo.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 hover:text-white border border-sky-500/40 font-bold transition shadow-sm"
+                            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 hover:text-slate-900 border border-sky-500/40 font-bold transition shadow-sm"
                             title={`Lacak ${contVal} via ${trackInfo.carrier}`}
                           >
                             <span>Lacak ({trackInfo.carrier.split(' ')[0]})</span>
@@ -1636,7 +1636,7 @@ export default function PRUpdatePage() {
             </table>
           </div>
           {displayedDetailRows.length > 150 && (
-            <p className="text-xs text-slate-400 mt-4 italic text-center">
+            <p className="text-xs text-slate-600 mt-4 italic text-center">
               * Menampilkan 150 baris pertama dari total {displayedDetailRows.length} dokumen pesanan yang tersaring...
             </p>
           )}

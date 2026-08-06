@@ -461,7 +461,7 @@ export default function DashboardOverview() {
         {hasAnyData && (
           <div className="flex flex-col sm:flex-row sm:items-center gap-4 relative z-[100]">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">🏢 Filter Cabang:</span>
+              <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">🏢 Filter Cabang:</span>
               <MultiSelect
                 options={allCabangs}
                 selected={globalCabang}
@@ -470,7 +470,7 @@ export default function DashboardOverview() {
                 placeholder="Pilih Cabang..."
               />
             </div>
-            <button onClick={handleExport} className="px-5 py-2.5 bg-slate-800 text-slate-100 border border-slate-700 rounded-xl hover:border-sky-500 hover:bg-slate-700 transition text-sm font-bold flex items-center gap-2 shadow-md">
+            <button onClick={handleExport} className="px-5 py-2.5 bg-slate-100 text-slate-900 border border-slate-200 rounded-xl hover:border-sky-500 hover:bg-slate-700 transition text-sm font-bold flex items-center gap-2 shadow-md">
               <Download className="w-4 h-4 text-sky-400" /> Export Dashboard
             </button>
           </div>

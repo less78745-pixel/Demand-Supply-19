@@ -213,10 +213,10 @@ export default function DDMRPPage() {
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20 uppercase tracking-widest">
               <Layers className="w-3.5 h-3.5" /> Kalkulator DSP • Demand Driven MRP (Phase 1)
             </div>
-            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white flex items-center gap-3">
+            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-slate-900 flex items-center gap-3">
               DDMRP — <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-cyan-300 to-indigo-300">Demand Driven MRP</span>
             </h1>
-            <p className="text-slate-300 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
+            <p className="text-slate-700 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
               Buffer positioning & replenishment cerdas berbasis Net Flow Position. Mencegah bullwhip effect melalui penempatan buffer inventaris strategis (Red, Yellow, Green).
             </p>
           </div>
@@ -236,26 +236,26 @@ export default function DDMRPPage() {
 
       {/* ─── PANDUAN & DEMO DATA SECTION ─── */}
       {showHowTo && (
-        <GlassCard className="p-6 border-blue-500/30 bg-slate-900/80 backdrop-blur-xl animate-fade-in">
-          <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-6">
-            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+        <GlassCard className="p-6 border-blue-500/30 bg-white backdrop-blur-xl animate-fade-in">
+          <div className="flex items-center justify-between border-b border-slate-200 pb-4 mb-6">
+            <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
               <FileSpreadsheet className="w-5 h-5 text-blue-400" /> Panduan Upload & Rumus DDMRP
             </h3>
             <div className="flex flex-wrap gap-2">
               <button
                 onClick={handleGenerateDemo}
-                className="px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-blue-500/20"
+                className="px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-slate-900 font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-blue-500/20"
               >
                 <Cpu className="w-4 h-4" /> Gunakan Data Demo
               </button>
             </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm text-slate-300">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm text-slate-700">
             <div>
-              <h4 className="font-semibold text-white mb-2">📌 Skema Kolom Upload File:</h4>
-              <ul className="grid grid-cols-2 gap-2 text-xs text-slate-300">
+              <h4 className="font-semibold text-slate-900 mb-2">📌 Skema Kolom Upload File:</h4>
+              <ul className="grid grid-cols-2 gap-2 text-xs text-slate-700">
                 {['Bulan','Deskripsi','Cabang','Kategori','Penjualan','Lead Time (Hari)','MOQ','Order Cycle (Hari)','On-Hand','On-Order','Qualified Demand'].map(col => (
-                  <li key={col} className="flex items-center gap-2 font-mono bg-white/5 p-2 rounded border border-white/10">
+                  <li key={col} className="flex items-center gap-2 font-mono bg-white/5 p-2 rounded border border-slate-200">
                     <div className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />
                     <span>{col}</span>
                   </li>
@@ -263,8 +263,8 @@ export default function DDMRPPage() {
               </ul>
             </div>
             <div className="space-y-3">
-              <h4 className="font-semibold text-white">⚙️ Net Flow Position & Buffer Sizing:</h4>
-              <p className="text-xs text-slate-400 leading-relaxed">
+              <h4 className="font-semibold text-slate-900">⚙️ Net Flow Position & Buffer Sizing:</h4>
+              <p className="text-xs text-slate-600 leading-relaxed">
                 Persamaan Net Flow (<code>On-Hand + On-Order - Qualified Demand</code>) menentukan status pemesanan. Bila turun ke zona Merah atau Kuning, sistem menghasilkan rekomendasi order kuantitas cerdas.
               </p>
               <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl text-xs text-blue-300 flex items-center gap-2">
@@ -282,7 +282,7 @@ export default function DDMRPPage() {
           <h2 className="text-sm font-bold uppercase tracking-wider text-blue-400 flex items-center gap-2">
             <Cpu className="w-4 h-4" /> Pilih 3 Jalur Evaluasi & Simulasi Stress-Test Buffer:
           </h2>
-          <span className="text-xs text-slate-400 italic hidden sm:inline">Klik tab untuk memproyeksikan lonjakan ADU atau delay lead time!</span>
+          <span className="text-xs text-slate-600 italic hidden sm:inline">Klik tab untuk memproyeksikan lonjakan ADU atau delay lead time!</span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -298,22 +298,22 @@ export default function DDMRPPage() {
                 }}
                 className={`relative group p-4 sm:p-5 rounded-2xl transition-all duration-300 text-left border overflow-hidden shadow-lg ${
                   isSelected
-                    ? `bg-gradient-to-br ${sc.color} text-white border-transparent ring-2 ring-white/20 shadow-blue-500/25 scale-[1.02]`
-                    : 'bg-slate-900/70 hover:bg-slate-800/80 text-slate-300 border-slate-700 hover:border-slate-600'
+                    ? `bg-gradient-to-br ${sc.color} text-slate-900 border-transparent ring-2 ring-white/20 shadow-blue-500/25 scale-[1.02]`
+                    : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 hover:border-slate-600'
                 }`}
               >
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-bold text-base tracking-wide flex items-center gap-2.5">
-                    <Icon className={`w-5 h-5 ${isSelected ? 'text-white' : 'text-blue-400'}`} />
+                    <Icon className={`w-5 h-5 ${isSelected ? 'text-slate-900' : 'text-blue-400'}`} />
                     {sc.title}
                   </span>
                   {isSelected && (
-                    <span className="px-2 py-0.5 rounded-full bg-white/20 text-white text-xs font-black uppercase tracking-wider">
+                    <span className="px-2 py-0.5 rounded-full bg-white/20 text-slate-900 text-xs font-black uppercase tracking-wider">
                       Aktif
                     </span>
                   )}
                 </div>
-                <p className={`text-xs sm:text-sm leading-relaxed ${isSelected ? 'text-slate-100 font-medium' : 'text-slate-400'}`}>
+                <p className={`text-xs sm:text-sm leading-relaxed ${isSelected ? 'text-slate-900 font-medium' : 'text-slate-600'}`}>
                   {sc.desc}
                 </p>
               </button>
@@ -469,10 +469,10 @@ export default function DDMRPPage() {
         <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500 mt-10">
           
           {/* Summary & Filters (Expanded & Overflow Visible) */}
-          <GlassCard allowOverflow={true} className="mb-12 p-6 border-slate-800 bg-slate-900/90 shadow-xl relative z-30">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 border-b border-slate-800 pb-5">
+          <GlassCard allowOverflow={true} className="mb-12 p-6 border-slate-200 bg-white shadow-xl relative z-30">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 border-b border-slate-200 pb-5">
               <div className="flex flex-wrap items-center gap-3">
-                <h2 className="text-xl font-bold tracking-tight flex items-center gap-2 text-white">
+                <h2 className="text-xl font-bold tracking-tight flex items-center gap-2 text-slate-900">
                   <BarChart3 className="w-6 h-6 text-sky-400" />
                   Ringkasan Analisis DDMRP
                 </h2>
@@ -496,7 +496,7 @@ export default function DDMRPPage() {
                   }));
                   exportToExcel(exportData, 'DDMRP_Buffer', 'Buffer', results?.processed_at || new Date().toISOString());
                 }}
-                className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-md"
+                className="bg-emerald-600 hover:bg-emerald-500 text-slate-900 px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-md"
               >
                 <FileSpreadsheet className="w-4 h-4" /> Export to Excel
               </button>
@@ -505,7 +505,7 @@ export default function DDMRPPage() {
             {results.results && (
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 pt-2">
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-300 mb-1 block uppercase tracking-wider">🏢 Filter Cabang:</label>
+                  <label className="text-xs font-bold text-slate-700 mb-1 block uppercase tracking-wider">🏢 Filter Cabang:</label>
                   <MultiSelect
                     options={['All', ...Array.from(new Set(results.results.map((r: any) => r.cabang || 'All'))).filter(x => x !== 'All') as string[]]}
                     selected={filterCabang}
@@ -516,7 +516,7 @@ export default function DDMRPPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-300 mb-1 block uppercase tracking-wider">📦 Filter Kategori:</label>
+                  <label className="text-xs font-bold text-slate-700 mb-1 block uppercase tracking-wider">📦 Filter Kategori:</label>
                   <MultiSelect
                     options={['All', ...Array.from(new Set(results.results.map((r: any) => r.kategori || 'All'))).filter(x => x !== 'All') as string[]]}
                     selected={filterKategori}
@@ -527,7 +527,7 @@ export default function DDMRPPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-300 mb-1 block uppercase tracking-wider">🔍 Cari SKU Item:</label>
+                  <label className="text-xs font-bold text-slate-700 mb-1 block uppercase tracking-wider">🔍 Cari SKU Item:</label>
                   <MultiSelect
                     options={['All', ...results.results
                       .filter((r: any) => 

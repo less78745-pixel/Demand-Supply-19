@@ -373,10 +373,10 @@ export default function ForecastPage() {
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-purple-500/10 text-purple-400 border border-purple-500/20 uppercase tracking-widest">
               <BrainCircuit className="w-3.5 h-3.5" /> Kalkulator DSP • ML & AI Forecasting
             </div>
-            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white flex items-center gap-3">
+            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-slate-900 flex items-center gap-3">
               Advanced Causal <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-pink-300 to-indigo-300">Sales Forecasting</span>
             </h1>
-            <p className="text-slate-300 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
+            <p className="text-slate-700 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
               Peramalan permintaan hierarkis memadukan tren historis dengan variabel eksogen (AO, RO, Drop Size, NOO) menggunakan 15 algoritma Machine Learning modern.
             </p>
           </div>
@@ -396,26 +396,26 @@ export default function ForecastPage() {
 
       {/* ─── PANDUAN & DEMO DATA SECTION ─── */}
       {showHowTo && (
-        <GlassCard className="p-6 border-purple-500/30 bg-slate-900/80 backdrop-blur-xl animate-fade-in">
-          <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-6">
-            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+        <GlassCard className="p-6 border-purple-500/30 bg-white backdrop-blur-xl animate-fade-in">
+          <div className="flex items-center justify-between border-b border-slate-200 pb-4 mb-6">
+            <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
               <FileSpreadsheet className="w-5 h-5 text-purple-400" /> Panduan Upload & Skema Exogenous Variables
             </h3>
             <div className="flex flex-wrap gap-2">
               <button
                 onClick={handleGenerateDemo}
-                className="px-4 py-2 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-purple-500/20"
+                className="px-4 py-2 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-slate-900 font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-purple-500/20"
               >
                 <Zap className="w-4 h-4" /> Gunakan Data Demo
               </button>
             </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm text-slate-300">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm text-slate-700">
             <div>
-              <h4 className="font-semibold text-white mb-2">📌 Skema Kolom Diperlukan:</h4>
-              <ul className="grid grid-cols-2 gap-2 text-xs text-slate-300">
+              <h4 className="font-semibold text-slate-900 mb-2">📌 Skema Kolom Diperlukan:</h4>
+              <ul className="grid grid-cols-2 gap-2 text-xs text-slate-700">
                 {['Bulan','Deskripsi','Cabang','Kategori','Penjualan','AO (Active Outlet)','RO (Repeat Outlet)','Rerata Drop Size','NOO (New Outlet)'].map(col => (
-                  <li key={col} className="flex items-center gap-2 font-mono bg-white/5 p-2 rounded border border-white/10">
+                  <li key={col} className="flex items-center gap-2 font-mono bg-white/5 p-2 rounded border border-slate-200">
                     <div className="w-1.5 h-1.5 rounded-full bg-purple-400 shrink-0" />
                     <span>{col}</span>
                   </li>
@@ -423,8 +423,8 @@ export default function ForecastPage() {
               </ul>
             </div>
             <div className="space-y-3">
-              <h4 className="font-semibold text-white">⚙️ Auto-ML Pipeline & Covariates Optimization:</h4>
-              <p className="text-xs text-slate-400 leading-relaxed">
+              <h4 className="font-semibold text-slate-900">⚙️ Auto-ML Pipeline & Covariates Optimization:</h4>
+              <p className="text-xs text-slate-600 leading-relaxed">
                 Sistem mengevaluasi model stabil (SMA, SES) hingga model Machine Learning & Deep Learning (XGBoost, ARIMAX, Prophet, BiLSTM-Hybrid). Variabel eksogen (AO, RO, NOO) digunakan sebagai *causal booster* untuk akurasi optimal.
               </p>
               <div className="p-3 bg-purple-500/10 border border-purple-500/20 rounded-xl text-xs text-purple-300 flex items-center gap-2">
@@ -442,7 +442,7 @@ export default function ForecastPage() {
           <h2 className="text-sm font-bold uppercase tracking-wider text-purple-400 flex items-center gap-2">
             <Zap className="w-4 h-4" /> Pilih 3 Jalur Simulasi & Uji Sensitivitas Permintaan:
           </h2>
-          <span className="text-xs text-slate-400 italic hidden sm:inline">Klik tab untuk memproyeksikan lonjakan promosi atau kontraksi pasar!</span>
+          <span className="text-xs text-slate-600 italic hidden sm:inline">Klik tab untuk memproyeksikan lonjakan promosi atau kontraksi pasar!</span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -458,22 +458,22 @@ export default function ForecastPage() {
                 }}
                 className={`relative group p-4 sm:p-5 rounded-2xl transition-all duration-300 text-left border overflow-hidden shadow-lg ${
                   isSelected
-                    ? `bg-gradient-to-br ${sc.color} text-white border-transparent ring-2 ring-white/20 shadow-purple-500/25 scale-[1.02]`
-                    : 'bg-slate-900/70 hover:bg-slate-800/80 text-slate-300 border-slate-700 hover:border-slate-600'
+                    ? `bg-gradient-to-br ${sc.color} text-slate-900 border-transparent ring-2 ring-white/20 shadow-purple-500/25 scale-[1.02]`
+                    : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 hover:border-slate-600'
                 }`}
               >
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-bold text-base tracking-wide flex items-center gap-2.5">
-                    <Icon className={`w-5 h-5 ${isSelected ? 'text-white' : 'text-purple-400'}`} />
+                    <Icon className={`w-5 h-5 ${isSelected ? 'text-slate-900' : 'text-purple-400'}`} />
                     {sc.title}
                   </span>
                   {isSelected && (
-                    <span className="px-2 py-0.5 rounded-full bg-white/20 text-white text-xs font-black uppercase tracking-wider">
+                    <span className="px-2 py-0.5 rounded-full bg-white/20 text-slate-900 text-xs font-black uppercase tracking-wider">
                       Aktif
                     </span>
                   )}
                 </div>
-                <p className={`text-xs sm:text-sm leading-relaxed ${isSelected ? 'text-slate-100 font-medium' : 'text-slate-400'}`}>
+                <p className={`text-xs sm:text-sm leading-relaxed ${isSelected ? 'text-slate-900 font-medium' : 'text-slate-600'}`}>
                   {sc.desc}
                 </p>
               </button>
@@ -483,7 +483,7 @@ export default function ForecastPage() {
       </div>
 
       {/* ─── UPLOAD BOX WHEN RESULTS PRESENT OR HIDDEN ─── */}
-      <GlassCard className="p-4 bg-slate-900/40 border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <GlassCard className="p-4 bg-white border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="flex-1 w-full">
           <FileUploader
             onFileUpload={handleFileUpload}
@@ -498,10 +498,10 @@ export default function ForecastPage() {
             description="File Excel atau CSV: Bulan, Deskripsi, Cabang, Kategori, Penjualan, AO, RO, Drop Size, NOO."
           />
         </div>
-        <div className="sm:border-l border-slate-800 sm:pl-4 flex flex-col justify-center items-center shrink-0">
+        <div className="sm:border-l border-slate-200 sm:pl-4 flex flex-col justify-center items-center shrink-0">
           <button
             onClick={handleGenerateDemo}
-            className="w-full sm:w-auto px-5 py-3 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg transition flex items-center justify-center gap-2 text-sm"
+            className="w-full sm:w-auto px-5 py-3 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-slate-900 font-bold rounded-xl shadow-lg transition flex items-center justify-center gap-2 text-sm"
           >
             <Zap className="w-4 h-4" /> Gunakan Data Demo
           </button>
@@ -523,13 +523,13 @@ export default function ForecastPage() {
             <KPICard title="Total Datapoints" value={filteredData.length} icon={<Target />} />
           </div>
 
-          <GlassCard allowOverflow={true} className="mb-10 p-6 bg-slate-900/90 border-slate-800 shadow-xl relative z-30">
-            <div className="flex flex-col lg:flex-row justify-between lg:items-center mb-6 gap-6 border-b border-slate-800 pb-6">
+          <GlassCard allowOverflow={true} className="mb-10 p-6 bg-white border-slate-200 shadow-xl relative z-30">
+            <div className="flex flex-col lg:flex-row justify-between lg:items-center mb-6 gap-6 border-b border-slate-200 pb-6">
               <div className="flex-1">
                 <h3 className="text-lg font-bold text-foreground uppercase tracking-wide">Actual vs Forecast</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4 max-w-3xl">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block">🏢 Filter Cabang:</label>
+                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">🏢 Filter Cabang:</label>
                     <MultiSelect
                       options={cabangs}
                       selected={selectedCabang}
@@ -539,7 +539,7 @@ export default function ForecastPage() {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block">📦 Filter Kategori:</label>
+                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">📦 Filter Kategori:</label>
                     <MultiSelect
                       options={categories}
                       selected={selectedCategory}
@@ -549,11 +549,11 @@ export default function ForecastPage() {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block">⚙️ Metode Prediksi:</label>
+                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">⚙️ Metode Prediksi:</label>
                     <select 
                       value={selectedMethod} 
                       onChange={e => setSelectedMethod(e.target.value)} 
-                      className="w-full min-h-[44px] rounded-xl border border-slate-700 bg-slate-950/90 px-3.5 py-2.5 text-sm text-sky-300 font-bold focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30 transition shadow-md"
+                      className="w-full min-h-[44px] rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm text-sky-300 font-bold focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30 transition shadow-md"
                     >
                       {results.available_methods.map((m:string) => <option key={m} value={m}>{m}</option>)}
                     </select>
@@ -562,7 +562,7 @@ export default function ForecastPage() {
               </div>
               <div className="flex gap-3 shrink-0 mt-4 lg:mt-0">
                 <button onClick={handleExport}
-                  className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white border border-emerald-500 rounded-xl hover:from-emerald-500 hover:to-teal-500 transition text-sm flex items-center gap-2 font-extrabold shadow-lg shadow-emerald-500/20">
+                  className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-slate-900 border border-emerald-500 rounded-xl hover:from-emerald-500 hover:to-teal-500 transition text-sm flex items-center gap-2 font-extrabold shadow-lg shadow-emerald-500/20">
                   <FileSpreadsheet className="w-4 h-4 text-emerald-200" /> Export Excel (3 Sheet)
                 </button>
               </div>

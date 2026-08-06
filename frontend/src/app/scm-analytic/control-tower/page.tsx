@@ -260,10 +260,10 @@ export default function ControlTowerPage() {
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 uppercase tracking-widest">
               <Radar className="w-3.5 h-3.5" /> SCM Analytic • Executive Supply Chain Surveillance
             </div>
-            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white flex items-center gap-3">
+            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-slate-900 flex items-center gap-3">
               SCM Control <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-blue-300 to-cyan-300">Tower</span>
             </h1>
-            <p className="text-slate-300 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
+            <p className="text-slate-700 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
               Dashboard eksekutif terpadu untuk memantau health score supply chain 28 kantor cabang secara real-time, mendeteksi krisis stok cepat, serta merekomendasikan aksi mitigasi mingguan.
             </p>
           </div>
@@ -283,26 +283,26 @@ export default function ControlTowerPage() {
 
       {/* ─── PANDUAN & DEMO DATA SECTION ─── */}
       {showHowTo && (
-        <GlassCard className="p-6 border-indigo-500/30 bg-slate-900/80 backdrop-blur-xl animate-fade-in">
-          <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-6">
-            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+        <GlassCard className="p-6 border-indigo-500/30 bg-white backdrop-blur-xl animate-fade-in">
+          <div className="flex items-center justify-between border-b border-slate-200 pb-4 mb-6">
+            <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
               <FileSpreadsheet className="w-5 h-5 text-indigo-400" /> Panduan Upload & Parameter Control Tower
             </h3>
             <div className="flex flex-wrap gap-2">
               <button
                 onClick={handleGenerateDemo}
-                className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-blue-600 hover:from-indigo-600 hover:to-blue-700 text-white font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-indigo-500/20"
+                className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-blue-600 hover:from-indigo-600 hover:to-blue-700 text-slate-900 font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-indigo-500/20"
               >
                 <Zap className="w-4 h-4" /> Gunakan Data Demo
               </button>
             </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm text-slate-300">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm text-slate-700">
             <div>
-              <h4 className="font-semibold text-white mb-2">📌 Skema Kolom Upload (Excel / CSV):</h4>
-              <ul className="grid grid-cols-2 gap-2 text-xs text-slate-300">
+              <h4 className="font-semibold text-slate-900 mb-2">📌 Skema Kolom Upload (Excel / CSV):</h4>
+              <ul className="grid grid-cols-2 gap-2 text-xs text-slate-700">
                 {['Cabang','In_Stock_Rate','Days_of_Supply','OTIF_Score','Current_Stock','ROP_Level','Category'].map(col => (
-                  <li key={col} className="flex items-center gap-2 font-mono bg-white/5 p-2 rounded border border-white/10">
+                  <li key={col} className="flex items-center gap-2 font-mono bg-white/5 p-2 rounded border border-slate-200">
                     <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0" />
                     <span>{col}</span>
                   </li>
@@ -310,8 +310,8 @@ export default function ControlTowerPage() {
               </ul>
             </div>
             <div className="space-y-3">
-              <h4 className="font-semibold text-white">⚙️ Kalkulasi Health Score:</h4>
-              <p className="text-xs text-slate-400 leading-relaxed">
+              <h4 className="font-semibold text-slate-900">⚙️ Kalkulasi Health Score:</h4>
+              <p className="text-xs text-slate-600 leading-relaxed">
                 Health score merupakan rata-rata berbobot dari In-Stock Rate dan skor pengiriman tepat waktu (OTIF). Cabang dengan health score &lt; 65 otomatis ditandai sebagai zona RED (Critical).
               </p>
               <div className="p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-xl text-xs text-indigo-300 flex items-center gap-2">
@@ -329,7 +329,7 @@ export default function ControlTowerPage() {
           <h2 className="text-sm font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-2">
             <Zap className="w-4 h-4" /> Pilih 3 Jalur Simulasi Ketahanan Suplai Nasional:
           </h2>
-          <span className="text-xs text-slate-400 italic hidden sm:inline">Klik tab untuk menguji ketahanan stok saat musim puncak atau krisis nasional!</span>
+          <span className="text-xs text-slate-600 italic hidden sm:inline">Klik tab untuk menguji ketahanan stok saat musim puncak atau krisis nasional!</span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -345,22 +345,22 @@ export default function ControlTowerPage() {
                 }}
                 className={`relative group p-4 sm:p-5 rounded-2xl transition-all duration-300 text-left border overflow-hidden shadow-lg ${
                   isSelected
-                    ? `bg-gradient-to-br ${sc.color} text-white border-transparent ring-2 ring-white/20 shadow-indigo-500/25 scale-[1.02]`
-                    : 'bg-slate-900/70 hover:bg-slate-800/80 text-slate-300 border-slate-700 hover:border-slate-600'
+                    ? `bg-gradient-to-br ${sc.color} text-slate-900 border-transparent ring-2 ring-white/20 shadow-indigo-500/25 scale-[1.02]`
+                    : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 hover:border-slate-600'
                 }`}
               >
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-bold text-base tracking-wide flex items-center gap-2.5">
-                    <Icon className={`w-5 h-5 ${isSelected ? 'text-white' : 'text-indigo-400'}`} />
+                    <Icon className={`w-5 h-5 ${isSelected ? 'text-slate-900' : 'text-indigo-400'}`} />
                     {sc.title}
                   </span>
                   {isSelected && (
-                    <span className="px-2 py-0.5 rounded-full bg-white/20 text-white text-xs font-black uppercase tracking-wider">
+                    <span className="px-2 py-0.5 rounded-full bg-white/20 text-slate-900 text-xs font-black uppercase tracking-wider">
                       Aktif
                     </span>
                   )}
                 </div>
-                <p className={`text-xs sm:text-sm leading-relaxed ${isSelected ? 'text-slate-100 font-medium' : 'text-slate-400'}`}>
+                <p className={`text-xs sm:text-sm leading-relaxed ${isSelected ? 'text-slate-900 font-medium' : 'text-slate-600'}`}>
                   {sc.desc}
                 </p>
               </button>
@@ -370,7 +370,7 @@ export default function ControlTowerPage() {
       </div>
 
       {/* ─── UPLOAD BOX WHEN RESULTS PRESENT OR HIDDEN ─── */}
-      <GlassCard className="p-4 bg-slate-900/40 border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <GlassCard className="p-4 bg-white border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="flex-1 w-full">
           <FileUploader
             onFileUpload={handleFileUpload}
@@ -381,10 +381,10 @@ export default function ControlTowerPage() {
             templateName="template_branch_health.csv"
           />
         </div>
-        <div className="sm:border-l border-slate-800 sm:pl-4 flex flex-col justify-center items-center shrink-0">
+        <div className="sm:border-l border-slate-200 sm:pl-4 flex flex-col justify-center items-center shrink-0">
           <button
             onClick={handleGenerateDemo}
-            className="w-full sm:w-auto px-5 py-3 bg-gradient-to-r from-indigo-500 to-blue-600 hover:from-indigo-600 hover:to-blue-700 text-white font-bold rounded-xl shadow-lg transition flex items-center justify-center gap-2 text-sm"
+            className="w-full sm:w-auto px-5 py-3 bg-gradient-to-r from-indigo-500 to-blue-600 hover:from-indigo-600 hover:to-blue-700 text-slate-900 font-bold rounded-xl shadow-lg transition flex items-center justify-center gap-2 text-sm"
           >
             <Zap className="w-4 h-4" /> Gunakan Data Demo
           </button>
@@ -394,7 +394,7 @@ export default function ControlTowerPage() {
       {results && (
         <div className="space-y-8 animate-in fade-in duration-700">
           {/* ─── FILTER & EXPORT ACTION BAR ─── */}
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-slate-900/90 p-6 rounded-2xl border border-slate-800 shadow-xl relative z-30 overflow-visible mb-10">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-white p-6 rounded-2xl border border-slate-200 shadow-xl relative z-30 overflow-visible mb-10">
             <div className="flex flex-col sm:flex-row sm:items-center gap-4 flex-1">
               <span className="text-xs font-bold text-indigo-300 uppercase tracking-wider whitespace-nowrap">🏢 Filter Cabang & Zona:</span>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-lg">
@@ -402,9 +402,9 @@ export default function ControlTowerPage() {
                 <MultiSelect options={zoneOptions} selected={selectedZone} onChange={setSelectedZone} selectAllLabel="Semua Zone" placeholder="Pilih Zona..." />
               </div>
             </div>
-            <div className="flex flex-wrap items-center justify-end gap-3 pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-800">
+            <div className="flex flex-wrap items-center justify-end gap-3 pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-200">
               <TimestampBadge timestamp={results.processed_at} />
-              <button onClick={handleExport} className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-500 transition text-xs sm:text-sm font-bold flex items-center gap-2 uppercase tracking-wide shadow-lg">
+              <button onClick={handleExport} className="px-5 py-2.5 bg-indigo-600 text-slate-900 rounded-xl hover:bg-indigo-500 transition text-xs sm:text-sm font-bold flex items-center gap-2 uppercase tracking-wide shadow-lg">
                 <Download className="w-4 h-4" /> Export Report (CSV)
               </button>
             </div>
