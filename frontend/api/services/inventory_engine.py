@@ -91,7 +91,8 @@ def run_inventory_analysis(df: pd.DataFrame) -> dict:
         on_hand_col = 'On Hand' if 'On Hand' in cat_df.columns else None
         current_on_hand = _safe_float(pd.to_numeric(cat_df[on_hand_col], errors='coerce').iloc[-1]) if on_hand_col else 0.0
         daily_sales = mean_sales / 30 if mean_sales > 0 else 0
-        doh = current_on_hand / daily_sales if daily_sales > 0 else 9999
+        # Akurasi: DOH tidak bisa negatif. Jika on_hand minus (shortage), DOH = 0
+        doh = max(0.0, current_on_hand) / daily_sales if daily_sales > 0 else 9999
 
         stockout_risk = doh < 14
         overstock     = doh > 60

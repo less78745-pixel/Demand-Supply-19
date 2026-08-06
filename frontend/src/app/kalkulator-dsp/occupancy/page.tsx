@@ -1018,45 +1018,29 @@ export default function OccupancyPage() {
                 </div>
               )}
 
-              {/* Automated Insights Section */}
-              {((mrpData.insights_list && mrpData.insights_list.length > 0) || (results.over_occupancy_insights && results.over_occupancy_insights.length > 0)) && (
-                <div className="mb-8">
-                  <h4 className="text-sm sm:text-base font-extrabold text-slate-100 mb-4 flex items-center gap-2.5 border-b border-white/10 pb-2.5">
-                    <Sparkles className="w-5 h-5 text-amber-400 animate-pulse" /> Insight &amp; Rekomendasi Otomatis MRP
+              {/* Automated Insights Section (Simplified) */}
+              {(mrpData.shortage_alerts?.length > 0 || mrpData.daily_data?.some((d: any) => d.occupancy_pct > 100)) && (
+                <div className="mb-6 bg-slate-50 border border-slate-200 rounded-2xl p-5 shadow-sm">
+                  <h4 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-amber-500" /> Rangkuman Status Gudang
                   </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {(mrpData.insights_list || results.over_occupancy_insights || []).map((text: string, idx: number) => {
-                      const isShortage = text.includes("RISIKO KEKURANGAN");
-                      const isOverOcc = text.includes("RISIKO OVER KAPASITAS");
-                      const isTrend = text.includes("TREN");
-                      const isComp = text.includes("PERBANDINGAN");
-                      
-                      return (
-                        <div key={idx} className={`p-4.5 rounded-2xl border flex items-start gap-4 shadow-lg backdrop-blur-md transition hover:scale-[1.01] ${
-                          isShortage ? 'bg-rose-950/40 border-rose-500/50 text-rose-100 shadow-rose-900/20' :
-                          isOverOcc ? 'bg-amber-950/40 border-amber-500/50 text-amber-100 shadow-amber-900/20' :
-                          isTrend ? 'bg-blue-950/40 border-blue-500/50 text-blue-100 shadow-blue-900/20' :
-                          isComp ? 'bg-purple-950/40 border-purple-500/50 text-purple-100 shadow-purple-900/20' :
-                          'bg-slate-900/70 border-slate-700 text-slate-200'
-                        }`}>
-                          <div className="p-2.5 rounded-xl bg-white/10 shrink-0 mt-0.5 shadow-inner">
-                            {isShortage ? <AlertOctagon className="w-6 h-6 text-rose-400 animate-bounce" /> :
-                             isOverOcc ? <AlertTriangle className="w-6 h-6 text-amber-400 animate-pulse" /> :
-                             isTrend ? <TrendingUp className="w-6 h-6 text-blue-400" /> :
-                             <Sparkles className="w-6 h-6 text-purple-400" />}
-                          </div>
-                          <div className="flex-1 text-xs sm:text-sm leading-relaxed font-normal">
-                            <span className="font-black text-sm uppercase tracking-wide block mb-1.5 text-white">
-                              {isShortage ? '🚨 Peringatan Shortage (Stok Kurang)' :
-                               isOverOcc ? '⚠️ Peringatan Kapasitas Gudang (Over-Occupancy)' :
-                               isTrend ? '📈 Analisa Tren Perubahan Stok' :
-                               isComp ? '⚖️ Analisa Komparasi Skenario' : '💡 Catatan Analisa'}
-                            </span>
-                            {text}
-                          </div>
+                  <div className="flex flex-wrap gap-4">
+                    <div className="px-4 py-3 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-3">
+                      <AlertOctagon className="w-6 h-6 text-rose-500" />
+                      <div>
+                        <div className="text-rose-900 font-bold text-lg">{mrpData.shortage_alerts?.length || 0} Alert</div>
+                        <div className="text-rose-600 text-xs font-medium">Potensi Kekurangan Stok</div>
+                      </div>
+                    </div>
+                    <div className="px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-3">
+                      <AlertTriangle className="w-6 h-6 text-amber-500" />
+                      <div>
+                        <div className="text-amber-900 font-bold text-lg">
+                          {mrpData.daily_data?.filter((d: any) => d.occupancy_pct > 100).length || 0} Insiden
                         </div>
-                      );
-                    })}
+                        <div className="text-amber-700 text-xs font-medium">Over Kapasitas Gudang</div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}

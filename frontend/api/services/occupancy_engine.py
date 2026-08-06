@@ -191,7 +191,8 @@ def compute_occupancy(records, balances_by_record, wh_capacity):
             if rec.cabang == cabang:
                 bals = balances_by_record[id(rec)]
                 for w in range(n_weeks):
-                    totals[w] += bals[w]
+                    # Akurasi: shortage/minus tidak membebaskan ruang fisik gudang
+                    totals[w] += max(0.0, bals[w])
         occupancy[cabang] = [t / capacity if capacity else None for t in totals]
     return occupancy
 
