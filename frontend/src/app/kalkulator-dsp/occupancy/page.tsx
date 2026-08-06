@@ -45,17 +45,31 @@ const SCENARIOS = [
 function generateDemoOccupancy() {
   const dates = ['JAN-1', 'JAN-2', 'JAN-3', 'JAN-4', 'FEB-1', 'FEB-2'];
   const branches = [
-    { name: 'DC Jakarta', capacity: 10000, hand: 8500 },
-    { name: 'DC Surabaya', capacity: 6000, hand: 6300 },
-    { name: 'DC Medan', capacity: 4500, hand: 2200 },
-    { name: 'DC Makassar', capacity: 5000, hand: 4800 },
+    { name: 'DC Jakarta', capacity: 30000, hand: 15200 },
+    { name: 'DC Surabaya', capacity: 17000, hand: 8300 },
+    { name: 'DC Medan', capacity: 9000, hand: 4100 },
+    { name: 'DC Makassar', capacity: 13500, hand: 6200 },
   ];
+
+  const forecastSeries: Record<string, number[]> = {
+    'DC Jakarta': [50.67, 48.33, 49.67, 49.67, 51.33, 51.0],
+    'DC Surabaya': [48.82, 48.24, 45.29, 45.29, 43.53, 42.35],
+    'DC Medan': [45.56, 45.56, 45.0, 46.11, 46.11, 45.0],
+    'DC Makassar': [45.93, 45.93, 45.56, 46.3, 46.3, 45.56]
+  };
+  const targetSeries: Record<string, number[]> = {
+    'DC Jakarta': [50.0, 46.67, 47.0, 46.0, 46.67, 45.33],
+    'DC Surabaya': [49.41, 49.41, 47.06, 47.65, 46.47, 45.88],
+    'DC Medan': [44.44, 43.33, 41.67, 41.67, 40.56, 38.33],
+    'DC Makassar': [45.19, 44.44, 43.33, 43.33, 42.59, 41.11]
+  };
+
   const daily_data: any[] = [];
   branches.forEach(b => {
+    const series = forecastSeries[b.name] || [50, 50, 50, 50, 50, 50];
     dates.forEach((dt, idx) => {
-      const variation = (idx % 2 === 0 ? 1 : 1.05);
-      const currentHand = Math.round(b.hand * variation);
-      const pct = Math.round((currentHand / b.capacity) * 100 * 10) / 10;
+      const pct = series[idx];
+      const currentHand = Math.round((pct / 100) * b.capacity);
       daily_data.push({
         date: dt,
         cabang: b.name,
@@ -70,15 +84,12 @@ function generateDemoOccupancy() {
   return {
     processed_at: new Date().toISOString(),
     daily_data,
-    kpi_summary: { avg_occupancy: 83.5, max_occupancy: 110.3, categories_at_risk: 2 },
-    shortage_alerts: [
-      { cabang: 'DC Surabaya', category: 'Fast Moving Consumer', date: 'JAN-2', deficit: 350 },
-      { cabang: 'DC Jakarta', category: 'Electronics & Spareparts', date: 'FEB-1', deficit: 120 }
-    ],
+    kpi_summary: { avg_occupancy: 46.8, max_occupancy: 51.3, categories_at_risk: 0 },
+    shortage_alerts: [],
     inventory_analysis: {
       matrix_data: [
-        { cabang: 'DC Jakarta', category: 'Electronics & Spareparts', class: 'A-X', volume: 5200, mean_sales: 140, cv: 0.2, doh: 22, on_hand: 3080, trend_pct: 5, stockout_risk: true, strategy: 'Continuous Review, tight safety stock. High value, predictable.' },
-        { cabang: 'DC Surabaya', category: 'Fast Moving Consumer', class: 'A-Z', volume: 3800, mean_sales: 110, cv: 0.75, doh: 12, on_hand: 1320, trend_pct: -2, stockout_risk: true, strategy: 'Collaborative forecasting needed. Risk of high-cost stockouts.' },
+        { cabang: 'DC Jakarta', category: 'Electronics & Spareparts', class: 'A-X', volume: 5200, mean_sales: 140, cv: 0.2, doh: 22, on_hand: 3080, trend_pct: 5, stockout_risk: false, strategy: 'Continuous Review, tight safety stock. High value, predictable.' },
+        { cabang: 'DC Surabaya', category: 'Fast Moving Consumer', class: 'A-Z', volume: 3800, mean_sales: 110, cv: 0.75, doh: 12, on_hand: 1320, trend_pct: -2, stockout_risk: false, strategy: 'Collaborative forecasting needed. Risk of high-cost stockouts.' },
         { cabang: 'DC Medan', category: 'Apparel & Textiles', class: 'C-Z', volume: 800, mean_sales: 5, cv: 1.2, doh: 115, on_hand: 575, trend_pct: -15, stockout_risk: false, strategy: 'Candidate for discontinuation or consignment stock.' }
       ],
       dead_stock: [
@@ -86,30 +97,30 @@ function generateDemoOccupancy() {
       ]
     },
     over_occupancy_insights: [
-      'RISIKO OVER KAPASITAS GUDANG (Forecast) - Cabang DC Surabaya pada periode JAN-2: occupancy 110% dari kapasitas gudang (kelebihan 10 poin persen).',
-      'TREN - DC Jakarta-Electronics & Spareparts (Forecast): balance turun signifikan dari 8500 (JAN-1) menjadi 5100 (FEB-2), perubahan -40%. Cek risiko kekurangan stok.'
+      'PERBANDINGAN SKENARIO - DC Jakarta: pada periode JAN-1, utilisasi gudang stabil di kisaran 50.67% dari total kapasitas 30,000 unit.',
+      'STATUS GUDANG - Seluruh 4 Distribution Center (DC Jakarta, Surabaya, Medan, Makassar) beroperasi pada level occupancy ideal (42% - 51%), tidak terdeteksi risiko over-kapasitas maupun shortage.'
     ],
+    mrp_results: {
+      week_awal: 1,
+      period_labels: dates,
+      insights_list: [
+        'PERBANDINGAN SKENARIO - DC Jakarta: pada periode JAN-1, utilisasi gudang stabil di kisaran 50.67% dari total kapasitas 30,000 unit.',
+        'TREN - DC Surabaya (Forecast): balance utilisasi turun stabil dari 48.82% (JAN-1) menjadi 42.35% (FEB-2). Status utilisasi kapasitas gudang optimal.',
+        'STATUS GUDANG - Seluruh 4 Distribution Center (DC Jakarta, Surabaya, Medan, Makassar) beroperasi pada level occupancy ideal (42% - 51%), tidak terdeteksi risiko over-kapasitas maupun shortage.'
+      ],
+      occupancy_series_forecast: forecastSeries,
+      occupancy_series_target: targetSeries
+    },
     ddmrp_results: {
       week_awal: 1,
       period_labels: dates,
       insights_list: [
-        'RISIKO OVER KAPASITAS GUDANG (Forecast) - Cabang DC Surabaya pada periode JAN-2: occupancy 110% dari kapasitas gudang (kelebihan 10 poin persen).',
-        'RISIKO OVER KAPASITAS GUDANG (Target) - Cabang DC Surabaya pada periode JAN-3: occupancy 115% dari kapasitas gudang.',
-        'TREN - DC Jakarta-Electronics & Spareparts (Forecast): balance turun signifikan dari 8500 (JAN-1) menjadi 5100 (FEB-2), perubahan -40%. Cek risiko kekurangan stok.',
-        'PERBANDINGAN SKENARIO - DC Makassar-Automotive: pada periode FEB-2, balance skenario Target lebih tinggi (selisih 450 unit) dibanding skenario lainnya. Artinya asumsi demand target menghasilkan buffer yang lebih besar.'
+        'PERBANDINGAN SKENARIO - DC Jakarta: pada periode JAN-1, utilisasi gudang stabil di kisaran 50.67% dari total kapasitas 30,000 unit.',
+        'TREN - DC Surabaya (Forecast): balance utilisasi turun stabil dari 48.82% (JAN-1) menjadi 42.35% (FEB-2). Status utilisasi kapasitas gudang optimal.',
+        'STATUS GUDANG - Seluruh 4 Distribution Center (DC Jakarta, Surabaya, Medan, Makassar) beroperasi pada level occupancy ideal (42% - 51%), tidak terdeteksi risiko over-kapasitas maupun shortage.'
       ],
-      occupancy_series_forecast: {
-        'DC Jakarta': [85.0, 89.2, 92.5, 95.0, 91.0, 88.5],
-        'DC Surabaya': [95.0, 110.3, 108.0, 102.5, 98.0, 95.5],
-        'DC Medan': [48.8, 51.2, 53.0, 55.0, 50.0, 49.5],
-        'DC Makassar': [96.0, 98.5, 101.0, 99.0, 94.0, 92.0]
-      },
-      occupancy_series_target: {
-        'DC Jakarta': [82.0, 86.0, 89.0, 91.0, 87.0, 85.0],
-        'DC Surabaya': [98.0, 115.0, 112.0, 106.0, 101.0, 98.0],
-        'DC Medan': [45.0, 48.0, 50.0, 52.0, 47.0, 46.0],
-        'DC Makassar': [92.0, 95.0, 97.0, 96.0, 91.0, 89.0]
-      }
+      occupancy_series_forecast: forecastSeries,
+      occupancy_series_target: targetSeries
     }
   };
 }
@@ -122,17 +133,17 @@ export default function OccupancyPage() {
 
   const handleDownloadTemplate = async () => {
     try {
-      toast.loading('Mengunduh Template Excel DDMRP (Raw & WH)...', { id: 'tpl' });
+      toast.loading('Mengunduh Template Excel MRP (Raw & WH)...', { id: 'tpl' });
       const blob = await downloadOccupancyTemplate();
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = 'Template_Occupancy_DDMRP_Raw_WH.xlsx';
+      link.download = 'Template_Occupancy_MRP_Raw_WH.xlsx';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-      toast.success('Template DDMRP Berhasil Diunduh!', { id: 'tpl' });
+      toast.success('Template MRP Berhasil Diunduh!', { id: 'tpl' });
     } catch (e: any) {
       toast.error('Gagal mengunduh template: ' + (e?.message || 'Server offline'), { id: 'tpl' });
     }
@@ -419,6 +430,8 @@ export default function OccupancyPage() {
     };
   }, [filteredData, filteredShortageAlerts, filteredInvData, results]);
 
+  const mrpData = results?.mrp_results || results?.ddmrp_results;
+
   return (
     <div className="space-y-8 max-w-[1550px] mx-auto pb-16 animate-in fade-in duration-500 text-foreground">
 
@@ -463,7 +476,7 @@ export default function OccupancyPage() {
                 onClick={handleDownloadTemplate}
                 className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-emerald-500/20"
               >
-                <FileSpreadsheet className="w-4 h-4" /> Download Template Excel DDMRP
+                <FileSpreadsheet className="w-4 h-4" /> Download Template Excel MRP
               </button>
               <button
                 onClick={handleGenerateDemo}
@@ -477,7 +490,7 @@ export default function OccupancyPage() {
             <div>
               <h4 className="font-semibold text-white mb-2">📌 Skema Kolom Diperlukan (2 Pilihan Format):</h4>
               <div className="space-y-2 mb-3">
-                <p className="text-xs font-bold text-indigo-400">Option 1: Format Multi-Sheet DDMRP (Terbaru)</p>
+                <p className="text-xs font-bold text-indigo-400">Option 1: Format Multi-Sheet MRP (Terbaru)</p>
                 <p className="text-xs text-slate-400">• Sheet <code>Raw</code>: No, Cabang, Grup, Category, On Hand + blok mingguan [TO, Vessel, Forecast, Target].</p>
                 <p className="text-xs text-slate-400">• Sheet <code>WH</code>: No, Cabang, Kapasitas Existing, Tambahan, dan sel <code>Week Awal</code> (cth: 1 untuk JAN-1).</p>
               </div>
@@ -566,7 +579,7 @@ export default function OccupancyPage() {
             }
             templateName="occupancy_template.csv"
             label="Upload Dataset Occupancy (Excel/CSV)"
-            description="Format Multi-Sheet DDMRP (Raw & WH) atau Format Legacy CSV/XLSX (Cabang, Category, On Hand, In, Out, Capacity, Date)."
+            description="Format Multi-Sheet MRP (Raw & WH) atau Format Legacy CSV/XLSX (Cabang, Category, On Hand, In, Out, Capacity, Date)."
           />
         </div>
         <div className="sm:border-l border-slate-800 sm:pl-4 flex flex-col justify-center items-center shrink-0 gap-2.5">
@@ -574,7 +587,7 @@ export default function OccupancyPage() {
             onClick={handleDownloadTemplate}
             className="w-full sm:w-auto px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl shadow-lg transition flex items-center justify-center gap-2 text-xs sm:text-sm"
           >
-            <FileSpreadsheet className="w-4 h-4" /> Download Template DDMRP
+            <FileSpreadsheet className="w-4 h-4" /> Download Template MRP
           </button>
           <button
             onClick={handleGenerateDemo}
@@ -823,44 +836,44 @@ export default function OccupancyPage() {
             </GlassCard>
           )}
 
-          {/* ═══ DDMRP AUTOMATED ANALYSIS SECTION (WHEN MULTI-SHEET EXCEL UPLOADED) ═══ */}
-          {results.ddmrp_results && (
+          {/* ═══ MRP AUTOMATED ANALYSIS SECTION (WHEN MULTI-SHEET EXCEL UPLOADED) ═══ */}
+          {mrpData && (
             <GlassCard className="p-6 border-indigo-500/30 bg-gradient-to-br from-slate-900/90 via-indigo-950/20 to-slate-900/90 shadow-2xl relative z-30 mb-10">
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-indigo-500/20 pb-5 mb-6">
                 <div>
                   <h3 className="text-xl font-extrabold text-white uppercase tracking-wide flex items-center gap-2.5">
                     <Sparkles className="w-6 h-6 text-indigo-400 animate-pulse" />
-                    Analisa &amp; Grafik DDMRP (Skenario Forecast vs Target)
+                    Analisa &amp; Grafik MRP (Skenario Forecast vs Target)
                   </h3>
                   <p className="text-xs text-slate-400 mt-1 font-medium">
-                    Hasil kalkulasi otomatis balance mingguan, rasio demand, dan occupancy gudang per periode ({results.ddmrp_results.period_labels?.join(', ')}).
+                    Hasil kalkulasi otomatis balance mingguan, rasio demand, dan occupancy gudang per periode ({mrpData.period_labels?.join(', ')}).
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-3 shrink-0">
-                  {results.ddmrp_results.excel_base64 && (
+                  {mrpData.excel_base64 && (
                     <button
                       onClick={() => {
                         const link = document.createElement('a');
-                        link.href = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${results.ddmrp_results.excel_base64}`;
-                        link.download = getStandardFilename('ddmrp_hasil_perhitungan', 'xlsx');
+                        link.href = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${mrpData.excel_base64}`;
+                        link.download = getStandardFilename('mrp_hasil_perhitungan', 'xlsx');
                         link.click();
-                        toast.success('File Excel DDMRP dengan rumus berhasil diunduh!');
+                        toast.success('File Excel MRP dengan rumus berhasil diunduh!');
                       }}
                       className="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl shadow-lg transition text-xs flex items-center gap-2"
                     >
                       <FileSpreadsheet className="w-4 h-4" /> Download Excel Hasil (Rumus &amp; Ratio)
                     </button>
                   )}
-                  {results.ddmrp_results.html_report && (
+                  {mrpData.html_report && (
                     <button
                       onClick={() => {
-                        const blob = new Blob([results.ddmrp_results.html_report], { type: 'text/html;charset=utf-8;' });
+                        const blob = new Blob([mrpData.html_report], { type: 'text/html;charset=utf-8;' });
                         const url = URL.createObjectURL(blob);
                         const link = document.createElement('a');
                         link.href = url;
-                        link.download = getStandardFilename('ddmrp_analysis_report', 'html');
+                        link.download = getStandardFilename('mrp_analysis_report', 'html');
                         link.click();
-                        toast.success('Laporan HTML Analisa DDMRP berhasil diunduh!');
+                        toast.success('Laporan HTML Analisa MRP berhasil diunduh!');
                       }}
                       className="px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold rounded-xl shadow-lg transition text-xs flex items-center gap-2"
                     >
@@ -871,7 +884,7 @@ export default function OccupancyPage() {
               </div>
 
               {/* Komparasi Occupancy Skenario Forecast vs Target Table */}
-              {(results.ddmrp_results.occupancy_series_forecast || results.ddmrp_results.occupancy_series_target) && (
+              {(mrpData.occupancy_series_forecast || mrpData.occupancy_series_target) && (
                 <div className="mb-8">
                   <h4 className="text-sm sm:text-base font-extrabold text-slate-100 mb-4 flex items-center gap-2.5 border-b border-white/10 pb-2.5">
                     <Activity className="w-5 h-5 text-emerald-400" /> Komparasi Occupancy Mingguan - Skenario Forecast vs Target (%)
@@ -882,15 +895,15 @@ export default function OccupancyPage() {
                         <tr>
                           <th className="py-3.5 px-4">Cabang</th>
                           <th className="py-3.5 px-4 text-center">Skenario</th>
-                          {results.ddmrp_results.period_labels?.map((label: string, i: number) => (
+                          {mrpData.period_labels?.map((label: string, i: number) => (
                             <th key={i} className="py-3.5 px-3 text-right">{label}</th>
                           ))}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/5 font-medium">
-                        {Object.keys(results.ddmrp_results.occupancy_series_forecast || results.ddmrp_results.occupancy_series_target || {}).map((cabang) => {
-                          const fVals = results.ddmrp_results.occupancy_series_forecast?.[cabang] || [];
-                          const tVals = results.ddmrp_results.occupancy_series_target?.[cabang] || [];
+                        {Object.keys(mrpData.occupancy_series_forecast || mrpData.occupancy_series_target || {}).map((cabang) => {
+                          const fVals = mrpData.occupancy_series_forecast?.[cabang] || [];
+                          const tVals = mrpData.occupancy_series_target?.[cabang] || [];
                           return (
                             <React.Fragment key={cabang}>
                               <tr className="bg-slate-900/40 hover:bg-slate-800/70 transition">
@@ -934,13 +947,13 @@ export default function OccupancyPage() {
               )}
 
               {/* Automated Insights Section */}
-              {((results.ddmrp_results.insights_list && results.ddmrp_results.insights_list.length > 0) || (results.over_occupancy_insights && results.over_occupancy_insights.length > 0)) && (
+              {((mrpData.insights_list && mrpData.insights_list.length > 0) || (results.over_occupancy_insights && results.over_occupancy_insights.length > 0)) && (
                 <div className="mb-8">
                   <h4 className="text-sm sm:text-base font-extrabold text-slate-100 mb-4 flex items-center gap-2.5 border-b border-white/10 pb-2.5">
-                    <Sparkles className="w-5 h-5 text-amber-400 animate-pulse" /> Insight &amp; Rekomendasi Otomatis DDMRP
+                    <Sparkles className="w-5 h-5 text-amber-400 animate-pulse" /> Insight &amp; Rekomendasi Otomatis MRP
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {(results.ddmrp_results.insights_list || results.over_occupancy_insights || []).map((text: string, idx: number) => {
+                    {(mrpData.insights_list || results.over_occupancy_insights || []).map((text: string, idx: number) => {
                       const isShortage = text.includes("RISIKO KEKURANGAN");
                       const isOverOcc = text.includes("RISIKO OVER KAPASITAS");
                       const isTrend = text.includes("TREN");
@@ -977,9 +990,9 @@ export default function OccupancyPage() {
               )}
 
               {/* Matplotlib Generated Charts Grid */}
-              {results.ddmrp_results.charts && (
+              {mrpData.charts && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {Object.entries(results.ddmrp_results.charts).map(([key, b64]: [string, any], idx) => {
+                  {Object.entries(mrpData.charts).map(([key, b64]: [string, any], idx) => {
                     if (!b64) return null;
                     const titleMap: Record<string, string> = {
                       balance_forecast: "📈 Tren Balance - Skenario Forecast",

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException
 import pandas as pd
 import io
-from services.inventory_engine import run_inventory_analysis, run_inventory_from_ddmrp_bytes
+from services.inventory_engine import run_inventory_analysis, run_inventory_from_mrp_bytes
 
 router = APIRouter()
 
@@ -14,14 +14,17 @@ async def analyze_inventory(file: UploadFile = File(...)):
         contents = await file.read()
         if file.filename.lower().endswith(('.xlsx', '.xls')):
             import openpyxl
+            is_mrp_multi_sheet = False
             try:
                 wb = openpyxl.load_workbook(io.BytesIO(contents), read_only=True)
                 sheet_names = wb.sheetnames
                 wb.close()
                 if "Raw" in sheet_names and "WH" in sheet_names:
-                    return run_inventory_from_ddmrp_bytes(contents)
+                    is_mrp_multi_sheet = True
             except Exception:
                 pass
+            if is_mrp_multi_sheet:
+                return run_inventory_from_mrp_bytes(contents)
             df = pd.read_excel(io.BytesIO(contents))
         elif file.filename.lower().endswith('.csv'):
             try:

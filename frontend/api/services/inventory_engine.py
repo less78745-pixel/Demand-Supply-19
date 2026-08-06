@@ -14,9 +14,9 @@ def _safe_float(v):
     except Exception:
         return 0.0
 
-def run_inventory_from_ddmrp_bytes(file_bytes: bytes) -> dict:
+def run_inventory_from_mrp_bytes(file_bytes: bytes) -> dict:
     """
-    Ekstrak data mingguan dari sheet Raw & WH DDMRP untuk diolah ke dalam ABC-XYZ Inventory Intelligence.
+    Ekstrak data mingguan dari sheet Raw & WH MRP untuk diolah ke dalam ABC-XYZ Inventory Intelligence.
     """
     wb = load_workbook(io.BytesIO(file_bytes), data_only=True)
     if "Raw" not in wb.sheetnames or "WH" not in wb.sheetnames:
@@ -46,6 +46,9 @@ def run_inventory_from_ddmrp_bytes(file_bytes: bytes) -> dict:
             
     df_inv = pd.DataFrame(inv_rows)
     return run_inventory_analysis(df_inv)
+
+# Backward compatibility alias
+run_inventory_from_ddmrp_bytes = run_inventory_from_mrp_bytes
 
 
 def run_inventory_analysis(df: pd.DataFrame) -> dict:

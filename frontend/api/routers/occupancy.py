@@ -4,18 +4,18 @@ import pandas as pd
 import io
 from utils.validators import validate_occupancy_schema
 from utils.imputation import clean_occupancy_data
-from services.occupancy_engine import calculate_occupancy, calculate_ddmrp_occupancy_from_bytes, generate_ddmrp_template_bytes
+from services.occupancy_engine import calculate_occupancy, calculate_mrp_occupancy_from_bytes, generate_mrp_template_bytes
 
 router = APIRouter()
 
 @router.get("/analyze/occupancy/template")
-async def get_ddmrp_template():
+async def get_mrp_template():
     try:
-        content = generate_ddmrp_template_bytes()
+        content = generate_mrp_template_bytes()
         return Response(
             content=content,
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={"Content-Disposition": "attachment; filename=Template_Occupancy_DDMRP_Raw_WH.xlsx"}
+            headers={"Content-Disposition": "attachment; filename=Template_Occupancy_MRP_Raw_WH.xlsx"}
         )
     except Exception as e:
         import traceback
@@ -31,14 +31,17 @@ async def analyze_occupancy(file: UploadFile = File(...)):
         contents = await file.read()
         if file.filename.lower().endswith(('.xlsx', '.xls')):
             import openpyxl
+            is_mrp_multi_sheet = False
             try:
                 wb = openpyxl.load_workbook(io.BytesIO(contents), read_only=True)
                 sheet_names = wb.sheetnames
                 wb.close()
                 if "Raw" in sheet_names and "WH" in sheet_names:
-                    return calculate_ddmrp_occupancy_from_bytes(contents)
+                    is_mrp_multi_sheet = True
             except Exception:
                 pass
+            if is_mrp_multi_sheet:
+                return calculate_mrp_occupancy_from_bytes(contents)
             df = pd.read_excel(io.BytesIO(contents))
         elif file.filename.lower().endswith('.csv'):
             try:

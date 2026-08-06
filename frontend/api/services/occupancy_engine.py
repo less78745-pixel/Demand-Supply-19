@@ -26,7 +26,7 @@ def _safe_float(v):
         return 0.0
 
 # ============================================================================
-# CORE DDMRP LOGIC (Sheet Raw & WH, Week Awal, Periode Dinamis)
+# CORE MRP LOGIC (Sheet Raw & WH, Week Awal, Periode Dinamis)
 # ============================================================================
 
 FIXED_RAW_COLS = 4
@@ -73,8 +73,12 @@ def raw_week_cols(w: int):
 
 def get_raw_rows(ws_raw: Worksheet):
     rows = []
-    for r in range(2, ws_raw.max_row + 1):
-        if ws_raw.cell(row=r, column=1).value in (None, "") and ws_raw.cell(row=r, column=2).value in (None, ""):
+    for r in range(3, ws_raw.max_row + 1):
+        val1 = ws_raw.cell(row=r, column=1).value
+        val2 = ws_raw.cell(row=r, column=2).value
+        if val1 in (None, "") and val2 in (None, ""):
+            continue
+        if str(val2).strip().lower() in ("cabang", "branch", "grup"):
             continue
         rows.append(r)
     return rows
@@ -97,11 +101,11 @@ class RawRecord:
         self.cabang = str(cabang) if cabang is not None else "Unknown"
         self.grup = str(grup) if grup is not None else "General"
         self.category = str(category) if category is not None else "General"
-        self.onhand = float(onhand) if onhand is not None else 0.0
-        self.to = [float(x) if x is not None else 0.0 for x in to]
-        self.vessel = [float(x) if x is not None else 0.0 for x in vessel]
-        self.forecast = [float(x) if x is not None else 0.0 for x in forecast]
-        self.target = [float(x) if x is not None else 0.0 for x in target]
+        self.onhand = _safe_float(onhand)
+        self.to = [_safe_float(x) for x in to]
+        self.vessel = [_safe_float(x) for x in vessel]
+        self.forecast = [_safe_float(x) for x in forecast]
+        self.target = [_safe_float(x) for x in target]
 
     @property
     def label(self):
@@ -407,7 +411,7 @@ def build_html_report_string(charts_data, insights, period_labels, week_awal):
 <html lang="id">
 <head>
 <meta charset="utf-8"/>
-<title>DDMRP Analysis Report</title>
+<title>MRP Analysis Report</title>
 <style>
   body {{ font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background:#f9f9f7; color:#0b0b0b; margin:0; padding:32px; }}
   h1 {{ font-size: 22px; margin-bottom:4px; }}
@@ -422,7 +426,7 @@ def build_html_report_string(charts_data, insights, period_labels, week_awal):
 </style>
 </head>
 <body>
-  <h1>DDMRP Balance &amp; Occupancy - Analysis Report</h1>
+  <h1>MRP Balance &amp; Occupancy - Analysis Report</h1>
   <div class="sub">Periode: {period_labels[0]} - {period_labels[-1]} (Week Awal = {week_awal})</div>
   <div class="grid">{imgs_html}</div>
   <h2>Insight &amp; Rekomendasi</h2>
@@ -430,10 +434,10 @@ def build_html_report_string(charts_data, insights, period_labels, week_awal):
 </body>
 </html>"""
 
-def calculate_ddmrp_occupancy_from_bytes(file_bytes: bytes) -> dict:
+def calculate_mrp_occupancy_from_bytes(file_bytes: bytes) -> dict:
     wb_data = load_workbook(io.BytesIO(file_bytes), data_only=True)
     if "Raw" not in wb_data.sheetnames or "WH" not in wb_data.sheetnames:
-        raise ValueError("File Excel harus memiliki sheet 'Raw' dan 'WH' untuk pemrosesan DDMRP.")
+        raise ValueError("File Excel harus memiliki sheet 'Raw' dan 'WH' untuk pemrosesan MRP.")
 
     ws_raw, ws_wh = wb_data["Raw"], wb_data["WH"]
     n_weeks = detect_week_count(ws_raw)
@@ -533,6 +537,21 @@ def calculate_ddmrp_occupancy_from_bytes(file_bytes: bytes) -> dict:
         },
         "over_occupancy_insights": insights,
         "inventory_analysis": inventory_result,
+        "mrp_results": {
+            "week_awal": week_awal,
+            "period_labels": period_labels,
+            "charts": {
+                "balance_forecast": b64_bal_f,
+                "balance_target": b64_bal_t,
+                "occupancy_forecast": b64_occ_f,
+                "occupancy_target": b64_occ_t,
+            },
+            "html_report": html_report,
+            "excel_base64": excel_base64,
+            "insights_list": insights,
+            "occupancy_series_forecast": {str(k): [round(v * 100, 2) if v is not None else 0 for v in val] for k, val in occ_f.items()},
+            "occupancy_series_target": {str(k): [round(v * 100, 2) if v is not None else 0 for v in val] for k, val in occ_t.items()},
+        },
         "ddmrp_results": {
             "week_awal": week_awal,
             "period_labels": period_labels,
@@ -614,9 +633,9 @@ def calculate_occupancy(df: pd.DataFrame) -> dict:
     }
 
 
-def generate_ddmrp_template_bytes() -> bytes:
+def generate_mrp_template_bytes() -> bytes:
     """
-    Menghasilkan file Excel template resmi DDMRP Occupancy & Inventory Projector
+    Menghasilkan file Excel template resmi MRP Occupancy & Inventory Projector
     lengkap dengan sheet 'Raw' (blok 4 kolom per minggu [TO, Vessel, Forecast, Target])
     dan sheet 'WH' (Kapasitas & Week Awal).
     """
@@ -717,3 +736,7 @@ def generate_ddmrp_template_bytes() -> bytes:
     wb.save(out_buf)
     out_buf.seek(0)
     return out_buf.read()
+
+# Backward compatibility aliases
+calculate_ddmrp_occupancy_from_bytes = calculate_mrp_occupancy_from_bytes
+generate_ddmrp_template_bytes = generate_mrp_template_bytes
