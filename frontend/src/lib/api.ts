@@ -40,6 +40,13 @@ export const uploadOccupancyFile = async (file: File) => {
   return response.data;
 };
 
+export const downloadOccupancyTemplate = async () => {
+  const response = await api.get('/analyze/occupancy/template', {
+    responseType: 'blob',
+  });
+  return response.data;
+};
+
 export const uploadForecastFile = async (file: File) => {
   const formData = new FormData();
   formData.append('file', file);

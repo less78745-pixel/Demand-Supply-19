@@ -1,11 +1,26 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi.responses import Response
 import pandas as pd
 import io
 from utils.validators import validate_occupancy_schema
 from utils.imputation import clean_occupancy_data
-from services.occupancy_engine import calculate_occupancy, calculate_ddmrp_occupancy_from_bytes
+from services.occupancy_engine import calculate_occupancy, calculate_ddmrp_occupancy_from_bytes, generate_ddmrp_template_bytes
 
 router = APIRouter()
+
+@router.get("/analyze/occupancy/template")
+async def get_ddmrp_template():
+    try:
+        content = generate_ddmrp_template_bytes()
+        return Response(
+            content=content,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": "attachment; filename=Template_Occupancy_DDMRP_Raw_WH.xlsx"}
+        )
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Gagal generate template: {str(e)}")
 
 @router.post("/analyze/occupancy")
 async def analyze_occupancy(file: UploadFile = File(...)):

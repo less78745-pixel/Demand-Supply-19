@@ -239,10 +239,10 @@ def build_hasil_sheet(wb, sheet_name, ws_raw, raw_rows, n_weeks, demand_kind, pe
             L_to, L_vessel, L_demand = get_column_letter(col_to), get_column_letter(col_vessel), get_column_letter(col_demand)
             out_col = col_perhitungan_start + w
             if w == 0:
-                formula = f"=Raw!E{raw_row}+Raw!{L_to}{raw_row}+Raw!{L_vessel}{raw_row}-Raw!{L_demand}{raw_row}"
+                formula = f"=SUM(Raw!E{raw_row},Raw!{L_to}{raw_row},Raw!{L_vessel}{raw_row})-Raw!{L_demand}{raw_row}"
             else:
                 prev_letter = perhitungan_col_letters[w - 1]
-                formula = f"={prev_letter}{out_row}+Raw!{L_to}{raw_row}+Raw!{L_vessel}{raw_row}-Raw!{L_demand}{raw_row}"
+                formula = f"=SUM({prev_letter}{out_row},Raw!{L_to}{raw_row},Raw!{L_vessel}{raw_row})-Raw!{L_demand}{raw_row}"
             ws.cell(row=out_row, column=out_col, value=formula)
             perhitungan_col_letters.append(get_column_letter(out_col))
 
@@ -253,7 +253,7 @@ def build_hasil_sheet(wb, sheet_name, ws_raw, raw_rows, n_weeks, demand_kind, pe
                 _, _, col_forecast_next, col_target_next = raw_week_cols(w + 1)
                 col_demand_next = col_forecast_next if demand_kind == "forecast" else col_target_next
                 L_demand_next = get_column_letter(col_demand_next)
-                formula = f'=IF(Raw!{L_demand_next}{raw_row}=0,"",{perhitungan_letter}{out_row}/Raw!{L_demand_next}{raw_row})'
+                formula = f'=IFERROR(IF(OR(Raw!{L_demand_next}{raw_row}="",Raw!{L_demand_next}{raw_row}=0),"",{perhitungan_letter}{out_row}/Raw!{L_demand_next}{raw_row}),"")'
                 ws.cell(row=out_row, column=out_col, value=formula)
                 ws.cell(row=out_row, column=out_col).number_format = "0.0%"
             else:
@@ -261,6 +261,13 @@ def build_hasil_sheet(wb, sheet_name, ws_raw, raw_rows, n_weeks, demand_kind, pe
         for c in range(1, total_cols + 1):
             ws.cell(row=out_row, column=c).border = BORDER
         out_row += 1
+
+    ws.column_dimensions["A"].width = 6
+    ws.column_dimensions["B"].width = 15
+    ws.column_dimensions["C"].width = 14
+    ws.column_dimensions["D"].width = 16
+    for c in range(col_perhitungan_start, total_cols + 1):
+        ws.column_dimensions[get_column_letter(c)].width = 12
 
     ws.freeze_panes = "E3"
     return ws, col_perhitungan_start, out_row - 1
@@ -280,12 +287,18 @@ def build_occupancy_sheet(wb, sheet_name, ws_wh, wh_rows, hasil_sheet_name,
         for w in range(n_weeks):
             col_letter = get_column_letter(perhitungan_col_start + w)
             out_col = 3 + w
-            formula = f"=SUMIF('{hasil_sheet_name}'!$B$3:$B${hasil_last_row},$B{out_row},'{hasil_sheet_name}'!${col_letter}$3:${col_letter}${hasil_last_row})/WH!$E{wh_row}"
+            formula = f"=IFERROR(IF(WH!$E{wh_row}=0,0,SUMIF('{hasil_sheet_name}'!$B$3:$B${hasil_last_row},$B{out_row},'{hasil_sheet_name}'!${col_letter}$3:${col_letter}${hasil_last_row})/WH!$E{wh_row}),0)"
             ws.cell(row=out_row, column=out_col, value=formula)
             ws.cell(row=out_row, column=out_col).number_format = "0.0%"
         for c in range(1, 3 + n_weeks):
             ws.cell(row=out_row, column=c).border = BORDER
         out_row += 1
+
+    ws.column_dimensions["A"].width = 6
+    ws.column_dimensions["B"].width = 16
+    for w in range(n_weeks):
+        ws.column_dimensions[get_column_letter(3 + w)].width = 13
+
     ws.freeze_panes = "C2"
     return ws
 
@@ -530,7 +543,10 @@ def calculate_ddmrp_occupancy_from_bytes(file_bytes: bytes) -> dict:
                 "occupancy_target": b64_occ_t,
             },
             "html_report": html_report,
-            "excel_base64": excel_base64
+            "excel_base64": excel_base64,
+            "insights_list": insights,
+            "occupancy_series_forecast": {str(k): [round(v * 100, 2) if v is not None else 0 for v in val] for k, val in occ_f.items()},
+            "occupancy_series_target": {str(k): [round(v * 100, 2) if v is not None else 0 for v in val] for k, val in occ_t.items()},
         }
     }
 
@@ -596,3 +612,108 @@ def calculate_occupancy(df: pd.DataFrame) -> dict:
         "kpi_summary": {"avg_occupancy": round(avg_occ, 2), "max_occupancy": round(max_occ, 2), "categories_at_risk": len(shortage_alerts)},
         "inventory_analysis": inventory_result
     }
+
+
+def generate_ddmrp_template_bytes() -> bytes:
+    """
+    Menghasilkan file Excel template resmi DDMRP Occupancy & Inventory Projector
+    lengkap dengan sheet 'Raw' (blok 4 kolom per minggu [TO, Vessel, Forecast, Target])
+    dan sheet 'WH' (Kapasitas & Week Awal).
+    """
+    wb = Workbook()
+    ws_raw = wb.active
+    ws_raw.title = "Raw"
+    ws_wh = wb.create_sheet("WH")
+
+    n_weeks = 6
+    col_start_week = 6  # Kolom F (1-indexed = 6)
+    
+    for c in range(1, col_start_week):
+        style_header_cell(ws_raw, 1, c, "Judul", FILL_JUDUL)
+    for w in range(n_weeks):
+        base_c = col_start_week + (w * 4)
+        for sub_c in range(4):
+            style_header_cell(ws_raw, 1, base_c + sub_c, f"Week {w + 1}", FILL_PERHITUNGAN if w % 2 == 0 else FILL_RATIO)
+
+    fixed_headers = ["No", "Cabang", "Grup", "Category", "On Hand"]
+    for i, h in enumerate(fixed_headers, start=1):
+        style_header_cell(ws_raw, 2, i, h, FILL_HEADER2)
+
+    for w in range(n_weeks):
+        base_c = col_start_week + (w * 4)
+        style_header_cell(ws_raw, 2, base_c, "TO", FILL_HEADER2)
+        style_header_cell(ws_raw, 2, base_c + 1, "Vessel", FILL_HEADER2)
+        style_header_cell(ws_raw, 2, base_c + 2, "Forecast", FILL_HEADER2)
+        style_header_cell(ws_raw, 2, base_c + 3, "Target", FILL_HEADER2)
+
+    sample_raw = [
+        [1, "DC Jakarta", "FMCG", "Beverages", 15000],
+        [2, "DC Surabaya", "Electronics", "Gadgets", 8500],
+        [3, "DC Medan", "Apparel", "Fashion Casual", 4200],
+        [4, "DC Makassar", "Automotive", "Spareparts", 6300]
+    ]
+    sample_weeks_data = [
+        [[1200, 2000, 3000, 3200], [1500, 1000, 3200, 3500], [1000, 2500, 3100, 3400], [2000, 1500, 3500, 3800], [1800, 2000, 3300, 3600], [1500, 1800, 3400, 3700]],
+        [[500, 800, 1500, 1400], [600, 900, 1600, 1500], [700, 500, 1700, 1600], [800, 1000, 1800, 1700], [600, 700, 1600, 1500], [500, 800, 1500, 1400]],
+        [[200, 300, 600, 700], [300, 400, 700, 800], [250, 350, 650, 750], [400, 500, 800, 900], [300, 400, 700, 800], [200, 300, 600, 700]],
+        [[400, 600, 1100, 1200], [500, 700, 1200, 1300], [450, 650, 1150, 1250], [600, 800, 1300, 1400], [500, 700, 1200, 1300], [400, 600, 1100, 1200]],
+    ]
+
+    for row_idx, row_base in enumerate(sample_raw, start=3):
+        for col_idx, val in enumerate(row_base, start=1):
+            cell = ws_raw.cell(row=row_idx, column=col_idx, value=val)
+            cell.border = BORDER
+        weeks_vals = sample_weeks_data[row_idx - 3]
+        for w in range(n_weeks):
+            base_c = col_start_week + (w * 4)
+            for sub_c, v in enumerate(weeks_vals[w]):
+                cell = ws_raw.cell(row=row_idx, column=base_c + sub_c, value=v)
+                cell.border = BORDER
+
+    ws_raw.column_dimensions["A"].width = 6
+    ws_raw.column_dimensions["B"].width = 15
+    ws_raw.column_dimensions["C"].width = 14
+    ws_raw.column_dimensions["D"].width = 16
+    ws_raw.column_dimensions["E"].width = 12
+    for c in range(col_start_week, col_start_week + (n_weeks * 4)):
+        ws_raw.column_dimensions[get_column_letter(c)].width = 11
+    ws_raw.freeze_panes = "F3"
+
+    wh_headers = ["No", "Cabang", "Kapasitas Existing", "Tambahan", "Total Kapasitas"]
+    for i, h in enumerate(wh_headers, start=1):
+        style_header_cell(ws_wh, 1, i, h, FILL_HEADER2)
+
+    ws_wh.cell(row=1, column=7, value="Week Awal").font = BOLD
+    ws_wh.cell(row=1, column=7).fill = FILL_JUDUL
+    ws_wh.cell(row=1, column=7).border = BORDER
+    ws_wh.cell(row=1, column=8, value=1).font = BOLD
+    ws_wh.cell(row=1, column=8).fill = FILL_RATIO
+    ws_wh.cell(row=1, column=8).border = BORDER
+    ws_wh.cell(row=1, column=8).alignment = CENTER
+
+    sample_wh = [
+        [1, "DC Jakarta", 25000, 5000],
+        [2, "DC Surabaya", 15000, 2000],
+        [3, "DC Medan", 8000, 1000],
+        [4, "DC Makassar", 12000, 1500],
+    ]
+    for row_idx, row_data in enumerate(sample_wh, start=2):
+        for col_idx, val in enumerate(row_data, start=1):
+            cell = ws_wh.cell(row=row_idx, column=col_idx, value=val)
+            cell.border = BORDER
+        tot_cell = ws_wh.cell(row=row_idx, column=5, value=f"=C{row_idx}+D{row_idx}")
+        tot_cell.border = BORDER
+        tot_cell.font = BOLD
+
+    ws_wh.column_dimensions["A"].width = 6
+    ws_wh.column_dimensions["B"].width = 16
+    ws_wh.column_dimensions["C"].width = 18
+    ws_wh.column_dimensions["D"].width = 14
+    ws_wh.column_dimensions["E"].width = 18
+    ws_wh.column_dimensions["G"].width = 14
+    ws_wh.column_dimensions["H"].width = 10
+
+    out_buf = io.BytesIO()
+    wb.save(out_buf)
+    out_buf.seek(0)
+    return out_buf.read()

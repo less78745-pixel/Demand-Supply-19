@@ -7,7 +7,7 @@ import { KPICard } from '@/components/ui/KPICard';
 import { OccupancyChart } from '@/components/charts/OccupancyChart';
 import { InventoryChart } from '@/components/charts/InventoryChart';
 import { Activity, AlertTriangle, Info, TrendingUp, TrendingDown, AlertOctagon, Layers, Download, PackageSearch, LayoutGrid, CheckCircle, Sparkles, HelpCircle, FileSpreadsheet, Zap, ShieldAlert } from 'lucide-react';
-import { uploadOccupancyFile } from '@/lib/api';
+import { uploadOccupancyFile, downloadOccupancyTemplate } from '@/lib/api';
 import { MultiSelect } from '@/components/ui/MultiSelect';
 import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import toast from 'react-hot-toast';
@@ -87,11 +87,29 @@ function generateDemoOccupancy() {
     },
     over_occupancy_insights: [
       'RISIKO OVER KAPASITAS GUDANG (Forecast) - Cabang DC Surabaya pada periode JAN-2: occupancy 110% dari kapasitas gudang (kelebihan 10 poin persen).',
-      'TREN - DC Jakarta-Electronics & Spareparts (Forecast): balance turun signifikan, perubahan -32%. Cek risiko kekurangan stok.'
+      'TREN - DC Jakarta-Electronics & Spareparts (Forecast): balance turun signifikan dari 8500 (JAN-1) menjadi 5100 (FEB-2), perubahan -40%. Cek risiko kekurangan stok.'
     ],
     ddmrp_results: {
       week_awal: 1,
-      period_labels: dates
+      period_labels: dates,
+      insights_list: [
+        'RISIKO OVER KAPASITAS GUDANG (Forecast) - Cabang DC Surabaya pada periode JAN-2: occupancy 110% dari kapasitas gudang (kelebihan 10 poin persen).',
+        'RISIKO OVER KAPASITAS GUDANG (Target) - Cabang DC Surabaya pada periode JAN-3: occupancy 115% dari kapasitas gudang.',
+        'TREN - DC Jakarta-Electronics & Spareparts (Forecast): balance turun signifikan dari 8500 (JAN-1) menjadi 5100 (FEB-2), perubahan -40%. Cek risiko kekurangan stok.',
+        'PERBANDINGAN SKENARIO - DC Makassar-Automotive: pada periode FEB-2, balance skenario Target lebih tinggi (selisih 450 unit) dibanding skenario lainnya. Artinya asumsi demand target menghasilkan buffer yang lebih besar.'
+      ],
+      occupancy_series_forecast: {
+        'DC Jakarta': [85.0, 89.2, 92.5, 95.0, 91.0, 88.5],
+        'DC Surabaya': [95.0, 110.3, 108.0, 102.5, 98.0, 95.5],
+        'DC Medan': [48.8, 51.2, 53.0, 55.0, 50.0, 49.5],
+        'DC Makassar': [96.0, 98.5, 101.0, 99.0, 94.0, 92.0]
+      },
+      occupancy_series_target: {
+        'DC Jakarta': [82.0, 86.0, 89.0, 91.0, 87.0, 85.0],
+        'DC Surabaya': [98.0, 115.0, 112.0, 106.0, 101.0, 98.0],
+        'DC Medan': [45.0, 48.0, 50.0, 52.0, 47.0, 46.0],
+        'DC Makassar': [92.0, 95.0, 97.0, 96.0, 91.0, 89.0]
+      }
     }
   };
 }
@@ -101,6 +119,24 @@ export default function OccupancyPage() {
   const [results, setResults]           = useState<any>(null);
   const [activeScenario, setActiveScenario] = useState<ScenarioType>('actual');
   const [showHowTo, setShowHowTo] = useState(false);
+
+  const handleDownloadTemplate = async () => {
+    try {
+      toast.loading('Mengunduh Template Excel DDMRP (Raw & WH)...', { id: 'tpl' });
+      const blob = await downloadOccupancyTemplate();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'Template_Occupancy_DDMRP_Raw_WH.xlsx';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      toast.success('Template DDMRP Berhasil Diunduh!', { id: 'tpl' });
+    } catch (e: any) {
+      toast.error('Gagal mengunduh template: ' + (e?.message || 'Server offline'), { id: 'tpl' });
+    }
+  };
 
   const handleGenerateDemo = () => {
     const demo = generateDemoOccupancy();
@@ -422,7 +458,13 @@ export default function OccupancyPage() {
             <h3 className="text-lg font-bold text-white flex items-center gap-2">
               <FileSpreadsheet className="w-5 h-5 text-indigo-400" /> Panduan & Skema File Excel Occupancy
             </h3>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2.5">
+              <button
+                onClick={handleDownloadTemplate}
+                className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-emerald-500/20"
+              >
+                <FileSpreadsheet className="w-4 h-4" /> Download Template Excel DDMRP
+              </button>
               <button
                 onClick={handleGenerateDemo}
                 className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-indigo-500/20"
@@ -524,13 +566,19 @@ export default function OccupancyPage() {
             }
             templateName="occupancy_template.csv"
             label="Upload Dataset Occupancy (Excel/CSV)"
-            description="File Excel atau CSV dengan kolom: Cabang, Category, On Hand, In, Out, Capacity, Date."
+            description="Format Multi-Sheet DDMRP (Raw & WH) atau Format Legacy CSV/XLSX (Cabang, Category, On Hand, In, Out, Capacity, Date)."
           />
         </div>
-        <div className="sm:border-l border-slate-800 sm:pl-4 flex flex-col justify-center items-center shrink-0">
+        <div className="sm:border-l border-slate-800 sm:pl-4 flex flex-col justify-center items-center shrink-0 gap-2.5">
+          <button
+            onClick={handleDownloadTemplate}
+            className="w-full sm:w-auto px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl shadow-lg transition flex items-center justify-center gap-2 text-xs sm:text-sm"
+          >
+            <FileSpreadsheet className="w-4 h-4" /> Download Template DDMRP
+          </button>
           <button
             onClick={handleGenerateDemo}
-            className="w-full sm:w-auto px-5 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-bold rounded-xl shadow-lg transition flex items-center justify-center gap-2 text-sm"
+            className="w-full sm:w-auto px-5 py-2.5 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-bold rounded-xl shadow-lg transition flex items-center justify-center gap-2 text-xs sm:text-sm"
           >
             <Zap className="w-4 h-4" /> Gunakan Data Demo
           </button>
@@ -821,6 +869,112 @@ export default function OccupancyPage() {
                   )}
                 </div>
               </div>
+
+              {/* Komparasi Occupancy Skenario Forecast vs Target Table */}
+              {(results.ddmrp_results.occupancy_series_forecast || results.ddmrp_results.occupancy_series_target) && (
+                <div className="mb-8">
+                  <h4 className="text-sm sm:text-base font-extrabold text-slate-100 mb-4 flex items-center gap-2.5 border-b border-white/10 pb-2.5">
+                    <Activity className="w-5 h-5 text-emerald-400" /> Komparasi Occupancy Mingguan - Skenario Forecast vs Target (%)
+                  </h4>
+                  <div className="overflow-x-auto rounded-xl border border-white/10 bg-slate-950/60 shadow-xl">
+                    <table className="w-full text-xs text-left text-slate-300">
+                      <thead className="bg-slate-900 text-slate-100 uppercase font-extrabold border-b border-white/10 tracking-wider">
+                        <tr>
+                          <th className="py-3.5 px-4">Cabang</th>
+                          <th className="py-3.5 px-4 text-center">Skenario</th>
+                          {results.ddmrp_results.period_labels?.map((label: string, i: number) => (
+                            <th key={i} className="py-3.5 px-3 text-right">{label}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/5 font-medium">
+                        {Object.keys(results.ddmrp_results.occupancy_series_forecast || results.ddmrp_results.occupancy_series_target || {}).map((cabang) => {
+                          const fVals = results.ddmrp_results.occupancy_series_forecast?.[cabang] || [];
+                          const tVals = results.ddmrp_results.occupancy_series_target?.[cabang] || [];
+                          return (
+                            <React.Fragment key={cabang}>
+                              <tr className="bg-slate-900/40 hover:bg-slate-800/70 transition">
+                                <td className="py-3 px-4 font-bold text-indigo-300 text-sm" rowSpan={2}>{cabang}</td>
+                                <td className="py-2 px-3 text-center font-bold text-blue-400 bg-blue-500/10 rounded">Forecast</td>
+                                {fVals.map((v: number, vIdx: number) => {
+                                  const isOver = v > 100;
+                                  const isHigh = v >= 90 && v <= 100;
+                                  return (
+                                    <td key={vIdx} className={`py-2.5 px-3 text-right text-sm font-bold ${
+                                      isOver ? 'text-rose-400 bg-rose-500/20 font-black' : isHigh ? 'text-amber-400 font-extrabold' : 'text-slate-200'
+                                    }`}>
+                                      {v.toFixed(1)}%
+                                      {isOver && <span className="block text-[9px] font-extrabold text-rose-300 uppercase tracking-tighter">Over Capacity!</span>}
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+                              <tr className="bg-slate-900/20 hover:bg-slate-800/70 transition border-b border-white/10">
+                                <td className="py-2 px-3 text-center font-bold text-emerald-400 bg-emerald-500/10 rounded">Target</td>
+                                {tVals.map((v: number, vIdx: number) => {
+                                  const isOver = v > 100;
+                                  const isHigh = v >= 90 && v <= 100;
+                                  return (
+                                    <td key={vIdx} className={`py-2.5 px-3 text-right text-sm font-bold ${
+                                      isOver ? 'text-rose-400 bg-rose-500/20 font-black' : isHigh ? 'text-amber-400 font-extrabold' : 'text-slate-200'
+                                    }`}>
+                                      {v.toFixed(1)}%
+                                      {isOver && <span className="block text-[9px] font-extrabold text-rose-300 uppercase tracking-tighter">Over Capacity!</span>}
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+                            </React.Fragment>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Automated Insights Section */}
+              {((results.ddmrp_results.insights_list && results.ddmrp_results.insights_list.length > 0) || (results.over_occupancy_insights && results.over_occupancy_insights.length > 0)) && (
+                <div className="mb-8">
+                  <h4 className="text-sm sm:text-base font-extrabold text-slate-100 mb-4 flex items-center gap-2.5 border-b border-white/10 pb-2.5">
+                    <Sparkles className="w-5 h-5 text-amber-400 animate-pulse" /> Insight &amp; Rekomendasi Otomatis DDMRP
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {(results.ddmrp_results.insights_list || results.over_occupancy_insights || []).map((text: string, idx: number) => {
+                      const isShortage = text.includes("RISIKO KEKURANGAN");
+                      const isOverOcc = text.includes("RISIKO OVER KAPASITAS");
+                      const isTrend = text.includes("TREN");
+                      const isComp = text.includes("PERBANDINGAN");
+                      
+                      return (
+                        <div key={idx} className={`p-4.5 rounded-2xl border flex items-start gap-4 shadow-lg backdrop-blur-md transition hover:scale-[1.01] ${
+                          isShortage ? 'bg-rose-950/40 border-rose-500/50 text-rose-100 shadow-rose-900/20' :
+                          isOverOcc ? 'bg-amber-950/40 border-amber-500/50 text-amber-100 shadow-amber-900/20' :
+                          isTrend ? 'bg-blue-950/40 border-blue-500/50 text-blue-100 shadow-blue-900/20' :
+                          isComp ? 'bg-purple-950/40 border-purple-500/50 text-purple-100 shadow-purple-900/20' :
+                          'bg-slate-900/70 border-slate-700 text-slate-200'
+                        }`}>
+                          <div className="p-2.5 rounded-xl bg-white/10 shrink-0 mt-0.5 shadow-inner">
+                            {isShortage ? <AlertOctagon className="w-6 h-6 text-rose-400 animate-bounce" /> :
+                             isOverOcc ? <AlertTriangle className="w-6 h-6 text-amber-400 animate-pulse" /> :
+                             isTrend ? <TrendingUp className="w-6 h-6 text-blue-400" /> :
+                             <Sparkles className="w-6 h-6 text-purple-400" />}
+                          </div>
+                          <div className="flex-1 text-xs sm:text-sm leading-relaxed font-normal">
+                            <span className="font-black text-sm uppercase tracking-wide block mb-1.5 text-white">
+                              {isShortage ? '🚨 Peringatan Shortage (Stok Kurang)' :
+                               isOverOcc ? '⚠️ Peringatan Kapasitas Gudang (Over-Occupancy)' :
+                               isTrend ? '📈 Analisa Tren Perubahan Stok' :
+                               isComp ? '⚖️ Analisa Komparasi Skenario' : '💡 Catatan Analisa'}
+                            </span>
+                            {text}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* Matplotlib Generated Charts Grid */}
               {results.ddmrp_results.charts && (

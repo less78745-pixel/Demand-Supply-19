@@ -288,16 +288,10 @@ def build_hasil_sheet(wb, sheet_name, ws_raw, raw_rows, n_weeks, demand_kind, pe
 
             out_col = col_perhitungan_start + w
             if w == 0:
-                formula = (
-                    f"=Raw!E{raw_row}+Raw!{L_to}{raw_row}+Raw!{L_vessel}{raw_row}"
-                    f"-Raw!{L_demand}{raw_row}"
-                )
+                formula = f"=SUM(Raw!E{raw_row},Raw!{L_to}{raw_row},Raw!{L_vessel}{raw_row})-Raw!{L_demand}{raw_row}"
             else:
                 prev_letter = perhitungan_col_letters[w - 1]
-                formula = (
-                    f"={prev_letter}{out_row}+Raw!{L_to}{raw_row}+Raw!{L_vessel}{raw_row}"
-                    f"-Raw!{L_demand}{raw_row}"
-                )
+                formula = f"=SUM({prev_letter}{out_row},Raw!{L_to}{raw_row},Raw!{L_vessel}{raw_row})-Raw!{L_demand}{raw_row}"
             ws.cell(row=out_row, column=out_col, value=formula)
             perhitungan_col_letters.append(get_column_letter(out_col))
 
@@ -309,8 +303,8 @@ def build_hasil_sheet(wb, sheet_name, ws_raw, raw_rows, n_weeks, demand_kind, pe
                 col_demand_next = col_forecast_next if demand_kind == "forecast" else col_target_next
                 L_demand_next = get_column_letter(col_demand_next)
                 formula = (
-                    f'=IF(Raw!{L_demand_next}{raw_row}=0,"",'
-                    f"{perhitungan_letter}{out_row}/Raw!{L_demand_next}{raw_row})"
+                    f'=IFERROR(IF(OR(Raw!{L_demand_next}{raw_row}="",Raw!{L_demand_next}{raw_row}=0),"",'
+                    f'{perhitungan_letter}{out_row}/Raw!{L_demand_next}{raw_row}),"")'
                 )
                 ws.cell(row=out_row, column=out_col, value=formula)
                 ws.cell(row=out_row, column=out_col).number_format = "0.0%"
@@ -352,10 +346,10 @@ def build_occupancy_sheet(wb, sheet_name, ws_wh, wh_rows, hasil_sheet_name,
             col_letter = get_column_letter(perhitungan_col_start + w)
             out_col = 3 + w
             formula = (
-                f"=SUMIF('{hasil_sheet_name}'!$B$3:$B${hasil_last_row},"
+                f"=IFERROR(IF(WH!$E{wh_row}=0,0,SUMIF('{hasil_sheet_name}'!$B$3:$B${hasil_last_row},"
                 f"$B{out_row},"
                 f"'{hasil_sheet_name}'!${col_letter}$3:${col_letter}${hasil_last_row})"
-                f"/WH!$E{wh_row}"
+                f"/WH!$E{wh_row}),0)"
             )
             ws.cell(row=out_row, column=out_col, value=formula)
             ws.cell(row=out_row, column=out_col).number_format = "0.0%"
