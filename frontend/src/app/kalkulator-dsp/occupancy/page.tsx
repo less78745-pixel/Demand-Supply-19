@@ -1017,7 +1017,9 @@ export default function OccupancyPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/5 font-medium">
-                        {Object.keys(mrpData.occupancy_series_forecast || mrpData.occupancy_series_target || {}).map((cabang) => {
+                        {Object.keys(mrpData.occupancy_series_forecast || mrpData.occupancy_series_target || {})
+                          .filter((cabang) => selectedCabang.includes('All') || selectedCabang.includes(cabang))
+                          .map((cabang) => {
                           const fVals = mrpData.occupancy_series_forecast?.[cabang] || [];
                           const tVals = mrpData.occupancy_series_target?.[cabang] || [];
                           return (
@@ -1062,32 +1064,38 @@ export default function OccupancyPage() {
                 </div>
               )}
 
-              {/* Automated Insights Section (Simplified) */}
-              {(mrpData.shortage_alerts?.length > 0 || mrpData.daily_data?.some((d: any) => d.occupancy_pct > 100)) && (
-                <div className="mb-6 bg-slate-50 border border-slate-200 rounded-2xl p-5 shadow-sm">
-                  <h4 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
-                    <Sparkles className="w-5 h-5 text-amber-500" /> Rangkuman Status Gudang
-                  </h4>
-                  <div className="flex flex-wrap gap-4">
-                    <div className="px-4 py-3 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-3">
-                      <AlertOctagon className="w-6 h-6 text-rose-500" />
-                      <div>
-                        <div className="text-rose-900 font-bold text-lg">{mrpData.shortage_alerts?.length || 0} Alert</div>
-                        <div className="text-rose-600 text-xs font-medium">Potensi Kekurangan Stok</div>
-                      </div>
-                    </div>
-                    <div className="px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-3">
-                      <AlertTriangle className="w-6 h-6 text-amber-500" />
-                      <div>
-                        <div className="text-amber-900 font-bold text-lg">
-                          {mrpData.daily_data?.filter((d: any) => d.occupancy_pct > 100).length || 0} Insiden
+              {/* Automated Insights Section (Filtered) */}
+              {(() => {
+                const filteredShortageAlerts = (mrpData.shortage_alerts || []).filter((a: any) => selectedCabang.includes('All') || selectedCabang.includes(a.cabang));
+                const filteredDailyData = (mrpData.daily_data || []).filter((d: any) => selectedCabang.includes('All') || selectedCabang.includes(d.cabang));
+                const hasInsights = filteredShortageAlerts.length > 0 || filteredDailyData.some((d: any) => d.occupancy_pct > 100);
+                if (!hasInsights) return null;
+                return (
+                  <div className="mb-6 bg-slate-50 border border-slate-200 rounded-2xl p-5 shadow-sm">
+                    <h4 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
+                      <Sparkles className="w-5 h-5 text-amber-500" /> Rangkuman Status Gudang (Mengikuti Filter)
+                    </h4>
+                    <div className="flex flex-wrap gap-4">
+                      <div className="px-4 py-3 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-3">
+                        <AlertOctagon className="w-6 h-6 text-rose-500" />
+                        <div>
+                          <div className="text-rose-900 font-bold text-lg">{filteredShortageAlerts.length} Alert</div>
+                          <div className="text-rose-600 text-xs font-medium">Potensi Kekurangan Stok</div>
                         </div>
-                        <div className="text-amber-700 text-xs font-medium">Over Kapasitas Gudang</div>
+                      </div>
+                      <div className="px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-3">
+                        <AlertTriangle className="w-6 h-6 text-amber-500" />
+                        <div>
+                          <div className="text-amber-900 font-bold text-lg">
+                            {filteredDailyData.filter((d: any) => d.occupancy_pct > 100).length} Insiden
+                          </div>
+                          <div className="text-amber-700 text-xs font-medium">Over Kapasitas Gudang</div>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* Matplotlib Generated Charts Grid */}
               {mrpData.charts && (
