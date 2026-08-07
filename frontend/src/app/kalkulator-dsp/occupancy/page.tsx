@@ -531,10 +531,10 @@ export default function OccupancyPage() {
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 uppercase tracking-widest">
               <Activity className="w-3.5 h-3.5" /> Kalkulator DSP • Warehouse & Inventory Projector
             </div>
-            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-slate-900 flex items-center gap-3">
+            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white flex items-center gap-3">
               Occupancy & <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-violet-300 to-purple-300">Inventory Projector</span>
             </h1>
-            <p className="text-slate-700 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
+            <p className="text-slate-300 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
               Analisis utilitas ruang simpan gudang per cabang, mitigasi kekurangan kapasitas, dan klasifikasi ABC-XYZ Inventory untuk pengoptimalan rantai pasok Anda.
             </p>
           </div>
@@ -1023,32 +1023,32 @@ export default function OccupancyPage() {
                           return (
                             <React.Fragment key={cabang}>
                               <tr className="bg-white hover:bg-slate-100 transition">
-                                <td className="py-3 px-4 font-bold text-indigo-300 text-sm" rowSpan={2}>{cabang}</td>
-                                <td className="py-2 px-3 text-center font-bold text-blue-400 bg-blue-500/10 rounded">Forecast</td>
+                                <td className="py-3 px-4 font-bold text-indigo-700 text-sm" rowSpan={2}>{cabang}</td>
+                                <td className="py-2 px-3 text-center font-bold text-blue-700 bg-blue-500/10 rounded">Forecast</td>
                                 {fVals.map((v: number, vIdx: number) => {
                                   const isOver = v > 100;
                                   const isHigh = v >= 90 && v <= 100;
                                   return (
                                     <td key={vIdx} className={`py-2.5 px-3 text-right text-sm font-bold ${
-                                      isOver ? 'text-rose-400 bg-rose-500/20 font-black' : isHigh ? 'text-amber-400 font-extrabold' : 'text-slate-800'
+                                      isOver ? 'text-rose-600 bg-rose-500/20 font-black' : isHigh ? 'text-amber-600 font-extrabold' : 'text-slate-800'
                                     }`}>
                                       {v.toFixed(1)}%
-                                      {isOver && <span className="block text-[9px] font-extrabold text-rose-300 uppercase tracking-tighter">Over Capacity!</span>}
+                                      {isOver && <span className="block text-[9px] font-extrabold text-rose-600 uppercase tracking-tighter">Over Capacity!</span>}
                                     </td>
                                   );
                                 })}
                               </tr>
                               <tr className="bg-white hover:bg-slate-100 transition border-b border-slate-200">
-                                <td className="py-2 px-3 text-center font-bold text-emerald-400 bg-emerald-500/10 rounded">Target</td>
+                                <td className="py-2 px-3 text-center font-bold text-emerald-700 bg-emerald-500/10 rounded">Target</td>
                                 {tVals.map((v: number, vIdx: number) => {
                                   const isOver = v > 100;
                                   const isHigh = v >= 90 && v <= 100;
                                   return (
                                     <td key={vIdx} className={`py-2.5 px-3 text-right text-sm font-bold ${
-                                      isOver ? 'text-rose-400 bg-rose-500/20 font-black' : isHigh ? 'text-amber-400 font-extrabold' : 'text-slate-800'
+                                      isOver ? 'text-rose-600 bg-rose-500/20 font-black' : isHigh ? 'text-amber-600 font-extrabold' : 'text-slate-800'
                                     }`}>
                                       {v.toFixed(1)}%
-                                      {isOver && <span className="block text-[9px] font-extrabold text-rose-300 uppercase tracking-tighter">Over Capacity!</span>}
+                                      {isOver && <span className="block text-[9px] font-extrabold text-rose-600 uppercase tracking-tighter">Over Capacity!</span>}
                                     </td>
                                   );
                                 })}

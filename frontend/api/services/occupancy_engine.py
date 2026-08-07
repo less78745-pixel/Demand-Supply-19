@@ -39,14 +39,29 @@ MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN",
 WEEKS_PER_MONTH = 4
 
 def period_label(week_number: int) -> str:
+    from datetime import date
     if week_number < 1:
         week_number = 1
-    zero_based = week_number - 1
-    month_index = zero_based // WEEKS_PER_MONTH
-    week_in_month = (zero_based % WEEKS_PER_MONTH) + 1
-    year_offset = month_index // 12
-    month_name = MONTHS[month_index % 12]
+    
+    # Calculate year and ISO week
+    # Assuming base year 2024 (leap year, standard reference)
+    year = 2024 + (week_number - 1) // 52
+    iso_week = ((week_number - 1) % 52) + 1
+    
+    # Get the date of Monday for this ISO week
+    try:
+        d = date.fromisocalendar(year, iso_week, 1)
+    except Exception:
+        # Fallback if fromisocalendar is not available or errors out
+        d = date(year, 1, 1)
+        
+    month_name = MONTHS[d.month - 1]
+    
+    # Calculate week of the month (1 to 5)
+    week_in_month = (d.day - 1) // 7 + 1
+    
     label = f"{month_name}-{week_in_month}"
+    year_offset = year - 2024
     if year_offset > 0:
         label += f" (Y+{year_offset})"
     return label

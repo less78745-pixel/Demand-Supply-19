@@ -386,10 +386,10 @@ export default function ForecastPage() {
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-purple-500/10 text-purple-400 border border-purple-500/20 uppercase tracking-widest">
               <BrainCircuit className="w-3.5 h-3.5" /> Kalkulator DSP • ML & AI Forecasting
             </div>
-            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-slate-900 flex items-center gap-3">
+            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white flex items-center gap-3">
               Advanced Causal <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-pink-300 to-indigo-300">Sales Forecasting</span>
             </h1>
-            <p className="text-slate-700 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
+            <p className="text-slate-300 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
               Peramalan permintaan hierarkis memadukan tren historis dengan variabel eksogen (AO, RO, Drop Size, NOO) menggunakan 15 algoritma Machine Learning modern.
             </p>
           </div>

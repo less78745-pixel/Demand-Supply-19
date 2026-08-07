@@ -119,15 +119,15 @@ const calculateStockCondition = (onHand: number, totalTO: number, totalVessel: n
   const exactRatio = totalSupply / effectiveTarget;
   const ratio = toExactFloat(exactRatio, 2);
   if (ratio > 1.5 || exactRatio > 1.500001) {
-    return { ratio, status: 'Overstock', badge: '🟣 OVERSTOCK', color: 'bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-sm shadow-purple-500/10' };
+    return { ratio, status: 'Overstock', badge: '🟣 OVERSTOCK', color: 'bg-purple-100 text-purple-800 border border-purple-300 shadow-sm shadow-purple-500/10' };
   }
   if (ratio > 1.25 || exactRatio > 1.250001) {
-    return { ratio, status: 'Aman', badge: '🟢 AMAN', color: 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' };
+    return { ratio, status: 'Aman', badge: '🟢 AMAN', color: 'bg-emerald-100 text-emerald-800 border border-emerald-300' };
   }
   if ((ratio >= 1.0 && ratio <= 1.25) || (exactRatio >= 0.99999 && exactRatio <= 1.250001)) {
-    return { ratio, status: 'Hati-Hati', badge: '🟡 HATI-HATI', color: 'bg-amber-500/20 text-amber-400 border border-amber-500/40' };
+    return { ratio, status: 'Hati-Hati', badge: '🟡 HATI-HATI', color: 'bg-amber-100 text-amber-800 border border-amber-300' };
   }
-  return { ratio, status: 'Bahaya', badge: '🔴 BAHAYA', color: 'bg-rose-500/20 text-rose-400 border border-rose-500/40 animate-pulse' };
+  return { ratio, status: 'Bahaya', badge: '🔴 BAHAYA', color: 'bg-rose-100 text-rose-800 border border-rose-300 animate-pulse' };
 };
 
 function generateDemoSOH(): ParsedData {
@@ -767,19 +767,19 @@ export default function SOHAnalysisPage() {
     const globalRatio = totalEffectiveTarget > 0 ? Number((totalSupply / totalEffectiveTarget).toFixed(2)) : 0;
     
     let globalStatus = '⚪ N/A (Target <= 0)';
-    let badgeColor = 'bg-slate-700/50 text-slate-700 border border-slate-600';
+    let badgeColor = 'bg-slate-100 text-slate-800 border border-slate-300';
     if (globalRatio > 1.5) {
       globalStatus = '🟣 OVERSTOCK (Rasio > 1.50)';
-      badgeColor = 'bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-lg shadow-purple-500/20';
+      badgeColor = 'bg-purple-100 text-purple-800 border border-purple-300 shadow-lg shadow-purple-500/20';
     } else if (globalRatio > 1.25) {
       globalStatus = '🟢 AMAN (Rasio 1.25 - 1.50)';
-      badgeColor = 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40';
+      badgeColor = 'bg-emerald-100 text-emerald-800 border border-emerald-300';
     } else if (globalRatio >= 1.0) {
       globalStatus = '🟡 HATI-HATI (Rasio 1.0 - 1.25)';
-      badgeColor = 'bg-amber-500/20 text-amber-400 border border-amber-500/40';
+      badgeColor = 'bg-amber-100 text-amber-800 border border-amber-300';
     } else if (totalEffectiveTarget > 0) {
       globalStatus = '🔴 BAHAYA (Rasio < 1.0)';
-      badgeColor = 'bg-rose-500/20 text-rose-400 border border-rose-500/40 animate-pulse';
+      badgeColor = 'bg-rose-100 text-rose-800 border border-rose-300 animate-pulse';
     }
 
     return {
