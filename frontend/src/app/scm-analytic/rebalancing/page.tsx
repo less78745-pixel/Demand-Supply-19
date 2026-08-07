@@ -440,8 +440,8 @@ export default function RebalancingPage() {
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={results.route_summary || []} layout="vertical" margin={{ top: 10, right: 20, left: 100, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
-                    <XAxis type="number" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} tickLine={false} axisLine={false} />
-                    <YAxis type="category" dataKey="route" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} tickLine={false} axisLine={false} width={95} />
+                    <XAxis type="number" tick={{ fill: '#475569', fontSize: 11 }} tickLine={false} axisLine={false} />
+                    <YAxis type="category" dataKey="route" tick={{ fill: '#475569', fontSize: 10 }} tickLine={false} axisLine={false} width={95} />
                     <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--popover))', borderColor: 'hsl(var(--border))', color: 'hsl(var(--popover-foreground))' }}
                       formatter={(value: any) => [`Rp ${Number(value).toLocaleString('id-ID')}`]} />
                     <Bar dataKey="total_cost" name="Total Biaya" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />

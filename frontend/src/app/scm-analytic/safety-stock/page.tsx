@@ -437,8 +437,8 @@ export default function SafetyStockPage() {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={results.service_level_simulations || []} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                  <XAxis dataKey="service_level" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} tickLine={false} axisLine={false} />
-                  <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} tickLine={false} axisLine={false} />
+                  <XAxis dataKey="service_level" tick={{ fill: '#475569', fontSize: 11 }} tickLine={false} axisLine={false} />
+                  <YAxis tick={{ fill: '#475569', fontSize: 11 }} tickLine={false} axisLine={false} />
                   <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--popover))', borderColor: 'hsl(var(--border))', color: 'hsl(var(--popover-foreground))' }} />
                   <Bar dataKey="total_safety_stock" name="Total Safety Stock" radius={[4, 4, 0, 0]}>
                     {(results.service_level_simulations || []).map((entry: any, idx: number) => (
@@ -463,8 +463,8 @@ export default function SafetyStockPage() {
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={zoneChartData} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                    <XAxis dataKey="cabang" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} tickLine={false} axisLine={false} angle={-45} textAnchor="end" height={80} />
-                    <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} tickLine={false} axisLine={false} />
+                    <XAxis dataKey="cabang" tick={{ fill: '#475569', fontSize: 10 }} tickLine={false} axisLine={false} angle={-45} textAnchor="end" height={80} />
+                    <YAxis tick={{ fill: '#475569', fontSize: 11 }} tickLine={false} axisLine={false} />
                     <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--popover))', borderColor: 'hsl(var(--border))', color: 'hsl(var(--popover-foreground))' }} />
                     <Legend />
                     <Bar dataKey="Red Zone" stackId="zones" fill="#ef4444" radius={[0, 0, 0, 0]} />
@@ -486,8 +486,8 @@ export default function SafetyStockPage() {
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={ltChartData} layout="vertical" margin={{ top: 10, right: 20, left: 80, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
-                    <XAxis type="number" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} tickLine={false} axisLine={false} unit=" hari" />
-                    <YAxis type="category" dataKey="cabang" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} tickLine={false} axisLine={false} width={75} />
+                    <XAxis type="number" tick={{ fill: '#475569', fontSize: 11 }} tickLine={false} axisLine={false} unit=" hari" />
+                    <YAxis type="category" dataKey="cabang" tick={{ fill: '#475569', fontSize: 10 }} tickLine={false} axisLine={false} width={75} />
                     <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--popover))', borderColor: 'hsl(var(--border))', color: 'hsl(var(--popover-foreground))' }} />
                     <Legend />
                     <Bar dataKey="avg_lead_time" name="Avg Lead Time" radius={[0, 4, 4, 0]}>

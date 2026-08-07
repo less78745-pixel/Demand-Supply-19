@@ -542,8 +542,8 @@ export default function LandedCostPage() {
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={modifiedResults.currency_simulations || []} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                    <XAxis dataKey="rate" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} tickLine={false} axisLine={false} />
-                    <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} tickLine={false} axisLine={false}
+                    <XAxis dataKey="rate" tick={{ fill: '#475569', fontSize: 10 }} tickLine={false} axisLine={false} />
+                    <YAxis tick={{ fill: '#475569', fontSize: 11 }} tickLine={false} axisLine={false}
                       tickFormatter={(v) => `${(v / 1e6).toFixed(0)}M`} />
                     <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--popover))', borderColor: 'hsl(var(--border))', color: 'hsl(var(--popover-foreground))' }}
                       formatter={(value: any) => [`Rp ${Number(value).toLocaleString('id-ID')}`]} />
@@ -571,8 +571,8 @@ export default function LandedCostPage() {
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={modifiedResults.monte_carlo.histogram} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                    <XAxis dataKey="bin" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} tickLine={false} axisLine={false} label={{ value: 'Hari', position: 'insideBottom', offset: -2 }} />
-                    <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} tickLine={false} axisLine={false} />
+                    <XAxis dataKey="bin" tick={{ fill: '#475569', fontSize: 10 }} tickLine={false} axisLine={false} label={{ value: 'Hari', position: 'insideBottom', offset: -2 }} />
+                    <YAxis tick={{ fill: '#475569', fontSize: 11 }} tickLine={false} axisLine={false} />
                     <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--popover))', borderColor: 'hsl(var(--border))', color: 'hsl(var(--popover-foreground))' }} />
                     <Bar dataKey="count" name="Frekuensi" fill="hsl(var(--primary))" radius={[2, 2, 0, 0]} opacity={0.8} />
                   </BarChart>

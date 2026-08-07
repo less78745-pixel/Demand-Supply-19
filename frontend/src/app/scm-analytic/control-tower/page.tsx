@@ -470,8 +470,8 @@ export default function ControlTowerPage() {
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={results.region_summary || []} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                    <XAxis dataKey="region" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} tickLine={false} axisLine={false} />
-                    <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} tickLine={false} axisLine={false} />
+                    <XAxis dataKey="region" tick={{ fill: '#475569', fontSize: 10 }} tickLine={false} axisLine={false} />
+                    <YAxis tick={{ fill: '#475569', fontSize: 11 }} tickLine={false} axisLine={false} />
                     <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--popover))', borderColor: 'hsl(var(--border))', color: 'hsl(var(--popover-foreground))' }} />
                     <Legend />
                     <Bar dataKey="avg_in_stock" name="In-Stock %" fill="#22c55e" radius={[2, 2, 0, 0]} />
@@ -492,8 +492,8 @@ export default function ControlTowerPage() {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={filtered} layout="vertical" margin={{ top: 10, right: 20, left: 90, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
-                  <XAxis type="number" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} tickLine={false} axisLine={false} unit=" hari" />
-                  <YAxis type="category" dataKey="cabang" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} tickLine={false} axisLine={false} width={85} />
+                  <XAxis type="number" tick={{ fill: '#475569', fontSize: 11 }} tickLine={false} axisLine={false} unit=" hari" />
+                  <YAxis type="category" dataKey="cabang" tick={{ fill: '#475569', fontSize: 10 }} tickLine={false} axisLine={false} width={85} />
                   <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--popover))', borderColor: 'hsl(var(--border))', color: 'hsl(var(--popover-foreground))' }}
                     formatter={(value: any) => [`${value} hari`, 'Days of Supply']}
                     labelFormatter={(label: any) => {

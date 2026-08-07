@@ -566,7 +566,7 @@ export default function ForecastPage() {
                     <select 
                       value={selectedMethod} 
                       onChange={e => setSelectedMethod(e.target.value)} 
-                      className="w-full min-h-[44px] rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm text-sky-300 font-bold focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30 transition shadow-md"
+                      className="w-full min-h-[44px] rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm text-sky-700 font-bold focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30 transition shadow-md"
                     >
                       {results.available_methods.map((m:string) => <option key={m} value={m}>{m}</option>)}
                     </select>

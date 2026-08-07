@@ -31,9 +31,9 @@ const CustomTick = (props: any) => {
 
   return (
     <g transform={`translate(${x},${y})`}>
-      <text x={0} y={0} dy={16} textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize={11}>{date}</text>
-      <text x={0} y={0} dy={30} textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize={11} className="font-semibold">{category}</text>
-      <text x={0} y={0} dy={44} textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize={11}>{cabang}</text>
+      <text x={0} y={0} dy={16} textAnchor="middle" fill="#475569" fontSize={11}>{date}</text>
+      <text x={0} y={0} dy={30} textAnchor="middle" fill="#475569" fontSize={11} className="font-semibold">{category}</text>
+      <text x={0} y={0} dy={44} textAnchor="middle" fill="#475569" fontSize={11}>{cabang}</text>
     </g>
   );
 };
@@ -57,15 +57,15 @@ export function ForecastChart({ data, activeMethod }: ForecastChartProps) {
           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
           <XAxis 
             dataKey="label" 
-            stroke="hsl(var(--muted-foreground))" 
+            stroke="#475569" 
             tick={<CustomTick />} 
             tickLine={false} 
             axisLine={false} 
             height={70}
           />
           <YAxis 
-            stroke="hsl(var(--muted-foreground))" 
-            tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} 
+            stroke="#475569" 
+            tick={{ fill: '#475569', fontSize: 12 }} 
             tickLine={false} 
             axisLine={false} 
           />

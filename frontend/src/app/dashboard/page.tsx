@@ -526,8 +526,8 @@ export default function DashboardOverview() {
                         <ResponsiveContainer width="100%" height="100%">
                           <BarChart data={occChartData.chartRows} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                            <XAxis dataKey="date" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} tickLine={false} axisLine={false} />
-                            <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} tickLine={false} axisLine={false} unit="%" />
+                            <XAxis dataKey="date" tick={{ fill: '#475569', fontSize: 11 }} tickLine={false} axisLine={false} />
+                            <YAxis tick={{ fill: '#475569', fontSize: 11 }} tickLine={false} axisLine={false} unit="%" />
                             <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--popover))', borderColor: 'hsl(var(--border))', color: 'hsl(var(--popover-foreground))' }} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }} formatter={(value: any) => [`${Number(value).toFixed(2)}%`]} />
                             <Legend />
                             <ReferenceLine y={100} stroke="hsl(var(--destructive))" strokeDasharray="4 2" />
@@ -569,11 +569,11 @@ export default function DashboardOverview() {
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={forecastSnapshot.chartRows} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
                           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                          <XAxis dataKey="cabang" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} tickLine={false} axisLine={false} />
-                          <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} tickLine={false} axisLine={false} />
+                          <XAxis dataKey="cabang" tick={{ fill: '#475569', fontSize: 11 }} tickLine={false} axisLine={false} />
+                          <YAxis tick={{ fill: '#475569', fontSize: 11 }} tickLine={false} axisLine={false} />
                           <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--popover))', borderColor: 'hsl(var(--border))', color: 'hsl(var(--popover-foreground))' }} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }} />
                           <Legend />
-                          <Bar dataKey="Avg Actual" fill="hsl(var(--muted-foreground))" radius={[2, 2, 0, 0]} />
+                          <Bar dataKey="Avg Actual" fill="#475569" radius={[2, 2, 0, 0]} />
                           <Bar dataKey={`Forecast (${forecastSnapshot.bestModel})`} fill="hsl(var(--primary))" radius={[2, 2, 0, 0]} />
                         </BarChart>
                       </ResponsiveContainer>
