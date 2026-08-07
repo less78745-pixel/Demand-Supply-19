@@ -818,7 +818,7 @@ export default function HistorySalesPage() {
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20 uppercase tracking-widest">
               <TrendingUp className="w-3.5 h-3.5" /> Dashboard Data Harian • History Sales
             </div>
-            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-slate-900 flex items-center gap-3">
+            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white flex items-center gap-3">
               History Sales & Outstanding <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-sky-400 to-cyan-300">(Analytics Engine)</span>
             </h1>
             <p className="text-slate-700 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
@@ -981,7 +981,7 @@ export default function HistorySalesPage() {
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-black bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 uppercase tracking-widest mb-2 shadow-sm">
                 <Sparkles className="w-3.5 h-3.5 text-indigo-400" /> Advanced Analytics • Matriks ABC-XYZ (M s/d M-5)
               </div>
-              <h3 className="text-lg sm:text-xl font-black text-slate-900 flex items-center gap-2.5">
+              <h3 className="text-lg sm:text-xl font-black text-white flex items-center gap-2.5">
                 <BarChart3 className="w-6 h-6 text-indigo-400" />
                 Grafik &amp; Analisa Matriks ABC-XYZ (Volume vs Fluktuasi Permintaan)
               </h3>
@@ -1004,7 +1004,7 @@ export default function HistorySalesPage() {
               </h4>
               <div className="h-[280px] w-full flex-1">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={abcXyzAnalysis.chartData} margin={{ top: 15, right: 15, left: 0, bottom: 20 }}>
+                  <BarChart data={abcXyzAnalysis.chartData} margin={{ top: 15, right: 15, left: 20, bottom: 20 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.4} />
                     <XAxis dataKey="matrix" stroke="#94a3b8" tick={{ fill: '#e2e8f0', fontSize: 13, fontWeight: 'bold' }} />
                     <YAxis stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 12 }} />
@@ -1089,7 +1089,7 @@ export default function HistorySalesPage() {
         <GlassCard className="p-6 border-blue-500/30 bg-gradient-to-b from-slate-900/90 to-slate-950/90 shadow-2xl">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 pb-4 mb-6 gap-3">
             <div>
-              <h3 className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2">
+              <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
                 <BarChart3 className="w-5 h-5 text-blue-400" />
                 Grafik Komparasi Volume Sales vs Outstanding per Cabang
               </h3>
@@ -1136,7 +1136,7 @@ export default function HistorySalesPage() {
 
           <div className="h-[360px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={chartData} margin={{ top: 20, right: 30, left: 10, bottom: 20 }}>
+              <ComposedChart data={chartData} margin={{ top: 20, right: 30, left: 30, bottom: 60 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
                 <XAxis dataKey="cabang" stroke="#94a3b8" tick={{ fill: '#e2e8f0', fontSize: 12, fontWeight: 600 }} angle={-15} textAnchor="end" height={50} />
                 <YAxis stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 12 }} />
@@ -1204,7 +1204,7 @@ export default function HistorySalesPage() {
                   <ShieldAlert className="w-5 h-5 text-blue-400 animate-pulse" />
                 </span>
                 <div>
-                  <h4 className="font-extrabold text-slate-900 text-sm sm:text-base tracking-wide flex items-center gap-2">
+                  <h4 className="font-extrabold text-white text-sm sm:text-base tracking-wide flex items-center gap-2">
                     Insight Analitis: Komparasi Total Pasokan (SOH + TO + Vessel) vs Rata-Rata Sales 3 Bulan
                   </h4>
                   <p className="text-xs text-slate-600">
@@ -1305,7 +1305,7 @@ export default function HistorySalesPage() {
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[11px] font-black bg-amber-500/10 text-amber-400 border border-amber-500/30 uppercase tracking-widest mb-2">
                 <Layers className="w-3.5 h-3.5" /> Kapasitas Stok vs History Penjualan
               </div>
-              <h3 className="text-lg sm:text-xl font-black text-slate-900 flex items-center gap-2.5">
+              <h3 className="text-lg sm:text-xl font-black text-white flex items-center gap-2.5">
                 <BarChart3 className="w-5 h-5 text-amber-400" />
                 Komparasi Stok (SOH + TO + Vessel) Terhadap Penjualan Bulanan (M s/d M-5)
               </h3>

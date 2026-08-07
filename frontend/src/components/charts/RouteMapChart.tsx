@@ -146,7 +146,7 @@ export function RouteMapChart({ locations = [], routes = [], methodName }: Route
         </svg>
 
         <ResponsiveContainer width="100%" height="100%">
-          <ScatterChart margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
+          <ScatterChart margin={{ top: 10, right: 30, left: 30, bottom: 30 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis
               type="number" dataKey="lon" name="Longitude"

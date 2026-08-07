@@ -803,7 +803,7 @@ export default function PRUpdatePage() {
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-purple-500/10 text-purple-400 border border-purple-500/20 uppercase tracking-widest">
               <FileBarChart className="w-3.5 h-3.5" /> Dashboard Data Harian • PR Update & Tracking Container
             </div>
-            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-slate-900 flex items-center gap-3">
+            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white flex items-center gap-3">
               PR Update & Tracking Container <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-pink-400 to-amber-300">(Integrated Tracker)</span>
             </h1>
             <p className="text-slate-700 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
@@ -1017,7 +1017,7 @@ export default function PRUpdatePage() {
         <GlassCard className="p-6 border-purple-500/30 bg-gradient-to-b from-slate-900/90 to-slate-950/90 shadow-2xl">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between border-b border-slate-200 pb-4 mb-6 gap-4">
             <div>
-              <h3 className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2">
+              <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
                 <BarChart3 className="w-5 h-5 text-purple-400" />
                 Grafik Distribusi Status Compile & Persebaran Category ({chartViewMode === 'eta' ? 'per Week ETA' : chartViewMode === 'cabang' ? 'per Cabang' : 'Jumlah Container per Cabang'})
               </h3>
@@ -1071,7 +1071,7 @@ export default function PRUpdatePage() {
 
           <div className="w-full pb-4" style={{ minHeight: '520px' }}>
             <ResponsiveContainer width="100%" height={520}>
-              <BarChart data={chartViewMode === 'eta' ? chartEtaData : chartViewMode === 'container' ? chartContainerData : chartData} margin={{ top: 20, right: 60, left: 20, bottom: 40 }}>
+              <BarChart data={chartViewMode === 'eta' ? chartEtaData : chartViewMode === 'container' ? chartContainerData : chartData} margin={{ top: 20, right: 60, left: 40, bottom: 60 }}>
                 <defs>
                   <linearGradient id="containerBarGradient" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="#06b6d4" stopOpacity={0.95} />
@@ -1122,7 +1122,7 @@ export default function PRUpdatePage() {
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[11px] font-extrabold bg-rose-500/20 text-rose-300 border border-rose-500/40 uppercase tracking-wider mb-1 shadow-sm">
               <ShieldAlert className="w-3.5 h-3.5 text-rose-400 animate-pulse" /> Warning Supply Chain • Monitoring Keterlambatan Port & Vendor
             </div>
-            <h3 className="text-lg sm:text-xl font-black text-slate-900 flex items-center gap-2.5">
+            <h3 className="text-lg sm:text-xl font-black text-white flex items-center gap-2.5">
               Insight PO Overdue: SPJM, Hold Delivery & On Vessel
             </h3>
             <p className="text-xs sm:text-sm text-slate-700">

@@ -923,7 +923,7 @@ export default function SOHAnalysisPage() {
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase tracking-widest">
               <ClipboardList className="w-3.5 h-3.5" /> Dashboard Data Harian • SOH-TO-Vessel
             </div>
-            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-slate-900 flex items-center gap-3">
+            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white flex items-center gap-3">
               SOH-TO-Vessel <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-cyan-400 to-teal-300">(Weekly Grouping Analytics)</span>
             </h1>
             <p className="text-slate-700 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
@@ -1166,7 +1166,7 @@ export default function SOHAnalysisPage() {
         <GlassCard className="p-6 border-emerald-500/30 bg-gradient-to-b from-slate-900/90 to-slate-950/90 shadow-2xl">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 pb-4 mb-6 gap-3">
             <div>
-              <h3 className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2">
+              <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
                 <BarChart3 className="w-5 h-5 text-emerald-400" />
                 {chartMode === 'weekly' ? 'Grafik Grouping Mingguan: TO vs Vessel per Kategori (W1 - W4)' : chartMode === 'stock' ? 'Detail On Hand (Fisik) per Kategori Barang' : 'Grafik Komparasi Pilar SOH & Inbound per Cabang'}
               </h3>
@@ -1455,7 +1455,7 @@ export default function SOHAnalysisPage() {
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider bg-amber-500/10 text-amber-400 border border-amber-500/20 mb-2.5">
               <Sparkles className="w-3.5 h-3.5" /> Hasil Kesimpulan Hitungan Otomatis ({unitLabel})
             </div>
-            <h3 className="text-lg sm:text-xl font-black text-slate-900 flex items-center gap-2">
+            <h3 className="text-lg sm:text-xl font-black text-white flex items-center gap-2">
               Kesimpulan Rasio Pasokan vs Target Efektif (Outstanding - Sales Berjalan)
             </h3>
             <p className="text-xs text-slate-600 mt-1">
