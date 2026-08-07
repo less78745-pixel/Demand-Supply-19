@@ -1079,7 +1079,7 @@ export default function PRUpdatePage() {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
-                <XAxis dataKey={chartViewMode === 'eta' ? 'eta' : 'cabang'} stroke="#94a3b8" tick={{ fill: '#e2e8f0', fontSize: 12, fontWeight: 600 }} angle={-15} textAnchor="end" height={60} />
+                <XAxis dataKey={chartViewMode === 'eta' ? 'eta' : 'cabang'} stroke="#94a3b8" tick={{ fill: '#e2e8f0', fontSize: 11, fontWeight: 600 }} angle={-35} textAnchor="end" height={90} />
                 <YAxis stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 12 }} tickFormatter={(val) => Number(val).toLocaleString('id-ID')} />
                 <Tooltip
                   content={chartViewMode === 'container' ? <CustomContainerTooltip /> : <CustomStackedTooltip />}
@@ -1195,22 +1195,22 @@ export default function PRUpdatePage() {
         {/* Table of Overdue POs */}
         <div className="overflow-x-auto rounded-xl border border-slate-200 max-h-[420px] overflow-y-auto shadow-inner">
           <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[1050px]">
-            <thead className="bg-slate-50 text-slate-700 uppercase font-bold sticky top-0 z-20 shadow-md text-center text-[11px] tracking-wider">
-              <tr className="border-b border-slate-200">
+            <thead className="bg-slate-800/80 text-slate-200 uppercase font-bold sticky top-0 z-20 shadow-md text-center text-[11px] tracking-wider">
+              <tr className="border-b border-slate-700">
                 <th className="py-3.5 px-3 text-left">Cabang</th>
-                <th className="py-3.5 px-3 border-l border-slate-200 text-amber-400">No. PO</th>
-                <th className="py-3.5 px-3 border-l border-slate-200 text-purple-400">Status Compile</th>
-                <th className="py-3.5 px-3 border-l border-slate-200 text-cyan-300">Tanggal ETA</th>
-                <th className="py-3.5 px-4 border-l border-slate-200 text-rose-400 bg-rose-950/40 font-extrabold">Durasi Terlewat</th>
-                <th className="py-3.5 px-3 border-l border-slate-200 text-left">Deskripsi & Kategori</th>
-                <th className="py-3.5 px-3 border-l border-slate-200 text-emerald-400">Total Qty</th>
-                <th className="py-3.5 px-4 border-l border-slate-200">Action & Rekomendasi</th>
+                <th className="py-3.5 px-3 border-l border-slate-700 text-amber-400">No. PO</th>
+                <th className="py-3.5 px-3 border-l border-slate-700 text-purple-400">Status Compile</th>
+                <th className="py-3.5 px-3 border-l border-slate-700 text-cyan-300">Tanggal ETA</th>
+                <th className="py-3.5 px-4 border-l border-slate-700 text-rose-400 bg-rose-950/40 font-extrabold">Durasi Terlewat</th>
+                <th className="py-3.5 px-3 border-l border-slate-700 text-left">Deskripsi & Kategori</th>
+                <th className="py-3.5 px-3 border-l border-slate-700 text-emerald-400">Total Qty</th>
+                <th className="py-3.5 px-4 border-l border-slate-700">Action & Rekomendasi</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/80 text-slate-700 text-center font-medium">
+            <tbody className="divide-y divide-slate-800/80 text-slate-300 text-center font-medium">
               {overdueInsights.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-emerald-400 font-bold bg-slate-50 text-sm">
+                  <td colSpan={8} className="py-12 text-center text-emerald-400 font-bold bg-slate-900/40 text-sm">
                     🎉 Tidak ada dokumen SPJM, Hold Delivery, atau On Vessel yang melewati Tanggal ETA! Seluruh rantai pasok tepat waktu.
                   </td>
                 </tr>
@@ -1218,14 +1218,14 @@ export default function PRUpdatePage() {
                 const isSevere = item.overdueDays >= 14;
                 const isMod = item.overdueDays >= 7 && !isSevere;
                 return (
-                  <tr key={idx} className="hover:bg-slate-100 transition font-semibold">
-                    <td className="py-3 px-3 text-left font-extrabold text-slate-900 align-middle">
+                  <tr key={idx} className="hover:bg-slate-800/50 transition font-semibold">
+                    <td className="py-3 px-3 text-left font-extrabold text-white align-middle">
                       {item.cabang}
                     </td>
-                    <td className="py-3 px-3 border-l border-slate-200 font-mono font-bold text-amber-300 align-middle text-sm">
+                    <td className="py-3 px-3 border-l border-slate-700 font-mono font-bold text-amber-300 align-middle text-sm">
                       {item.po}
                     </td>
-                    <td className="py-3 px-3 border-l border-slate-200 align-middle">
+                    <td className="py-3 px-3 border-l border-slate-700 align-middle">
                       <span className={`px-2.5 py-1 rounded-lg text-xs font-black inline-block shadow-sm ${
                         item.statusCategory === 'SPJM' ? 'bg-purple-950/90 text-purple-300 border border-purple-500/50' :
                         item.statusCategory === 'HOLD' ? 'bg-rose-950/90 text-rose-300 border border-rose-500/50' :
@@ -1234,12 +1234,12 @@ export default function PRUpdatePage() {
                         {item.status}
                       </span>
                     </td>
-                    <td className="py-3 px-3 border-l border-slate-200 font-mono text-cyan-300 align-middle font-bold">
+                    <td className="py-3 px-3 border-l border-slate-700 font-mono text-cyan-300 align-middle font-bold">
                       {item.etaFormatted}
                     </td>
-                    <td className="py-3 px-3 border-l border-slate-200 bg-rose-950/30 align-middle">
+                    <td className="py-3 px-3 border-l border-slate-700 bg-rose-950/30 align-middle">
                       <span className={`px-3 py-1 rounded-full text-xs font-black inline-flex items-center gap-1.5 shadow-md border ${
-                        isSevere ? 'bg-rose-600 text-slate-900 border-rose-400 animate-pulse' :
+                        isSevere ? 'bg-rose-600 text-white border-rose-400 animate-pulse' :
                         isMod ? 'bg-orange-500 text-slate-900 border-orange-300' :
                         'bg-amber-500/30 text-amber-300 border-amber-500/50'
                       }`}>
@@ -1247,15 +1247,15 @@ export default function PRUpdatePage() {
                         Terlewat {item.overdueDays} Hari
                       </span>
                     </td>
-                    <td className="py-3 px-3 border-l border-slate-200 text-left align-middle max-w-[240px]">
-                      <div className="font-bold text-slate-900 truncate text-xs" title={item.deskripsi}>{item.deskripsi}</div>
+                    <td className="py-3 px-3 border-l border-slate-700 text-left align-middle max-w-[240px]">
+                      <div className="font-bold text-white truncate text-xs" title={item.deskripsi}>{item.deskripsi}</div>
                       <div className="text-[11px] text-purple-300 font-mono mt-0.5 truncate">{item.grup} • {item.category}</div>
                     </td>
-                    <td className="py-3 px-3 border-l border-slate-200 font-mono font-black text-emerald-400 text-base align-middle">
+                    <td className="py-3 px-3 border-l border-slate-700 font-mono font-black text-emerald-400 text-base align-middle">
                       {item.qty.toLocaleString('id-ID')}
                     </td>
-                    <td className="py-3 px-3 border-l border-slate-200 align-middle">
-                      <div className="text-[11px] font-extrabold px-2.5 py-1 rounded-lg bg-slate-100 text-slate-800 border border-slate-200 shadow-sm inline-block">
+                    <td className="py-3 px-3 border-l border-slate-700 align-middle">
+                      <div className="text-[11px] font-extrabold px-2.5 py-1 rounded-lg bg-slate-800 text-slate-200 border border-slate-700 shadow-sm inline-block">
                         {item.statusCategory === 'SPJM' ? '🚛 Desak Trucking Port' :
                          item.statusCategory === 'HOLD' ? '📞 Eskalasi Vendor/Port' :
                          '⚓ Cek Sandar / Bea Cukai'}

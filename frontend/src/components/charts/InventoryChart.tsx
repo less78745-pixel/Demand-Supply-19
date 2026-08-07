@@ -26,20 +26,21 @@ export function InventoryChart({ data }: InventoryChartProps) {
           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
           <XAxis 
             dataKey="category" 
-            stroke="hsl(var(--muted-foreground))" 
-            tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} 
+            stroke="#94a3b8" 
+            tick={{ fill: '#475569', fontSize: 11, fontWeight: 500 }}
+            angle={-35} textAnchor="end" height={80}
             tickLine={false} 
             axisLine={false} 
           />
           <YAxis 
-            stroke="hsl(var(--muted-foreground))" 
-            tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} 
+            stroke="#94a3b8" 
+            tick={{ fill: '#64748b', fontSize: 11 }} 
             tickLine={false} 
             axisLine={false} 
           />
           <Tooltip 
-            contentStyle={{ backgroundColor: 'hsl(var(--background))', borderColor: 'hsl(var(--border))', color: 'hsl(var(--foreground))' }}
-            cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }}
+            contentStyle={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0', color: '#1e293b', borderRadius: '8px', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+            cursor={{ fill: '#f1f5f9', opacity: 0.8 }}
           />
           <Legend wrapperStyle={{ paddingTop: '20px' }} />
           

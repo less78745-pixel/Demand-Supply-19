@@ -942,7 +942,7 @@ Pelanggan,Toko A,-6.210000,106.820000,15,08:00-12:00,30`}
                                 {item.methodName}
                               </span>
                               {item.isBestMethod && (
-                                <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-extrabold px-2 py-0.5 rounded border border-emerald-500/40 w-fit">
+                                <span className="text-[10px] bg-emerald-500/10 text-emerald-700 font-extrabold px-2 py-0.5 rounded border border-emerald-500/40 w-fit">
                                   ✨ RUTE PALING OK
                                 </span>
                               )}
@@ -953,11 +953,11 @@ Pelanggan,Toko A,-6.210000,106.820000,15,08:00-12:00,30`}
                           </td>
                           <td className="py-3 px-3 border-l border-slate-200 align-middle">
                             {item.is_dedicated ? (
-                              <span className="px-2 py-0.5 bg-orange-500/10 border border-orange-500/30 text-orange-400 font-bold rounded text-xs uppercase inline-block">
+                              <span className="px-2 py-0.5 bg-orange-500/10 border border-orange-500/30 text-orange-700 font-bold rounded text-xs uppercase inline-block">
                                 Dedicated
                               </span>
                             ) : (
-                              <span className="px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-bold rounded text-xs uppercase inline-block">
+                              <span className="px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 font-bold rounded text-xs uppercase inline-block">
                                 Optimasi
                               </span>
                             )}
@@ -969,11 +969,11 @@ Pelanggan,Toko A,-6.210000,106.820000,15,08:00-12:00,30`}
                             {item.load ?? '—'} unit
                           </td>
                           <td className="py-3 px-3 border-l border-slate-200 align-middle text-right font-mono text-xs">
-                            <span className={Number(item.capacity_pct) > 90 ? 'text-amber-400 font-bold' : 'text-emerald-400 font-bold'}>
+                            <span className={Number(item.capacity_pct) > 90 ? 'text-amber-600 font-bold' : 'text-emerald-600 font-bold'}>
                               {item.capacity_pct ?? '—'}%
                             </span>
                           </td>
-                          <td className="py-3 px-3 border-l border-slate-200 align-middle text-right font-mono font-black text-cyan-300 text-sm">
+                          <td className="py-3 px-3 border-l border-slate-200 align-middle text-right font-mono font-black text-cyan-700 text-sm">
                             {item.distance_km ?? '—'} km
                           </td>
                           <td className="py-3 px-4 border-l border-slate-200 text-left align-middle text-xs text-slate-700 max-w-sm truncate" title={getRouteStopNames(item).join(' ➔ ')}>

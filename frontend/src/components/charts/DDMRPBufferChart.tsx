@@ -109,8 +109,8 @@ export function DDMRPBufferChart({ bufferZones, netFlowPosition, label }: DDMRPB
       <ResponsiveContainer width="100%" height={280}>
         <BarChart data={data} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-          <XAxis type="number" stroke="hsl(var(--muted-foreground))" fontSize={12} />
-          <YAxis type="category" dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={12} width={80} />
+          <XAxis type="number" stroke="#94a3b8" tick={{ fill: '#64748b', fontSize: 11, fontWeight: 500 }} />
+          <YAxis type="category" dataKey="name" stroke="#94a3b8" tick={{ fill: '#64748b', fontSize: 11, fontWeight: 500 }} width={80} />
           <Tooltip content={<CustomTooltip />} />
           <Bar dataKey="red" stackId="buffer" fill="#ef4444" name="Red Zone" radius={[0, 0, 0, 0]} />
           <Bar dataKey="yellow" stackId="buffer" fill="#f59e0b" name="Yellow Zone" />

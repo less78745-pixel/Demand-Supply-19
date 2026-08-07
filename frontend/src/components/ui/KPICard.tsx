@@ -29,15 +29,15 @@ export function KPICard({ title, value, icon, trend, isAlert, className }: KPICa
       )}>
         {icon}
       </div>
-      <div>
-        <h3 className="text-sm font-medium text-muted-foreground">{title}</h3>
-        <div className="mt-1 flex items-baseline gap-2">
-          <span className="text-3xl font-bold text-foreground tracking-tight">{value}</span>
+      <div className="min-w-0 flex-1">
+        <h3 className="text-sm font-medium text-muted-foreground truncate" title={title}>{title}</h3>
+        <div className="mt-1 flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-2">
+          <span className="text-xl sm:text-2xl lg:text-3xl font-bold text-foreground tracking-tight truncate" title={String(value)}>{value}</span>
           {trend && (
             <span className={cn(
-              "text-xs font-medium",
+              "text-xs font-medium truncate",
               isAlert ? "text-destructive" : "text-emerald-500"
-            )}>
+            )} title={trend}>
               {trend}
             </span>
           )}

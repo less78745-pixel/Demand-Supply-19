@@ -550,7 +550,7 @@ export default function ControlTowerPage() {
               Detail Health per Cabang ({filtered.length} cabang)
             </h3>
             <div className="overflow-x-auto max-h-[500px] overflow-y-auto custom-scrollbar">
-              <table className="w-full text-sm text-left text-muted-foreground">
+              <table className="w-full text-sm text-left text-slate-700 dark:text-slate-300">
                 <thead className="text-xs text-foreground uppercase bg-muted/50 border-b border-border sticky top-0 font-bold tracking-wider z-10">
                   <tr>
                     <th className="px-3 py-3">Cabang</th>

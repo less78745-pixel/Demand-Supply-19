@@ -453,7 +453,7 @@ export default function LandedCostPage() {
           <GlassCard>
             <h3 className="text-sm font-bold text-foreground mb-4 uppercase tracking-wide">Status Kontainer Impor</h3>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left text-muted-foreground">
+              <table className="w-full text-sm text-left text-slate-700 dark:text-slate-300">
                 <thead className="text-xs text-foreground uppercase bg-muted/50 border-b border-border font-bold tracking-wider">
                   <tr>
                     <th className="px-3 py-3">No BL</th>
@@ -501,7 +501,7 @@ export default function LandedCostPage() {
               Landed Cost Breakdown per SKU ({(modifiedResults.sku_costs || []).length} items)
             </h3>
             <div className="overflow-x-auto max-h-[400px] overflow-y-auto custom-scrollbar">
-              <table className="w-full text-sm text-left text-muted-foreground">
+              <table className="w-full text-sm text-left text-slate-700 dark:text-slate-300">
                 <thead className="text-xs text-foreground uppercase bg-muted/50 border-b border-border sticky top-0 font-bold tracking-wider z-10">
                   <tr>
                     <th className="px-3 py-3">BL</th>

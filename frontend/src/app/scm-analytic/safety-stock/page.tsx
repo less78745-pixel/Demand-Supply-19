@@ -508,7 +508,7 @@ export default function SafetyStockPage() {
                 <AlertTriangle className="w-4 h-4" /> Reorder Alerts — Cabang Butuh Pengisian Segera
               </h3>
               <div className="overflow-x-auto max-h-80 overflow-y-auto custom-scrollbar">
-                <table className="w-full text-sm text-left text-muted-foreground">
+                <table className="w-full text-sm text-left text-slate-700 dark:text-slate-300">
                   <thead className="text-xs text-foreground uppercase bg-destructive/10 border-b border-destructive/20 sticky top-0 font-bold tracking-wider z-10">
                     <tr>
                       <th className="px-4 py-3">Cabang</th>
@@ -554,7 +554,7 @@ export default function SafetyStockPage() {
               Detail Hasil Kalkulasi ({filtered.length} items)
             </h3>
             <div className="overflow-x-auto max-h-[500px] overflow-y-auto custom-scrollbar">
-              <table className="w-full text-sm text-left text-muted-foreground">
+              <table className="w-full text-sm text-left text-slate-700 dark:text-slate-300">
                 <thead className="text-xs text-foreground uppercase bg-muted/50 border-b border-border sticky top-0 font-bold tracking-wider z-10">
                   <tr>
                     <th className="px-3 py-3">Cabang</th>

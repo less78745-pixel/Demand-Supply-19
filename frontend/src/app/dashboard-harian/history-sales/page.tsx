@@ -1228,16 +1228,16 @@ export default function HistorySalesPage() {
                     {cabangSupplyVsAvg3.underAvg.length > 0 ? (
                       <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
                         {cabangSupplyVsAvg3.underAvg.map((item, idx) => (
-                          <div key={idx} className="p-2.5 rounded-xl bg-slate-50 border border-rose-500/20 flex items-center justify-between text-xs">
+                          <div key={idx} className="p-2.5 rounded-xl bg-slate-50 border border-rose-500/20 flex items-center justify-between text-xs shadow-sm">
                             <div>
                               <div className="font-bold text-slate-900 text-sm">📍 {item.cabang}</div>
                               <div className="text-[11px] text-slate-600 mt-0.5">
-                                Pasokan: <span className="text-rose-300 font-mono">{Math.round(item.totalSupply).toLocaleString('id-ID')}</span> | AVG 3 Bln: <span className="text-slate-800 font-mono">{Math.round(item.avg3).toLocaleString('id-ID')}</span>
+                                Pasokan: <span className="text-rose-700 font-mono">{Math.round(item.totalSupply).toLocaleString('id-ID')}</span> | AVG 3 Bln: <span className="text-slate-800 font-mono">{Math.round(item.avg3).toLocaleString('id-ID')}</span>
                               </div>
                             </div>
                             <div className="text-right">
-                              <div className="font-mono font-black text-rose-400 text-sm">{item.ratio}%</div>
-                              <div className="text-[10px] text-rose-300 font-semibold">Defisit: {Math.round(item.diff).toLocaleString('id-ID')}</div>
+                              <div className="font-mono font-black text-rose-700 text-sm">{item.ratio}%</div>
+                              <div className="text-[10px] text-rose-600 font-semibold">Defisit: {Math.round(item.diff).toLocaleString('id-ID')}</div>
                             </div>
                           </div>
                         ))}
@@ -1267,16 +1267,16 @@ export default function HistorySalesPage() {
                     {cabangSupplyVsAvg3.over125.length > 0 ? (
                       <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
                         {cabangSupplyVsAvg3.over125.map((item, idx) => (
-                          <div key={idx} className="p-2.5 rounded-xl bg-slate-50 border border-emerald-500/20 flex items-center justify-between text-xs">
+                          <div key={idx} className="p-2.5 rounded-xl bg-slate-50 border border-emerald-500/20 flex items-center justify-between text-xs shadow-sm">
                             <div>
                               <div className="font-bold text-slate-900 text-sm">📍 {item.cabang}</div>
                               <div className="text-[11px] text-slate-600 mt-0.5">
-                                Pasokan: <span className="text-emerald-300 font-mono">{Math.round(item.totalSupply).toLocaleString('id-ID')}</span> | AVG 3 Bln: <span className="text-slate-800 font-mono">{Math.round(item.avg3).toLocaleString('id-ID')}</span>
+                                Pasokan: <span className="text-emerald-700 font-mono">{Math.round(item.totalSupply).toLocaleString('id-ID')}</span> | AVG 3 Bln: <span className="text-slate-800 font-mono">{Math.round(item.avg3).toLocaleString('id-ID')}</span>
                               </div>
                             </div>
                             <div className="text-right">
-                              <div className="font-mono font-black text-emerald-400 text-sm">{item.ratio}%</div>
-                              <div className="text-[10px] text-emerald-300 font-semibold">Surplus: +{Math.round(item.diff).toLocaleString('id-ID')}</div>
+                              <div className="font-mono font-black text-emerald-700 text-sm">{item.ratio}%</div>
+                              <div className="text-[10px] text-emerald-600 font-semibold">Surplus: +{Math.round(item.diff).toLocaleString('id-ID')}</div>
                             </div>
                           </div>
                         ))}
@@ -1343,19 +1343,19 @@ export default function HistorySalesPage() {
                 <ReferenceArea y1={supplyVsMonthlySales.totalSOH + supplyVsMonthlySales.totalTO} y2={supplyVsMonthlySales.totalSupply} fill="#cbd5e1" fillOpacity={0.25} stroke="none" />
 
                 {/* Zone Labels inside left & right */}
-                <ReferenceLine y={supplyVsMonthlySales.totalSOH / 2} stroke="none" label={{ value: 'SOH', position: 'insideLeft', fill: '#cbd5e1', fontSize: 14, fontWeight: 900 }} />
-                <ReferenceLine y={supplyVsMonthlySales.totalSOH / 2} stroke="none" label={{ value: 'SOH', position: 'insideRight', fill: '#cbd5e1', fontSize: 14, fontWeight: 900 }} />
+                <ReferenceLine y={supplyVsMonthlySales.totalSOH / 2} stroke="none" label={{ value: 'SOH', position: 'insideLeft', fill: '#334155', fontSize: 14, fontWeight: 900 }} />
+                <ReferenceLine y={supplyVsMonthlySales.totalSOH / 2} stroke="none" label={{ value: 'SOH', position: 'insideRight', fill: '#334155', fontSize: 14, fontWeight: 900 }} />
 
-                <ReferenceLine y={supplyVsMonthlySales.totalSOH + supplyVsMonthlySales.totalTO / 2} stroke="none" label={{ value: 'TO', position: 'insideLeft', fill: '#93c5fd', fontSize: 14, fontWeight: 900 }} />
-                <ReferenceLine y={supplyVsMonthlySales.totalSOH + supplyVsMonthlySales.totalTO / 2} stroke="none" label={{ value: 'TO', position: 'insideRight', fill: '#93c5fd', fontSize: 14, fontWeight: 900 }} />
+                <ReferenceLine y={supplyVsMonthlySales.totalSOH + supplyVsMonthlySales.totalTO / 2} stroke="none" label={{ value: 'TO', position: 'insideLeft', fill: '#1e40af', fontSize: 14, fontWeight: 900 }} />
+                <ReferenceLine y={supplyVsMonthlySales.totalSOH + supplyVsMonthlySales.totalTO / 2} stroke="none" label={{ value: 'TO', position: 'insideRight', fill: '#1e40af', fontSize: 14, fontWeight: 900 }} />
 
-                <ReferenceLine y={supplyVsMonthlySales.totalSOH + supplyVsMonthlySales.totalTO + supplyVsMonthlySales.totalVessel / 2} stroke="none" label={{ value: 'VESSEL', position: 'insideLeft', fill: '#f8fafc', fontSize: 14, fontWeight: 900 }} />
-                <ReferenceLine y={supplyVsMonthlySales.totalSOH + supplyVsMonthlySales.totalTO + supplyVsMonthlySales.totalVessel / 2} stroke="none" label={{ value: 'VESSEL', position: 'insideRight', fill: '#f8fafc', fontSize: 14, fontWeight: 900 }} />
+                <ReferenceLine y={supplyVsMonthlySales.totalSOH + supplyVsMonthlySales.totalTO + supplyVsMonthlySales.totalVessel / 2} stroke="none" label={{ value: 'VESSEL', position: 'insideLeft', fill: '#475569', fontSize: 14, fontWeight: 900 }} />
+                <ReferenceLine y={supplyVsMonthlySales.totalSOH + supplyVsMonthlySales.totalTO + supplyVsMonthlySales.totalVessel / 2} stroke="none" label={{ value: 'VESSEL', position: 'insideRight', fill: '#475569', fontSize: 14, fontWeight: 900 }} />
 
                 {/* Dashed boundary lines with numerical summary */}
-                <ReferenceLine y={supplyVsMonthlySales.totalSOH} stroke="#94a3b8" strokeDasharray="3 3" label={{ value: `SOH: ${supplyVsMonthlySales.totalSOH.toLocaleString('id-ID')}`, position: 'insideTopLeft', fill: '#94a3b8', fontSize: 11 }} />
-                <ReferenceLine y={supplyVsMonthlySales.totalSOH + supplyVsMonthlySales.totalTO} stroke="#3b82f6" strokeDasharray="3 3" label={{ value: `+TO: ${(supplyVsMonthlySales.totalSOH + supplyVsMonthlySales.totalTO).toLocaleString('id-ID')}`, position: 'insideTopLeft', fill: '#60a5fa', fontSize: 11 }} />
-                <ReferenceLine y={supplyVsMonthlySales.totalSupply} stroke="#e2e8f0" strokeDasharray="4 4" strokeWidth={2} label={{ value: `Total (SOH+TO+Vessel): ${supplyVsMonthlySales.totalSupply.toLocaleString('id-ID')}`, position: 'top', fill: '#ffffff', fontSize: 12, fontWeight: 'bold' }} />
+                <ReferenceLine y={supplyVsMonthlySales.totalSOH} stroke="#64748b" strokeDasharray="3 3" label={{ value: `SOH: ${supplyVsMonthlySales.totalSOH.toLocaleString('id-ID')}`, position: 'insideTopLeft', fill: '#64748b', fontSize: 11, fontWeight: 'bold' }} />
+                <ReferenceLine y={supplyVsMonthlySales.totalSOH + supplyVsMonthlySales.totalTO} stroke="#3b82f6" strokeDasharray="3 3" label={{ value: `+TO: ${(supplyVsMonthlySales.totalSOH + supplyVsMonthlySales.totalTO).toLocaleString('id-ID')}`, position: 'insideTopLeft', fill: '#2563eb', fontSize: 11, fontWeight: 'bold' }} />
+                <ReferenceLine y={supplyVsMonthlySales.totalSupply} stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth={2} label={{ value: `Total (SOH+TO+Vessel): ${supplyVsMonthlySales.totalSupply.toLocaleString('id-ID')}`, position: 'top', fill: '#0f172a', fontSize: 12, fontWeight: 'bold' }} />
 
                 {/* Monthly Sales Bars */}
                 <Bar dataKey="sales" name="Volume Sales Bulanan" radius={[6, 6, 0, 0]} maxBarSize={80}>
@@ -1481,36 +1481,36 @@ export default function HistorySalesPage() {
                       </span>
                     </td>
                     <td className="py-3.5 px-4 border-l border-slate-200 align-middle">
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-purple-500/10 text-purple-300 border border-purple-500/20 font-bold text-xs">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-purple-100 text-purple-800 border border-purple-300 font-bold text-xs">
                         📦 {row.category}
                       </span>
                     </td>
-                    <td className="py-3.5 px-4 border-l border-slate-200 font-extrabold text-blue-400 text-base font-mono align-middle">
+                    <td className="py-3.5 px-4 border-l border-slate-200 font-extrabold text-blue-700 text-base font-mono align-middle">
                       {row.sales.toLocaleString('id-ID')}
                     </td>
-                    <td className="py-3.5 px-4 border-l border-slate-200 font-extrabold text-rose-400 text-base font-mono align-middle">
+                    <td className="py-3.5 px-4 border-l border-slate-200 font-extrabold text-rose-700 text-base font-mono align-middle">
                       {row.avg3.toLocaleString('id-ID')}
                     </td>
-                    <td className="py-3.5 px-4 border-l border-slate-200 font-black text-amber-400 text-base font-mono align-middle">
+                    <td className="py-3.5 px-4 border-l border-slate-200 font-black text-amber-600 text-base font-mono align-middle">
                       {row.kontribusi.toFixed(2)}%
                     </td>
                     <td className="py-3.5 px-4 border-l border-slate-200 text-xs align-middle">
-                      <div className="font-mono text-cyan-300 font-bold">M: {row.m.toLocaleString('id-ID')}</div>
-                      <div className="font-mono text-slate-600 mt-1">M-1: {row.m1.toLocaleString('id-ID')}</div>
+                      <div className="font-mono text-cyan-700 font-bold">M: {row.m.toLocaleString('id-ID')}</div>
+                      <div className="font-mono text-slate-700 mt-1">M-1: {row.m1.toLocaleString('id-ID')}</div>
                     </td>
                     <td className="py-3.5 px-4 border-l border-slate-200 text-xs align-middle">
-                      <div className={`font-mono font-bold ${row.growthM >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      <div className={`font-mono font-bold ${row.growthM >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
                         M vs AVG: {row.growthM >= 0 ? '▲ +' : '▼ '}{row.growthM.toFixed(1)}%
                       </div>
-                      <div className={`font-mono font-bold mt-1 ${row.growthM1 >= 0 ? 'text-emerald-400/80' : 'text-rose-400/80'}`}>
+                      <div className={`font-mono font-bold mt-1 ${row.growthM1 >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                         M-1 vs AVG: {row.growthM1 >= 0 ? '▲ +' : '▼ '}{row.growthM1.toFixed(1)}%
                       </div>
                     </td>
                     <td className="py-3.5 px-4 border-l border-slate-200 align-middle">
                       <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider inline-block ${
-                        row.growthM >= 5 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' :
-                        row.growthM <= -5 ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30' :
-                        'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                        row.growthM >= 5 ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' :
+                        row.growthM <= -5 ? 'bg-rose-100 text-rose-800 border border-rose-300' :
+                        'bg-blue-100 text-blue-800 border border-blue-300'
                       }`}>
                         {row.growthM >= 5 ? '🚀 PERTUMBUHAN POSITIF' : row.growthM <= -5 ? '📉 SALES MELAMBAT' : '⚖️ STABLE SALES'}
                       </span>
@@ -1552,19 +1552,19 @@ export default function HistorySalesPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-xs">
                 <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col justify-between">
                   <div>
-                    <span className="text-purple-300 font-extrabold uppercase tracking-wider text-[11px] flex items-center gap-1.5 mb-2">
-                      <Award className="w-4 h-4 text-purple-400" /> Kontributor Insentif Utama (Tier Dominan)
+                    <span className="text-purple-700 font-extrabold uppercase tracking-wider text-[11px] flex items-center gap-1.5 mb-2">
+                      <Award className="w-4 h-4 text-purple-600" /> Kontributor Insentif Utama (Tier Dominan)
                     </span>
                     {insentifInsights.topTier ? (
                       <div className="mt-2">
                         <div className="text-base font-black text-slate-900 flex items-center gap-2">
                           <span>💎 {insentifInsights.topTier.categoryInsentif}</span>
-                          <span className="text-xs font-semibold text-slate-600">({insentifInsights.topTier.cabang})</span>
+                          <span className="text-xs font-semibold text-slate-700">({insentifInsights.topTier.cabang})</span>
                         </div>
-                        <div className="text-sm font-mono font-extrabold text-cyan-300 mt-1">
+                        <div className="text-sm font-mono font-extrabold text-cyan-700 mt-1">
                           Total Volume Sales: {Math.round(insentifInsights.topTier.totalSales).toLocaleString('id-ID')} Unit
                         </div>
-                        <p className="text-[11px] text-slate-700 mt-2 leading-relaxed">
+                        <p className="text-[11px] text-slate-800 mt-2 leading-relaxed">
                           Kombinasi ini merupakan motor penggerak utama volume penjualan insentif. Pastikan alokasi stok untuk kategori ini selalu menjadi prioritas di gudang cabang agar ritme pencapaian insentif tim sales terjaga.
                         </p>
                       </div>
@@ -1576,19 +1576,19 @@ export default function HistorySalesPage() {
 
                 <div className="p-4 rounded-xl bg-amber-950/20 border border-amber-500/30 flex flex-col justify-between">
                   <div>
-                    <span className="text-amber-300 font-extrabold uppercase tracking-wider text-[11px] flex items-center gap-1.5 mb-2">
-                      <AlertTriangle className="w-4 h-4 text-amber-400" /> Peringatan Outstanding Pada Produk Insentif
+                    <span className="text-amber-700 font-extrabold uppercase tracking-wider text-[11px] flex items-center gap-1.5 mb-2">
+                      <AlertTriangle className="w-4 h-4 text-amber-600" /> Peringatan Outstanding Pada Produk Insentif
                     </span>
                     {insentifInsights.highestOutTier ? (
                       <div className="mt-2">
                         <div className="text-base font-black text-slate-900 flex items-center gap-2">
                           <span>⚠️ {insentifInsights.highestOutTier.categoryInsentif}</span>
-                          <span className="text-xs font-semibold text-slate-600">({insentifInsights.highestOutTier.cabang})</span>
+                          <span className="text-xs font-semibold text-slate-700">({insentifInsights.highestOutTier.cabang})</span>
                         </div>
-                        <div className="text-sm font-mono font-extrabold text-amber-400 mt-1">
+                        <div className="text-sm font-mono font-extrabold text-amber-700 mt-1">
                           Rasio Outstanding: {insentifInsights.highestOutTier.ratio.toFixed(1)}% ({Math.round(insentifInsights.highestOutTier.totalOutstanding).toLocaleString('id-ID')} Unit Tertunda)
                         </div>
-                        <p className="text-[11px] text-amber-200/90 mt-2 leading-relaxed">
+                        <p className="text-[11px] text-amber-800 mt-2 leading-relaxed">
                           🚨 <strong>Perhatian:</strong> Terdapat tunggakan pesanan signifikan pada kategori bernilai insentif ini! Keterlambatan pengiriman (Hold Delivery/Vessel) berisiko menurunkan pencapaian KPI sales bulanan dan omzet riil.
                         </p>
                       </div>
@@ -1607,7 +1607,7 @@ export default function HistorySalesPage() {
           <div className="space-y-8">
             {/* Grafik Bar Category Insentif Stacked per Periode */}
             <div className="h-[400px] w-full bg-slate-50 p-5 rounded-2xl border border-slate-200 shadow-inner flex flex-col justify-between">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-purple-300 mb-2 text-center flex items-center justify-center gap-2">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-purple-700 mb-2 text-center flex items-center justify-center gap-2">
                 📊 Proporsi Volume Penjualan per Category Insentif (100% Stacked • Sumbu X: M s/d M-5)
               </h4>
               <div className="flex-1 w-full">
@@ -1648,15 +1648,15 @@ export default function HistorySalesPage() {
                 <thead className="bg-slate-50 text-slate-700 uppercase font-extrabold sticky top-0 z-20 shadow-md border-b border-slate-200">
                   <tr className="text-[11px] tracking-wider text-center">
                     <th className="py-3.5 px-4 text-left">Cabang / Wilayah</th>
-                    <th className="py-3.5 px-4 border-l border-slate-200 text-purple-300 text-left">Category Insentif</th>
-                    <th className="py-3.5 px-3 border-l border-slate-200 text-cyan-300">M</th>
-                    <th className="py-3.5 px-3 border-l border-slate-200 text-cyan-400">M-1</th>
-                    <th className="py-3.5 px-3 border-l border-slate-200 text-cyan-400">M-2</th>
-                    <th className="py-3.5 px-3 border-l border-slate-200 text-cyan-500">M-3</th>
-                    <th className="py-3.5 px-3 border-l border-slate-200 text-cyan-500">M-4</th>
-                    <th className="py-3.5 px-3 border-l border-slate-200 text-cyan-600">M-5</th>
-                    <th className="py-3.5 px-4 border-l border-slate-200 bg-purple-950/40 text-purple-300 font-extrabold">📈 Total Sales Vol</th>
-                    <th className="py-3.5 px-4 border-l border-slate-200 bg-amber-950/40 text-amber-300 font-extrabold">⏳ Total Out Vol</th>
+                    <th className="py-3.5 px-4 border-l border-slate-200 text-purple-700 text-left">Category Insentif</th>
+                    <th className="py-3.5 px-3 border-l border-slate-200 text-cyan-700">M</th>
+                    <th className="py-3.5 px-3 border-l border-slate-200 text-cyan-700">M-1</th>
+                    <th className="py-3.5 px-3 border-l border-slate-200 text-cyan-700">M-2</th>
+                    <th className="py-3.5 px-3 border-l border-slate-200 text-cyan-700">M-3</th>
+                    <th className="py-3.5 px-3 border-l border-slate-200 text-cyan-700">M-4</th>
+                    <th className="py-3.5 px-3 border-l border-slate-200 text-cyan-700">M-5</th>
+                    <th className="py-3.5 px-4 border-l border-slate-200 bg-purple-100 text-purple-800 font-extrabold">📈 Total Sales Vol</th>
+                    <th className="py-3.5 px-4 border-l border-slate-200 bg-amber-100 text-amber-800 font-extrabold">⏳ Total Out Vol</th>
                     <th className="py-3.5 px-4 border-l border-slate-200">Rasio Out/Sales</th>
                   </tr>
                 </thead>
@@ -1668,11 +1668,11 @@ export default function HistorySalesPage() {
                         <td className="py-3 px-4 text-left font-extrabold text-slate-900 text-sm">
                           {item.cabang}
                         </td>
-                        <td className="py-3 px-4 border-l border-slate-200 text-left font-extrabold text-purple-300 flex items-center gap-2">
+                        <td className="py-3 px-4 border-l border-slate-200 text-left font-extrabold text-purple-700 flex items-center gap-2">
                           <span className="w-2.5 h-2.5 rounded-full bg-gradient-to-tr from-purple-500 to-pink-400 shrink-0 shadow-sm shadow-purple-500/50" />
                           <span>{item.categoryInsentif}</span>
                         </td>
-                        <td className="py-3 px-3 border-l border-slate-200 font-mono text-cyan-300 font-bold">
+                        <td className="py-3 px-3 border-l border-slate-200 font-mono text-cyan-700 font-bold">
                           {Math.round(item.periods['M'] || 0).toLocaleString('id-ID')}
                         </td>
                         <td className="py-3 px-3 border-l border-slate-200 font-mono text-slate-700">
@@ -1690,14 +1690,14 @@ export default function HistorySalesPage() {
                         <td className="py-3 px-3 border-l border-slate-200 font-mono text-slate-600">
                           {Math.round(item.periods['M-5'] || 0).toLocaleString('id-ID')}
                         </td>
-                        <td className="py-3 px-4 border-l border-slate-200 bg-purple-950/20 font-mono font-extrabold text-purple-300 text-sm">
+                        <td className="py-3 px-4 border-l border-slate-200 bg-purple-50 font-mono font-extrabold text-purple-800 text-sm">
                           {Math.round(item.totalSales).toLocaleString('id-ID')}
                         </td>
-                        <td className="py-3 px-4 border-l border-slate-200 bg-amber-950/20 font-mono font-bold text-amber-400 text-sm">
+                        <td className="py-3 px-4 border-l border-slate-200 bg-amber-50 font-mono font-bold text-amber-700 text-sm">
                           {Math.round(item.totalOutstanding).toLocaleString('id-ID')}
                         </td>
                         <td className="py-3 px-4 border-l border-slate-200 font-mono font-bold">
-                          <span className={`px-2.5 py-1 rounded-md text-xs font-black uppercase inline-block ${isAlert ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'}`}>
+                          <span className={`px-2.5 py-1 rounded-md text-xs font-black uppercase inline-block ${isAlert ? 'bg-amber-100 text-amber-800 border border-amber-300' : 'bg-emerald-100 text-emerald-800 border border-emerald-300'}`}>
                             {item.ratio.toFixed(1)}%
                           </span>
                         </td>

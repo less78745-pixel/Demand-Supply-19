@@ -687,9 +687,9 @@ export default function DDMRPPage() {
                         { label: 'Net Flow Position', value: res.net_flow_position, desc: 'OH + OO − QD', color: 'text-primary font-bold' },
                       ].map((row) => (
                         <tr key={row.label} className="hover:bg-muted/30 transition-colors">
-                          <td className={`py-2 px-3 font-medium ${row.color || ''}`}>{row.label}</td>
-                          <td className={`py-2 px-3 text-right font-mono font-semibold ${row.color || ''}`}>{row.value?.toLocaleString()}</td>
-                          <td className="py-2 px-3 text-muted-foreground text-xs">{row.desc}</td>
+                          <td className={`py-2 px-3 font-bold ${row.color || 'text-foreground'}`}>{row.label}</td>
+                          <td className={`py-2 px-3 text-right font-mono font-bold ${row.color || 'text-foreground'}`}>{row.value?.toLocaleString()}</td>
+                          <td className="py-2 px-3 text-slate-600 dark:text-slate-400 font-medium text-xs">{row.desc}</td>
                         </tr>
                       ))}
                     </tbody>

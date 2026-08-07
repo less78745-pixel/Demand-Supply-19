@@ -1495,10 +1495,10 @@ export default function SOHAnalysisPage() {
           </div>
           <div className="p-4 rounded-xl bg-slate-100 border border-slate-200/60 shadow-inner">
             <span className="text-xs font-bold text-slate-600 block mb-1">⚖️ Hasil Rasio vs Target Efektif</span>
-            <span className="text-base sm:text-xl font-black font-mono text-slate-900">
+            <span className="text-base sm:text-xl md:text-2xl font-black font-mono text-slate-900">
               {calculationSummary.globalRatio}x
             </span>
-            <span className="text-[11px] text-cyan-300 font-medium block mt-1">Target Efektif: {calculationSummary.totalEffectiveTarget.toLocaleString('id-ID')}</span>
+            <span className="text-[11px] sm:text-xs text-cyan-700 font-medium block mt-1">Target Efektif: {calculationSummary.totalEffectiveTarget.toLocaleString('id-ID')}</span>
           </div>
           <div className="p-4 rounded-xl bg-slate-100 border border-slate-200/60 shadow-inner">
             <span className="text-xs font-bold text-slate-600 block mb-1">📊 Rincian Kesimpulan Baris</span>
@@ -1701,19 +1701,19 @@ export default function SOHAnalysisPage() {
               {/* Box 2: Sorotan Kritis (Bahaya / Defisit) */}
               <div className="p-4 rounded-xl bg-rose-950/20 border border-rose-500/30 flex flex-col justify-between">
                 <div>
-                  <span className="text-rose-300 font-bold uppercase tracking-wider text-[10px] mb-2 flex items-center gap-1.5">
-                    <AlertTriangle className="w-3.5 h-3.5 text-rose-400" /> Cabang & Kategori Defisit Kritis (Rasio &lt; 1.0x)
+                  <span className="text-rose-700 font-bold uppercase tracking-wider text-[10px] sm:text-[11px] mb-2 flex items-center gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5 text-rose-600" /> Cabang & Kategori Defisit Kritis (Rasio &lt; 1.0x)
                   </span>
                   {ratioInsights.topCritical.length > 0 ? (
                     <div className="space-y-2 mt-2">
                       {ratioInsights.topCritical.map((item, idx) => (
                         <div key={idx} className="p-2 rounded-lg bg-rose-950/40 border border-rose-500/20 flex flex-col gap-0.5">
-                          <div className="flex justify-between items-center font-bold text-slate-900 text-[11px]">
+                          <div className="flex justify-between items-center font-bold text-slate-900 text-[11px] sm:text-xs">
                             <span>📍 {item.cabang}</span>
-                            <span className="text-rose-400 font-mono px-1.5 py-0.5 rounded bg-rose-500/10 border border-rose-500/20">{item.ratio}x</span>
+                            <span className="text-rose-700 font-mono px-1.5 py-0.5 rounded bg-rose-100 border border-rose-200">{item.ratio}x</span>
                           </div>
-                          <div className="text-[10px] text-slate-700 truncate">📦 {item.category}</div>
-                          <div className="text-[10px] text-rose-300 font-mono">Defisit Pasokan: -{item.defisit.toLocaleString('id-ID')} Unit</div>
+                          <div className="text-[10px] sm:text-[11px] text-slate-700 truncate">📦 {item.category}</div>
+                          <div className="text-[10px] sm:text-[11px] text-rose-700 font-mono">Defisit Pasokan: -{item.defisit.toLocaleString('id-ID')} Unit</div>
                         </div>
                       ))}
                     </div>
@@ -1725,7 +1725,7 @@ export default function SOHAnalysisPage() {
                   )}
                 </div>
                 {ratioInsights.topCritical.length > 0 && (
-                  <div className="mt-3 pt-2.5 border-t border-rose-500/20 text-[10px] text-rose-300">
+                  <div className="mt-3 pt-2.5 border-t border-rose-500/20 text-[10px] sm:text-[11px] text-rose-700">
                     ⚠️ <strong>Action Required:</strong> Segera percepat jadwal Vessel & Plan Loading untuk item di atas!
                   </div>
                 )}
@@ -1734,19 +1734,19 @@ export default function SOHAnalysisPage() {
               {/* Box 3: Sorotan Overstock & Rekomendasi Rebalancing */}
               <div className="p-4 rounded-xl bg-purple-950/20 border border-purple-500/30 flex flex-col justify-between">
                 <div>
-                  <span className="text-purple-300 font-bold uppercase tracking-wider text-[10px] mb-2 flex items-center gap-1.5">
-                    <TrendingUp className="w-3.5 h-3.5 text-purple-400" /> Potensi Rebalancing (Overstock &gt; 1.5x)
+                  <span className="text-purple-700 font-bold uppercase tracking-wider text-[10px] sm:text-[11px] mb-2 flex items-center gap-1.5">
+                    <TrendingUp className="w-3.5 h-3.5 text-purple-600" /> Potensi Rebalancing (Overstock &gt; 1.5x)
                   </span>
                   {ratioInsights.topOverstock.length > 0 ? (
                     <div className="space-y-2 mt-2">
                       {ratioInsights.topOverstock.map((item, idx) => (
                         <div key={idx} className="p-2 rounded-lg bg-purple-950/40 border border-purple-500/20 flex flex-col gap-0.5">
-                          <div className="flex justify-between items-center font-bold text-slate-900 text-[11px]">
+                          <div className="flex justify-between items-center font-bold text-slate-900 text-[11px] sm:text-xs">
                             <span>📍 {item.cabang}</span>
-                            <span className="text-purple-300 font-mono px-1.5 py-0.5 rounded bg-purple-500/10 border border-purple-500/20">{item.ratio}x</span>
+                            <span className="text-purple-700 font-mono px-1.5 py-0.5 rounded bg-purple-100 border border-purple-200">{item.ratio}x</span>
                           </div>
-                          <div className="text-[10px] text-slate-700 truncate">📦 {item.category}</div>
-                          <div className="text-[10px] text-purple-300 font-mono">Surplus Pasokan: +{item.surplus.toLocaleString('id-ID')} Unit</div>
+                          <div className="text-[10px] sm:text-[11px] text-slate-700 truncate">📦 {item.category}</div>
+                          <div className="text-[10px] sm:text-[11px] text-purple-700 font-mono">Surplus Pasokan: +{item.surplus.toLocaleString('id-ID')} Unit</div>
                         </div>
                       ))}
                     </div>
@@ -1756,7 +1756,7 @@ export default function SOHAnalysisPage() {
                     </div>
                   )}
                 </div>
-                <div className="mt-3 pt-2.5 border-t border-purple-500/20 text-[10px] text-purple-300">
+                <div className="mt-3 pt-2.5 border-t border-purple-500/20 text-[10px] sm:text-[11px] text-purple-700">
                   💡 <strong>Rekomendasi:</strong> Lakukan <b>Transfer Order (TO)</b> antar-cabang dari area surplus ke cabang yang defisit guna menekan holding cost.
                 </div>
               </div>
@@ -1780,22 +1780,22 @@ export default function SOHAnalysisPage() {
                     <button onClick={() => { setActiveSohColModal({ key: 'grup', name: 'Grup' }); setSohModalSearchInput(sohColFilters['grup']?.search || ''); }} className="p-1 hover:bg-slate-100 rounded text-slate-600 hover:text-slate-900 transition"><Filter className="w-3.5 h-3.5 text-purple-400" /></button>
                   </div>
                 </th>
-                <th className="py-3.5 px-3 border-l border-slate-200 text-left text-cyan-400">
+                <th className="py-3.5 px-3 border-l border-slate-200 text-left text-cyan-600">
                   <div className="flex items-center gap-1.5 justify-between">
                     <span>🏷️ Kategori Item</span>
-                    <button onClick={() => { setActiveSohColModal({ key: 'category', name: 'Kategori Item' }); setSohModalSearchInput(sohColFilters['category']?.search || ''); }} className="p-1 hover:bg-slate-100 rounded text-slate-600 hover:text-slate-900 transition"><Filter className="w-3.5 h-3.5 text-cyan-400" /></button>
+                    <button onClick={() => { setActiveSohColModal({ key: 'category', name: 'Kategori Item' }); setSohModalSearchInput(sohColFilters['category']?.search || ''); }} className="p-1 hover:bg-slate-100 rounded text-slate-600 hover:text-slate-900 transition"><Filter className="w-3.5 h-3.5 text-cyan-600" /></button>
                   </div>
                 </th>
-                <th className="py-3.5 px-2.5 border-l border-slate-200 text-left text-emerald-300">
+                <th className="py-3.5 px-2.5 border-l border-slate-200 text-left text-emerald-600">
                   <div className="flex items-center gap-1.5 justify-between">
                     <span>🏆 Status Insentif</span>
-                    <button onClick={() => { setActiveSohColModal({ key: 'statusInsentif', name: 'Status Insentif' }); setSohModalSearchInput(sohColFilters['statusInsentif']?.search || ''); }} className="p-1 hover:bg-slate-100 rounded text-slate-600 hover:text-slate-900 transition"><Filter className="w-3.5 h-3.5 text-emerald-300" /></button>
+                    <button onClick={() => { setActiveSohColModal({ key: 'statusInsentif', name: 'Status Insentif' }); setSohModalSearchInput(sohColFilters['statusInsentif']?.search || ''); }} className="p-1 hover:bg-slate-100 rounded text-slate-600 hover:text-slate-900 transition"><Filter className="w-3.5 h-3.5 text-emerald-600" /></button>
                   </div>
                 </th>
-                <th className="py-3.5 px-2.5 border-l border-slate-200 text-left text-blue-300">
+                <th className="py-3.5 px-2.5 border-l border-slate-200 text-left text-blue-600">
                   <div className="flex items-center gap-1.5 justify-between">
                     <span>🔖 Status DOI</span>
-                    <button onClick={() => { setActiveSohColModal({ key: 'statusDoi', name: 'Status DOI' }); setSohModalSearchInput(sohColFilters['statusDoi']?.search || ''); }} className="p-1 hover:bg-slate-100 rounded text-slate-600 hover:text-slate-900 transition"><Filter className="w-3.5 h-3.5 text-blue-300" /></button>
+                    <button onClick={() => { setActiveSohColModal({ key: 'statusDoi', name: 'Status DOI' }); setSohModalSearchInput(sohColFilters['statusDoi']?.search || ''); }} className="p-1 hover:bg-slate-100 rounded text-slate-600 hover:text-slate-900 transition"><Filter className="w-3.5 h-3.5 text-blue-600" /></button>
                   </div>
                 </th>
                 <th className="py-3.5 px-2.5 border-l border-slate-200 text-emerald-400">
@@ -1816,7 +1816,7 @@ export default function SOHAnalysisPage() {
                     <button onClick={() => { setActiveSohColModal({ key: 'vessel', name: 'Vessel' }); setSohModalSearchInput(sohColFilters['vessel']?.search || ''); }} className="p-1 hover:bg-slate-100 rounded text-slate-600 hover:text-slate-900 transition"><Filter className="w-3.5 h-3.5" /></button>
                   </div>
                 </th>
-                <th className="py-3.5 px-3 border-l border-slate-200 bg-emerald-950/40 text-emerald-300 font-extrabold">
+                <th className="py-3.5 px-3 border-l border-slate-200 bg-emerald-100 text-emerald-800 font-extrabold">
                   <div className="flex items-center gap-1 justify-between">
                     <span>🧮 Total Pasokan (OH+TO+Vessel)</span>
                     <button onClick={() => { setActiveSohColModal({ key: 'totalSupply', name: 'Total Pasokan' }); setSohModalSearchInput(sohColFilters['totalSupply']?.search || ''); }} className="p-1 hover:bg-slate-100 rounded text-slate-600 hover:text-slate-900 transition"><Filter className="w-3.5 h-3.5" /></button>
@@ -1828,25 +1828,25 @@ export default function SOHAnalysisPage() {
                     <button onClick={() => { setActiveSohColModal({ key: 'planLoading', name: 'Plan Loading' }); setSohModalSearchInput(sohColFilters['planLoading']?.search || ''); }} className="p-1 hover:bg-slate-100 rounded text-slate-600 hover:text-slate-900 transition"><Filter className="w-3.5 h-3.5" /></button>
                   </div>
                 </th>
-                <th className="py-3.5 px-3 border-l border-slate-200 bg-white text-amber-300">
+                <th className="py-3.5 px-3 border-l border-slate-200 bg-white text-amber-700">
                   <div className="flex items-center gap-1 justify-between">
                     <span>🎯 Outstanding Target</span>
                     <button onClick={() => { setActiveSohColModal({ key: 'target', name: 'Outstanding Target' }); setSohModalSearchInput(sohColFilters['target']?.search || ''); }} className="p-1 hover:bg-slate-100 rounded text-slate-600 hover:text-slate-900 transition"><Filter className="w-3.5 h-3.5" /></button>
                   </div>
                 </th>
-                <th className="py-3.5 px-3 border-l border-slate-200 bg-white text-cyan-300">
+                <th className="py-3.5 px-3 border-l border-slate-200 bg-white text-cyan-700">
                   <div className="flex items-center gap-1 justify-between">
                     <span>🛒 Sales Berjalan</span>
                     <button onClick={() => { setActiveSohColModal({ key: 'salesBerjalan', name: 'Sales Berjalan' }); setSohModalSearchInput(sohColFilters['salesBerjalan']?.search || ''); }} className="p-1 hover:bg-slate-100 rounded text-slate-600 hover:text-slate-900 transition"><Filter className="w-3.5 h-3.5" /></button>
                   </div>
                 </th>
-                <th className="py-3.5 px-3 border-l border-slate-200 bg-amber-950/30 text-amber-300 font-extrabold">
+                <th className="py-3.5 px-3 border-l border-slate-200 bg-amber-100 text-amber-800 font-extrabold">
                   <div className="flex items-center gap-1 justify-between">
                     <span>📊 Target Efektif</span>
                     <button onClick={() => { setActiveSohColModal({ key: 'effectiveTarget', name: 'Target Efektif' }); setSohModalSearchInput(sohColFilters['effectiveTarget']?.search || ''); }} className="p-1 hover:bg-slate-100 rounded text-slate-600 hover:text-slate-900 transition"><Filter className="w-3.5 h-3.5" /></button>
                   </div>
                 </th>
-                <th className="py-3.5 px-3 border-l border-slate-200 text-cyan-300">
+                <th className="py-3.5 px-3 border-l border-slate-200 text-cyan-700">
                   <div className="flex items-center gap-1 justify-between">
                     <span>📈 Hasil Hitungan (Rasio)</span>
                     <button onClick={() => { setActiveSohColModal({ key: 'ratio', name: 'Rasio' }); setSohModalSearchInput(sohColFilters['ratio']?.search || ''); }} className="p-1 hover:bg-slate-100 rounded text-slate-600 hover:text-slate-900 transition"><Filter className="w-3.5 h-3.5" /></button>
@@ -1874,17 +1874,17 @@ export default function SOHAnalysisPage() {
                     {row.grup || '-'}
                   </td>
                   <td className="py-3 px-3 border-l border-slate-200 text-left align-middle">
-                    <span className="inline-block px-2.5 py-1 rounded-lg text-xs font-semibold text-cyan-300 bg-cyan-950/60 border border-cyan-800/50 truncate max-w-[180px]" title={row.category}>
+                    <span className="inline-block px-2.5 py-1 rounded-lg text-xs font-semibold text-cyan-800 bg-cyan-100 border border-cyan-300 truncate max-w-[180px]" title={row.category}>
                       {row.category}
                     </span>
                   </td>
                   <td className="py-3 px-2.5 border-l border-slate-200 text-left align-middle">
-                    <span className="inline-block px-2 py-0.5 rounded text-[11px] font-bold text-emerald-300 bg-emerald-950/40 border border-emerald-800/40 truncate max-w-[140px]" title={row.statusInsentif}>
+                    <span className="inline-block px-2 py-0.5 rounded text-[11px] sm:text-xs font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 truncate max-w-[140px]" title={row.statusInsentif}>
                       {row.statusInsentif || '-'}
                     </span>
                   </td>
                   <td className="py-3 px-2.5 border-l border-slate-200 text-left align-middle">
-                    <span className="inline-block px-2 py-0.5 rounded text-[11px] font-bold text-blue-300 bg-blue-950/40 border border-blue-800/40 truncate max-w-[140px]" title={row.statusDoi}>
+                    <span className="inline-block px-2 py-0.5 rounded text-[11px] sm:text-xs font-bold text-blue-800 bg-blue-100 border border-blue-300 truncate max-w-[140px]" title={row.statusDoi}>
                       {row.statusDoi || '-'}
                     </span>
                   </td>
@@ -1897,19 +1897,19 @@ export default function SOHAnalysisPage() {
                   <td className="py-3 px-2.5 border-l border-slate-200 font-mono text-blue-300 font-bold">
                     {Math.round(row['VESSEL'] || 0).toLocaleString('id-ID')}
                   </td>
-                  <td className="py-3 px-3 border-l border-slate-200 bg-emerald-950/20 font-black font-mono text-emerald-300 text-sm">
+                  <td className="py-3 px-3 border-l border-slate-200 bg-emerald-50 font-black font-mono text-emerald-700 text-sm">
                     {(row.totalSupply || (row['On Hand'] + row['TO'] + row['VESSEL']) || 0).toLocaleString('id-ID')}
                   </td>
-                  <td className="py-3 px-2.5 border-l border-slate-200 font-mono text-purple-300">
+                  <td className="py-3 px-2.5 border-l border-slate-200 font-mono text-purple-700">
                     {Math.round(row['PLAN LOADING'] || 0).toLocaleString('id-ID')}
                   </td>
-                  <td className="py-3 px-3 border-l border-slate-200 font-bold text-amber-300 font-mono text-sm bg-slate-50">
+                  <td className="py-3 px-3 border-l border-slate-200 font-bold text-amber-700 font-mono text-sm bg-slate-50">
                     {row['Outstanding Target'] > 0 ? Math.round(row['Outstanding Target']).toLocaleString('id-ID') : '-'}
                   </td>
-                  <td className="py-3 px-3 border-l border-slate-200 font-bold text-cyan-300 font-mono text-sm bg-slate-50">
+                  <td className="py-3 px-3 border-l border-slate-200 font-bold text-cyan-700 font-mono text-sm bg-slate-50">
                     {row['Sales Berjalan'] > 0 ? Math.round(row['Sales Berjalan']).toLocaleString('id-ID') : '-'}
                   </td>
-                  <td className="py-3 px-3 border-l border-slate-200 bg-amber-950/20 font-black font-mono text-amber-300 text-sm">
+                  <td className="py-3 px-3 border-l border-slate-200 bg-amber-50 font-black font-mono text-amber-700 text-sm">
                     {row.effectiveTarget > 0 ? Math.round(row.effectiveTarget).toLocaleString('id-ID') : (row.effectiveTarget < 0 ? `(${Math.round(Math.abs(row.effectiveTarget)).toLocaleString('id-ID')})` : '-')}
                   </td>
                   <td className="py-3 px-3 border-l border-slate-200 font-black font-mono text-sm text-slate-900">
