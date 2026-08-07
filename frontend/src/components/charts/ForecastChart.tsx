@@ -79,7 +79,7 @@ export function ForecastChart({ data, activeMethod }: ForecastChartProps) {
           <Bar 
             dataKey="actual" 
             name="Actual Sales" 
-            fill="hsl(var(--muted-foreground))" 
+            fill="hsl(var(--chart-3))" 
             radius={[4, 4, 0, 0]}
             barSize={30}
           />
@@ -87,10 +87,10 @@ export function ForecastChart({ data, activeMethod }: ForecastChartProps) {
             type="monotone"
             dataKey="forecast" 
             name={`Forecast (${activeMethod})`} 
-            stroke="hsl(var(--primary))" 
+            stroke="hsl(var(--chart-1))" 
             strokeWidth={3}
-            dot={{ r: 4, fill: 'hsl(var(--background))', stroke: 'hsl(var(--primary))', strokeWidth: 2 }}
-            activeDot={{ r: 6, fill: 'hsl(var(--primary))' }}
+            dot={{ r: 4, fill: 'hsl(var(--background))', stroke: 'hsl(var(--chart-1))', strokeWidth: 2 }}
+            activeDot={{ r: 6, fill: 'hsl(var(--chart-1))' }}
           />
           
           {firstFuture && (

@@ -46,14 +46,14 @@ export function InventoryChart({ data }: InventoryChartProps) {
           <Bar 
             dataKey="volume" 
             name="Sales Volume" 
-            fill="#f97316" 
+            fill="hsl(var(--chart-4))" 
             radius={[4, 4, 0, 0]}
             isAnimationActive={chartData.length <= 15}
           />
           <Bar 
             dataKey="on_hand" 
             name="On Hand Inventory" 
-            fill="#10b981" 
+            fill="hsl(var(--chart-2))" 
             radius={[4, 4, 0, 0]}
             isAnimationActive={chartData.length <= 15}
           />

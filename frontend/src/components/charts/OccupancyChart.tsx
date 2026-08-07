@@ -84,7 +84,7 @@ export function OccupancyChart({ data }: OccupancyChartProps) {
           <Bar
             dataKey="occupancy_pct"
             name="Occupancy %"
-            fill="hsl(var(--primary))"
+            fill="hsl(var(--chart-1))"
             radius={[4, 4, 0, 0]}
             isAnimationActive={chartData.length <= 25}
           />

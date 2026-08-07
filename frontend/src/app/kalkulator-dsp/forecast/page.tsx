@@ -141,10 +141,23 @@ export default function ForecastPage() {
 
   const handleFileUpload = async (file: File) => {
     setIsProcessing(true);
-    toast.loading('Training ML Models (SMA, SES, SARIMAX, XGBoost) per Cabang & Kategori...', { id: 'forecast-upload' });
+    toast.loading('Mempersiapkan data (Optimasi Payload)...', { id: 'forecast-upload' });
 
     try {
-      const data = await uploadForecastFile(file);
+      let payloadFile = file;
+      
+      // Mengubah file Excel menjadi CSV di frontend agar terhindar dari limit 4.5MB Vercel (413 Payload Too Large)
+      if (file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls')) {
+        const buffer = await file.arrayBuffer();
+        const wb = XLSX.read(buffer, { type: 'array' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const csvStr = XLSX.utils.sheet_to_csv(ws);
+        payloadFile = new File([csvStr], file.name.replace(/\.xlsx?$/i, '.csv'), { type: 'text/csv' });
+      }
+
+      toast.loading('Training ML Models (SMA, SES, SARIMAX, XGBoost) per Cabang & Kategori...', { id: 'forecast-upload' });
+
+      const data = await uploadForecastFile(payloadFile);
       if (data.error) {
         toast.error(data.error, { id: 'forecast-upload' });
       } else {

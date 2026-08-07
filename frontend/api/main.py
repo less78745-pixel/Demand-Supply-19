@@ -6,6 +6,8 @@ from routers import ddmrp, route_optimization
 
 app = FastAPI(title="Demand Supply Planning API")
 
+from fastapi.middleware.gzip import GZipMiddleware
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -13,6 +15,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 app.include_router(occupancy.router, prefix="/api/v1", tags=["Occupancy"])
 app.include_router(forecast.router, prefix="/api/v1", tags=["Forecast"])
