@@ -20,6 +20,7 @@ import {
 import { get, set } from 'idb-keyval';
 import { parseDynamicCSV, findColumn, ParsedData } from '@/lib/csvParser';
 import { getStandardFilename } from '@/utils/export';
+import { formatNumberCompact } from '@/lib/utils';
 import * as XLSX from 'xlsx';
 
 const COLORS = ['#f97316', '#3b82f6', '#22c55e', '#ef4444', '#a855f7', '#eab308', '#06b6d4', '#ec4899', '#14b8a6', '#6366f1', '#f43f5e', '#84cc16'];
@@ -926,7 +927,7 @@ export default function SOHAnalysisPage() {
             <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white flex items-center gap-3">
               SOH-TO-Vessel <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-cyan-400 to-teal-300">(Weekly Grouping Analytics)</span>
             </h1>
-            <p className="text-slate-700 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
+            <p className="text-slate-300 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
               Analisis persediaan terstruktur dengan pengelompokan mingguan: <b>On Hand ➔ TO Week 1-4 ➔ Vessel Week 1-4 ➔ Plan Loading</b>.
               Dilengkapi evaluasi ketahanan stok dan grafik perbandingan TO vs Vessel.
             </p>
@@ -1002,11 +1003,11 @@ export default function SOHAnalysisPage() {
       {parsed?.sheetNames && parsed.sheetNames.length > 0 && (
         <div className="p-5 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-950 to-slate-900 border border-emerald-500/30 shadow-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="space-y-1">
-            <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+            <h3 className="text-base font-black text-white flex items-center gap-2">
               <FileSpreadsheet className="w-5 h-5 text-emerald-400" />
               Pilih Sumber Data / Sheet Evaluasi ({unitLabel}):
             </h3>
-            <p className="text-xs text-slate-600">
+            <p className="text-xs text-slate-300">
               Beralih secara instan antara sheet <span className="text-emerald-400 font-bold">Nilai QTY</span> dan <span className="text-cyan-400 font-bold">Nilai VALUE (Rp)</span> untuk analisis komparatif pasokan terhadap target penjualan.
             </p>
           </div>
@@ -1088,14 +1089,14 @@ export default function SOHAnalysisPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
         <KPICard
           title="Total On Hand Fisik"
-          value={`${totalOnHand.toLocaleString('id-ID')} ${unitLabel}`}
+          value={`${formatNumberCompact(totalOnHand)} ${unitLabel}`}
           trend="Siap Jual Gudang Cabang"
           icon={<Package className="w-5 h-5 text-emerald-400" />}
           className="border-emerald-500/20 bg-emerald-500/5 hover:border-emerald-500/40 transition"
         />
         <KPICard
           title="Total Inbound (On Order)"
-          value={`${totalInbound.toLocaleString('id-ID')} ${unitLabel}`}
+          value={`${formatNumberCompact(totalInbound)} ${unitLabel}`}
           trend="Gabungan Vessel + TO + Loading"
           icon={<TrendingUp className="w-5 h-5 text-blue-400" />}
           className="border-blue-500/20 bg-blue-500/5 hover:border-blue-500/40 transition"
@@ -1658,10 +1659,10 @@ export default function SOHAnalysisPage() {
                 <Sparkles className="w-5 h-5 animate-pulse" />
               </span>
               <div>
-                <h4 className="font-extrabold text-slate-900 text-sm sm:text-base tracking-wide flex items-center gap-2">
+                <h4 className="font-extrabold text-white text-sm sm:text-base tracking-wide flex items-center gap-2">
                   Insight Strategis Evaluasi Rasio Ketersediaan (SOH & TO vs Target)
                 </h4>
-                <p className="text-[11px] sm:text-xs text-slate-600">
+                <p className="text-[11px] sm:text-xs text-slate-300">
                   Analisis otomatis keseimbangan stok berdasarkan rasio pasokan terhadap sisa target operasional.
                 </p>
               </div>

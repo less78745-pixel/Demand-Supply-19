@@ -20,6 +20,7 @@ import {
 import { get, set } from 'idb-keyval';
 import { parseDynamicCSV, findColumn, ParsedData } from '@/lib/csvParser';
 import { getStandardFilename } from '@/utils/export';
+import { formatNumberCompact } from '@/lib/utils';
 
 const COLORS = ['#3b82f6', '#f97316', '#22c55e', '#ef4444', '#a855f7', '#eab308', '#06b6d4', '#ec4899'];
 
@@ -821,7 +822,7 @@ export default function HistorySalesPage() {
             <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white flex items-center gap-3">
               History Sales & Outstanding <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-sky-400 to-cyan-300">(Analytics Engine)</span>
             </h1>
-            <p className="text-slate-700 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
+            <p className="text-slate-300 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
               Pemantauan performa penjualan historis terhadap pesanan tertunggak (outstanding). Menganalisa metrik otomatis dari sheet Data Compile secara aktual dan riil.
             </p>
           </div>
@@ -894,14 +895,14 @@ export default function HistorySalesPage() {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <KPICard
             title="Total Volume Sales"
-            value={`${executiveSummary.totalSales.toLocaleString('id-ID')} Unit`}
+            value={`${formatNumberCompact(executiveSummary.totalSales)}`}
             trend="Akumulasi Penjualan Cabang"
             icon={<TrendingUp className="w-5 h-5 text-blue-400" />}
             className="border-blue-500/20 bg-blue-500/5 hover:border-blue-500/40 transition"
           />
           <KPICard
             title="Total Outstanding Order"
-            value={`${executiveSummary.totalOutstanding.toLocaleString('id-ID')} Unit`}
+            value={`${formatNumberCompact(executiveSummary.totalOutstanding)}`}
             trend="Pesanan Belum Terkirim / Hold"
             icon={<AlertCircle className="w-5 h-5 text-amber-400" />}
             className="border-amber-500/20 bg-amber-500/5 hover:border-amber-500/40 transition"
@@ -985,7 +986,7 @@ export default function HistorySalesPage() {
                 <BarChart3 className="w-6 h-6 text-indigo-400" />
                 Grafik &amp; Analisa Matriks ABC-XYZ (Volume vs Fluktuasi Permintaan)
               </h3>
-              <p className="text-xs text-slate-700 mt-1 max-w-3xl leading-relaxed">
+              <p className="text-xs text-slate-300 mt-1 max-w-3xl leading-relaxed">
                 Menggabungkan klasifikasi <b>ABC</b> (kontribusi volume sales) dengan <b>XYZ</b> (koefisien variasi permintaan M s/d M-5) untuk menentukan strategi stok yang presisi.
               </p>
             </div>
@@ -1040,7 +1041,7 @@ export default function HistorySalesPage() {
                   <AlertCircle className="w-4 h-4 text-amber-400" />
                   <span>Sorotan Risiko Kritis: Kelompok AY &amp; AZ (High Vol, High Fluctuation)</span>
                 </div>
-                <p className="text-xs text-slate-700 mb-3 leading-relaxed">
+                <p className="text-xs text-amber-100 mb-3 leading-relaxed">
                   Item dalam kuadran <b>AZ &amp; AY</b> adalah penyumbang omzet terbesar namun memiliki fluktuasi permintaan tinggi di 6 bulan terakhir. Rentan mengalami stockout drastis atau overstock!
                 </p>
                 {abcXyzAnalysis.topAZ.length > 0 ? (
@@ -1058,7 +1059,7 @@ export default function HistorySalesPage() {
                     ))}
                   </div>
                 ) : (
-                  <div className="text-xs text-slate-600 font-medium py-2">Semua item volume tinggi memiliki permintaan cukup stabil.</div>
+                  <div className="text-xs text-slate-400 font-medium py-2">Semua item volume tinggi memiliki permintaan cukup stabil.</div>
                 )}
               </div>
 
@@ -1068,7 +1069,7 @@ export default function HistorySalesPage() {
                   <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                   <span>Rekomendasi Strategi Pengelolaan Matriks</span>
                 </div>
-                <ul className="text-xs text-slate-700 space-y-2 font-normal">
+                <ul className="text-xs text-slate-300 space-y-2 font-normal">
                   <li className="flex items-start gap-2">
                     <span className="text-emerald-400 font-black">✔</span>
                     <span><b>Kuadran AX &amp; BX (Stabil):</b> Terapkan sistem pemesanan otomatis dengan safety stock rendah. Ketersediaan stok di gudang harus dijamin 99% karena permintaan konstan dan dapat diprediksi.</span>
@@ -1413,14 +1414,14 @@ export default function HistorySalesPage() {
                 <span className="text-amber-300 font-bold text-[10px] uppercase block mb-1">Rasio Outstanding Tertinggi (Bottleneck)</span>
                 {tableSalesVsOutInsights.highestOutRatioItem ? (
                   <div>
-                    <div className="font-extrabold text-slate-900 text-sm truncate mt-1">📍 {tableSalesVsOutInsights.highestOutRatioItem.cabang} ({tableSalesVsOutInsights.highestOutRatioItem.category})</div>
+                    <div className="font-extrabold text-white text-sm truncate mt-1">📍 {tableSalesVsOutInsights.highestOutRatioItem.cabang} ({tableSalesVsOutInsights.highestOutRatioItem.category})</div>
                     <div className="text-xs font-mono font-black text-amber-400 mt-1">Rasio Out/Sales: {tableSalesVsOutInsights.highestOutRatioItem.ratio.toFixed(1)}% ({tableSalesVsOutInsights.highestOutRatioItem.outstanding.toLocaleString('id-ID')} Unit Hold)</div>
                     <p className="text-[11px] text-amber-200 mt-1.5 leading-tight">
                       ⚠️ Kombinasi ini mengalami tunggakan pesanan paling tinggi terhadap penjualan aktual. Perlu intervensi logistik segera!
                     </p>
                   </div>
                 ) : (
-                  <span className="text-slate-600 text-xs">Tidak ada data outstanding signifikan.</span>
+                  <span className="text-slate-400 text-xs">Tidak ada data outstanding signifikan.</span>
                 )}
               </div>
 
@@ -1429,7 +1430,7 @@ export default function HistorySalesPage() {
                 <div className="space-y-1.5 mt-2">
                   {tableSalesVsOutInsights.topContributors.map((tc, idx) => (
                     <div key={idx} className="flex justify-between items-center text-xs">
-                      <span className="text-slate-900 font-bold truncate pr-2">🏆 {tc.cabang} ({tc.category})</span>
+                      <span className="text-white font-bold truncate pr-2">🏆 {tc.cabang} ({tc.category})</span>
                       <span className="text-purple-300 font-mono font-black shrink-0">{tc.kontribusi.toFixed(1)}% Vol</span>
                     </div>
                   ))}
@@ -1535,7 +1536,7 @@ export default function HistorySalesPage() {
                 <BarChart3 className="w-5 h-5 text-purple-400" />
                 Performa Volume Sales & Outstanding per Category Insentif
               </h3>
-              <p className="text-xs text-slate-700 mt-1">
+              <p className="text-xs text-slate-300 mt-1">
                 Pengelompokan riwayat penjualan dari <b>M sampai M-5</b> dan pesanan tertunggak berdasarkan kombinasi <b>Cabang & Kategori Insentif</b>.
               </p>
             </div>
@@ -1581,19 +1582,19 @@ export default function HistorySalesPage() {
                     </span>
                     {insentifInsights.highestOutTier ? (
                       <div className="mt-2">
-                        <div className="text-base font-black text-slate-900 flex items-center gap-2">
+                        <div className="text-base font-black text-white flex items-center gap-2">
                           <span>⚠️ {insentifInsights.highestOutTier.categoryInsentif}</span>
-                          <span className="text-xs font-semibold text-slate-700">({insentifInsights.highestOutTier.cabang})</span>
+                          <span className="text-xs font-semibold text-slate-300">({insentifInsights.highestOutTier.cabang})</span>
                         </div>
-                        <div className="text-sm font-mono font-extrabold text-amber-700 mt-1">
+                        <div className="text-sm font-mono font-extrabold text-amber-500 mt-1">
                           Rasio Outstanding: {insentifInsights.highestOutTier.ratio.toFixed(1)}% ({Math.round(insentifInsights.highestOutTier.totalOutstanding).toLocaleString('id-ID')} Unit Tertunda)
                         </div>
-                        <p className="text-[11px] text-amber-800 mt-2 leading-relaxed">
+                        <p className="text-[11px] text-amber-200 mt-2 leading-relaxed">
                           🚨 <strong>Perhatian:</strong> Terdapat tunggakan pesanan signifikan pada kategori bernilai insentif ini! Keterlambatan pengiriman (Hold Delivery/Vessel) berisiko menurunkan pencapaian KPI sales bulanan dan omzet riil.
                         </p>
                       </div>
                     ) : (
-                      <span className="text-slate-600">Semua pesanan insentif terdistribusi lancar tanpa tunggakan tinggi.</span>
+                      <span className="text-slate-400">Semua pesanan insentif terdistribusi lancar tanpa tunggakan tinggi.</span>
                     )}
                   </div>
                   <div className="mt-3.5 pt-2.5 border-t border-amber-500/20 text-[11px] text-amber-300">
