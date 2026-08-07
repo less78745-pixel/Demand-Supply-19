@@ -550,28 +550,30 @@ def _process_group(cabang: str, category: str, df: pd.DataFrame, test_size: int)
         test_idx = test_index.index(date) if is_test else -1
         preds = {}
         for m_name, pred_list in forecasts_map.items():
-            preds[m_name] = float(pred_list[test_idx]) if (is_test and test_idx < len(pred_list)) else None
+            if is_test and test_idx < len(pred_list):
+                preds[m_name] = round(float(pred_list[test_idx]), 2)
+        
         combined_data.append({
             'cabang':       cabang,
             'category':     category,
             'date':         date.strftime('%Y-%m') if isinstance(date, pd.Timestamp) else str(date),
-            'actual':       _safe_float(row['Penjualan']),
+            'actual':       round(_safe_float(row['Penjualan']), 2),
             'is_anomaly':   False,
             'is_future':    False,
             'forecasts':    preds,
             'best_model':   best_model,
-            'mape':         best_mape,
-            'bias':         b_bias,
-            'mad':          b_mad,
-            'rmse':         b_rmse,
-            'safety_stock': safety_stock,
-            'rop':          rop,
+            'mape':         round(best_mape, 2),
+            'bias':         round(b_bias, 2),
+            'mad':          round(b_mad, 2),
+            'rmse':         round(b_rmse, 2),
+            'safety_stock': round(safety_stock, 2),
+            'rop':          round(rop, 2),
         })
 
     last_date = df.index[-1]
     for i in range(1, future_size + 1):
         future_date = last_date + pd.DateOffset(months=i)
-        preds = {m_name: float(pred_list[i - 1]) for m_name, pred_list in future_map.items()}
+        preds = {m_name: round(float(pred_list[i - 1]), 2) for m_name, pred_list in future_map.items()}
         combined_data.append({
             'cabang':       cabang,
             'category':     category,
@@ -581,12 +583,12 @@ def _process_group(cabang: str, category: str, df: pd.DataFrame, test_size: int)
             'is_future':    True,
             'forecasts':    preds,
             'best_model':   best_model,
-            'mape':         best_mape,
-            'bias':         b_bias,
-            'mad':          b_mad,
-            'rmse':         b_rmse,
-            'safety_stock': safety_stock,
-            'rop':          rop,
+            'mape':         round(best_mape, 2),
+            'bias':         round(b_bias, 2),
+            'mad':          round(b_mad, 2),
+            'rmse':         round(b_rmse, 2),
+            'safety_stock': round(safety_stock, 2),
+            'rop':          round(rop, 2),
         })
 
     return {
@@ -595,9 +597,9 @@ def _process_group(cabang: str, category: str, df: pd.DataFrame, test_size: int)
         'combined_data':   combined_data,
         'model_comparison': models_eval,
         'best_model':      best_model,
-        'best_mape':       best_mape,
-        'safety_stock':    safety_stock,
-        'rop':             rop,
+        'best_mape':       round(best_mape, 2),
+        'safety_stock':    round(safety_stock, 2),
+        'rop':             round(rop, 2),
     }
 
 def _compute_exog_factor(exog_train, steps):
