@@ -110,10 +110,26 @@ function generateDemoHistorySales(): ParsedData {
     { index: 30, name: 'TO' }
   ];
 
+  const targetData: any[] = [];
+  cabangs.forEach(item => {
+    targetData.push({
+      Cabang: item.cab,
+      'week start': 31,
+      'M': Math.round(50000 + Math.random() * 20000),
+      'M+1': Math.round(52000 + Math.random() * 20000),
+      'M+2': Math.round(55000 + Math.random() * 20000)
+    });
+  });
+
   return {
     headers,
     targetColumns,
     data,
+    sheetNames: ['History Sales', 'Target Value'],
+    sheets: {
+      'History Sales': { headers, targetColumns, data },
+      'Target Value': { headers: ['Cabang', 'week start', 'M', 'M+1', 'M+2'], targetColumns: [], data: targetData }
+    },
     processed_at: new Date().toISOString()
   };
 }
@@ -180,17 +196,26 @@ export default function HistorySalesPage() {
   };
 
   const handleDownloadTemplate = () => {
-    const headers = 'Cabang,Region,Item,NAMA BARANG,CATEGORY,GRUP,CATEGORY ITEM,Sub item,STATUS DOI,SOH,M-12,M-11,M-10,M-9,M-8,M-7,M-6,M-5,M-4,M-3,M-2,M-1,M,AVG Sales 3 Bln,On Vessel,Hold Delivery,SPJM,Load,Plan Loading,Ready,TO,Category Insentif';
-    const row1 = 'Surabaya,Jatim,ITM-001,Minyak Goreng Premium 1kg,Food & Beverage,Minyak Goreng Premium,Minyak Goreng Premium,Regular,ACTIVE,3500,2100,2200,2300,2400,3100,2500,2400,2600,2700,3000,4500,4800,5100,4800,600,200,100,300,500,400,350,Tier 1';
-    const row2 = 'Jakarta,DKI,ITM-002,Beras Setra Ramos 5kg,Food & Beverage,Beras Setra Ramos,Beras Setra Ramos,Regular,ACTIVE,2800,1800,1900,2000,2100,2800,2200,2100,2300,2400,2600,3200,3400,3600,3400,450,150,80,250,400,300,280,Tier 1';
-    const blob = new Blob(['\ufeff' + headers + '\n' + row1 + '\n' + row2], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'template_history_sales.csv';
-    link.click();
-    URL.revokeObjectURL(url);
-    toast.success('📁 Template CSV History Sales Berhasil Diunduh');
+    const wb = XLSX.utils.book_new();
+
+    const ws1_data = [
+      ['Cabang','Region','Item','NAMA BARANG','CATEGORY','GRUP','CATEGORY ITEM','Sub item','STATUS DOI','SOH','M-12','M-11','M-10','M-9','M-8','M-7','M-6','M-5','M-4','M-3','M-2','M-1','M','AVG Sales 3 Bln','On Vessel','Hold Delivery','SPJM','Load','Plan Loading','Ready','TO','Category Insentif'],
+      ['Surabaya','Jatim','ITM-001','Minyak Goreng Premium 1kg','Food & Beverage','Minyak Goreng Premium','Minyak Goreng Premium','Regular','ACTIVE',3500,2100,2200,2300,2400,3100,2500,2400,2600,2700,3000,4500,4800,5100,4800,600,200,100,300,500,400,350,'Tier 1'],
+      ['Jakarta','DKI','ITM-002','Beras Setra Ramos 5kg','Food & Beverage','Beras Setra Ramos','Beras Setra Ramos','Regular','ACTIVE',2800,1800,1900,2000,2100,2800,2200,2100,2300,2400,2600,3200,3400,3600,3400,450,150,80,250,400,300,280,'Tier 1']
+    ];
+    const ws1 = XLSX.utils.aoa_to_sheet(ws1_data);
+    XLSX.utils.book_append_sheet(wb, ws1, "History Sales");
+
+    const ws2_data = [
+      ['Cabang', 'week start', 'M', 'M+1', 'M+2'],
+      ['Surabaya', 31, 50000, 52000, 55000],
+      ['Jakarta', 31, 48000, 49000, 52000]
+    ];
+    const ws2 = XLSX.utils.aoa_to_sheet(ws2_data);
+    XLSX.utils.book_append_sheet(wb, ws2, "Target Value");
+
+    XLSX.writeFile(wb, 'template_history_sales.xlsx');
+    toast.success('📁 Template Excel History Sales Berhasil Diunduh');
   };
 
   const handleFileUpload = async (file: File) => {
