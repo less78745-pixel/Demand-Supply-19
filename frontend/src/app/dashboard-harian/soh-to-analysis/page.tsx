@@ -1659,10 +1659,10 @@ export default function SOHAnalysisPage() {
                 <Sparkles className="w-5 h-5 animate-pulse" />
               </span>
               <div>
-                <h4 className="font-extrabold text-white text-sm sm:text-base tracking-wide flex items-center gap-2">
+                <h4 className="font-extrabold text-emerald-100 bg-emerald-800/60 px-3 py-1.5 rounded-md border border-emerald-500/50 text-sm sm:text-base tracking-wide flex items-center gap-2 w-fit mb-1 shadow-sm">
                   Insight Strategis Evaluasi Rasio Ketersediaan (SOH & TO vs Target)
                 </h4>
-                <p className="text-[11px] sm:text-xs text-slate-300">
+                <p className="text-[11px] sm:text-xs text-emerald-200/90 font-medium px-1">
                   Analisis otomatis keseimbangan stok berdasarkan rasio pasokan terhadap sisa target operasional.
                 </p>
               </div>
