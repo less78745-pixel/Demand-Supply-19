@@ -459,11 +459,14 @@ export default function HistorySalesPage() {
     }
 
     const getMonthScore = (name: string) => {
-      const matchM = name.match(/^M(?:-(\d+))?$/i);
+      const cleanName = name.trim();
+      if (cleanName.toLowerCase().includes('avg')) return 999999;
+
+      const matchM = cleanName.match(/^M(?:-(\d+))?$/i);
       if (matchM) {
         return parseInt(matchM[1] || '0', 10) * -1;
       }
-      const matchDate = name.match(/^([a-zA-Z]+)[\s-]*(\d+)$/);
+      const matchDate = cleanName.match(/^([a-zA-Z]+)[\s-]*(\d+)$/);
       if (matchDate) {
          const mStr = matchDate[1].toUpperCase().substring(0, 3);
          let year = parseInt(matchDate[2], 10);
@@ -475,11 +478,10 @@ export default function HistorySalesPage() {
             return year * 12 + idMonths[mStr];
          }
       }
-      if (name.toLowerCase().includes('avg')) return -999999;
-      return 0;
+      return -999998;
     };
 
-    return [...cols].sort((a, b) => getMonthScore(a.name) - getMonthScore(b.name));
+    return [...cols].sort((a, b) => getMonthScore(b.name) - getMonthScore(a.name));
   }, [parsed, executiveSummary, chartFilter]);
 
   // Table Data grouped per Cabang + Category for detailed comparison & growth analysis
