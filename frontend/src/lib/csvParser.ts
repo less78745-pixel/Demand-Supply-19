@@ -7,7 +7,7 @@ export interface ParsedData {
   data: any[];
   processed_at?: string;
   sheetNames?: string[];
-  sheets?: Record<string, { headers: string[]; targetColumns: { index: number; name: string }[]; data: any[] }>;
+  sheets?: Record<string, { headers: string[]; targetColumns: { index: number; name: string }[]; data: any[]; lines?: any[][] }>;
 }
 
 export function parseIndonesianNumber(val: any): number {
@@ -183,7 +183,8 @@ export async function parseDynamicCSV(file: File): Promise<ParsedData> {
             try {
               const sheet = workbook.Sheets[sName];
               const lines = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
-              const parsed = parseLinesSync(lines);
+              const parsed = parseLinesSync(lines) as any;
+              parsed.lines = lines;
               sheets[sName] = parsed;
               if (!firstSheetData) firstSheetData = parsed;
             } catch (err) {

@@ -218,6 +218,15 @@ export default function HistorySalesPage() {
     const ws2 = XLSX.utils.aoa_to_sheet(ws2_data);
     XLSX.utils.book_append_sheet(wb, ws2, "Target Value");
 
+    const ws3_data = [
+      [],
+      ['Month Start', 'AGUS-2026'],
+      [],
+      []
+    ];
+    const ws3 = XLSX.utils.aoa_to_sheet(ws3_data);
+    XLSX.utils.book_append_sheet(wb, ws3, "Month");
+
     XLSX.writeFile(wb, 'template_history_sales.xlsx');
     toast.success('📁 Template Excel History Sales Berhasil Diunduh');
   };
@@ -315,25 +324,25 @@ export default function HistorySalesPage() {
 
   // Dynamic Month Labels computation
   const dynamicMonthLabels = useMemo(() => {
-    const defaultLabels: Record<string, string> = { M: 'M', M1: 'M-1', M2: 'M-2', M3: 'M-3', M4: 'M-4', M5: 'M-5' };
-    if (!parsed || !parsed.sheets) return defaultLabels;
+    const defaultLabels = { M: 'M', M1: 'M-1', M2: 'M-2', M3: 'M-3', M4: 'M-4', M5: 'M-5' };
+    if (!parsed) return defaultLabels;
     
-    const monthSheetKey = Object.keys(parsed.sheets).find(k => k.toLowerCase().includes('month'));
-    if (!monthSheetKey) return defaultLabels;
+    const monthSheetKey = parsed.sheetNames?.find(n => n.toLowerCase() === 'month');
+    const monthRawLines = monthSheetKey && parsed.sheets ? parsed.sheets[monthSheetKey]?.lines || [] : [];
     
-    const monthData = parsed.sheets[monthSheetKey].data;
     let monthStartStr = '';
     
-    for (const row of monthData) {
-      const vals = Object.values(row);
-      for (let j = 0; j < vals.length; j++) {
-         const v = String(vals[j]).trim().toLowerCase();
-         if (v.includes('month start')) {
-            if (j + 1 < vals.length && vals[j+1]) {
-               monthStartStr = String(vals[j+1]).trim();
+    for (const row of monthRawLines) {
+      if (!Array.isArray(row)) continue;
+      for (let j = 0; j < row.length; j++) {
+         const cell = String(row[j] || '').trim().toLowerCase();
+         if (cell.includes('month start')) {
+            if (j + 1 < row.length && row[j+1]) {
+               monthStartStr = String(row[j+1]).trim();
             } else {
-               monthStartStr = String(vals[j]).replace(/month start/i, '').replace(/[:=]/g, '').trim();
+               monthStartStr = String(row[j]).replace(/month start/i, '').replace(/[:=]/g, '').trim();
             }
+            break;
          }
       }
       if (monthStartStr) break;
@@ -1802,11 +1811,11 @@ export default function HistorySalesPage() {
                       {insentifInsights.topContributorsPerTier.map((tierData: any, idx: number) => (
                         <div key={idx} className="border-b border-purple-500/20 pb-2 last:border-0 last:pb-0">
                            <div className="text-purple-300 font-bold mb-1">{tierData.tier}</div>
-                           <div className="space-y-1">
+                           <div className="space-y-1.5 mt-1">
                               {tierData.contributors.map((c: any, cIdx: number) => (
-                                 <div key={cIdx} className="flex justify-between text-[11px] text-slate-300">
-                                    <span>- {c.name}</span>
-                                    <span className="font-mono text-purple-200">{Math.round(c.sales).toLocaleString('id-ID')} Unit</span>
+                                 <div key={cIdx} className="flex justify-between items-center text-[11px] py-0.5">
+                                    <span className="font-bold text-blue-100 bg-blue-600/40 px-2 py-0.5 rounded border border-blue-500/50 shadow-sm">- {c.name}</span>
+                                    <span className="font-mono font-bold text-purple-200">{Math.round(c.sales).toLocaleString('id-ID')} Unit</span>
                                  </div>
                               ))}
                            </div>
