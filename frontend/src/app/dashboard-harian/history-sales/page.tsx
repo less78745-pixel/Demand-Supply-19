@@ -313,6 +313,64 @@ export default function HistorySalesPage() {
     );
   }, [parsed, selectedRegion, selectedCabang, selectedCategory, selectedCategoryInsentif, selectedStatusDoi, colRegion, colCabang, colCategory, colCategoryInsentif, colStatusDoi]);
 
+  // Dynamic Month Labels computation
+  const dynamicMonthLabels = useMemo(() => {
+    const defaultLabels: Record<string, string> = { M: 'M', M1: 'M-1', M2: 'M-2', M3: 'M-3', M4: 'M-4', M5: 'M-5' };
+    if (!parsed || !parsed.sheets) return defaultLabels;
+    
+    const monthSheetKey = Object.keys(parsed.sheets).find(k => k.toLowerCase().includes('month'));
+    if (!monthSheetKey) return defaultLabels;
+    
+    const monthData = parsed.sheets[monthSheetKey].data;
+    let monthStartStr = '';
+    
+    for (const row of monthData) {
+      const keys = Object.keys(row);
+      const wsKey = keys.find(k => String(row[k]).toLowerCase().includes('month start') || k.toLowerCase().includes('month start'));
+      if (wsKey && row[wsKey] !== undefined) {
+         monthStartStr = String(row[wsKey]);
+         break;
+      }
+      if (keys.length >= 2) {
+         const valA = row[keys[0]];
+         const valB = row[keys[1]];
+         if (String(valA).toLowerCase().includes('month start') && valB) {
+            monthStartStr = String(valB);
+            break;
+         }
+      }
+    }
+    
+    if (!monthStartStr) return defaultLabels;
+
+    const idMonths: Record<string, number> = {
+      'JAN': 0, 'FEB': 1, 'MAR': 2, 'APR': 3, 'MEI': 4, 'JUN': 5, 'JUL': 6, 'AGU': 7, 'SEP': 8, 'OKT': 9, 'NOV': 10, 'DES': 11,
+      'AUG': 7, 'OCT': 9, 'DEC': 11
+    };
+    
+    const parts = monthStartStr.split('-');
+    if (parts.length === 2) {
+       const mStr = parts[0].toUpperCase().substring(0, 3);
+       let year = parseInt(parts[1].replace(/[^0-9]/g, ''), 10);
+       if (year < 100) year += 2000;
+       const monthIdx = idMonths[mStr];
+       if (monthIdx !== undefined) {
+         const labels = { ...defaultLabels };
+         const enMonths = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+         for (let i = 0; i <= 5; i++) {
+            let dYear = year;
+            let dMonth = monthIdx - i;
+            while (dMonth < 0) { dMonth += 12; dYear -= 1; }
+            const lbl = `${enMonths[dMonth]}-${String(dYear).substring(2)}`;
+            if (i === 0) labels.M = lbl;
+            else labels[`M${i}`] = lbl;
+         }
+         return labels;
+       }
+    }
+    return defaultLabels;
+  }, [parsed]);
+
   // Executive Summary Insights Computation
   const executiveSummary = useMemo(() => {
     if (!parsed || filtered.length === 0) return null;
@@ -599,10 +657,19 @@ export default function HistorySalesPage() {
   const abcXyzAnalysis = useMemo(() => {
     if (!parsed || filtered.length === 0) return null;
     const periodNames = ['M', 'M-1', 'M-2', 'M-3', 'M-4', 'M-5'];
+    const filterPeriodNames = ['M', 'M-1', 'M-2', 'M-3', 'M-4', 'M-5', 'M-6', 'M-7', 'M-8', 'M-9', 'M-10', 'M-11', 'M-12'];
+
     const periodCols: Record<string, string | undefined> = {};
+    const filterPeriodCols: Record<string, string | undefined> = {};
+
     periodNames.forEach(p => {
       const found = parsed.headers.find(h => h.trim().toUpperCase() === p.toUpperCase());
       if (found) periodCols[p] = found;
+    });
+
+    filterPeriodNames.forEach(p => {
+      const found = parsed.headers.find(h => h.trim().toUpperCase() === p.toUpperCase());
+      if (found) filterPeriodCols[p] = found;
     });
 
     const itemMap: Record<string, any> = {};
@@ -614,7 +681,7 @@ export default function HistorySalesPage() {
       const key = `${cab}___${grup}___${cat}`;
 
       if (!itemMap[key]) {
-        itemMap[key] = { key, cabang: cab, category: cat, name: itemDesc, periods: [], totalVol: 0 };
+        itemMap[key] = { key, cabang: cab, category: cat, name: itemDesc, periods: [], totalVol: 0, filterTotalVol: 0 };
       }
 
       periodNames.forEach((p, idx) => {
@@ -622,9 +689,17 @@ export default function HistorySalesPage() {
         const val = colName && row[colName] !== undefined ? Number(String(row[colName] || 0).replace(/[^0-9.-]+/g, '')) || 0 : 0;
         itemMap[key].periods[idx] = (itemMap[key].periods[idx] || 0) + val;
       });
+
+      filterPeriodNames.forEach(p => {
+        const colName = filterPeriodCols[p];
+        const val = colName && row[colName] !== undefined ? Number(String(row[colName] || 0).replace(/[^0-9.-]+/g, '')) || 0 : 0;
+        itemMap[key].filterTotalVol += val;
+      });
     }
 
-    const rawItems = Object.values(itemMap).map(item => {
+    const rawItems = Object.values(itemMap)
+      .filter(item => item.filterTotalVol > 0)
+      .map(item => {
       const totalVol = item.periods.reduce((a: number, b: number) => a + b, 0);
       const mean = totalVol / 6;
       let variance = 0;
@@ -1109,14 +1184,14 @@ export default function HistorySalesPage() {
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-slate-200 pb-4 mb-6 gap-4">
             <div>
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-black bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 uppercase tracking-widest mb-2 shadow-sm">
-                <Sparkles className="w-3.5 h-3.5 text-indigo-400" /> Advanced Analytics • Matriks ABC-XYZ (M s/d M-5)
+                <Sparkles className="w-3.5 h-3.5 text-indigo-400" /> Advanced Analytics • Matriks ABC-XYZ ({dynamicMonthLabels.M5} s/d {dynamicMonthLabels.M})
               </div>
               <h3 className="text-lg sm:text-xl font-black text-white flex items-center gap-2.5">
                 <BarChart3 className="w-6 h-6 text-indigo-400" />
                 Grafik &amp; Analisa Matriks ABC-XYZ (Volume vs Fluktuasi Permintaan)
               </h3>
               <p className="text-xs text-slate-300 mt-1 max-w-3xl leading-relaxed">
-                <mark className="bg-amber-300/20 text-amber-100 rounded px-1.5 py-0.5">Menggabungkan klasifikasi <b>ABC</b> (kontribusi volume sales) dengan <b>XYZ</b> (koefisien variasi permintaan M s/d M-5) untuk menentukan strategi stok yang presisi.</mark>
+                <mark className="bg-amber-300/20 text-amber-100 rounded px-1.5 py-0.5">Menggabungkan klasifikasi <b>ABC</b> (kontribusi volume sales) dengan <b>XYZ</b> (koefisien variasi permintaan {dynamicMonthLabels.M5} s/d {dynamicMonthLabels.M}) untuk menentukan strategi stok yang presisi.</mark>
               </p>
             </div>
             <div className="flex flex-col items-end gap-1 font-mono text-xs text-slate-700 bg-slate-50 p-3 rounded-xl border border-slate-200 shrink-0">
@@ -1397,16 +1472,16 @@ export default function HistorySalesPage() {
       {supplyVsMonthlySales && (
         <GlassCard className="p-6 border-amber-500/40 bg-gradient-to-b from-slate-900/95 via-slate-950/90 to-slate-900/95 shadow-2xl">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 pb-4 mb-6 gap-3">
-            <div>
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[11px] font-black bg-amber-500/10 text-amber-400 border border-amber-500/30 uppercase tracking-widest mb-2">
+            <div className="flex-1">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-black bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 uppercase tracking-widest mb-2 shadow-sm">
                 <Layers className="w-3.5 h-3.5" /> Kapasitas Stok vs History Penjualan
               </div>
-              <h3 className="text-lg sm:text-xl font-black text-white flex items-center gap-2.5">
-                <BarChart3 className="w-5 h-5 text-amber-400" />
+              <h3 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2">
+                <BarChart3 className="w-5 h-5 text-cyan-400" />
                 Komparasi Stok (SOH + TO + Vessel) Terhadap Penjualan Bulanan (M s/d M-5)
               </h3>
-              <p className="text-xs text-slate-700 mt-1">
-                Visualisasi terpadu membandingkan volume transaksi penjualan dari 6 bulan terakhir (M s/d M-5) dengan kapasitas posisi stok aktual dan perjalanan.
+              <p className="text-xs text-slate-300 mt-1.5 leading-relaxed">
+                <mark className="bg-amber-300/20 text-amber-100 rounded px-1.5 py-0.5">Visualisasi terpadu membandingkan volume transaksi penjualan dari 6 bulan terakhir (M s/d M-5) dengan kapasitas posisi stok aktual dan perjalanan.</mark>
               </p>
             </div>
 
@@ -1540,7 +1615,7 @@ export default function HistorySalesPage() {
                 <th className="py-3.5 px-4 border-l border-slate-200 text-blue-400">📈 Total Volume Sales</th>
                 <th className="py-3.5 px-4 border-l border-slate-200 text-rose-400">📊 AVG Sales 3 Bln</th>
                 <th className="py-3.5 px-4 border-l border-slate-200 text-amber-300">✨ % Kontribusi (per Cabang)</th>
-                <th className="py-3.5 px-4 border-l border-slate-200 text-cyan-400">📅 Volume M & M-1</th>
+                <th className="py-3.5 px-4 border-l border-slate-200 text-cyan-400">📅 Volume {dynamicMonthLabels.M} & {dynamicMonthLabels.M1}</th>
                 <th className="py-3.5 px-4 border-l border-slate-200 text-emerald-400">📈 Pertumbuhan vs AVG 3 Bln</th>
                 <th className="py-3.5 px-4 border-l border-slate-200 text-amber-300">💡 Analisis Pertumbuhan</th>
               </tr>
@@ -1594,15 +1669,15 @@ export default function HistorySalesPage() {
                       {row.kontribusi.toFixed(2)}%
                     </td>
                     <td className="py-3.5 px-4 border-l border-slate-200 text-xs align-middle">
-                      <div className="font-mono text-cyan-700 font-bold">M: {row.m.toLocaleString('id-ID')}</div>
-                      <div className="font-mono text-slate-700 mt-1">M-1: {row.m1.toLocaleString('id-ID')}</div>
+                      <div className="font-mono text-cyan-700 font-bold">{dynamicMonthLabels.M}: {row.m.toLocaleString('id-ID')}</div>
+                      <div className="font-mono text-slate-700 mt-1">{dynamicMonthLabels.M1}: {row.m1.toLocaleString('id-ID')}</div>
                     </td>
                     <td className="py-3.5 px-4 border-l border-slate-200 text-xs align-middle">
                       <div className={`font-mono font-bold ${row.growthM >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
-                        M vs AVG: {row.growthM >= 0 ? '▲ +' : '▼ '}{row.growthM.toFixed(1)}%
+                        {dynamicMonthLabels.M} vs AVG: {row.growthM >= 0 ? '▲ +' : '▼ '}{row.growthM.toFixed(1)}%
                       </div>
                       <div className={`font-mono font-bold mt-1 ${row.growthM1 >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                        M-1 vs AVG: {row.growthM1 >= 0 ? '▲ +' : '▼ '}{row.growthM1.toFixed(1)}%
+                        {dynamicMonthLabels.M1} vs AVG: {row.growthM1 >= 0 ? '▲ +' : '▼ '}{row.growthM1.toFixed(1)}%
                       </div>
                     </td>
                     <td className="py-3.5 px-4 border-l border-slate-200 align-middle">
