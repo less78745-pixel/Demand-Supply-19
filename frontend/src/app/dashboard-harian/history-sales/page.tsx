@@ -21,6 +21,7 @@ import { get, set } from 'idb-keyval';
 import { parseDynamicCSV, findColumn, ParsedData } from '@/lib/csvParser';
 import { getStandardFilename } from '@/utils/export';
 import { formatNumberCompact } from '@/lib/utils';
+import * as XLSX from 'xlsx';
 
 const COLORS = ['#3b82f6', '#f97316', '#22c55e', '#ef4444', '#a855f7', '#eab308', '#06b6d4', '#ec4899'];
 
@@ -769,25 +770,30 @@ export default function HistorySalesPage() {
 
   const handleExport = () => {
     if (!tableData || tableData.length === 0) return;
-    const header = [
-      'Cabang / Wilayah',
-      'Grup',
-      'Kategori Item',
-      'Total Volume Sales',
-      'AVG Sales 3 Bln',
-      '% Kontribusi (per Cabang)',
-      'Volume M',
-      'Volume M-1',
-      'Pertumbuhan M vs AVG (%)',
-      'Pertumbuhan M-1 vs AVG (%)'
-    ].map(h => `"${h}"`).join(',');
-    const lines = [header];
+    
+    const wb = XLSX.utils.book_new();
+
+    // 1. History Sales Komparatif Analis
+    const ws1_data: any[][] = [
+      [
+        'Cabang / Wilayah',
+        'Grup',
+        'Kategori Item',
+        'Total Volume Sales',
+        'AVG Sales 3 Bln',
+        '% Kontribusi (per Cabang)',
+        'Volume M',
+        'Volume M-1',
+        'Pertumbuhan M vs AVG (%)',
+        'Pertumbuhan M-1 vs AVG (%)'
+      ]
+    ];
 
     tableData.forEach(row => {
-      const line = [
-        `"${String(row.cabang).replace(/"/g, '""')}"`,
-        `"${String(row.grup || '-').replace(/"/g, '""')}"`,
-        `"${String(row.category).replace(/"/g, '""')}"`,
+      ws1_data.push([
+        row.cabang,
+        row.grup || '-',
+        row.category,
         toExactFloat(row.sales, 2),
         toExactFloat(row.avg3, 2),
         toExactFloat(row.kontribusi, 2),
@@ -795,17 +801,86 @@ export default function HistorySalesPage() {
         toExactFloat(row.m1, 2),
         row.growthM,
         row.growthM1
-      ].join(',');
-      lines.push(line);
+      ]);
+    });
+    const ws1 = XLSX.utils.aoa_to_sheet(ws1_data);
+    XLSX.utils.book_append_sheet(wb, ws1, "History Sales Komparatif");
+
+    // 2. Breakdown Kontribusi
+    const ws2_data: any[][] = [
+      ['Cabang', 'Grup', 'Category', 'Kontribusi', 'Nama Week', 'Total Target Perbulan', 'Target Per Minggu']
+    ];
+
+    const targetValueSheetName = parsed?.sheetNames?.find(n => n.toLowerCase().includes('target value'));
+    const targetData = targetValueSheetName && parsed?.sheets ? parsed.sheets[targetValueSheetName]?.data : [];
+
+    let weekStartVal: any = 1;
+    let monthCols: string[] = [];
+    if (targetData && targetData.length > 0) {
+      // Find week start
+      for (const r of targetData) {
+        const keys = Object.keys(r);
+        const wsKey = keys.find(k => k.toLowerCase().includes('week start'));
+        if (wsKey && r[wsKey] !== undefined && r[wsKey] !== null) {
+          const wStr = String(r[wsKey]).replace(/\D/g, ''); 
+          if (wStr) {
+            weekStartVal = parseInt(wStr, 10);
+          } else {
+            weekStartVal = r[wsKey];
+          }
+          break;
+        }
+      }
+      
+      const keys = Object.keys(targetData[0]);
+      monthCols = keys.filter(k => {
+        const kLower = k.toLowerCase().trim();
+        return kLower === 'm' || kLower.startsWith('m+') || kLower.startsWith('m-') || /^m\s*\+?\s*\d+$/.test(kLower);
+      });
+    }
+    
+    let weekStartNum = parseInt(String(weekStartVal).replace(/\D/g, ''), 10);
+    if (isNaN(weekStartNum)) weekStartNum = 1;
+
+    tableData.forEach(row => {
+      const cabang = row.cabang;
+      const targetRow = targetData?.find((t: any) => {
+        const cKey = Object.keys(t).find(k => k.toLowerCase() === 'cabang' || k.toLowerCase() === 'branch' || k.toLowerCase() === 'cab');
+        return cKey && String(t[cKey]).trim().toLowerCase() === String(cabang).trim().toLowerCase();
+      });
+
+      if (targetRow && monthCols.length > 0) {
+        let currentWeekNum = weekStartNum;
+        
+        for (const mCol of monthCols) {
+          const monthTarget = Number(targetRow[mCol]) || 0;
+          const kontribusiPct = row.kontribusi / 100;
+          const totalTargetPerbulan = kontribusiPct * monthTarget;
+          const targetPerMinggu = totalTargetPerbulan / 4;
+          
+          for (let w = 1; w <= 4; w++) {
+            const namaWeek = (typeof weekStartVal === 'number' || !isNaN(parseInt(String(weekStartVal))))
+                           ? `Week ${currentWeekNum}` 
+                           : `${weekStartVal} + ${currentWeekNum - weekStartNum}`;
+            ws2_data.push([
+              cabang,
+              row.grup || '-',
+              row.category,
+              toExactFloat(row.kontribusi, 2) + '%',
+              namaWeek,
+              toExactFloat(totalTargetPerbulan, 2),
+              toExactFloat(targetPerMinggu, 2)
+            ]);
+            currentWeekNum++;
+          }
+        }
+      }
     });
 
-    const blob = new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = getStandardFilename(`History_Sales_Komparatif_Analisis`, new Date().toISOString(), 'csv');
-    link.click();
-    URL.revokeObjectURL(url);
+    const ws2 = XLSX.utils.aoa_to_sheet(ws2_data);
+    XLSX.utils.book_append_sheet(wb, ws2, "Breakdown Kontribusi");
+
+    XLSX.writeFile(wb, getStandardFilename(`History_Sales_Komparatif_Analisis`, new Date().toISOString(), 'xlsx'));
     toast.success('📊 Hasil Analisis Presisi History Sales Berhasil Diekspor!');
   };
 
