@@ -242,7 +242,7 @@ export default function HistorySalesPage() {
   const colCabang = useMemo(() => parsed ? findColumn(parsed.headers, ['cabang', 'branch_name', 'branch', 'cab']) : undefined, [parsed]);
   const colRegion = useMemo(() => parsed ? findColumn(parsed.headers, ['region', 'regional', 'wilayah']) : undefined, [parsed]);
   const colGrup = useMemo(() => parsed ? findColumn(parsed.headers, ['grup', 'group', 'grup barang', 'group item', 'divisi', 'division']) : undefined, [parsed]);
-  const colCategory = useMemo(() => parsed ? findColumn(parsed.headers, ['category', 'kategori item', 'kategori', 'grup']) : undefined, [parsed]);
+  const colCategory = useMemo(() => parsed ? findColumn(parsed.headers, ['category item', 'kategori item', 'category', 'kategori', 'grup']) : undefined, [parsed]);
   const colCategoryInsentif = useMemo(() => parsed ? findColumn(parsed.headers, ['category insentif', 'category_insentif', 'kategori insentif', 'insentif', 'cat insentif']) : undefined, [parsed]);
 
   // Linked Filter options
