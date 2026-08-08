@@ -25,6 +25,29 @@ import * as XLSX from 'xlsx';
 
 const COLORS = ['#3b82f6', '#f97316', '#22c55e', '#ef4444', '#a855f7', '#eab308', '#06b6d4', '#ec4899'];
 
+export const getMonthScore = (name: string) => {
+  const cleanName = (name || '').trim();
+  if (cleanName.toLowerCase().includes('avg')) return 999999;
+
+  const matchM = cleanName.match(/^M(?:-(\d+))?$/i);
+  if (matchM) {
+    return parseInt(matchM[1] || '0', 10) * -1;
+  }
+  const matchDate = cleanName.match(/^([a-zA-Z]+)[\s-]*(\d+)$/);
+  if (matchDate) {
+      const mStr = matchDate[1].toUpperCase().substring(0, 3);
+      let year = parseInt(matchDate[2], 10);
+      if (year < 100) year += 2000;
+      const idMonths: Record<string, number> = {
+        'JAN': 0, 'FEB': 1, 'MAR': 2, 'APR': 3, 'MAY': 4, 'MEI': 4, 'JUN': 5, 'JUL': 6, 'AUG': 7, 'AGU': 7, 'SEP': 8, 'OCT': 9, 'OKT': 9, 'NOV': 10, 'DEC': 11, 'DES': 11
+      };
+      if (idMonths[mStr] !== undefined) {
+        return year * 12 + idMonths[mStr];
+      }
+  }
+  return -999998;
+};
+
 function generateDemoHistorySales(): ParsedData {
   const cabangs = [
     { cab: 'Surabaya', reg: 'Jatim' },
@@ -168,10 +191,144 @@ export const toExactFloat = (num: number, decimals: number = 2): number => {
   return Number(Math.round(Number(num + 'e' + decimals)) + 'e-' + decimals);
 };
 
+const ExcelColFilterModal = ({
+  activeCol,
+  setActiveCol,
+  searchInput,
+  setSearchInput,
+  colFilters,
+  setColFilters,
+  uniqueValues
+}: any) => {
+  if (!activeCol) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+      <div className="bg-white border border-slate-200 rounded-2xl p-5 max-w-sm w-full shadow-2xl text-slate-800">
+        <div className="flex items-center justify-between border-b border-slate-200 pb-3 mb-4">
+          <h4 className="font-bold text-sm text-slate-900 flex items-center gap-2">
+            <Filter className="w-4 h-4 text-emerald-400" /> Filter Kolom: <span className="text-emerald-400">{activeCol}</span>
+          </h4>
+          <button onClick={() => setActiveCol(null)} className="text-slate-600 hover:text-slate-900 transition">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <div className="relative">
+            <Search className="w-4 h-4 absolute left-3 top-3 text-slate-600" />
+            <input
+              type="text"
+              value={searchInput}
+              onChange={e => setSearchInput(e.target.value)}
+              placeholder={`Cari dalam ${activeCol}...`}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-900 placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+            />
+            {searchInput && (
+              <button onClick={() => setSearchInput('')} className="absolute right-3 top-2.5 text-slate-500 hover:text-slate-900 text-xs">
+                Hapus
+              </button>
+            )}
+          </div>
+
+          <div className="max-h-48 overflow-y-auto border border-slate-200 rounded-xl bg-slate-50 p-2 space-y-1 text-xs">
+            <div className="text-[11px] font-semibold text-slate-600 mb-1 px-1 flex justify-between">
+              <span>Daftar Nilai Unik ({uniqueValues.length}):</span>
+            </div>
+            {uniqueValues.filter((val: string) => !searchInput || val.toLowerCase().includes(searchInput.toLowerCase())).slice(0, 50).map((val: string, idx: number) => {
+              const isChecked = !colFilters[activeCol]?.selected?.length || colFilters[activeCol]?.selected?.includes(val);
+              return (
+                <label
+                  key={idx}
+                  className="flex items-center gap-2 py-1 px-2 rounded hover:bg-slate-100 cursor-pointer text-slate-700 truncate"
+                >
+                  <input
+                    type="checkbox"
+                    checked={isChecked}
+                    onChange={() => {
+                      const curSelected = colFilters[activeCol]?.selected?.length ? [...(colFilters[activeCol]?.selected || [])] : [...uniqueValues];
+                      let nextSelected: string[];
+                      if (curSelected.includes(val)) {
+                        nextSelected = curSelected.filter((item: string) => item !== val);
+                      } else {
+                        nextSelected = [...curSelected, val];
+                      }
+                      if (nextSelected.length === uniqueValues.length) {
+                        nextSelected = [];
+                      }
+                      setColFilters({
+                        ...colFilters,
+                        [activeCol]: { ...colFilters[activeCol], selected: nextSelected }
+                      });
+                    }}
+                    className="rounded border-slate-200 bg-white text-emerald-500 focus:ring-emerald-500/30"
+                  />
+                  <span className="truncate" title={val}>{val || '(Kosong)'}</span>
+                </label>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center gap-2 pt-2 border-t border-slate-200">
+            <button
+              onClick={() => {
+                const next = { ...colFilters };
+                delete next[activeCol];
+                setColFilters(next);
+                setSearchInput('');
+                toast.success(`Filter kolom ${activeCol} direset!`);
+              }}
+              className="flex-1 py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-700 font-bold text-xs text-slate-700 hover:text-slate-900 transition"
+            >
+              Reset
+            </button>
+            <button
+              onClick={() => {
+                setColFilters({
+                  ...colFilters,
+                  [activeCol]: { ...colFilters[activeCol], search: searchInput }
+                });
+                setActiveCol(null);
+                toast.success('Filter diterapkan!');
+              }}
+              className="flex-1 py-2 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 font-bold text-xs text-slate-950 transition shadow-lg shadow-emerald-500/20"
+            >
+              Terapkan
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function HistorySalesPage() {
   const [parsed, setParsed] = useState<ParsedData | null>(null);
+
+  const setFormattedParsed = (data: ParsedData | null) => {
+    if (!data || !data.data) {
+      setParsed(data);
+      return;
+    }
+    const formatText = (val: any) => {
+      if (!val) return val;
+      const s = String(val).trim();
+      if (!s) return val;
+      return s.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+    };
+    const colCab = findColumn(data.headers, ['cabang', 'branch_name', 'branch', 'cab']);
+    const colGrp = findColumn(data.headers, ['grup', 'group', 'grup barang', 'group item', 'divisi', 'division']);
+    const colCat = findColumn(data.headers, ['category item', 'kategori item', 'category', 'kategori', 'grup']);
+
+    data.data.forEach(d => {
+      if (colCab && d[colCab]) d[colCab] = formatText(d[colCab]);
+      if (colGrp && d[colGrp]) d[colGrp] = formatText(d[colGrp]);
+      if (colCat && d[colCat]) d[colCat] = formatText(d[colCat]);
+    });
+    setParsed({ ...data });
+  };
+
   const [isProcessing, setIsProcessing] = useState(false);
-  const [chartFilter, setChartFilter] = useState<'all' | 'sales' | 'avg3'>('all');
+  const [chartGrouping, setChartGrouping] = useState<'cabang' | 'grup' | 'category'>('cabang');
   const [showHowTo, setShowHowTo] = useState<boolean>(false);
   const [selectedCabangForChart, setSelectedCabangForChart] = useState<string>('All');
 
@@ -183,28 +340,37 @@ export default function HistorySalesPage() {
   const [selectedStatusDoi, setSelectedStatusDoi] = useState<string[]>(['All']);
   const [searchTable1, setSearchTable1] = useState<string>('');
   const [searchTable2, setSearchTable2] = useState<string>('');
+  const [selectedMonths, setSelectedMonths] = useState<string[]>(['All']);
 
   // Excel AutoFilter state for Raw Data table
   const [activeRawColModal, setActiveRawColModal] = useState<string | null>(null);
   const [rawModalSearchInput, setRawModalSearchInput] = useState<string>('');
   const [rawColFilters, setRawColFilters] = useState<Record<string, { search?: string; selected?: string[] }>>({});
 
+  const [activeTable1ColModal, setActiveTable1ColModal] = useState<string | null>(null);
+  const [table1ModalSearchInput, setTable1ModalSearchInput] = useState<string>('');
+  const [table1ColFilters, setTable1ColFilters] = useState<Record<string, { search?: string; selected?: string[] }>>({});
+
+  const [activeTable2ColModal, setActiveTable2ColModal] = useState<string | null>(null);
+  const [table2ModalSearchInput, setTable2ModalSearchInput] = useState<string>('');
+  const [table2ColFilters, setTable2ColFilters] = useState<Record<string, { search?: string; selected?: string[] }>>({});
+
   useEffect(() => {
     get('last_history_sales').then(saved => {
       if (saved && saved.data && saved.data.length > 0) {
-        setParsed(saved);
+        setFormattedParsed(saved);
       } else {
-        setParsed(generateDemoHistorySales());
+        setFormattedParsed(generateDemoHistorySales());
       }
     }).catch(err => {
       console.warn('Failed to load History Sales state from IndexDB', err);
-      setParsed(generateDemoHistorySales());
+      setFormattedParsed(generateDemoHistorySales());
     });
   }, []);
 
   const handleGenerateDemo = () => {
     const demo = generateDemoHistorySales();
-    setParsed(demo);
+    setFormattedParsed(demo);
     toast.success('🎉 Data Demo History Sales Berhasil Dimuat!');
   };
 
@@ -245,7 +411,7 @@ export default function HistorySalesPage() {
     toast.loading('Membaca data History Sales (Excel/CSV)...', { id: 'sales' });
     try {
       const parsedData = await parseDynamicCSV(file);
-      setParsed(parsedData);
+      setFormattedParsed(parsedData);
       try {
         await set('last_history_sales', parsedData);
       } catch (e) {
@@ -387,6 +553,20 @@ export default function HistorySalesPage() {
     return defaultLabels;
   }, [parsed]);
 
+  const availableMonths = useMemo(() => {
+    if (!parsed) return ['All'];
+    const cols = parsed.targetColumns.map(tc => {
+      const match = tc.name.match(/^M(?:-(\d+))?$/);
+      if (match) {
+        const suffix = match[1] ? match[1] : '';
+        const key = `M${suffix}`;
+        if (dynamicMonthLabels[key]) return dynamicMonthLabels[key];
+      }
+      return tc.name;
+    });
+    return ['All', ...cols];
+  }, [parsed, dynamicMonthLabels]);
+
   // Executive Summary Insights Computation
   const executiveSummary = useMemo(() => {
     if (!parsed || filtered.length === 0) return null;
@@ -427,62 +607,65 @@ export default function HistorySalesPage() {
     };
   }, [parsed, filtered, colCabang]);
 
-  // Chart data: Grouped by Cabang
+  // Chart data: Grouped dynamically and limited to top 28
   const chartData = useMemo(() => {
     if (!parsed || filtered.length === 0) return [];
     const map: Record<string, any> = {};
     for (const row of filtered) {
       const cbg = colCabang ? (row[colCabang] || 'Unknown') : 'All';
       if (selectedCabangForChart !== 'All' && cbg !== selectedCabangForChart) continue;
+      
+      let groupByValue = cbg;
+      if (chartGrouping === 'grup') {
+        groupByValue = colGrup ? (row[colGrup] || 'Unknown') : 'Unknown';
+      } else if (chartGrouping === 'category') {
+        groupByValue = colCategory ? (row[colCategory] || 'Unknown') : 'Unknown';
+      }
+      
+      const groupBy = String(groupByValue);
 
-      if (!map[cbg]) {
-        map[cbg] = { cabang: cbg };
-        parsed.targetColumns.forEach(tc => map[cbg][tc.name] = 0);
+      if (!map[groupBy]) {
+        map[groupBy] = { name: groupBy, cabang: groupBy };
+        parsed.targetColumns.forEach(tc => map[groupBy][tc.name] = 0);
       }
       parsed.targetColumns.forEach(tc => {
-        map[cbg][tc.name] += (row[tc.name] || 0);
+        map[groupBy][tc.name] += (row[tc.name] || 0);
       });
     }
-    return Object.values(map);
-  }, [parsed, filtered, colCabang, selectedCabangForChart]);
+    
+    let data = Object.values(map);
+    const avgCol = parsed.targetColumns.find(tc => tc.name.toLowerCase().includes('avg'))?.name;
+    const salesCols = executiveSummary?.salesCols || [];
+
+    data.sort((a, b) => {
+      if (avgCol && a[avgCol] !== undefined && b[avgCol] !== undefined) {
+        return (b[avgCol] || 0) - (a[avgCol] || 0);
+      }
+      const sumA = salesCols.reduce((acc, col) => acc + (a[col] || 0), 0);
+      const sumB = salesCols.reduce((acc, col) => acc + (b[col] || 0), 0);
+      return sumB - sumA;
+    });
+
+    return data.slice(0, 28);
+  }, [parsed, filtered, colCabang, colGrup, colCategory, chartGrouping, selectedCabangForChart, executiveSummary]);
 
   const displayedChartColumns = useMemo(() => {
     if (!parsed) return [];
     let cols = parsed.targetColumns;
-    if (executiveSummary && chartFilter !== 'all') {
-      if (chartFilter === 'avg3') {
-        cols = parsed.targetColumns.filter(tc => tc.name.toLowerCase().includes('avg'));
-      } else {
-        const targetSet = new Set(executiveSummary.salesCols);
-        cols = parsed.targetColumns.filter(tc => targetSet.has(tc.name));
-      }
+
+    if (selectedMonths && !selectedMonths.includes('All')) {
+      cols = cols.filter(tc => {
+        const match = tc.name.match(/^M(?:-(\d+))?$/);
+        const suffix = match && match[1] ? match[1] : '';
+        const key = match ? `M${suffix}` : '';
+        const dynName = match && dynamicMonthLabels[key] ? dynamicMonthLabels[key] : tc.name;
+        
+        return selectedMonths.includes(dynName) || tc.name.toLowerCase().includes('avg');
+      });
     }
 
-    const getMonthScore = (name: string) => {
-      const cleanName = name.trim();
-      if (cleanName.toLowerCase().includes('avg')) return 999999;
-
-      const matchM = cleanName.match(/^M(?:-(\d+))?$/i);
-      if (matchM) {
-        return parseInt(matchM[1] || '0', 10) * -1;
-      }
-      const matchDate = cleanName.match(/^([a-zA-Z]+)[\s-]*(\d+)$/);
-      if (matchDate) {
-         const mStr = matchDate[1].toUpperCase().substring(0, 3);
-         let year = parseInt(matchDate[2], 10);
-         if (year < 100) year += 2000;
-         const idMonths: Record<string, number> = {
-            'JAN': 0, 'FEB': 1, 'MAR': 2, 'APR': 3, 'MAY': 4, 'MEI': 4, 'JUN': 5, 'JUL': 6, 'AUG': 7, 'AGU': 7, 'SEP': 8, 'OCT': 9, 'OKT': 9, 'NOV': 10, 'DEC': 11, 'DES': 11
-         };
-         if (idMonths[mStr] !== undefined) {
-            return year * 12 + idMonths[mStr];
-         }
-      }
-      return -999998;
-    };
-
     return [...cols].sort((a, b) => getMonthScore(b.name) - getMonthScore(a.name));
-  }, [parsed, executiveSummary, chartFilter]);
+  }, [parsed, selectedMonths, dynamicMonthLabels]);
 
   // Table Data grouped per Cabang + Category for detailed comparison & growth analysis
   const tableData = useMemo(() => {
@@ -505,7 +688,7 @@ export default function HistorySalesPage() {
       }
 
       parsed.targetColumns.forEach(tc => {
-        const val = Number(String(row[tc.name] || 0).replace(/[^0-9.-]+/g, '')) || 0;
+        const val = parseHighPrecision(row[tc.name]);
         if (salesSet.has(tc.name)) {
           map[key].sales += val;
           map[key].total += val;
@@ -513,13 +696,13 @@ export default function HistorySalesPage() {
       });
 
       if (colAvg) {
-        map[key].avg3 += Number(String(row[colAvg] || 0).replace(/[^0-9.-]+/g, '')) || 0;
+        map[key].avg3 += parseHighPrecision(row[colAvg]);
       }
       if (colM) {
-        map[key].m += Number(String(row[colM] || 0).replace(/[^0-9.-]+/g, '')) || 0;
+        map[key].m += parseHighPrecision(row[colM]);
       }
       if (colM1) {
-        map[key].m1 += Number(String(row[colM1] || 0).replace(/[^0-9.-]+/g, '')) || 0;
+        map[key].m1 += parseHighPrecision(row[colM1]);
       }
     }
 
@@ -592,11 +775,21 @@ export default function HistorySalesPage() {
     const totalSupply = totalSOH + totalTO + totalVessel;
     const barColors = ['#facc15', '#fbcfe8', '#86efac', '#475569', '#fcd34d', '#8b5cf6'];
 
-    const chartData = periodNames.map((p, index) => ({
-      period: p,
-      sales: periodTotals[p],
-      fill: barColors[index % barColors.length]
-    }));
+    const chartData = periodNames.map((p, index) => {
+      let dynamicP = p;
+      if (p === 'M') dynamicP = dynamicMonthLabels.M;
+      if (p === 'M-1') dynamicP = dynamicMonthLabels.M1;
+      if (p === 'M-2') dynamicP = dynamicMonthLabels.M2;
+      if (p === 'M-3') dynamicP = dynamicMonthLabels.M3;
+      if (p === 'M-4') dynamicP = dynamicMonthLabels.M4;
+      if (p === 'M-5') dynamicP = dynamicMonthLabels.M5;
+
+      return {
+        period: dynamicP,
+        sales: periodTotals[p],
+        fill: barColors[index % barColors.length]
+      };
+    });
 
     const maxSales = Math.max(...Object.values(periodTotals), 0);
     const maxY = Math.max(totalSupply, maxSales) * 1.15;
@@ -609,7 +802,7 @@ export default function HistorySalesPage() {
       chartData,
       maxY
     };
-  }, [parsed, filtered]);
+  }, [parsed, filtered, dynamicMonthLabels]);
 
   // Insentif Analysis Grouping by Cabang & Category Insentif + M to M-5
   const insentifAnalysis = useMemo(() => {
@@ -870,6 +1063,49 @@ export default function HistorySalesPage() {
     return { underAvg, over125, normalRange, list };
   }, [parsed, filtered, colCabang]);
 
+  // 2b. Cabang Only Supply vs AVG 3 Bulan (aggregated purely per Cabang)
+  const cabangOnlySupplyVsAvg3 = useMemo(() => {
+    if (!parsed || filtered.length === 0) return null;
+    const mapCabang: Record<string, { cabang: string; soh: number; to: number; vessel: number; holdDelivery: number; spjm: number; totalSupply: number; avg3: number; ratio: number; diff: number }> = {};
+    
+    const colSOH = findColumn(parsed.headers, ['soh', 'on hand', 'stock on hand']);
+    const colTO = findColumn(parsed.headers, ['to', 'transfer order']);
+    const colVessel = findColumn(parsed.headers, ['on vessel', 'vessel', 'in transit', 'on_vessel']);
+    const colHoldDelivery = findColumn(parsed.headers, ['hold delivery', 'hold_delivery']);
+    const colSPJM = findColumn(parsed.headers, ['spjm']);
+    const colAvg = findColumn(parsed.headers, ['avg sales 3 bln', 'avg sales', 'avg']);
+
+    for (const row of filtered) {
+      const cab = colCabang ? String(row[colCabang] || 'Unknown') : 'All';
+      if (!mapCabang[cab]) {
+        mapCabang[cab] = { cabang: cab, soh: 0, to: 0, vessel: 0, holdDelivery: 0, spjm: 0, totalSupply: 0, avg3: 0, ratio: 0, diff: 0 };
+      }
+      const soh = colSOH ? Number(String(row[colSOH] || 0).replace(/[^0-9.-]+/g, '')) || 0 : 0;
+      const to = colTO ? Number(String(row[colTO] || 0).replace(/[^0-9.-]+/g, '')) || 0 : 0;
+      const vessel = colVessel ? Number(String(row[colVessel] || 0).replace(/[^0-9.-]+/g, '')) || 0 : 0;
+      const holdDelivery = colHoldDelivery ? Number(String(row[colHoldDelivery] || 0).replace(/[^0-9.-]+/g, '')) || 0 : 0;
+      const spjm = colSPJM ? Number(String(row[colSPJM] || 0).replace(/[^0-9.-]+/g, '')) || 0 : 0;
+      const avg3 = colAvg ? Number(String(row[colAvg] || 0).replace(/[^0-9.-]+/g, '')) || 0 : 0;
+
+      mapCabang[cab].soh += soh;
+      mapCabang[cab].to += to;
+      mapCabang[cab].vessel += vessel;
+      mapCabang[cab].holdDelivery += holdDelivery;
+      mapCabang[cab].spjm += spjm;
+      mapCabang[cab].totalSupply += (soh + to + vessel + holdDelivery + spjm);
+      mapCabang[cab].avg3 += avg3;
+    }
+
+    const listCabang = Object.values(mapCabang).map(item => {
+      const ratio = item.avg3 > 0 ? Number(((item.totalSupply / item.avg3) * 100).toFixed(1)) : 0;
+      const diff = item.totalSupply - item.avg3;
+      return { ...item, ratio, diff };
+    }).sort((a, b) => b.totalSupply - a.totalSupply);
+    
+    return listCabang;
+  }, [parsed, filtered, colCabang]);
+
+
   // 3. Table Sales Insights
   const tableSalesInsights = useMemo(() => {
     if (!tableData || tableData.length === 0) return null;
@@ -878,16 +1114,21 @@ export default function HistorySalesPage() {
     let countPositiveGrowthM1 = 0;
     let countNegativeGrowthM1 = 0;
     let totalSalesVol = 0;
+    let grandTotalAvg3 = 0;
 
     tableData.forEach(row => {
       totalSalesVol += row.sales;
+      grandTotalAvg3 += row.avg3;
       if (row.growthM > 0) countPositiveGrowth++;
       else if (row.growthM < 0) countNegativeGrowth++;
       if (row.growthM1 > 0) countPositiveGrowthM1++;
       else if (row.growthM1 < 0) countNegativeGrowthM1++;
     });
 
-    const topContributors = [...tableData].sort((a, b) => b.kontribusi - a.kontribusi).slice(0, 3);
+    const topContributors = [...tableData].sort((a, b) => b.avg3 - a.avg3).slice(0, 3).map(tc => ({
+      ...tc,
+      kontribusiNasional: grandTotalAvg3 > 0 ? (tc.avg3 / grandTotalAvg3) * 100 : 0
+    }));
 
     return {
       countPositiveGrowth,
@@ -957,6 +1198,61 @@ export default function HistorySalesPage() {
       return true;
     });
   }, [filtered, rawColFilters]);
+
+  const currentTable1UniqueValues = useMemo(() => {
+    if (!activeTable1ColModal || !tableData) return [];
+    const set = new Set<string>();
+    tableData.forEach((r: any) => {
+      const val = String(r[activeTable1ColModal] !== undefined && r[activeTable1ColModal] !== null ? r[activeTable1ColModal] : '');
+      if (val) set.add(val);
+    });
+    return Array.from(set).sort();
+  }, [tableData, activeTable1ColModal]);
+
+  const displayedTable1Data = useMemo(() => {
+    return tableData.filter((row: any) => {
+      for (const [key, filter] of Object.entries(table1ColFilters)) {
+        if (!filter) continue;
+        const rawVal = row[key];
+        const val = String(rawVal !== undefined && rawVal !== null ? rawVal : '');
+        if (filter.selected && filter.selected.length > 0 && !filter.selected.includes(val)) {
+          return false;
+        }
+        if (filter.search && !val.toLowerCase().includes(filter.search.toLowerCase())) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [tableData, table1ColFilters]);
+
+  const currentTable2UniqueValues = useMemo(() => {
+    if (!activeTable2ColModal || !insentifAnalysis) return [];
+    const set = new Set<string>();
+    insentifAnalysis.forEach((r: any) => {
+      const val = String(r[activeTable2ColModal] !== undefined && r[activeTable2ColModal] !== null ? r[activeTable2ColModal] : '');
+      if (val) set.add(val);
+    });
+    return Array.from(set).sort();
+  }, [insentifAnalysis, activeTable2ColModal]);
+
+  const displayedTable2Data = useMemo(() => {
+    if (!insentifAnalysis) return [];
+    return insentifAnalysis.filter((row: any) => {
+      for (const [key, filter] of Object.entries(table2ColFilters)) {
+        if (!filter) continue;
+        const rawVal = row[key];
+        const val = String(rawVal !== undefined && rawVal !== null ? rawVal : '');
+        if (filter.selected && filter.selected.length > 0 && !filter.selected.includes(val)) {
+          return false;
+        }
+        if (filter.search && !val.toLowerCase().includes(filter.search.toLowerCase())) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [insentifAnalysis, table2ColFilters]);
 
   const handleExport = () => {
     if (!tableData || tableData.length === 0) return;
@@ -1236,6 +1532,16 @@ export default function HistorySalesPage() {
             />
           </div>
           <div className="flex-1 min-w-[200px] space-y-2">
+            <label className="text-xs font-bold text-sky-500 block uppercase tracking-wider">🗓️ Filter Bulan:</label>
+            <MultiSelect
+              options={availableMonths}
+              selected={selectedMonths}
+              onChange={setSelectedMonths}
+              selectAllLabel="Semua Bulan"
+              placeholder="Pilih Bulan..."
+            />
+          </div>
+          <div className="flex-1 min-w-[200px] space-y-2">
             <label className="text-xs font-bold text-purple-300 block uppercase tracking-wider">💎 Filter Category Insentif:</label>
             <MultiSelect
               options={categoryInsentifs.length > 0 ? categoryInsentifs : ['All', 'Tier 1 (High Performance)', 'Tier 2 (Core Growth)', 'Tier 3 (Standard)', 'Non-Insentif']}
@@ -1394,28 +1700,28 @@ export default function HistorySalesPage() {
 
             <div className="flex flex-wrap gap-1.5 bg-slate-100 p-1.5 rounded-xl border border-slate-200 shrink-0">
               <button
-                onClick={() => setChartFilter('all')}
+                onClick={() => setChartGrouping('cabang')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 ${
-                  chartFilter === 'all' ? 'bg-blue-600 text-slate-900 shadow-md scale-105' : 'text-slate-700 hover:text-slate-900'
+                  chartGrouping === 'cabang' ? 'bg-blue-600 text-slate-900 shadow-md scale-105' : 'text-slate-700 hover:text-slate-900'
                 }`}
               >
-                <Layers className="w-3.5 h-3.5" /> Semua Metrik
+                <Layers className="w-3.5 h-3.5" /> Fokus Cabang
               </button>
               <button
-                onClick={() => setChartFilter('sales')}
+                onClick={() => setChartGrouping('grup')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 ${
-                  chartFilter === 'sales' ? 'bg-emerald-600 text-slate-900 shadow-md scale-105' : 'text-slate-600 hover:text-emerald-400'
+                  chartGrouping === 'grup' ? 'bg-emerald-600 text-slate-900 shadow-md scale-105' : 'text-slate-600 hover:text-emerald-400'
                 }`}
               >
-                📈 Fokus Sales
+                📈 Fokus Grup
               </button>
               <button
-                onClick={() => setChartFilter('avg3')}
+                onClick={() => setChartGrouping('category')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 ${
-                  chartFilter === 'avg3' ? 'bg-rose-600 text-slate-900 shadow-md scale-105' : 'text-slate-600 hover:text-rose-400'
+                  chartGrouping === 'category' ? 'bg-rose-600 text-slate-900 shadow-md scale-105' : 'text-slate-600 hover:text-rose-400'
                 }`}
               >
-                📈 AVG 3 Bulan (Garis)
+                📊 Fokus Category Item
               </button>
             </div>
           </div>
@@ -1424,11 +1730,13 @@ export default function HistorySalesPage() {
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={chartData} margin={{ top: 20, right: 30, left: 30, bottom: 60 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
-                <XAxis dataKey="cabang" stroke="#94a3b8" tick={{ fill: '#e2e8f0', fontSize: 12, fontWeight: 600 }} angle={-15} textAnchor="end" height={50} />
+                <XAxis dataKey="name" stroke="#94a3b8" tick={{ fill: '#e2e8f0', fontSize: 12, fontWeight: 600 }} angle={-15} textAnchor="end" height={50} />
                 <YAxis stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 12 }} />
                 <Tooltip
+                  itemSorter={(item) => -getMonthScore(String(item.dataKey))}
                   contentStyle={{ backgroundColor: '#0f172a', borderColor: '#3b82f6', borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}
                   labelStyle={{ color: '#38bdf8', fontWeight: 'bold', borderBottom: '1px solid #334155', paddingBottom: '4px' }}
+                  formatter={(val: any, name: any) => [Number(val).toLocaleString('en-US', { maximumFractionDigits: 2 }), name]}
                 />
                 <Legend wrapperStyle={{ paddingTop: '16px', fontSize: '12px' }} />
                 {displayedChartColumns.map((tc, idx) => {
@@ -1465,7 +1773,11 @@ export default function HistorySalesPage() {
                     lower === 'transfer order' ||
                     lower.includes('vessel') || 
                     lower.includes('hold') || 
-                    lower.includes('inbound');
+                    lower.includes('inbound') ||
+                    lower.includes('spjm') ||
+                    lower.includes('plan loading') ||
+                    lower.includes('ready') ||
+                    lower.includes('load');
 
                   let barColor = COLORS[idx % COLORS.length];
                   if (lower.includes('hold')) barColor = '#f59e0b';
@@ -1481,12 +1793,75 @@ export default function HistorySalesPage() {
                       name={isSupplyOrOutstanding ? `📦 ${tc.name}` : `📊 ${getDynamicName(tc.name)} (Sales Vol)`}
                       fill={barColor}
                       maxBarSize={60}
+                      stackId={isSupplyOrOutstanding ? "supply" : undefined}
                     />
                   );
                 })}
               </ComposedChart>
             </ResponsiveContainer>
           </div>
+
+          {/* ─── INSIGHT CABANG ONLY: TOTAL SUPPLY VS AVG 3 BULAN ─── */}
+          {cabangOnlySupplyVsAvg3 && cabangOnlySupplyVsAvg3.length > 0 && (
+            <div className="mt-8 p-5 rounded-2xl bg-gradient-to-r from-slate-900 to-slate-950 border border-emerald-500/30 shadow-lg">
+              <div className="flex items-center gap-2.5 border-b border-slate-700 pb-3 mb-4">
+                <span className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400">
+                  <BarChart3 className="w-5 h-5 text-emerald-400" />
+                </span>
+                <div>
+                  <h4 className="font-extrabold text-white text-sm sm:text-base tracking-wide flex items-center gap-2">
+                    Insight Analitis: Total Pasokan vs Rata-Rata Sales 3 Bulan (Keseluruhan per Cabang)
+                  </h4>
+                  <p className="text-xs text-slate-400">
+                    Perbandingan langsung antara kapasitas pasokan keseluruhan (SOH+TO+Vessel+Hold+SPJM) dengan kebutuhan rata-rata 3 bulan untuk setiap cabang.
+                  </p>
+                </div>
+              </div>
+              <div className="h-[350px] w-full mt-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={cabangOnlySupplyVsAvg3} margin={{ top: 20, right: 20, left: 30, bottom: 60 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
+                    <XAxis dataKey="cabang" stroke="#94a3b8" tick={{ fill: '#e2e8f0', fontSize: 11, fontWeight: 600 }} angle={-25} textAnchor="end" height={60} />
+                    <YAxis stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 11 }} tickFormatter={(val) => val.toLocaleString('id-ID')} />
+                    <Tooltip
+                      content={({ active, payload, label }: any) => {
+                        if (active && payload && payload.length) {
+                          const data = payload[0].payload;
+                          const times = data.avg3 > 0 ? (data.totalSupply / data.avg3).toFixed(1) : 0;
+                          return (
+                            <div className="bg-slate-900 border border-emerald-500/30 p-3 rounded-xl shadow-xl">
+                              <p className="text-emerald-400 font-bold mb-2 border-b border-slate-700 pb-1">{label}</p>
+                              {payload.map((entry: any, index: number) => (
+                                <p key={index} style={{ color: entry.color }} className="text-sm">
+                                  {entry.name}: {Number(entry.value).toLocaleString('id-ID')} Unit
+                                </p>
+                              ))}
+                              <p className="text-amber-400 font-bold mt-2 pt-1 border-t border-slate-700 text-sm">
+                                Rasio Pasokan: {times}x Lipat ({(data.ratio).toFixed(1)}%)
+                              </p>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    <Legend wrapperStyle={{ paddingTop: '10px', fontSize: '12px', fontWeight: 'bold', color: '#fff' }} />
+                    <Bar dataKey="totalSupply" name="Total Pasokan" fill="#10b981" maxBarSize={50}>
+                      <LabelList 
+                        dataKey={(data: any) => data.avg3 > 0 ? (data.totalSupply / data.avg3).toFixed(1) + 'x' : '0x'} 
+                        position="top" 
+                        fill="#cbd5e1" 
+                        fontSize={11} 
+                        fontWeight="bold" 
+                      />
+                    </Bar>
+                    <Bar dataKey="avg3" name="Rata-Rata Sales 3 Bln" fill="#f43f5e" maxBarSize={50} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+
 
           {/* ─── INSIGHT CABANG: SOH + TO + VESSEL VS AVG SALES 3 BULAN ─── */}
           {cabangSupplyVsAvg3 && (
@@ -1732,12 +2107,36 @@ export default function HistorySalesPage() {
         </div>
 
         <div className="overflow-x-auto rounded-xl border border-slate-200 max-h-[600px] overflow-y-auto">
+          <ExcelColFilterModal
+            activeCol={activeTable1ColModal}
+            setActiveCol={setActiveTable1ColModal}
+            searchInput={table1ModalSearchInput}
+            setSearchInput={setTable1ModalSearchInput}
+            colFilters={table1ColFilters}
+            setColFilters={setTable1ColFilters}
+            uniqueValues={currentTable1UniqueValues}
+          />
           <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[1350px]">
             <thead className="bg-slate-50 text-slate-700 uppercase font-bold sticky top-0 z-20 shadow-md">
               <tr className="border-b border-slate-200 text-[11px] tracking-wider text-center">
-                <th className="py-3.5 px-4 text-left">Cabang / Wilayah</th>
-                <th className="py-3.5 px-4 border-l border-slate-200 text-slate-700">🏷️ Grup</th>
-                <th className="py-3.5 px-4 border-l border-slate-200 text-purple-300">📦 Kategori Item</th>
+                <th className="py-3.5 px-4 text-left">
+                  <div className="flex justify-between items-center gap-2">
+                    <span>Cabang / Wilayah</span>
+                    <button onClick={() => { setActiveTable1ColModal('cabang'); setTable1ModalSearchInput(table1ColFilters['cabang']?.search || ''); }} className="p-1 hover:bg-slate-200 rounded transition"><Filter className="w-3.5 h-3.5 text-emerald-400" /></button>
+                  </div>
+                </th>
+                <th className="py-3.5 px-4 border-l border-slate-200 text-slate-700">
+                  <div className="flex justify-between items-center gap-2 justify-center">
+                    <span>🏷️ Grup</span>
+                    <button onClick={() => { setActiveTable1ColModal('grup'); setTable1ModalSearchInput(table1ColFilters['grup']?.search || ''); }} className="p-1 hover:bg-slate-200 rounded transition"><Filter className="w-3.5 h-3.5 text-emerald-400" /></button>
+                  </div>
+                </th>
+                <th className="py-3.5 px-4 border-l border-slate-200 text-purple-300">
+                  <div className="flex justify-between items-center gap-2 justify-center">
+                    <span>📦 Kategori Item</span>
+                    <button onClick={() => { setActiveTable1ColModal('category'); setTable1ModalSearchInput(table1ColFilters['category']?.search || ''); }} className="p-1 hover:bg-slate-200 rounded transition"><Filter className="w-3.5 h-3.5 text-emerald-400" /></button>
+                  </div>
+                </th>
                 <th className="py-3.5 px-4 border-l border-slate-200 text-blue-400">📈 Total Volume Sales</th>
                 <th className="py-3.5 px-4 border-l border-slate-200 text-rose-400">📊 AVG Sales 3 Bln</th>
                 <th className="py-3.5 px-4 border-l border-slate-200 text-amber-300">✨ % Kontribusi {dynamicMonthLabels.M} & {dynamicMonthLabels.M1}</th>
@@ -1747,7 +2146,7 @@ export default function HistorySalesPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/80 text-slate-700 text-center">
-              {tableData.filter((row: any) => {
+              {displayedTable1Data.filter((row: any) => {
                 if (!searchTable1) return true;
                 const s = searchTable1.toLowerCase();
                 return (
@@ -1837,7 +2236,7 @@ export default function HistorySalesPage() {
                 Performa Volume Sales per Category Insentif
               </h3>
               <p className="text-xs text-slate-300 mt-1">
-                Pengelompokan riwayat penjualan dari <b>M sampai M-5</b> berdasarkan kombinasi <b>Cabang &amp; Kategori Insentif</b>.
+                Pengelompokan riwayat penjualan dari <b>{dynamicMonthLabels.M} sampai {dynamicMonthLabels.M5}</b> berdasarkan kombinasi <b>Cabang &amp; Kategori Insentif</b>.
               </p>
             </div>
           </div>
@@ -1951,11 +2350,30 @@ export default function HistorySalesPage() {
             </div>
 
             <div className="overflow-x-auto rounded-2xl border border-slate-200 max-h-[450px] overflow-y-auto bg-slate-50 shadow-lg">
+              <ExcelColFilterModal
+                activeCol={activeTable2ColModal}
+                setActiveCol={setActiveTable2ColModal}
+                searchInput={table2ModalSearchInput}
+                setSearchInput={setTable2ModalSearchInput}
+                colFilters={table2ColFilters}
+                setColFilters={setTable2ColFilters}
+                uniqueValues={currentTable2UniqueValues}
+              />
               <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[1000px]">
                 <thead className="bg-slate-50 text-slate-700 uppercase font-extrabold sticky top-0 z-20 shadow-md border-b border-slate-200">
                   <tr className="text-[11px] tracking-wider text-center">
-                    <th className="py-3.5 px-4 text-left">Cabang / Grup / Kategori</th>
-                    <th className="py-3.5 px-4 border-l border-slate-200 text-purple-700 text-left">Category Insentif</th>
+                    <th className="py-3.5 px-4 text-left">
+                      <div className="flex justify-between items-center gap-2">
+                        <span>Cabang / Grup / Kategori</span>
+                        <button onClick={() => { setActiveTable2ColModal('name'); setTable2ModalSearchInput(table2ColFilters['name']?.search || ''); }} className="p-1 hover:bg-slate-200 rounded transition"><Filter className="w-3.5 h-3.5 text-emerald-400" /></button>
+                      </div>
+                    </th>
+                    <th className="py-3.5 px-4 border-l border-slate-200 text-purple-700 text-left">
+                      <div className="flex justify-between items-center gap-2">
+                        <span>Category Insentif</span>
+                        <button onClick={() => { setActiveTable2ColModal('categoryInsentif'); setTable2ModalSearchInput(table2ColFilters['categoryInsentif']?.search || ''); }} className="p-1 hover:bg-slate-200 rounded transition"><Filter className="w-3.5 h-3.5 text-emerald-400" /></button>
+                      </div>
+                    </th>
                     <th className="py-3.5 px-3 border-l border-slate-200 text-cyan-700">{dynamicMonthLabels.M}</th>
                     <th className="py-3.5 px-3 border-l border-slate-200 text-cyan-700">{dynamicMonthLabels.M1}</th>
                     <th className="py-3.5 px-3 border-l border-slate-200 text-cyan-700">{dynamicMonthLabels.M2}</th>
@@ -1966,7 +2384,7 @@ export default function HistorySalesPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800 text-slate-800 text-center font-medium">
-                  {insentifAnalysis.filter((item: any) => {
+                  {displayedTable2Data.filter((item: any) => {
                     if (!searchTable2) return true;
                     const s = searchTable2.toLowerCase();
                     return (
@@ -2041,104 +2459,15 @@ export default function HistorySalesPage() {
           </div>
 
           {/* Excel Filter Modal Popover for Raw Data */}
-          {activeRawColModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
-              <div className="bg-white border border-slate-200 rounded-2xl p-5 max-w-sm w-full shadow-2xl text-slate-800">
-                <div className="flex items-center justify-between border-b border-slate-200 pb-3 mb-4">
-                  <h4 className="font-bold text-sm text-slate-900 flex items-center gap-2">
-                    <Filter className="w-4 h-4 text-emerald-400" /> Filter Kolom: <span className="text-emerald-400">{activeRawColModal}</span>
-                  </h4>
-                  <button onClick={() => setActiveRawColModal(null)} className="text-slate-600 hover:text-slate-900 transition">
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="relative">
-                    <Search className="w-4 h-4 absolute left-3 top-3 text-slate-600" />
-                    <input
-                      type="text"
-                      value={rawModalSearchInput}
-                      onChange={e => setRawModalSearchInput(e.target.value)}
-                      placeholder={`Cari dalam ${activeRawColModal}...`}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-900 placeholder-slate-500 focus:outline-none focus:border-emerald-500"
-                    />
-                    {rawModalSearchInput && (
-                      <button onClick={() => setRawModalSearchInput('')} className="absolute right-3 top-2.5 text-slate-500 hover:text-slate-900 text-xs">
-                        Hapus
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="max-h-48 overflow-y-auto border border-slate-200 rounded-xl bg-slate-50 p-2 space-y-1 text-xs">
-                    <div className="text-[11px] font-semibold text-slate-600 mb-1 px-1 flex justify-between">
-                      <span>Daftar Nilai Unik ({currentRawUniqueValues.length}):</span>
-                    </div>
-                    {currentRawUniqueValues.filter(val => !rawModalSearchInput || val.toLowerCase().includes(rawModalSearchInput.toLowerCase())).slice(0, 50).map((val, idx) => {
-                      const isChecked = !rawColFilters[activeRawColModal]?.selected?.length || rawColFilters[activeRawColModal]?.selected?.includes(val);
-                      return (
-                        <label
-                          key={idx}
-                          className="flex items-center gap-2 py-1 px-2 rounded hover:bg-slate-100 cursor-pointer text-slate-700 truncate"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={() => {
-                              const curSelected = rawColFilters[activeRawColModal]?.selected?.length ? [...(rawColFilters[activeRawColModal]?.selected || [])] : [...currentRawUniqueValues];
-                              let nextSelected: string[];
-                              if (curSelected.includes(val)) {
-                                nextSelected = curSelected.filter(item => item !== val);
-                              } else {
-                                nextSelected = [...curSelected, val];
-                              }
-                              if (nextSelected.length === currentRawUniqueValues.length) {
-                                nextSelected = [];
-                              }
-                              setRawColFilters({
-                                ...rawColFilters,
-                                [activeRawColModal]: { ...rawColFilters[activeRawColModal], selected: nextSelected }
-                              });
-                            }}
-                            className="rounded border-slate-200 bg-white text-emerald-500 focus:ring-emerald-500/30"
-                          />
-                          <span className="truncate" title={val}>{val || '(Kosong)'}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-
-                  <div className="flex items-center gap-2 pt-2 border-t border-slate-200">
-                    <button
-                      onClick={() => {
-                        const next = { ...rawColFilters };
-                        delete next[activeRawColModal];
-                        setRawColFilters(next);
-                        setRawModalSearchInput('');
-                        toast.success(`Filter kolom ${activeRawColModal} direset!`);
-                      }}
-                      className="flex-1 py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-700 font-bold text-xs text-slate-700 hover:text-slate-900 transition"
-                    >
-                      Reset
-                    </button>
-                    <button
-                      onClick={() => {
-                        setRawColFilters({
-                          ...rawColFilters,
-                          [activeRawColModal]: { ...rawColFilters[activeRawColModal], search: rawModalSearchInput }
-                        });
-                        setActiveRawColModal(null);
-                        toast.success('Filter diterapkan!');
-                      }}
-                      className="flex-1 py-2 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 font-bold text-xs text-slate-950 transition shadow-lg shadow-emerald-500/20"
-                    >
-                      Terapkan
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+          <ExcelColFilterModal
+            activeCol={activeRawColModal}
+            setActiveCol={setActiveRawColModal}
+            searchInput={rawModalSearchInput}
+            setSearchInput={setRawModalSearchInput}
+            colFilters={rawColFilters}
+            setColFilters={setRawColFilters}
+            uniqueValues={currentRawUniqueValues}
+          />
 
           <div className="overflow-x-auto rounded-xl border border-slate-200 max-h-[600px] overflow-y-auto">
             <table className="w-full text-left text-xs border-collapse min-w-[1200px]">

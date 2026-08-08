@@ -87,7 +87,7 @@ const CustomStackedTooltip = ({ active, payload, label }: any) => {
     const totalQty = validItems.reduce((sum: number, item: any) => sum + Number(item.value || 0), 0);
 
     return (
-      <div className="bg-[#090e1a] text-slate-900 p-3.5 rounded-xl border-2 border-purple-500 shadow-[0_15px_60px_rgba(0,0,0,1)] z-[999999] opacity-100 max-h-[300px] overflow-y-auto max-w-[340px] pointer-events-none select-none backdrop-blur-none" style={{ backgroundColor: '#090e1a', opacity: 1, zIndex: 999999 }}>
+      <div className="bg-[#090e1a] text-white p-3.5 rounded-xl border-2 border-purple-500 shadow-[0_15px_60px_rgba(0,0,0,1)] z-[999999] opacity-100 max-h-[300px] overflow-y-auto max-w-[340px] pointer-events-none select-none backdrop-blur-none" style={{ backgroundColor: '#090e1a', opacity: 1, zIndex: 999999 }}>
         <div className="border-b border-slate-200/80 pb-2 mb-2 sticky -top-3.5 bg-[#090e1a] pt-1 z-10 flex items-center justify-between gap-3">
           <span className="text-sky-400 font-extrabold text-sm tracking-wide">{label}</span>
           <span className="text-xs px-2 py-0.5 bg-purple-950/90 border border-purple-500/50 rounded-md font-bold text-purple-300 shadow-sm">
@@ -95,14 +95,14 @@ const CustomStackedTooltip = ({ active, payload, label }: any) => {
           </span>
         </div>
         {validItems.length === 0 ? (
-          <div className="text-xs text-slate-600 font-medium py-2">Tidak ada data kuantitas (0 Qty)</div>
+          <div className="text-xs text-slate-400 font-medium py-2">Tidak ada data kuantitas (0 Qty)</div>
         ) : (
           <div className="space-y-1.5 text-xs">
             {validItems.map((entry: any, index: number) => (
-              <div key={index} className="flex items-start justify-between gap-3 py-1 border-b border-slate-200/60 last:border-0 font-medium">
-                <span className="flex items-center gap-2 text-slate-800 flex-1 min-w-0">
+              <div key={index} className="flex items-start justify-between gap-3 py-1 border-b border-slate-700/60 last:border-0 font-medium">
+                <span className="flex items-center gap-2 text-white flex-1 min-w-0">
                   <span className="w-3 h-3 rounded-full inline-block shrink-0 border border-slate-600/50 shadow-sm mt-0.5" style={{ backgroundColor: entry.color }}></span>
-                  <span className="whitespace-normal leading-tight font-semibold" title={entry.name}>{entry.name}</span>
+                  <span className="whitespace-normal leading-tight font-semibold text-white" title={entry.name}>{entry.name}</span>
                 </span>
                 <span className="font-extrabold text-slate-900 shrink-0 bg-white px-2 py-0.5 rounded border border-slate-200">
                   {Number(entry.value).toLocaleString('id-ID')} Qty
@@ -129,22 +129,22 @@ const CustomContainerTooltip = ({ active, payload, label }: any) => {
             {data["Jumlah Container"]} Container
           </span>
         </div>
-        <div className="text-xs text-slate-700 font-medium space-y-2">
-          <div className="flex items-center justify-between bg-white px-3 py-2 rounded-lg border border-slate-200">
-            <span className="text-slate-600 font-semibold">Total Container (Distinct PO):</span>
-            <span className="font-extrabold text-slate-900 text-sm bg-cyan-500/20 px-2.5 py-0.5 rounded text-cyan-300 border border-cyan-500/40">
+        <div className="text-xs text-slate-300 font-medium space-y-2">
+          <div className="flex items-center justify-between bg-slate-800/80 px-3 py-2 rounded-lg border border-slate-700">
+            <span className="text-slate-200 font-semibold">Total Container (Distinct PO):</span>
+            <span className="font-extrabold text-cyan-300 text-sm bg-cyan-500/20 px-2.5 py-0.5 rounded border border-cyan-500/40">
               {data["Jumlah Container"]} Unit
             </span>
           </div>
           {poList.length > 0 && (
             <div>
-              <div className="text-[11px] font-bold text-slate-600 mb-1">Daftar No. PO di Cabang Ini:</div>
-              <div className="max-h-[140px] overflow-y-auto bg-slate-50 p-2 rounded-lg border border-slate-200 space-y-1 font-mono text-[11px] text-amber-300">
+              <div className="text-[11px] font-bold text-slate-300 mb-1">Daftar No. PO di Cabang Ini:</div>
+              <div className="max-h-[140px] overflow-y-auto bg-slate-800/80 p-2 rounded-lg border border-slate-700 space-y-1 font-mono text-[11px] text-amber-300">
                 {poList.slice(0, 10).map((po, i) => (
                   <div key={i} className="truncate">• {po}</div>
                 ))}
                 {poList.length > 10 && (
-                  <div className="text-slate-600 font-sans italic text-[10px]">...+ {poList.length - 10} PO lainnya</div>
+                  <div className="text-slate-400 font-sans italic text-[10px]">...+ {poList.length - 10} PO lainnya</div>
                 )}
               </div>
             </div>
@@ -807,7 +807,9 @@ export default function PRUpdatePage() {
               PR Update & Tracking Container <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-pink-400 to-amber-300">(Integrated Tracker)</span>
             </h1>
             <p className="text-slate-700 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
-              Modul gabungan pemantauan Purchase Requisition dan Live Tracking Container kapal (On Vessel, SPJM, Hold) dengan format <b>13 kolom terpadu</b>. Kini dilengkapi grafik persebaran Category dan filter kolom ala Excel.
+              <span className="bg-amber-100 text-amber-900 px-2 py-1 rounded font-medium shadow-sm inline-block">
+                Modul gabungan pemantauan Purchase Requisition dan Live Tracking Container kapal (On Vessel, SPJM, Hold) dengan format <b>13 kolom terpadu</b>. Kini dilengkapi grafik persebaran Category dan filter kolom ala Excel.
+              </span>
             </p>
           </div>
 
@@ -1219,8 +1221,8 @@ export default function PRUpdatePage() {
                 const isMod = item.overdueDays >= 7 && !isSevere;
                 return (
                   <tr key={idx} className="hover:bg-slate-800/50 transition font-semibold">
-                    <td className="py-3 px-3 text-left font-extrabold text-white align-middle">
-                      {item.cabang}
+                    <td className="py-3 px-3 text-left font-extrabold align-middle">
+                      <span className="bg-slate-800 text-slate-100 px-2 py-1 rounded-md">{item.cabang}</span>
                     </td>
                     <td className="py-3 px-3 border-l border-slate-700 font-mono font-bold text-amber-300 align-middle text-sm">
                       {item.po}
@@ -1248,8 +1250,12 @@ export default function PRUpdatePage() {
                       </span>
                     </td>
                     <td className="py-3 px-3 border-l border-slate-700 text-left align-middle max-w-[240px]">
-                      <div className="font-bold text-white truncate text-xs" title={item.deskripsi}>{item.deskripsi}</div>
-                      <div className="text-[11px] text-purple-300 font-mono mt-0.5 truncate">{item.grup} • {item.category}</div>
+                      <div className="truncate text-xs" title={item.deskripsi}>
+                        <span className="font-bold text-slate-100 bg-slate-800 px-1.5 py-0.5 rounded">{item.deskripsi}</span>
+                      </div>
+                      <div className="mt-1 truncate">
+                        <span className="text-[11px] text-purple-200 bg-purple-900/60 px-1.5 py-0.5 rounded font-mono border border-purple-700/50">{item.grup} • {item.category}</span>
+                      </div>
                     </td>
                     <td className="py-3 px-3 border-l border-slate-700 font-mono font-black text-emerald-400 text-base align-middle">
                       {item.qty.toLocaleString('id-ID')}
