@@ -333,7 +333,7 @@ export default function HistorySalesPage() {
 
   // Dynamic Month Labels computation
   const dynamicMonthLabels = useMemo(() => {
-    const defaultLabels = { M: 'M', M1: 'M-1', M2: 'M-2', M3: 'M-3', M4: 'M-4', M5: 'M-5' };
+    const defaultLabels: Record<string, string> = { M: 'M', M1: 'M-1', M2: 'M-2', M3: 'M-3', M4: 'M-4', M5: 'M-5', M6: 'M-6', M7: 'M-7', M8: 'M-8', M9: 'M-9', M10: 'M-10', M11: 'M-11', M12: 'M-12' };
     if (!parsed) return defaultLabels;
     
     const monthSheetKey = parsed.sheetNames?.find(n => n.toLowerCase() === 'month');
@@ -373,7 +373,7 @@ export default function HistorySalesPage() {
        if (monthIdx !== undefined) {
          const labels = { ...defaultLabels };
          const enMonths = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-         for (let i = 0; i <= 5; i++) {
+         for (let i = 0; i <= 12; i++) {
             let dYear = year;
             let dMonth = monthIdx - i;
             while (dMonth < 0) { dMonth += 12; dYear -= 1; }
@@ -1386,12 +1386,12 @@ export default function HistorySalesPage() {
                 <Legend wrapperStyle={{ paddingTop: '16px', fontSize: '12px' }} />
                 {displayedChartColumns.map((tc, idx) => {
                   const getDynamicName = (name: string) => {
-                    if (name === 'M') return dynamicMonthLabels.M;
-                    if (name === 'M-1') return dynamicMonthLabels.M1;
-                    if (name === 'M-2') return dynamicMonthLabels.M2;
-                    if (name === 'M-3') return dynamicMonthLabels.M3;
-                    if (name === 'M-4') return dynamicMonthLabels.M4;
-                    if (name === 'M-5') return dynamicMonthLabels.M5;
+                    const match = name.match(/^M(?:-(\d+))?$/);
+                    if (match) {
+                      const suffix = match[1] ? match[1] : '';
+                      const key = `M${suffix}`;
+                      if (dynamicMonthLabels[key]) return dynamicMonthLabels[key];
+                    }
                     return name;
                   };
                   const lower = tc.name.toLowerCase().trim();
@@ -1864,8 +1864,8 @@ export default function HistorySalesPage() {
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={insentifChartData.data} margin={{ top: 15, right: 20, left: 10, bottom: 25 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.4} />
-                    <XAxis dataKey="period" stroke="#94a3b8" tick={{ fill: '#ffffff', fontSize: 14, fontWeight: 800 }} />
-                    <YAxis domain={[0, 100]} stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 11 }} tickFormatter={(val) => `${Number(val)}%`} />
+                    <XAxis dataKey="period" stroke="#94a3b8" tick={{ fill: '#000000', fontSize: 14, fontWeight: 800 }} />
+                    <YAxis domain={[0, 100]} stroke="#94a3b8" tick={{ fill: '#000000', fontSize: 11 }} tickFormatter={(val) => `${Number(val)}%`} />
                     <Tooltip
                       contentStyle={{ backgroundColor: '#0f172a', borderColor: '#a855f7', borderRadius: '12px', boxShadow: '0 15px 35px rgba(0,0,0,0.8)' }}
                       labelStyle={{ color: '#d8b4fe', fontWeight: 'bold', borderBottom: '1px solid #334155', paddingBottom: '4px' }}
