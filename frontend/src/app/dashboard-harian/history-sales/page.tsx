@@ -1364,10 +1364,10 @@ export default function HistorySalesPage() {
                   <div>
                     <div className="flex items-center justify-between mb-3 border-b border-rose-500/20 pb-2">
                       <span className="text-rose-300 font-black text-xs uppercase tracking-wider flex items-center gap-1.5">
-                        <ArrowDownRight className="w-4 h-4 text-rose-400" /> Cabang Pasokan Kurang dari AVG 3 Bln (&lt;100%)
+                        <ArrowDownRight className="w-4 h-4 text-rose-400" /> Kategori Pasokan Kurang dari AVG 3 Bln (&lt;100%)
                       </span>
                       <span className="px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 font-mono font-extrabold text-[11px] border border-rose-500/30">
-                        {cabangSupplyVsAvg3.underAvg.length} Cabang Kritis
+                        {cabangSupplyVsAvg3.underAvg.length} Category Kritis
                       </span>
                     </div>
                     {cabangSupplyVsAvg3.underAvg.length > 0 ? (
@@ -1375,7 +1375,7 @@ export default function HistorySalesPage() {
                         {cabangSupplyVsAvg3.underAvg.map((item, idx) => (
                           <div key={idx} className="p-2.5 rounded-xl bg-slate-50 border border-rose-500/20 flex items-center justify-between text-xs shadow-sm">
                             <div>
-                              <div className="font-bold text-slate-900 text-sm">📍 {item.cabang}</div>
+                              <div className="font-bold text-slate-900 text-sm">📍 {item.name}</div>
                               <div className="text-[11px] text-slate-600 mt-0.5">
                                 Pasokan: <span className="text-rose-700 font-mono">{Math.round(item.totalSupply).toLocaleString('id-ID')}</span> | AVG 3 Bln: <span className="text-slate-800 font-mono">{Math.round(item.avg3).toLocaleString('id-ID')}</span>
                               </div>
@@ -1389,12 +1389,12 @@ export default function HistorySalesPage() {
                       </div>
                     ) : (
                       <div className="py-6 text-center text-emerald-400 font-bold text-xs">
-                        🎉 Semua cabang memiliki pasokan melebihi kebutuhan rata-rata 3 bulan!
+                        🎉 Semua kategori memiliki pasokan melebihi kebutuhan rata-rata 3 bulan!
                       </div>
                     )}
                   </div>
                   <div className="mt-3.5 pt-2.5 border-t border-rose-500/20 text-[11px] text-rose-300 leading-relaxed">
-                    ⚠️ <strong>Peringatan Kritis:</strong> Cabang di atas berpotensi kehabisan stok sebelum siklus bulan depan. Segera alokasikan kiriman TO tambahan atau percepat jadwal kapal!
+                    ⚠️ <strong>Peringatan Kritis:</strong> Kategori di atas berpotensi kehabisan stok sebelum siklus bulan depan. Segera alokasikan kiriman TO tambahan atau percepat jadwal kapal!
                   </div>
                 </div>
 
@@ -1403,10 +1403,10 @@ export default function HistorySalesPage() {
                   <div>
                     <div className="flex items-center justify-between mb-3 border-b border-emerald-500/20 pb-2">
                       <span className="text-emerald-400 font-black text-xs uppercase tracking-wider flex items-center gap-1.5">
-                        <ArrowUpRight className="w-4 h-4 text-emerald-400" /> Cabang Melebihi 125% dari AVG 3 Bln (&gt;125%)
+                        <ArrowUpRight className="w-4 h-4 text-emerald-400" /> Kategori Melebihi 125% dari AVG 3 Bln (&gt;125%)
                       </span>
                       <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono font-extrabold text-[11px] border border-emerald-500/30">
-                        {cabangSupplyVsAvg3.over125.length} Cabang Surplus / Buffer
+                        {cabangSupplyVsAvg3.over125.length} Category Surplus / Buffer
                       </span>
                     </div>
                     {cabangSupplyVsAvg3.over125.length > 0 ? (
@@ -1428,12 +1428,12 @@ export default function HistorySalesPage() {
                       </div>
                     ) : (
                       <div className="py-6 text-center text-slate-600 font-bold text-xs">
-                        Tidak ada cabang yang pasokannya melebihi batas buffer 125%.
+                        Tidak ada kategori yang pasokannya melebihi batas buffer 125%.
                       </div>
                     )}
                   </div>
                   <div className="mt-3.5 pt-2.5 border-t border-emerald-500/20 text-[11px] text-emerald-300 leading-relaxed">
-                    🟢 <strong>Status: Buffer Sangat Aman / Overstocked.</strong> Cabang ini memiliki ketahanan suplai di atas 1,25 bulan. Sangat cocok sebagai sumber redistribusri (Transfer Order) jika ada cabang terdekat yang mengalami krisis suplai.
+                    🟢 <strong>Status: Buffer Sangat Aman / Overstocked.</strong> Kategori ini memiliki ketahanan suplai di atas 1,25 bulan. Sangat cocok sebagai sumber redistribusi (Transfer Order) jika ada cabang terdekat yang mengalami krisis suplai.
                   </div>
                 </div>
               </div>
