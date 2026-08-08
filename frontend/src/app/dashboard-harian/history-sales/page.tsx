@@ -125,10 +125,19 @@ function generateDemoHistorySales(): ParsedData {
     headers,
     targetColumns,
     data,
-    sheetNames: ['History Sales', 'Target Value'],
+    sheetNames: ['History Sales', 'Target Value', 'Month'],
     sheets: {
       'History Sales': { headers, targetColumns, data },
-      'Target Value': { headers: ['Cabang', 'week start', 'M', 'M+1', 'M+2'], targetColumns: [], data: targetData }
+      'Target Value': { headers: ['Cabang', 'week start', 'M', 'M+1', 'M+2'], targetColumns: [], data: targetData },
+      'Month': { 
+        headers: [], 
+        targetColumns: [], 
+        data: [], 
+        lines: [
+          [],
+          ['Month Start', 'AGUS-2026']
+        ] 
+      }
     },
     processed_at: new Date().toISOString()
   };
