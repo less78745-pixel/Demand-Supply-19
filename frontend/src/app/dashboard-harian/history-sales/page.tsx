@@ -325,20 +325,18 @@ export default function HistorySalesPage() {
     let monthStartStr = '';
     
     for (const row of monthData) {
-      const keys = Object.keys(row);
-      const wsKey = keys.find(k => String(row[k]).toLowerCase().includes('month start') || k.toLowerCase().includes('month start'));
-      if (wsKey && row[wsKey] !== undefined) {
-         monthStartStr = String(row[wsKey]);
-         break;
-      }
-      if (keys.length >= 2) {
-         const valA = row[keys[0]];
-         const valB = row[keys[1]];
-         if (String(valA).toLowerCase().includes('month start') && valB) {
-            monthStartStr = String(valB);
-            break;
+      const vals = Object.values(row);
+      for (let j = 0; j < vals.length; j++) {
+         const v = String(vals[j]).trim().toLowerCase();
+         if (v.includes('month start')) {
+            if (j + 1 < vals.length && vals[j+1]) {
+               monthStartStr = String(vals[j+1]).trim();
+            } else {
+               monthStartStr = String(vals[j]).replace(/month start/i, '').replace(/[:=]/g, '').trim();
+            }
          }
       }
+      if (monthStartStr) break;
     }
     
     if (!monthStartStr) return defaultLabels;
@@ -348,10 +346,10 @@ export default function HistorySalesPage() {
       'AUG': 7, 'OCT': 9, 'DEC': 11
     };
     
-    const parts = monthStartStr.split('-');
-    if (parts.length === 2) {
-       const mStr = parts[0].toUpperCase().substring(0, 3);
-       let year = parseInt(parts[1].replace(/[^0-9]/g, ''), 10);
+    const match = monthStartStr.match(/([a-zA-Z]+)[\s-]*(\d+)/);
+    if (match) {
+       const mStr = match[1].toUpperCase().substring(0, 3);
+       let year = parseInt(match[2], 10);
        if (year < 100) year += 2000;
        const monthIdx = idMonths[mStr];
        if (monthIdx !== undefined) {
@@ -480,16 +478,24 @@ export default function HistorySalesPage() {
     }
 
     const cabangTotalAvg3: Record<string, number> = {};
+    const cabangTotalM: Record<string, number> = {};
+    const cabangTotalM1: Record<string, number> = {};
     Object.values(map).forEach(item => {
       cabangTotalAvg3[item.cabang] = (cabangTotalAvg3[item.cabang] || 0) + item.avg3;
+      cabangTotalM[item.cabang] = (cabangTotalM[item.cabang] || 0) + item.m;
+      cabangTotalM1[item.cabang] = (cabangTotalM1[item.cabang] || 0) + item.m1;
     });
 
     return Object.values(map).map(item => {
       const growthM = item.avg3 > 0 ? toExactFloat(((item.m - item.avg3) / item.avg3) * 100, 2) : 0;
       const growthM1 = item.avg3 > 0 ? toExactFloat(((item.m1 - item.avg3) / item.avg3) * 100, 2) : 0;
       const totalCbgAvg3 = cabangTotalAvg3[item.cabang] || 0;
+      const totalCbgM = cabangTotalM[item.cabang] || 0;
+      const totalCbgM1 = cabangTotalM1[item.cabang] || 0;
       const kontribusi = totalCbgAvg3 > 0 ? toExactFloat((item.avg3 / totalCbgAvg3) * 100, 2) : 0;
-      return { ...item, growthM, growthM1, kontribusi };
+      const kontribusiM = totalCbgM > 0 ? toExactFloat((item.m / totalCbgM) * 100, 2) : 0;
+      const kontribusiM1 = totalCbgM1 > 0 ? toExactFloat((item.m1 / totalCbgM1) * 100, 2) : 0;
+      return { ...item, growthM, growthM1, kontribusi, kontribusiM, kontribusiM1 };
     }).sort((a, b) => {
       if (a.cabang !== b.cabang) return a.cabang.localeCompare(b.cabang);
       if (a.grup !== b.grup) return a.grup.localeCompare(b.grup);
@@ -815,12 +821,16 @@ export default function HistorySalesPage() {
     if (!tableData || tableData.length === 0) return null;
     let countPositiveGrowth = 0;
     let countNegativeGrowth = 0;
+    let countPositiveGrowthM1 = 0;
+    let countNegativeGrowthM1 = 0;
     let totalSalesVol = 0;
 
     tableData.forEach(row => {
       totalSalesVol += row.sales;
       if (row.growthM > 0) countPositiveGrowth++;
       else if (row.growthM < 0) countNegativeGrowth++;
+      if (row.growthM1 > 0) countPositiveGrowthM1++;
+      else if (row.growthM1 < 0) countNegativeGrowthM1++;
     });
 
     const topContributors = [...tableData].sort((a, b) => b.kontribusi - a.kontribusi).slice(0, 3);
@@ -828,6 +838,8 @@ export default function HistorySalesPage() {
     return {
       countPositiveGrowth,
       countNegativeGrowth,
+      countPositiveGrowthM1,
+      countNegativeGrowthM1,
       topContributors
     };
   }, [tableData]);
@@ -897,7 +909,25 @@ export default function HistorySalesPage() {
     
     const wb = XLSX.utils.book_new();
 
-    // 1. History Sales Komparatif Analis
+    // 1. Matriks ABC-XYZ
+    if (abcXyzAnalysis && abcXyzAnalysis.classifiedItems) {
+      const wsABC_data: any[][] = [['Cabang', 'Grup', 'Category', 'Item Name', 'Volume M s/d M-5', 'Mean', 'StdDev', 'CV', 'Kuadran ABC', 'Kuadran XYZ', 'Matrix', '% Kontribusi']];
+      abcXyzAnalysis.classifiedItems.forEach((item: any) => {
+        wsABC_data.push([item.cabang, item.key.split('___')[1] || '-', item.category, item.name, item.totalVol, toExactFloat(item.mean, 2), toExactFloat(item.stdDev, 2), item.cv, item.abc, item.xyz, item.matrix, item.cumPct]);
+      });
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(wsABC_data), "Matriks ABC-XYZ");
+    }
+
+    // 2. Komparasi Pasokan vs Sales
+    if (supplyVsMonthlySales && supplyVsMonthlySales.chartData) {
+      const wsSupply_data: any[][] = [['Periode', 'Volume Sales', 'Total SOH', 'Total TO', 'Total Vessel', 'Total Supply']];
+      supplyVsMonthlySales.chartData.forEach((item: any) => {
+        wsSupply_data.push([item.period, item.sales, supplyVsMonthlySales.totalSOH, supplyVsMonthlySales.totalTO, supplyVsMonthlySales.totalVessel, supplyVsMonthlySales.totalSupply]);
+      });
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(wsSupply_data), "Komparasi Pasokan vs Sales");
+    }
+
+    // 3. History Sales Komparatif Analis
     const ws1_data: any[][] = [
       [
         'Cabang / Wilayah',
@@ -905,7 +935,8 @@ export default function HistorySalesPage() {
         'Kategori Item',
         'Total Volume Sales',
         'AVG Sales 3 Bln',
-        '% Kontribusi (per Cabang)',
+        '% Kontribusi M',
+        '% Kontribusi M-1',
         'Volume M',
         'Volume M-1',
         'Pertumbuhan M vs AVG (%)',
@@ -920,17 +951,26 @@ export default function HistorySalesPage() {
         row.category,
         toExactFloat(row.sales, 2),
         toExactFloat(row.avg3, 2),
-        toExactFloat(row.kontribusi, 2),
+        toExactFloat(row.kontribusiM, 2),
+        toExactFloat(row.kontribusiM1, 2),
         toExactFloat(row.m, 2),
         toExactFloat(row.m1, 2),
         row.growthM,
         row.growthM1
       ]);
     });
-    const ws1 = XLSX.utils.aoa_to_sheet(ws1_data);
-    XLSX.utils.book_append_sheet(wb, ws1, "History Sales Komparatif");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ws1_data), "Tabel Komparatif Sales");
 
-    // 2. Breakdown Kontribusi
+    // 4. Performa Volume Sales per Category Insentif
+    if (insentifAnalysis) {
+      const wsInsentif_data: any[][] = [['Cabang', 'Grup', 'Category', 'Category Insentif', 'Total Sales', 'Total Item']];
+      insentifAnalysis.forEach((item: any) => {
+        wsInsentif_data.push([item.cabang, item.name.split(' - ')[1] || '-', item.category, item.categoryInsentif, item.totalSales, item.itemCount]);
+      });
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(wsInsentif_data), "Kategori Insentif");
+    }
+
+    // 5. Breakdown Kontribusi
     const ws2_data: any[][] = [
       ['Cabang', 'Grup', 'Category', 'Kontribusi', 'Nama Week', 'Total Target Perbulan', 'Target Per Minggu']
     ];
@@ -941,7 +981,6 @@ export default function HistorySalesPage() {
     let weekStartVal: any = 1;
     let monthCols: string[] = [];
     if (targetData && targetData.length > 0) {
-      // Find week start
       for (const r of targetData) {
         const keys = Object.keys(r);
         const wsKey = keys.find(k => k.toLowerCase().includes('week start'));
@@ -1004,8 +1043,8 @@ export default function HistorySalesPage() {
     const ws2 = XLSX.utils.aoa_to_sheet(ws2_data);
     XLSX.utils.book_append_sheet(wb, ws2, "Breakdown Kontribusi");
 
-    XLSX.writeFile(wb, getStandardFilename(`History_Sales_Komparatif_Analisis`, new Date().toISOString(), 'xlsx'));
-    toast.success('📊 Hasil Analisis Presisi History Sales Berhasil Diekspor!');
+    XLSX.writeFile(wb, getStandardFilename(`Dashboard_History_Sales_Export`, new Date().toISOString(), 'xlsx'));
+    toast.success('📊 Hasil Seluruh Analisis Berhasil Diekspor!');
   };
 
   return (
@@ -1568,16 +1607,21 @@ export default function HistorySalesPage() {
               <Sparkles className="w-5 h-5 text-blue-400" />
               <span>Insight Evaluasi Komparatif Sales</span>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
               <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-                <span className="text-slate-600 font-bold text-[10px] uppercase block mb-1">Tren Pertumbuhan (M vs AVG 3 Bln)</span>
+                <span className="text-slate-600 font-bold text-[10px] uppercase block mb-1">Tren Pertumbuhan ({dynamicMonthLabels.M} vs AVG)</span>
                 <div className="flex items-center justify-between text-sm font-extrabold mt-2">
-                  <span className="text-emerald-400 flex items-center gap-1">▲ {tableSalesInsights.countPositiveGrowth} Kombinasi Positif</span>
-                  <span className="text-rose-400 flex items-center gap-1">▼ {tableSalesInsights.countNegativeGrowth} Melambat</span>
+                  <span className="text-emerald-500 flex items-center gap-1">▲ {tableSalesInsights.countPositiveGrowth} Positif</span>
+                  <span className="text-rose-500 flex items-center gap-1">▼ {tableSalesInsights.countNegativeGrowth} Melambat</span>
                 </div>
-                <p className="text-[11px] text-slate-600 mt-2 leading-tight">
-                  Menunjukkan perbandingan persentase item yang mengalami pertumbuhan volume pada bulan berjalan dibanding rata-rata 3 bulan.
-                </p>
+              </div>
+              
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                <span className="text-slate-600 font-bold text-[10px] uppercase block mb-1">Tren Pertumbuhan ({dynamicMonthLabels.M1} vs AVG)</span>
+                <div className="flex items-center justify-between text-sm font-extrabold mt-2">
+                  <span className="text-emerald-500 flex items-center gap-1">▲ {tableSalesInsights.countPositiveGrowthM1} Positif</span>
+                  <span className="text-rose-500 flex items-center gap-1">▼ {tableSalesInsights.countNegativeGrowthM1} Melambat</span>
+                </div>
               </div>
 
               <div className="p-3.5 rounded-xl bg-purple-950/20 border border-purple-500/30">
@@ -1614,7 +1658,7 @@ export default function HistorySalesPage() {
                 <th className="py-3.5 px-4 border-l border-slate-200 text-purple-300">📦 Kategori Item</th>
                 <th className="py-3.5 px-4 border-l border-slate-200 text-blue-400">📈 Total Volume Sales</th>
                 <th className="py-3.5 px-4 border-l border-slate-200 text-rose-400">📊 AVG Sales 3 Bln</th>
-                <th className="py-3.5 px-4 border-l border-slate-200 text-amber-300">✨ % Kontribusi (per Cabang)</th>
+                <th className="py-3.5 px-4 border-l border-slate-200 text-amber-300">✨ % Kontribusi {dynamicMonthLabels.M} & {dynamicMonthLabels.M1}</th>
                 <th className="py-3.5 px-4 border-l border-slate-200 text-cyan-400">📅 Volume {dynamicMonthLabels.M} & {dynamicMonthLabels.M1}</th>
                 <th className="py-3.5 px-4 border-l border-slate-200 text-emerald-400">📈 Pertumbuhan vs AVG 3 Bln</th>
                 <th className="py-3.5 px-4 border-l border-slate-200 text-amber-300">💡 Analisis Pertumbuhan</th>
@@ -1662,11 +1706,12 @@ export default function HistorySalesPage() {
                     <td className="py-3.5 px-4 border-l border-slate-200 font-extrabold text-blue-700 text-base font-mono align-middle">
                       {row.sales.toLocaleString('id-ID')}
                     </td>
-                    <td className="py-3.5 px-4 border-l border-slate-200 font-extrabold text-rose-700 text-base font-mono align-middle">
-                      {row.avg3.toLocaleString('id-ID')}
+                    <td className="py-3.5 px-4 border-l border-slate-200 text-xs font-bold text-rose-500 align-middle">
+                      {row.avg3.toLocaleString('id-ID', { maximumFractionDigits: 1 })}
                     </td>
-                    <td className="py-3.5 px-4 border-l border-slate-200 font-black text-amber-600 text-base font-mono align-middle">
-                      {row.kontribusi.toFixed(2)}%
+                    <td className="py-3.5 px-4 border-l border-slate-200 text-xs font-bold text-amber-600 align-middle">
+                      <div className="font-mono text-[11px]">{dynamicMonthLabels.M}: {row.kontribusiM.toFixed(1)}%</div>
+                      <div className="font-mono text-[11px] mt-1 opacity-80">{dynamicMonthLabels.M1}: {row.kontribusiM1.toFixed(1)}%</div>
                     </td>
                     <td className="py-3.5 px-4 border-l border-slate-200 text-xs align-middle">
                       <div className="font-mono text-cyan-700 font-bold">{dynamicMonthLabels.M}: {row.m.toLocaleString('id-ID')}</div>
