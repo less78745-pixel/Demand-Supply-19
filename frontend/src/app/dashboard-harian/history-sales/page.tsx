@@ -171,6 +171,8 @@ export default function HistorySalesPage() {
   const [selectedRegion, setSelectedRegion] = useState<string[]>(['All']);
   const [selectedCategory, setSelectedCategory] = useState<string[]>(['All']);
   const [selectedCategoryInsentif, setSelectedCategoryInsentif] = useState<string[]>(['All']);
+  const [searchTable1, setSearchTable1] = useState<string>('');
+  const [searchTable2, setSearchTable2] = useState<string>('');
 
   // Excel AutoFilter state for Raw Data table
   const [activeRawColModal, setActiveRawColModal] = useState<string | null>(null);
@@ -684,11 +686,18 @@ export default function HistorySalesPage() {
       fill: matrix.startsWith('A') ? '#10b981' : matrix.startsWith('B') ? '#3b82f6' : '#f59e0b'
     }));
 
-    const topAZ = classifiedItems.filter(i => i.matrix === 'AZ' || i.matrix === 'AY');
-    const topAX = classifiedItems.filter(i => i.matrix === 'AX' || i.matrix === 'BX');
+    const groupedByMatrix: Record<string, any[]> = {};
+    classifiedItems.forEach(item => {
+      if (!groupedByMatrix[item.matrix]) groupedByMatrix[item.matrix] = [];
+      groupedByMatrix[item.matrix].push(item);
+    });
+    const activeQuadrants = Object.keys(groupedByMatrix).sort().map(matrix => ({
+      matrix,
+      items: groupedByMatrix[matrix]
+    }));
 
-    return { classifiedItems, matrixCount, chartData, grandTotalVol, topAZ, topAX };
-  }, [parsed, filtered, colCabang, colCategory]);
+    return { classifiedItems, matrixCount, chartData, grandTotalVol, activeQuadrants };
+  }, [parsed, filtered, colCabang, colCategory, colGrup]);
 
   // 2. Cabang Supply (SOH + TO + Vessel + Hold Delivery + SPJM) vs AVG 3 Bulan calculation & insight
   const cabangSupplyVsAvg3 = useMemo(() => {
@@ -1156,15 +1165,16 @@ export default function HistorySalesPage() {
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={abcXyzAnalysis.chartData} margin={{ top: 15, right: 15, left: 20, bottom: 20 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.4} />
-                    <XAxis dataKey="matrix" stroke="#94a3b8" tick={{ fill: '#e2e8f0', fontSize: 13, fontWeight: 'bold' }} />
-                    <YAxis stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 12 }} />
+                    <XAxis dataKey="matrix" stroke="#94a3b8" tick={{ fill: '#334155', fontSize: 13, fontWeight: 'bold' }} />
+                    <YAxis stroke="#94a3b8" tick={{ fill: '#475569', fontSize: 12 }} />
                     <Tooltip
-                      contentStyle={{ backgroundColor: '#0f172a', borderColor: '#6366f1', borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.8)' }}
+                      contentStyle={{ backgroundColor: '#ffffff', borderColor: '#cbd5e1', borderRadius: '8px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}
+                      labelStyle={{ color: '#4338ca', fontWeight: 'bold' }}
+                      itemStyle={{ color: '#334155', fontWeight: 600 }}
                       formatter={(val: any, name: any, props: any) => [
                         `${Number(val).toLocaleString('id-ID')} Item (Vol: ${props.payload.volume.toLocaleString('id-ID')} Unit)`,
                         'Jumlah Item'
                       ]}
-                      labelStyle={{ color: '#818cf8', fontWeight: 'bold' }}
                     />
                     <Bar dataKey="count" name="Jumlah Item" radius={[6, 6, 0, 0]} maxBarSize={50}>
                       {abcXyzAnalysis.chartData.map((entry, index) => (
@@ -1182,63 +1192,29 @@ export default function HistorySalesPage() {
               </div>
             </div>
 
-            {/* Insight & Rekomendasi ABC-XYZ */}
-            <div className="lg:col-span-6 flex flex-col justify-between gap-4">
-              {/* Box 1: Sorotan Risiko (AZ & AY - Volume Tinggi, Permintaan Tidak Menentu) */}
-              <div className="p-4 rounded-xl bg-amber-950/20 border border-amber-500/30 flex flex-col max-h-[300px]">
-                <div className="flex items-center gap-2 text-amber-300 font-extrabold text-xs uppercase tracking-wider mb-2.5">
-                  <AlertCircle className="w-4 h-4 text-amber-400" />
-                  <span>Sorotan Risiko Kritis: Kelompok AY &amp; AZ (High Vol, High Fluctuation)</span>
-                </div>
-                <p className="text-xs text-amber-100 mb-3 leading-relaxed shrink-0">
-                  Item dalam kuadran <b>AZ &amp; AY</b> adalah penyumbang omzet terbesar namun memiliki fluktuasi permintaan tinggi. Rentan mengalami stockout drastis atau overstock!
-                </p>
-                <div className="overflow-y-auto pr-2 space-y-1.5 grow">
-                  {abcXyzAnalysis.topAZ.length > 0 ? (
-                    abcXyzAnalysis.topAZ.map((it, idx) => (
-                      <div key={idx} className="p-2 rounded-lg bg-slate-50 border border-amber-500/20 flex items-center justify-between text-xs">
+            {/* Insight & Rekomendasi ABC-XYZ - Dinamis */}
+            <div className="lg:col-span-6 flex flex-col justify-start gap-4 max-h-[400px] overflow-y-auto pr-2">
+              {abcXyzAnalysis.activeQuadrants.map((quadrant: any) => (
+                <div key={quadrant.matrix} className="p-4 rounded-xl bg-white border border-slate-200 shadow-sm flex flex-col shrink-0">
+                  <div className="flex items-center gap-2 font-extrabold text-sm tracking-wider mb-2 text-indigo-700 border-b border-slate-100 pb-2">
+                    <span className="w-6 h-6 rounded-md bg-indigo-100 flex items-center justify-center text-indigo-600">{quadrant.matrix}</span>
+                    <span>Kelompok {quadrant.matrix}</span>
+                    <span className="ml-auto text-[11px] text-slate-500 font-medium px-2 py-1 bg-slate-50 rounded-lg border border-slate-200">
+                      {quadrant.items.length} Item
+                    </span>
+                  </div>
+                  <div className="space-y-1.5 mt-2 overflow-y-auto max-h-[200px] pr-1">
+                    {quadrant.items.map((it: any, idx: number) => (
+                      <div key={idx} className="p-2 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-between text-xs hover:bg-slate-100 transition">
                         <div className="truncate pr-2">
                           <span className="font-bold text-slate-900 block">📍 {it.cabang} - {it.name}</span>
                           <span className="text-[10px] text-slate-600">Avg Vol: {Math.round(it.mean).toLocaleString('id-ID')} /bln | CV: {it.cv}</span>
                         </div>
-                        <span className="px-2 py-1 bg-amber-500/20 text-amber-500 font-mono font-black text-xs rounded border border-amber-500/30">
-                          {it.matrix}
-                        </span>
                       </div>
-                    ))
-                  ) : (
-                    <div className="text-xs text-slate-400 font-medium py-2">Semua item volume tinggi memiliki permintaan cukup stabil.</div>
-                  )}
+                    ))}
+                  </div>
                 </div>
-              </div>
-
-              {/* Box 2: Strategi Optimasi (AX & BX - Stabil & Predictable) */}
-              <div className="p-4 rounded-xl bg-emerald-950/20 border border-emerald-500/30 flex flex-col max-h-[300px]">
-                <div className="flex items-center gap-2 text-emerald-400 font-extrabold text-xs uppercase tracking-wider mb-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                  <span>Kinerja Stabil: Kelompok AX &amp; BX (Predictable)</span>
-                </div>
-                <p className="text-xs text-emerald-100 mb-3 leading-relaxed shrink-0">
-                  Item <b>AX &amp; BX</b> stabil dan terprediksi. Ketersediaan stok harus dijamin 99% menggunakan <i>auto-replenishment</i> dengan <i>safety stock</i> rendah.
-                </p>
-                <div className="overflow-y-auto pr-2 space-y-1.5 grow">
-                  {abcXyzAnalysis.topAX.length > 0 ? (
-                    abcXyzAnalysis.topAX.map((it, idx) => (
-                      <div key={idx} className="p-2 rounded-lg bg-slate-50 border border-emerald-500/20 flex items-center justify-between text-xs">
-                        <div className="truncate pr-2">
-                          <span className="font-bold text-slate-900 block">📍 {it.cabang} - {it.name}</span>
-                          <span className="text-[10px] text-slate-600">Avg Vol: {Math.round(it.mean).toLocaleString('id-ID')} /bln | CV: {it.cv}</span>
-                        </div>
-                        <span className="px-2 py-1 bg-emerald-500/20 text-emerald-600 font-mono font-black text-xs rounded border border-emerald-500/30">
-                          {it.matrix}
-                        </span>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-xs text-slate-400 font-medium py-2">Belum ada item stabil yang dapat diprediksi kuat.</div>
-                  )}
-                </div>
-              </div>
+              ))}
             </div>
           </div>
         </GlassCard>
@@ -1599,6 +1575,16 @@ export default function HistorySalesPage() {
           </div>
         )}
 
+        <div className="flex justify-end mb-4">
+          <input
+            type="text"
+            placeholder="Cari Cabang / Grup / Kategori..."
+            className="w-full sm:w-80 px-4 py-2 border border-slate-300 rounded-lg text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            value={searchTable1}
+            onChange={e => setSearchTable1(e.target.value)}
+          />
+        </div>
+
         <div className="overflow-x-auto rounded-xl border border-slate-200 max-h-[600px] overflow-y-auto">
           <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[1350px]">
             <thead className="bg-slate-50 text-slate-700 uppercase font-bold sticky top-0 z-20 shadow-md">
@@ -1615,7 +1601,15 @@ export default function HistorySalesPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/80 text-slate-700 text-center">
-              {tableData.map((row, idx) => {
+              {tableData.filter((row: any) => {
+                if (!searchTable1) return true;
+                const s = searchTable1.toLowerCase();
+                return (
+                  row.cabang?.toLowerCase().includes(s) ||
+                  row.grup?.toLowerCase().includes(s) ||
+                  row.category?.toLowerCase().includes(s)
+                );
+              }).map((row, idx) => {
                 const isCritical = row.ratio > 30;
                 const isWarning = row.ratio > 15 && !isCritical;
                 const isPrime = row.ratio <= 15 && row.sales > 5000;
@@ -1799,6 +1793,16 @@ export default function HistorySalesPage() {
             </div>
 
             {/* Tabel Ringkasan Insentif dengan M s/d M-5 */}
+            <div className="flex justify-end mb-4">
+              <input
+                type="text"
+                placeholder="Cari Cabang / Kategori Insentif..."
+                className="w-full sm:w-80 px-4 py-2 border border-slate-300 rounded-lg text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                value={searchTable2}
+                onChange={e => setSearchTable2(e.target.value)}
+              />
+            </div>
+
             <div className="overflow-x-auto rounded-2xl border border-slate-200 max-h-[450px] overflow-y-auto bg-slate-50 shadow-lg">
               <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[1000px]">
                 <thead className="bg-slate-50 text-slate-700 uppercase font-extrabold sticky top-0 z-20 shadow-md border-b border-slate-200">
@@ -1815,7 +1819,14 @@ export default function HistorySalesPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800 text-slate-800 text-center font-medium">
-                  {insentifAnalysis.map((item) => {
+                  {insentifAnalysis.filter((item: any) => {
+                    if (!searchTable2) return true;
+                    const s = searchTable2.toLowerCase();
+                    return (
+                      item.itemDesc?.toLowerCase().includes(s) ||
+                      item.insentifCat?.toLowerCase().includes(s)
+                    );
+                  }).map((item) => {
                     const isAlert = item.ratio > 25;
                     return (
                       <tr key={item.key} className="hover:bg-slate-100 transition">
