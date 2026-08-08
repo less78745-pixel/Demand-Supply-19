@@ -664,8 +664,8 @@ export default function HistorySalesPage() {
       fill: matrix.startsWith('A') ? '#10b981' : matrix.startsWith('B') ? '#3b82f6' : '#f59e0b'
     }));
 
-    const topAZ = classifiedItems.filter(i => i.matrix === 'AZ' || i.matrix === 'AY').slice(0, 3);
-    const topAX = classifiedItems.filter(i => i.matrix === 'AX' || i.matrix === 'BX').slice(0, 3);
+    const topAZ = classifiedItems.filter(i => i.matrix === 'AZ' || i.matrix === 'AY');
+    const topAX = classifiedItems.filter(i => i.matrix === 'AX' || i.matrix === 'BX');
 
     return { classifiedItems, matrixCount, chartData, grandTotalVol, topAZ, topAX };
   }, [parsed, filtered, colCabang, colCategory]);
@@ -1136,49 +1136,59 @@ export default function HistorySalesPage() {
             {/* Insight & Rekomendasi ABC-XYZ */}
             <div className="lg:col-span-6 flex flex-col justify-between gap-4">
               {/* Box 1: Sorotan Risiko (AZ & AY - Volume Tinggi, Permintaan Tidak Menentu) */}
-              <div className="p-4 rounded-xl bg-amber-950/20 border border-amber-500/30">
+              <div className="p-4 rounded-xl bg-amber-950/20 border border-amber-500/30 flex flex-col max-h-[300px]">
                 <div className="flex items-center gap-2 text-amber-300 font-extrabold text-xs uppercase tracking-wider mb-2.5">
                   <AlertCircle className="w-4 h-4 text-amber-400" />
                   <span>Sorotan Risiko Kritis: Kelompok AY &amp; AZ (High Vol, High Fluctuation)</span>
                 </div>
-                <p className="text-xs text-amber-100 mb-3 leading-relaxed">
-                  Item dalam kuadran <b>AZ &amp; AY</b> adalah penyumbang omzet terbesar namun memiliki fluktuasi permintaan tinggi di 6 bulan terakhir. Rentan mengalami stockout drastis atau overstock!
+                <p className="text-xs text-amber-100 mb-3 leading-relaxed shrink-0">
+                  Item dalam kuadran <b>AZ &amp; AY</b> adalah penyumbang omzet terbesar namun memiliki fluktuasi permintaan tinggi. Rentan mengalami stockout drastis atau overstock!
                 </p>
-                {abcXyzAnalysis.topAZ.length > 0 ? (
-                  <div className="space-y-1.5">
-                    {abcXyzAnalysis.topAZ.map((it, idx) => (
+                <div className="overflow-y-auto pr-2 space-y-1.5 grow">
+                  {abcXyzAnalysis.topAZ.length > 0 ? (
+                    abcXyzAnalysis.topAZ.map((it, idx) => (
                       <div key={idx} className="p-2 rounded-lg bg-slate-50 border border-amber-500/20 flex items-center justify-between text-xs">
                         <div className="truncate pr-2">
                           <span className="font-bold text-slate-900 block">📍 {it.cabang} - {it.name}</span>
                           <span className="text-[10px] text-slate-600">Avg Vol: {Math.round(it.mean).toLocaleString('id-ID')} /bln | CV: {it.cv}</span>
                         </div>
-                        <span className="px-2 py-1 bg-amber-500/20 text-amber-300 font-mono font-black text-xs rounded border border-amber-500/30">
+                        <span className="px-2 py-1 bg-amber-500/20 text-amber-500 font-mono font-black text-xs rounded border border-amber-500/30">
                           {it.matrix}
                         </span>
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-xs text-slate-400 font-medium py-2">Semua item volume tinggi memiliki permintaan cukup stabil.</div>
-                )}
+                    ))
+                  ) : (
+                    <div className="text-xs text-slate-400 font-medium py-2">Semua item volume tinggi memiliki permintaan cukup stabil.</div>
+                  )}
+                </div>
               </div>
 
               {/* Box 2: Strategi Optimasi (AX & BX - Stabil & Predictable) */}
-              <div className="p-4 rounded-xl bg-emerald-950/20 border border-emerald-500/30">
+              <div className="p-4 rounded-xl bg-emerald-950/20 border border-emerald-500/30 flex flex-col max-h-[300px]">
                 <div className="flex items-center gap-2 text-emerald-400 font-extrabold text-xs uppercase tracking-wider mb-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                  <span>Rekomendasi Strategi Pengelolaan Matriks</span>
+                  <span>Kinerja Stabil: Kelompok AX &amp; BX (Predictable)</span>
                 </div>
-                <ul className="text-xs text-slate-300 space-y-2 font-normal">
-                  <li className="flex items-start gap-2">
-                    <span className="text-emerald-400 font-black">✔</span>
-                    <span><b>Kuadran AX &amp; BX (Stabil):</b> Terapkan sistem pemesanan otomatis dengan safety stock rendah. Ketersediaan stok di gudang harus dijamin 99% karena permintaan konstan dan dapat diprediksi.</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-amber-400 font-black">▲</span>
-                    <span><b>Kuadran AZ &amp; BZ (Fluktuatif/Sporadik):</b> Jangan gunakan average sederhana. Siapkan buffer stok fleksibel dan pantau pesanan TO/Vessel secara berkala agar tidak bottleneck saat lonjakan musim.</span>
-                  </li>
-                </ul>
+                <p className="text-xs text-emerald-100 mb-3 leading-relaxed shrink-0">
+                  Item <b>AX &amp; BX</b> stabil dan terprediksi. Ketersediaan stok harus dijamin 99% menggunakan <i>auto-replenishment</i> dengan <i>safety stock</i> rendah.
+                </p>
+                <div className="overflow-y-auto pr-2 space-y-1.5 grow">
+                  {abcXyzAnalysis.topAX.length > 0 ? (
+                    abcXyzAnalysis.topAX.map((it, idx) => (
+                      <div key={idx} className="p-2 rounded-lg bg-slate-50 border border-emerald-500/20 flex items-center justify-between text-xs">
+                        <div className="truncate pr-2">
+                          <span className="font-bold text-slate-900 block">📍 {it.cabang} - {it.name}</span>
+                          <span className="text-[10px] text-slate-600">Avg Vol: {Math.round(it.mean).toLocaleString('id-ID')} /bln | CV: {it.cv}</span>
+                        </div>
+                        <span className="px-2 py-1 bg-emerald-500/20 text-emerald-600 font-mono font-black text-xs rounded border border-emerald-500/30">
+                          {it.matrix}
+                        </span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-xs text-slate-400 font-medium py-2">Belum ada item stabil yang dapat diprediksi kuat.</div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
