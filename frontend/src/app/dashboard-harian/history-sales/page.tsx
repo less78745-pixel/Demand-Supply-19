@@ -448,12 +448,38 @@ export default function HistorySalesPage() {
 
   const displayedChartColumns = useMemo(() => {
     if (!parsed) return [];
-    if (!executiveSummary || chartFilter === 'all') return parsed.targetColumns;
-    if (chartFilter === 'avg3') {
-      return parsed.targetColumns.filter(tc => tc.name.toLowerCase().includes('avg'));
+    let cols = parsed.targetColumns;
+    if (executiveSummary && chartFilter !== 'all') {
+      if (chartFilter === 'avg3') {
+        cols = parsed.targetColumns.filter(tc => tc.name.toLowerCase().includes('avg'));
+      } else {
+        const targetSet = new Set(executiveSummary.salesCols);
+        cols = parsed.targetColumns.filter(tc => targetSet.has(tc.name));
+      }
     }
-    const targetSet = new Set(executiveSummary.salesCols);
-    return parsed.targetColumns.filter(tc => targetSet.has(tc.name));
+
+    const getMonthScore = (name: string) => {
+      const matchM = name.match(/^M(?:-(\d+))?$/i);
+      if (matchM) {
+        return parseInt(matchM[1] || '0', 10) * -1;
+      }
+      const matchDate = name.match(/^([a-zA-Z]+)[\s-]*(\d+)$/);
+      if (matchDate) {
+         const mStr = matchDate[1].toUpperCase().substring(0, 3);
+         let year = parseInt(matchDate[2], 10);
+         if (year < 100) year += 2000;
+         const idMonths: Record<string, number> = {
+            'JAN': 0, 'FEB': 1, 'MAR': 2, 'APR': 3, 'MAY': 4, 'MEI': 4, 'JUN': 5, 'JUL': 6, 'AUG': 7, 'AGU': 7, 'SEP': 8, 'OCT': 9, 'OKT': 9, 'NOV': 10, 'DEC': 11, 'DES': 11
+         };
+         if (idMonths[mStr] !== undefined) {
+            return year * 12 + idMonths[mStr];
+         }
+      }
+      if (name.toLowerCase().includes('avg')) return -999999;
+      return 0;
+    };
+
+    return [...cols].sort((a, b) => getMonthScore(a.name) - getMonthScore(b.name));
   }, [parsed, executiveSummary, chartFilter]);
 
   // Table Data grouped per Cabang + Category for detailed comparison & growth analysis
@@ -1305,7 +1331,23 @@ export default function HistorySalesPage() {
 
             {/* Insight & Rekomendasi ABC-XYZ - Dinamis */}
             <div className="lg:col-span-6 flex flex-col justify-start gap-4 max-h-[400px] overflow-y-auto pr-2">
-              {abcXyzAnalysis.activeQuadrants.map((quadrant: any) => (
+              {abcXyzAnalysis.activeQuadrants.map((quadrant: any) => {
+                const getMatrixRecommendation = (matrix: string) => {
+                  switch (matrix) {
+                    case 'AX': return 'Penjualan tinggi & stabil. Jaga stok selalu tersedia (Service Level > 95%), hindari stockout.';
+                    case 'AY': return 'Volume tinggi & sedikit fluktuatif. Siapkan buffer stock moderat untuk meredam fluktuasi.';
+                    case 'AZ': return 'Volume tinggi & sangat fluktuatif. Pastikan Safety Stock tinggi saat peak season.';
+                    case 'BX': return 'Volume menengah & stabil. Kontrol inventori standar, pemesanan rutin.';
+                    case 'BY': return 'Volume menengah & fluktuatif. Lakukan peninjauan stok berkala, sesuaikan buffer dengan tren.';
+                    case 'BZ': return 'Volume menengah & sangat fluktuatif. Risiko dead stock jika overstock. Pesan hati-hati.';
+                    case 'CX': return 'Volume rendah & stabil. Otomatisasi pemesanan ulang untuk mengurangi biaya.';
+                    case 'CY': return 'Volume rendah & fluktuatif. Jaga pesanan kecil, hindari overstock.';
+                    case 'CZ': return 'Volume rendah & sangat fluktuatif. Pertimbangkan Make-to-Order atau rasionalisasi (hapus SKU).';
+                    default: return '';
+                  }
+                };
+                
+                return (
                 <div key={quadrant.matrix} className="p-4 rounded-xl bg-white border border-slate-200 shadow-sm flex flex-col shrink-0">
                   <div className="flex items-center gap-2 font-extrabold text-sm tracking-wider mb-2 text-indigo-700 border-b border-slate-100 pb-2">
                     <span className="w-6 h-6 rounded-md bg-indigo-100 flex items-center justify-center text-indigo-600">{quadrant.matrix}</span>
@@ -1314,7 +1356,10 @@ export default function HistorySalesPage() {
                       {quadrant.items.length} Item
                     </span>
                   </div>
-                  <div className="space-y-1.5 mt-2 overflow-y-auto max-h-[200px] pr-1">
+                  <div className="text-[11px] text-slate-700 bg-indigo-50 p-2.5 rounded-lg mb-3 leading-relaxed border border-indigo-100/50 shadow-inner">
+                    💡 <strong>Strategi:</strong> {getMatrixRecommendation(quadrant.matrix)}
+                  </div>
+                  <div className="space-y-1.5 overflow-y-auto max-h-[200px] pr-1">
                     {quadrant.items.map((it: any, idx: number) => (
                       <div key={idx} className="p-2 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-between text-xs hover:bg-slate-100 transition">
                         <div className="truncate pr-2">
@@ -1325,7 +1370,7 @@ export default function HistorySalesPage() {
                     ))}
                   </div>
                 </div>
-              ))}
+              )})}
             </div>
           </div>
         </GlassCard>
