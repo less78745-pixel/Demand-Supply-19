@@ -530,7 +530,7 @@ export default function HistorySalesPage() {
       const name = `${cbg} - ${grup} - ${category}`;
 
       if (!map[key]) {
-        map[key] = { key, name, cabang: cbg, categoryInsentif: cat, totalSales: 0, totalOutstanding: 0, itemCount: 0, periods: { 'M': 0, 'M-1': 0, 'M-2': 0, 'M-3': 0, 'M-4': 0, 'M-5': 0 } };
+        map[key] = { key, name, cabang: cbg, category, categoryInsentif: cat, totalSales: 0, totalOutstanding: 0, itemCount: 0, periods: { 'M': 0, 'M-1': 0, 'M-2': 0, 'M-3': 0, 'M-4': 0, 'M-5': 0 } };
       }
       map[key].itemCount += 1;
 
@@ -690,14 +690,16 @@ export default function HistorySalesPage() {
     return { classifiedItems, matrixCount, chartData, grandTotalVol, topAZ, topAX };
   }, [parsed, filtered, colCabang, colCategory]);
 
-  // 2. Cabang Supply (SOH + TO + Vessel) vs AVG 3 Bulan calculation & insight
+  // 2. Cabang Supply (SOH + TO + Vessel + Hold Delivery + SPJM) vs AVG 3 Bulan calculation & insight
   const cabangSupplyVsAvg3 = useMemo(() => {
     if (!parsed || filtered.length === 0) return null;
-    const map: Record<string, { cabang: string; name: string; soh: number; to: number; vessel: number; totalSupply: number; avg3: number; ratio: number; diff: number }> = {};
+    const map: Record<string, { cabang: string; name: string; soh: number; to: number; vessel: number; holdDelivery: number; spjm: number; totalSupply: number; avg3: number; ratio: number; diff: number }> = {};
 
     const colSOH = findColumn(parsed.headers, ['soh', 'on hand', 'stock on hand']);
     const colTO = findColumn(parsed.headers, ['to', 'transfer order']);
     const colVessel = findColumn(parsed.headers, ['on vessel', 'vessel', 'in transit', 'on_vessel']);
+    const colHoldDelivery = findColumn(parsed.headers, ['hold delivery', 'hold_delivery']);
+    const colSPJM = findColumn(parsed.headers, ['spjm']);
     const colAvg = findColumn(parsed.headers, ['avg sales 3 bln', 'avg sales', 'avg']);
 
     for (const row of filtered) {
@@ -707,17 +709,21 @@ export default function HistorySalesPage() {
       const key = `${cab}___${grup}___${cat}`;
       const name = `${cab} - ${grup} - ${cat}`;
       if (!map[key]) {
-        map[key] = { cabang: cab, name, soh: 0, to: 0, vessel: 0, totalSupply: 0, avg3: 0, ratio: 0, diff: 0 };
+        map[key] = { cabang: cab, name, soh: 0, to: 0, vessel: 0, holdDelivery: 0, spjm: 0, totalSupply: 0, avg3: 0, ratio: 0, diff: 0 };
       }
       const soh = colSOH ? Number(String(row[colSOH] || 0).replace(/[^0-9.-]+/g, '')) || 0 : 0;
       const to = colTO ? Number(String(row[colTO] || 0).replace(/[^0-9.-]+/g, '')) || 0 : 0;
       const vessel = colVessel ? Number(String(row[colVessel] || 0).replace(/[^0-9.-]+/g, '')) || 0 : 0;
+      const holdDelivery = colHoldDelivery ? Number(String(row[colHoldDelivery] || 0).replace(/[^0-9.-]+/g, '')) || 0 : 0;
+      const spjm = colSPJM ? Number(String(row[colSPJM] || 0).replace(/[^0-9.-]+/g, '')) || 0 : 0;
       const avg3 = colAvg ? Number(String(row[colAvg] || 0).replace(/[^0-9.-]+/g, '')) || 0 : 0;
 
       map[key].soh += soh;
       map[key].to += to;
       map[key].vessel += vessel;
-      map[key].totalSupply += (soh + to + vessel);
+      map[key].holdDelivery += holdDelivery;
+      map[key].spjm += spjm;
+      map[key].totalSupply += (soh + to + vessel + holdDelivery + spjm);
       map[key].avg3 += avg3;
     }
 
@@ -727,7 +733,7 @@ export default function HistorySalesPage() {
       return { ...item, ratio, diff };
     });
 
-    const underAvg = list.filter(item => item.totalSupply < item.avg3 && item.avg3 > 0).sort((a, b) => a.ratio - b.ratio);
+    const underAvg = list.filter(item => item.totalSupply < item.avg3 && Math.round(item.avg3) > 0).sort((a, b) => a.ratio - b.ratio);
     const over125 = list.filter(item => item.totalSupply > (1.25 * item.avg3)).sort((a, b) => b.ratio - a.ratio);
     const normalRange = list.filter(item => item.totalSupply >= item.avg3 && item.totalSupply <= (1.25 * item.avg3));
 
@@ -770,24 +776,33 @@ export default function HistorySalesPage() {
   const insentifInsights = useMemo(() => {
     if (!insentifAnalysis || insentifAnalysis.length === 0) return null;
     let topTier: any = null;
-    let highestOutTier: any = null;
     let totalTierSales = 0;
-    let totalTierOut = 0;
+    const contributors: Record<string, Record<string, number>> = {};
 
     insentifAnalysis.forEach(item => {
       totalTierSales += item.totalSales;
-      totalTierOut += item.totalOutstanding;
       if (!topTier || item.totalSales > topTier.totalSales) {
         topTier = item;
       }
-      if (!highestOutTier || (item.ratio > highestOutTier.ratio && item.totalSales > 100)) {
-        highestOutTier = item;
+      if (!contributors[item.categoryInsentif]) {
+        contributors[item.categoryInsentif] = {};
       }
+      contributors[item.categoryInsentif][item.category] = (contributors[item.categoryInsentif][item.category] || 0) + item.totalSales;
     });
 
-    const avgTierRatio = totalTierSales > 0 ? Number(((totalTierOut / totalTierSales) * 100).toFixed(1)) : 0;
+    const topContributorsPerTier = Object.keys(contributors).map(tier => {
+      const cats = Object.entries(contributors[tier])
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3)
+        .map(([cat, sales]) => ({ name: cat, sales }));
+      return { tier, contributors: cats };
+    }).sort((a, b) => {
+       const sumA = a.contributors.reduce((acc, c) => acc + c.sales, 0);
+       const sumB = b.contributors.reduce((acc, c) => acc + c.sales, 0);
+       return sumB - sumA;
+    });
 
-    return { topTier, highestOutTier, avgTierRatio };
+    return { topTier, topContributorsPerTier };
   }, [insentifAnalysis]);
 
   const currentRawUniqueValues = useMemo(() => {
@@ -1350,7 +1365,7 @@ export default function HistorySalesPage() {
                 </span>
                 <div>
                   <h4 className="font-extrabold text-white text-sm sm:text-base tracking-wide flex items-center gap-2">
-                    Insight Analitis: Komparasi Total Pasokan (SOH + TO + Vessel) vs Rata-Rata Sales 3 Bulan
+                    Insight Analitis: Komparasi Total Pasokan (SOH + TO + Vessel + Hold Delivery + SPJM) vs Rata-Rata Sales 3 Bulan
                   </h4>
                   <p className="text-xs text-slate-600">
                     Evaluasi ketahanan stok cabang terhadap kebutuhan rata-rata 3 bulan historis (AVG 3 Bln).
@@ -1678,20 +1693,20 @@ export default function HistorySalesPage() {
               </div>
               <h3 className="text-lg sm:text-xl font-extrabold text-slate-900 flex items-center gap-2.5">
                 <BarChart3 className="w-5 h-5 text-purple-400" />
-                Performa Volume Sales & Outstanding per Category Insentif
+                Performa Volume Sales per Category Insentif
               </h3>
               <p className="text-xs text-slate-300 mt-1">
-                Pengelompokan riwayat penjualan dari <b>M sampai M-5</b> dan pesanan tertunggak berdasarkan kombinasi <b>Cabang & Kategori Insentif</b>.
+                Pengelompokan riwayat penjualan dari <b>M sampai M-5</b> berdasarkan kombinasi <b>Cabang &amp; Kategori Insentif</b>.
               </p>
             </div>
           </div>
 
-          {/* ─── INSIGHT PERFORMA INSENTIF & OUTSTANDING ─── */}
+          {/* ─── INSIGHT PERFORMA INSENTIF ─── */}
           {insentifInsights && (
             <div className="mb-6 p-5 rounded-2xl bg-gradient-to-r from-purple-950/50 via-slate-900 to-slate-950 border border-purple-500/40 shadow-xl">
               <div className="flex items-center gap-2 text-purple-300 font-extrabold text-sm sm:text-base mb-3 border-b border-purple-500/20 pb-2.5">
                 <Zap className="w-5 h-5 text-purple-400 animate-pulse" />
-                <span>Insight Eksekutif: Performa Penjualan &amp; Kendala Outstanding per Kategori Insentif</span>
+                <span>Insight Eksekutif: Performa Penjualan per Kategori Insentif</span>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-xs">
@@ -1719,30 +1734,26 @@ export default function HistorySalesPage() {
                   </div>
                 </div>
 
-                <div className="p-4 rounded-xl bg-amber-950/20 border border-amber-500/30 flex flex-col justify-between">
+                <div className="p-4 rounded-xl bg-purple-950/20 border border-purple-500/30 flex flex-col justify-between">
                   <div>
-                    <span className="text-amber-700 font-extrabold uppercase tracking-wider text-[11px] flex items-center gap-1.5 mb-2">
-                      <AlertTriangle className="w-4 h-4 text-amber-600" /> Peringatan Outstanding Pada Produk Insentif
+                    <span className="text-purple-300 font-extrabold uppercase tracking-wider text-[11px] flex items-center gap-1.5 mb-2">
+                      <BarChart3 className="w-4 h-4 text-purple-400" /> Penyumbang Terbesar (Kategori) per Tier
                     </span>
-                    {insentifInsights.highestOutTier ? (
-                      <div className="mt-2">
-                        <div className="text-base font-black text-white flex items-center gap-2">
-                          <span>⚠️ {insentifInsights.highestOutTier.categoryInsentif}</span>
-                          <span className="text-xs font-semibold text-slate-300">({insentifInsights.highestOutTier.name})</span>
+                    <div className="mt-2 space-y-3 max-h-40 overflow-y-auto pr-2">
+                      {insentifInsights.topContributorsPerTier.map((tierData: any, idx: number) => (
+                        <div key={idx} className="border-b border-purple-500/20 pb-2 last:border-0 last:pb-0">
+                           <div className="text-purple-300 font-bold mb-1">{tierData.tier}</div>
+                           <div className="space-y-1">
+                              {tierData.contributors.map((c: any, cIdx: number) => (
+                                 <div key={cIdx} className="flex justify-between text-[11px] text-slate-300">
+                                    <span>- {c.name}</span>
+                                    <span className="font-mono text-purple-200">{Math.round(c.sales).toLocaleString('id-ID')} Unit</span>
+                                 </div>
+                              ))}
+                           </div>
                         </div>
-                        <div className="text-sm font-mono font-extrabold text-amber-500 mt-1">
-                          Rasio Outstanding: {insentifInsights.highestOutTier.ratio.toFixed(1)}% ({Math.round(insentifInsights.highestOutTier.totalOutstanding).toLocaleString('id-ID')} Unit Tertunda)
-                        </div>
-                        <p className="text-[11px] text-amber-200 mt-2 leading-relaxed">
-                          🚨 <strong>Perhatian:</strong> Terdapat tunggakan pesanan signifikan pada kategori bernilai insentif ini! Keterlambatan pengiriman (Hold Delivery/Vessel) berisiko menurunkan pencapaian KPI sales bulanan dan omzet riil.
-                        </p>
-                      </div>
-                    ) : (
-                      <span className="text-slate-400">Semua pesanan insentif terdistribusi lancar tanpa tunggakan tinggi.</span>
-                    )}
-                  </div>
-                  <div className="mt-3.5 pt-2.5 border-t border-amber-500/20 text-[11px] text-amber-300">
-                    💡 <strong>Rekomendasi Tindakan:</strong> Koordinasi intensif dengan tim logistik dan gudang untuk melakukan release barang-barang <i>Tier 1 &amp; Tier 2</i> yang masih berstatus Hold atau Plan Loading.
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1801,8 +1812,6 @@ export default function HistorySalesPage() {
                     <th className="py-3.5 px-3 border-l border-slate-200 text-cyan-700">M-4</th>
                     <th className="py-3.5 px-3 border-l border-slate-200 text-cyan-700">M-5</th>
                     <th className="py-3.5 px-4 border-l border-slate-200 bg-purple-100 text-purple-800 font-extrabold">📈 Total Sales Vol</th>
-                    <th className="py-3.5 px-4 border-l border-slate-200 bg-amber-100 text-amber-800 font-extrabold">⏳ Total Out Vol</th>
-                    <th className="py-3.5 px-4 border-l border-slate-200">Rasio Out/Sales</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800 text-slate-800 text-center font-medium">
@@ -1837,14 +1846,6 @@ export default function HistorySalesPage() {
                         </td>
                         <td className="py-3 px-4 border-l border-slate-200 bg-purple-50 font-mono font-extrabold text-purple-800 text-sm">
                           {Math.round(item.totalSales).toLocaleString('id-ID')}
-                        </td>
-                        <td className="py-3 px-4 border-l border-slate-200 bg-amber-50 font-mono font-bold text-amber-700 text-sm">
-                          {Math.round(item.totalOutstanding).toLocaleString('id-ID')}
-                        </td>
-                        <td className="py-3 px-4 border-l border-slate-200 font-mono font-bold">
-                          <span className={`px-2.5 py-1 rounded-md text-xs font-black uppercase inline-block ${isAlert ? 'bg-amber-100 text-amber-800 border border-amber-300' : 'bg-emerald-100 text-emerald-800 border border-emerald-300'}`}>
-                            {item.ratio.toFixed(1)}%
-                          </span>
                         </td>
                       </tr>
                     );
