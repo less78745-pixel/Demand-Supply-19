@@ -168,6 +168,7 @@ export default function HistorySalesPage() {
 
   // Filter states
   const [selectedCabang, setSelectedCabang] = useState<string[]>(['All']);
+  const [selectedRegion, setSelectedRegion] = useState<string[]>(['All']);
   const [selectedCategory, setSelectedCategory] = useState<string[]>(['All']);
   const [selectedCategoryInsentif, setSelectedCategoryInsentif] = useState<string[]>(['All']);
 
@@ -238,48 +239,63 @@ export default function HistorySalesPage() {
   };
 
   // Identify column names dynamically
-  const colCabang = useMemo(() => parsed ? findColumn(parsed.headers, ['cabang', 'branch_name', 'branch', 'cab', 'regional', 'region']) : undefined, [parsed]);
+  const colCabang = useMemo(() => parsed ? findColumn(parsed.headers, ['cabang', 'branch_name', 'branch', 'cab']) : undefined, [parsed]);
+  const colRegion = useMemo(() => parsed ? findColumn(parsed.headers, ['region', 'regional', 'wilayah']) : undefined, [parsed]);
   const colGrup = useMemo(() => parsed ? findColumn(parsed.headers, ['grup', 'group', 'grup barang', 'group item', 'divisi', 'division']) : undefined, [parsed]);
   const colCategory = useMemo(() => parsed ? findColumn(parsed.headers, ['category', 'kategori item', 'kategori', 'grup']) : undefined, [parsed]);
   const colCategoryInsentif = useMemo(() => parsed ? findColumn(parsed.headers, ['category insentif', 'category_insentif', 'kategori insentif', 'insentif', 'cat insentif']) : undefined, [parsed]);
 
   // Linked Filter options
+  const regions = useMemo(() => {
+    if (!parsed || !colRegion) return [];
+    const source = parsed.data.filter(d =>
+      (!colCabang || selectedCabang.includes('All') || selectedCabang.includes(d[colCabang])) &&
+      (!colCategory || selectedCategory.includes('All') || selectedCategory.includes(d[colCategory])) &&
+      (!colCategoryInsentif || selectedCategoryInsentif.includes('All') || selectedCategoryInsentif.includes(d[colCategoryInsentif]))
+    );
+    return ['All', ...Array.from(new Set(source.map(d => d[colRegion]).filter(v => v && !String(v).includes('#N/A') && !String(v).includes('#REF!') && String(v).toLowerCase() !== 'semua region'))).sort()];
+  }, [parsed, colRegion, selectedCabang, selectedCategory, selectedCategoryInsentif, colCabang, colCategory, colCategoryInsentif]);
+
   const cabangs = useMemo(() => {
     if (!parsed || !colCabang) return [];
     const source = parsed.data.filter(d =>
+      (!colRegion || selectedRegion.includes('All') || selectedRegion.includes(d[colRegion])) &&
       (!colCategory || selectedCategory.includes('All') || selectedCategory.includes(d[colCategory])) &&
       (!colCategoryInsentif || selectedCategoryInsentif.includes('All') || selectedCategoryInsentif.includes(d[colCategoryInsentif]))
     );
     return ['All', ...Array.from(new Set(source.map(d => d[colCabang]).filter(v => v && !String(v).includes('#N/A') && !String(v).includes('#REF!') && String(v).toLowerCase() !== 'semua cabang'))).sort()];
-  }, [parsed, colCabang, selectedCategory, selectedCategoryInsentif, colCategory, colCategoryInsentif]);
+  }, [parsed, colCabang, selectedRegion, selectedCategory, selectedCategoryInsentif, colRegion, colCategory, colCategoryInsentif]);
 
   const categories = useMemo(() => {
     if (!parsed || !colCategory) return [];
     const source = parsed.data.filter(d =>
+      (!colRegion || selectedRegion.includes('All') || selectedRegion.includes(d[colRegion])) &&
       (!colCabang || selectedCabang.includes('All') || selectedCabang.includes(d[colCabang])) &&
       (!colCategoryInsentif || selectedCategoryInsentif.includes('All') || selectedCategoryInsentif.includes(d[colCategoryInsentif]))
     );
     return ['All', ...Array.from(new Set(source.map(d => d[colCategory]).filter(v => v && !String(v).includes('#N/A') && !String(v).includes('#REF!') && String(v).toLowerCase() !== 'semua kategori'))).sort()];
-  }, [parsed, colCategory, selectedCabang, selectedCategoryInsentif, colCabang, colCategoryInsentif]);
+  }, [parsed, colCategory, selectedRegion, selectedCabang, selectedCategoryInsentif, colRegion, colCabang, colCategoryInsentif]);
 
   const categoryInsentifs = useMemo(() => {
     if (!parsed || !colCategoryInsentif) return [];
     const source = parsed.data.filter(d =>
+      (!colRegion || selectedRegion.includes('All') || selectedRegion.includes(d[colRegion])) &&
       (!colCabang || selectedCabang.includes('All') || selectedCabang.includes(d[colCabang])) &&
       (!colCategory || selectedCategory.includes('All') || selectedCategory.includes(d[colCategory]))
     );
     return ['All', ...Array.from(new Set(source.map(d => d[colCategoryInsentif]).filter(v => v && !String(v).includes('#N/A') && !String(v).includes('#REF!') && String(v).toLowerCase() !== 'semua insentif'))).sort()];
-  }, [parsed, colCategoryInsentif, selectedCabang, selectedCategory, colCabang, colCategory]);
+  }, [parsed, colCategoryInsentif, selectedRegion, selectedCabang, selectedCategory, colRegion, colCabang, colCategory]);
 
   // Filtered Data (Pure historical actuals, without simulation alteration)
   const filtered = useMemo(() => {
     if (!parsed) return [];
     return parsed.data.filter(d =>
+      (!colRegion || selectedRegion.includes('All') || selectedRegion.includes(d[colRegion])) &&
       (!colCabang || selectedCabang.includes('All') || selectedCabang.includes(d[colCabang])) &&
       (!colCategory || selectedCategory.includes('All') || selectedCategory.includes(d[colCategory])) &&
       (!colCategoryInsentif || selectedCategoryInsentif.includes('All') || selectedCategoryInsentif.includes(d[colCategoryInsentif]))
     );
-  }, [parsed, selectedCabang, selectedCategory, selectedCategoryInsentif, colCabang, colCategory, colCategoryInsentif]);
+  }, [parsed, selectedRegion, selectedCabang, selectedCategory, selectedCategoryInsentif, colRegion, colCabang, colCategory, colCategoryInsentif]);
 
   // Executive Summary Insights Computation
   const executiveSummary = useMemo(() => {
@@ -494,7 +510,7 @@ export default function HistorySalesPage() {
   // Insentif Analysis Grouping by Cabang & Category Insentif + M to M-5
   const insentifAnalysis = useMemo(() => {
     if (!parsed || !colCategoryInsentif || filtered.length === 0) return [];
-    const map: Record<string, { key: string; cabang: string; categoryInsentif: string; totalSales: number; totalOutstanding: number; itemCount: number; periods: Record<string, number> }> = {};
+    const map: Record<string, { key: string; name: string; cabang: string; categoryInsentif: string; totalSales: number; totalOutstanding: number; itemCount: number; periods: Record<string, number> }> = {};
     
     const salesSet = new Set(executiveSummary?.salesCols || []);
     const outSet = new Set(executiveSummary?.outstandingCols || []);
@@ -507,11 +523,14 @@ export default function HistorySalesPage() {
 
     for (const row of filtered) {
       const cbg = String(colCabang ? (row[colCabang] || 'All Cabang') : 'All Cabang').trim();
+      const grup = String(colGrup ? (row[colGrup] || '-') : '-').trim();
+      const category = String(colCategory ? (row[colCategory] || 'Umum') : 'Umum').trim();
       const cat = String(row[colCategoryInsentif] || 'Non-Insentif / Umum').trim();
-      const key = `${cbg}_${cat}`;
+      const key = `${cbg}_${grup}_${category}`;
+      const name = `${cbg} - ${grup} - ${category}`;
 
       if (!map[key]) {
-        map[key] = { key, cabang: cbg, categoryInsentif: cat, totalSales: 0, totalOutstanding: 0, itemCount: 0, periods: { 'M': 0, 'M-1': 0, 'M-2': 0, 'M-3': 0, 'M-4': 0, 'M-5': 0 } };
+        map[key] = { key, name, cabang: cbg, categoryInsentif: cat, totalSales: 0, totalOutstanding: 0, itemCount: 0, periods: { 'M': 0, 'M-1': 0, 'M-2': 0, 'M-3': 0, 'M-4': 0, 'M-5': 0 } };
       }
       map[key].itemCount += 1;
 
@@ -601,9 +620,10 @@ export default function HistorySalesPage() {
     const itemMap: Record<string, any> = {};
     for (const row of filtered) {
       const cab = colCabang ? (row[colCabang] || 'All') : 'All';
+      const grup = colGrup ? (row[colGrup] || '-') : '-';
       const cat = colCategory ? (row[colCategory] || 'Umum') : 'Umum';
-      const itemDesc = row['NAMA BARANG'] || row['Item'] || row[colCategory || ''] || 'Item';
-      const key = `${cab}___${itemDesc}`;
+      const itemDesc = `${grup} - ${cat}`;
+      const key = `${cab}___${grup}___${cat}`;
 
       if (!itemMap[key]) {
         itemMap[key] = { key, cabang: cab, category: cat, name: itemDesc, periods: [], totalVol: 0 };
@@ -673,7 +693,7 @@ export default function HistorySalesPage() {
   // 2. Cabang Supply (SOH + TO + Vessel) vs AVG 3 Bulan calculation & insight
   const cabangSupplyVsAvg3 = useMemo(() => {
     if (!parsed || filtered.length === 0) return null;
-    const map: Record<string, { cabang: string; soh: number; to: number; vessel: number; totalSupply: number; avg3: number; ratio: number; diff: number }> = {};
+    const map: Record<string, { cabang: string; name: string; soh: number; to: number; vessel: number; totalSupply: number; avg3: number; ratio: number; diff: number }> = {};
 
     const colSOH = findColumn(parsed.headers, ['soh', 'on hand', 'stock on hand']);
     const colTO = findColumn(parsed.headers, ['to', 'transfer order']);
@@ -682,19 +702,23 @@ export default function HistorySalesPage() {
 
     for (const row of filtered) {
       const cab = colCabang ? String(row[colCabang] || 'Unknown') : 'All';
-      if (!map[cab]) {
-        map[cab] = { cabang: cab, soh: 0, to: 0, vessel: 0, totalSupply: 0, avg3: 0, ratio: 0, diff: 0 };
+      const grup = colGrup ? String(row[colGrup] || '-') : '-';
+      const cat = colCategory ? String(row[colCategory] || 'Umum') : 'Umum';
+      const key = `${cab}___${grup}___${cat}`;
+      const name = `${cab} - ${grup} - ${cat}`;
+      if (!map[key]) {
+        map[key] = { cabang: cab, name, soh: 0, to: 0, vessel: 0, totalSupply: 0, avg3: 0, ratio: 0, diff: 0 };
       }
       const soh = colSOH ? Number(String(row[colSOH] || 0).replace(/[^0-9.-]+/g, '')) || 0 : 0;
       const to = colTO ? Number(String(row[colTO] || 0).replace(/[^0-9.-]+/g, '')) || 0 : 0;
       const vessel = colVessel ? Number(String(row[colVessel] || 0).replace(/[^0-9.-]+/g, '')) || 0 : 0;
       const avg3 = colAvg ? Number(String(row[colAvg] || 0).replace(/[^0-9.-]+/g, '')) || 0 : 0;
 
-      map[cab].soh += soh;
-      map[cab].to += to;
-      map[cab].vessel += vessel;
-      map[cab].totalSupply += (soh + to + vessel);
-      map[cab].avg3 += avg3;
+      map[key].soh += soh;
+      map[key].to += to;
+      map[key].vessel += vessel;
+      map[key].totalSupply += (soh + to + vessel);
+      map[key].avg3 += avg3;
     }
 
     const list = Object.values(map).map(item => {
@@ -1027,7 +1051,17 @@ export default function HistorySalesPage() {
 
       {/* ─── FILTER CONTROLS & SELECTION (EXPANDED & OVERFLOW-VISIBLE) ─── */}
       <GlassCard allowOverflow={true} className="p-6 border-slate-200 bg-white backdrop-blur-xl mb-10 shadow-xl">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-700 block uppercase tracking-wider">🌍 Filter Region:</label>
+            <MultiSelect
+              options={regions}
+              selected={selectedRegion}
+              onChange={setSelectedRegion}
+              selectAllLabel="Semua Region"
+              placeholder="Pilih Region..."
+            />
+          </div>
           <div className="space-y-2">
             <label className="text-xs font-bold text-slate-700 block uppercase tracking-wider">🏢 Filter Cabang:</label>
             <MultiSelect
@@ -1380,7 +1414,7 @@ export default function HistorySalesPage() {
                         {cabangSupplyVsAvg3.over125.map((item, idx) => (
                           <div key={idx} className="p-2.5 rounded-xl bg-slate-50 border border-emerald-500/20 flex items-center justify-between text-xs shadow-sm">
                             <div>
-                              <div className="font-bold text-slate-900 text-sm">📍 {item.cabang}</div>
+                              <div className="font-bold text-slate-900 text-sm">📍 {item.name}</div>
                               <div className="text-[11px] text-slate-600 mt-0.5">
                                 Pasokan: <span className="text-emerald-700 font-mono">{Math.round(item.totalSupply).toLocaleString('id-ID')}</span> | AVG 3 Bln: <span className="text-slate-800 font-mono">{Math.round(item.avg3).toLocaleString('id-ID')}</span>
                               </div>
@@ -1670,7 +1704,7 @@ export default function HistorySalesPage() {
                       <div className="mt-2">
                         <div className="text-base font-black text-slate-900 flex items-center gap-2">
                           <span>💎 {insentifInsights.topTier.categoryInsentif}</span>
-                          <span className="text-xs font-semibold text-slate-700">({insentifInsights.topTier.cabang})</span>
+                          <span className="text-xs font-semibold text-slate-700">({insentifInsights.topTier.name})</span>
                         </div>
                         <div className="text-sm font-mono font-extrabold text-cyan-700 mt-1">
                           Total Volume Sales: {Math.round(insentifInsights.topTier.totalSales).toLocaleString('id-ID')} Unit
@@ -1694,7 +1728,7 @@ export default function HistorySalesPage() {
                       <div className="mt-2">
                         <div className="text-base font-black text-white flex items-center gap-2">
                           <span>⚠️ {insentifInsights.highestOutTier.categoryInsentif}</span>
-                          <span className="text-xs font-semibold text-slate-300">({insentifInsights.highestOutTier.cabang})</span>
+                          <span className="text-xs font-semibold text-slate-300">({insentifInsights.highestOutTier.name})</span>
                         </div>
                         <div className="text-sm font-mono font-extrabold text-amber-500 mt-1">
                           Rasio Outstanding: {insentifInsights.highestOutTier.ratio.toFixed(1)}% ({Math.round(insentifInsights.highestOutTier.totalOutstanding).toLocaleString('id-ID')} Unit Tertunda)
@@ -1758,7 +1792,7 @@ export default function HistorySalesPage() {
               <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[1000px]">
                 <thead className="bg-slate-50 text-slate-700 uppercase font-extrabold sticky top-0 z-20 shadow-md border-b border-slate-200">
                   <tr className="text-[11px] tracking-wider text-center">
-                    <th className="py-3.5 px-4 text-left">Cabang / Wilayah</th>
+                    <th className="py-3.5 px-4 text-left">Cabang / Grup / Kategori</th>
                     <th className="py-3.5 px-4 border-l border-slate-200 text-purple-700 text-left">Category Insentif</th>
                     <th className="py-3.5 px-3 border-l border-slate-200 text-cyan-700">M</th>
                     <th className="py-3.5 px-3 border-l border-slate-200 text-cyan-700">M-1</th>
@@ -1777,7 +1811,7 @@ export default function HistorySalesPage() {
                     return (
                       <tr key={item.key} className="hover:bg-slate-100 transition">
                         <td className="py-3 px-4 text-left font-extrabold text-slate-900 text-sm">
-                          {item.cabang}
+                          {item.name}
                         </td>
                         <td className="py-3 px-4 border-l border-slate-200 text-left font-extrabold text-purple-700 flex items-center gap-2">
                           <span className="w-2.5 h-2.5 rounded-full bg-gradient-to-tr from-purple-500 to-pink-400 shrink-0 shadow-sm shadow-purple-500/50" />
