@@ -1709,12 +1709,12 @@ export default function SOHAnalysisPage() {
                     <div className="space-y-2 mt-2">
                       {ratioInsights.topCritical.map((item, idx) => (
                         <div key={idx} className="p-2 rounded-lg bg-rose-950/40 border border-rose-500/20 flex flex-col gap-0.5">
-                          <div className="flex justify-between items-center font-bold text-slate-900 text-[11px] sm:text-xs">
+                          <div className="flex justify-between items-center font-bold text-rose-100 text-[11px] sm:text-xs">
                             <span>📍 {item.cabang}</span>
                             <span className="text-rose-700 font-mono px-1.5 py-0.5 rounded bg-rose-100 border border-rose-200">{item.ratio}x</span>
                           </div>
-                          <div className="text-[10px] sm:text-[11px] text-slate-700 truncate">📦 {item.category}</div>
-                          <div className="text-[10px] sm:text-[11px] text-rose-700 font-mono">Defisit Pasokan: -{item.defisit.toLocaleString('id-ID')} Unit</div>
+                          <div className="text-[10px] sm:text-[11px] text-rose-200 truncate">📦 {item.category}</div>
+                          <div className="text-[10px] sm:text-[11px] text-rose-300 font-mono">Defisit Pasokan: -{item.defisit.toLocaleString('id-ID')} Unit</div>
                         </div>
                       ))}
                     </div>
@@ -1742,12 +1742,12 @@ export default function SOHAnalysisPage() {
                     <div className="space-y-2 mt-2">
                       {ratioInsights.topOverstock.map((item, idx) => (
                         <div key={idx} className="p-2 rounded-lg bg-purple-950/40 border border-purple-500/20 flex flex-col gap-0.5">
-                          <div className="flex justify-between items-center font-bold text-slate-900 text-[11px] sm:text-xs">
+                          <div className="flex justify-between items-center font-bold text-purple-100 text-[11px] sm:text-xs">
                             <span>📍 {item.cabang}</span>
                             <span className="text-purple-700 font-mono px-1.5 py-0.5 rounded bg-purple-100 border border-purple-200">{item.ratio}x</span>
                           </div>
-                          <div className="text-[10px] sm:text-[11px] text-slate-700 truncate">📦 {item.category}</div>
-                          <div className="text-[10px] sm:text-[11px] text-purple-700 font-mono">Surplus Pasokan: +{item.surplus.toLocaleString('id-ID')} Unit</div>
+                          <div className="text-[10px] sm:text-[11px] text-purple-200 truncate">📦 {item.category}</div>
+                          <div className="text-[10px] sm:text-[11px] text-purple-300 font-mono">Surplus Pasokan: +{item.surplus.toLocaleString('id-ID')} Unit</div>
                         </div>
                       ))}
                     </div>
