@@ -659,7 +659,15 @@ export default function HistorySalesPage() {
 
     const categories = Array.from(catSet);
     const data = periods.map(p => {
-      const entry: any = { period: p };
+      let dynamicP = p;
+      if (p === 'M') dynamicP = dynamicMonthLabels.M;
+      if (p === 'M-1') dynamicP = dynamicMonthLabels.M1;
+      if (p === 'M-2') dynamicP = dynamicMonthLabels.M2;
+      if (p === 'M-3') dynamicP = dynamicMonthLabels.M3;
+      if (p === 'M-4') dynamicP = dynamicMonthLabels.M4;
+      if (p === 'M-5') dynamicP = dynamicMonthLabels.M5;
+
+      const entry: any = { period: dynamicP };
       let totalQty = 0;
       categories.forEach(cat => {
         totalQty += (periodMap[p][cat] || 0);
@@ -675,7 +683,7 @@ export default function HistorySalesPage() {
     });
 
     return { data, categories };
-  }, [parsed, filtered, colCategoryInsentif]);
+  }, [parsed, filtered, colCategoryInsentif, dynamicMonthLabels]);
 
   // 1. ABC-XYZ Analysis calculation (M s/d M-5)
   const abcXyzAnalysis = useMemo(() => {
@@ -1377,6 +1385,15 @@ export default function HistorySalesPage() {
                 />
                 <Legend wrapperStyle={{ paddingTop: '16px', fontSize: '12px' }} />
                 {displayedChartColumns.map((tc, idx) => {
+                  const getDynamicName = (name: string) => {
+                    if (name === 'M') return dynamicMonthLabels.M;
+                    if (name === 'M-1') return dynamicMonthLabels.M1;
+                    if (name === 'M-2') return dynamicMonthLabels.M2;
+                    if (name === 'M-3') return dynamicMonthLabels.M3;
+                    if (name === 'M-4') return dynamicMonthLabels.M4;
+                    if (name === 'M-5') return dynamicMonthLabels.M5;
+                    return name;
+                  };
                   const lower = tc.name.toLowerCase().trim();
                   const isAvg = lower.includes('avg') || lower.includes('rata');
                   if (isAvg) {
@@ -1414,7 +1431,7 @@ export default function HistorySalesPage() {
                     <Bar
                       key={tc.name}
                       dataKey={tc.name}
-                      name={isSupplyOrOutstanding ? `📦 ${tc.name}` : `📊 ${tc.name} (Sales Vol)`}
+                      name={isSupplyOrOutstanding ? `📦 ${tc.name}` : `📊 ${getDynamicName(tc.name)} (Sales Vol)`}
                       fill={barColor}
                       maxBarSize={60}
                     />
@@ -1535,10 +1552,10 @@ export default function HistorySalesPage() {
               </div>
               <h3 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2">
                 <BarChart3 className="w-5 h-5 text-cyan-400" />
-                Komparasi Stok (SOH + TO + Vessel) Terhadap Penjualan Bulanan (M s/d M-5)
+                Komparasi Stok (SOH + TO + Vessel) Terhadap Penjualan Bulanan ({dynamicMonthLabels.M} s/d {dynamicMonthLabels.M5})
               </h3>
               <p className="text-xs text-slate-300 mt-1.5 leading-relaxed">
-                <mark className="bg-amber-300/20 text-amber-100 rounded px-1.5 py-0.5">Visualisasi terpadu membandingkan volume transaksi penjualan dari 6 bulan terakhir (M s/d M-5) dengan kapasitas posisi stok aktual dan perjalanan.</mark>
+                <mark className="bg-amber-300/20 text-amber-100 rounded px-1.5 py-0.5">Visualisasi terpadu membandingkan volume transaksi penjualan dari 6 bulan terakhir ({dynamicMonthLabels.M} s/d {dynamicMonthLabels.M5}) dengan kapasitas posisi stok aktual dan perjalanan.</mark>
               </p>
             </div>
 
@@ -1841,7 +1858,7 @@ export default function HistorySalesPage() {
             {/* Grafik Bar Category Insentif Stacked per Periode */}
             <div className="h-[400px] w-full bg-slate-50 p-5 rounded-2xl border border-slate-200 shadow-inner flex flex-col justify-between">
               <h4 className="text-xs font-bold uppercase tracking-wider text-purple-700 mb-2 text-center flex items-center justify-center gap-2">
-                📊 Proporsi Volume Penjualan per Category Insentif (100% Stacked • Sumbu X: M s/d M-5)
+                📊 Proporsi Volume Penjualan per Category Insentif (100% Stacked • Sumbu X: {dynamicMonthLabels.M} s/d {dynamicMonthLabels.M5})
               </h4>
               <div className="flex-1 w-full">
                 <ResponsiveContainer width="100%" height="100%">
@@ -1892,12 +1909,12 @@ export default function HistorySalesPage() {
                   <tr className="text-[11px] tracking-wider text-center">
                     <th className="py-3.5 px-4 text-left">Cabang / Grup / Kategori</th>
                     <th className="py-3.5 px-4 border-l border-slate-200 text-purple-700 text-left">Category Insentif</th>
-                    <th className="py-3.5 px-3 border-l border-slate-200 text-cyan-700">M</th>
-                    <th className="py-3.5 px-3 border-l border-slate-200 text-cyan-700">M-1</th>
-                    <th className="py-3.5 px-3 border-l border-slate-200 text-cyan-700">M-2</th>
-                    <th className="py-3.5 px-3 border-l border-slate-200 text-cyan-700">M-3</th>
-                    <th className="py-3.5 px-3 border-l border-slate-200 text-cyan-700">M-4</th>
-                    <th className="py-3.5 px-3 border-l border-slate-200 text-cyan-700">M-5</th>
+                    <th className="py-3.5 px-3 border-l border-slate-200 text-cyan-700">{dynamicMonthLabels.M}</th>
+                    <th className="py-3.5 px-3 border-l border-slate-200 text-cyan-700">{dynamicMonthLabels.M1}</th>
+                    <th className="py-3.5 px-3 border-l border-slate-200 text-cyan-700">{dynamicMonthLabels.M2}</th>
+                    <th className="py-3.5 px-3 border-l border-slate-200 text-cyan-700">{dynamicMonthLabels.M3}</th>
+                    <th className="py-3.5 px-3 border-l border-slate-200 text-cyan-700">{dynamicMonthLabels.M4}</th>
+                    <th className="py-3.5 px-3 border-l border-slate-200 text-cyan-700">{dynamicMonthLabels.M5}</th>
                     <th className="py-3.5 px-4 border-l border-slate-200 bg-purple-100 text-purple-800 font-extrabold">📈 Total Sales Vol</th>
                   </tr>
                 </thead>
