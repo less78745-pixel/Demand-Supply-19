@@ -162,7 +162,7 @@ export const toExactFloat = (num: number, decimals: number = 2): number => {
 export default function HistorySalesPage() {
   const [parsed, setParsed] = useState<ParsedData | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [chartFilter, setChartFilter] = useState<'all' | 'sales' | 'outstanding' | 'avg3'>('all');
+  const [chartFilter, setChartFilter] = useState<'all' | 'sales' | 'avg3'>('all');
   const [showHowTo, setShowHowTo] = useState<boolean>(false);
   const [selectedCabangForChart, setSelectedCabangForChart] = useState<string>('All');
 
@@ -171,6 +171,7 @@ export default function HistorySalesPage() {
   const [selectedRegion, setSelectedRegion] = useState<string[]>(['All']);
   const [selectedCategory, setSelectedCategory] = useState<string[]>(['All']);
   const [selectedCategoryInsentif, setSelectedCategoryInsentif] = useState<string[]>(['All']);
+  const [selectedStatusDoi, setSelectedStatusDoi] = useState<string[]>(['All']);
   const [searchTable1, setSearchTable1] = useState<string>('');
   const [searchTable2, setSearchTable2] = useState<string>('');
 
@@ -246,6 +247,7 @@ export default function HistorySalesPage() {
   const colGrup = useMemo(() => parsed ? findColumn(parsed.headers, ['grup', 'group', 'grup barang', 'group item', 'divisi', 'division']) : undefined, [parsed]);
   const colCategory = useMemo(() => parsed ? findColumn(parsed.headers, ['category item', 'kategori item', 'category', 'kategori', 'grup']) : undefined, [parsed]);
   const colCategoryInsentif = useMemo(() => parsed ? findColumn(parsed.headers, ['category insentif', 'category_insentif', 'kategori insentif', 'insentif', 'cat insentif']) : undefined, [parsed]);
+  const colStatusDoi = useMemo(() => parsed ? findColumn(parsed.headers, ['status doi', 'status', 'doi']) : undefined, [parsed]);
 
   // Linked Filter options
   const regions = useMemo(() => {
@@ -288,6 +290,17 @@ export default function HistorySalesPage() {
     return ['All', ...Array.from(new Set(source.map(d => d[colCategoryInsentif]).filter(v => v && !String(v).includes('#N/A') && !String(v).includes('#REF!') && String(v).toLowerCase() !== 'semua insentif'))).sort()];
   }, [parsed, colCategoryInsentif, selectedRegion, selectedCabang, selectedCategory, colRegion, colCabang, colCategory]);
 
+  const statusDois = useMemo(() => {
+    if (!parsed || !colStatusDoi) return [];
+    const source = parsed.data.filter(d =>
+      (!colRegion || selectedRegion.includes('All') || selectedRegion.includes(d[colRegion])) &&
+      (!colCabang || selectedCabang.includes('All') || selectedCabang.includes(d[colCabang])) &&
+      (!colCategory || selectedCategory.includes('All') || selectedCategory.includes(d[colCategory])) &&
+      (!colCategoryInsentif || selectedCategoryInsentif.includes('All') || selectedCategoryInsentif.includes(d[colCategoryInsentif]))
+    );
+    return ['All', ...Array.from(new Set(source.map(d => d[colStatusDoi]).filter(v => v && !String(v).includes('#N/A') && !String(v).includes('#REF!') && String(v).toLowerCase() !== 'semua status'))).sort()];
+  }, [parsed, colStatusDoi, selectedRegion, selectedCabang, selectedCategory, selectedCategoryInsentif, colRegion, colCabang, colCategory, colCategoryInsentif]);
+
   // Filtered Data (Pure historical actuals, without simulation alteration)
   const filtered = useMemo(() => {
     if (!parsed) return [];
@@ -295,33 +308,30 @@ export default function HistorySalesPage() {
       (!colRegion || selectedRegion.includes('All') || selectedRegion.includes(d[colRegion])) &&
       (!colCabang || selectedCabang.includes('All') || selectedCabang.includes(d[colCabang])) &&
       (!colCategory || selectedCategory.includes('All') || selectedCategory.includes(d[colCategory])) &&
-      (!colCategoryInsentif || selectedCategoryInsentif.includes('All') || selectedCategoryInsentif.includes(d[colCategoryInsentif]))
+      (!colCategoryInsentif || selectedCategoryInsentif.includes('All') || selectedCategoryInsentif.includes(d[colCategoryInsentif])) &&
+      (!colStatusDoi || selectedStatusDoi.includes('All') || selectedStatusDoi.includes(d[colStatusDoi]))
     );
-  }, [parsed, selectedRegion, selectedCabang, selectedCategory, selectedCategoryInsentif, colRegion, colCabang, colCategory, colCategoryInsentif]);
+  }, [parsed, selectedRegion, selectedCabang, selectedCategory, selectedCategoryInsentif, selectedStatusDoi, colRegion, colCabang, colCategory, colCategoryInsentif, colStatusDoi]);
 
   // Executive Summary Insights Computation
   const executiveSummary = useMemo(() => {
     if (!parsed || filtered.length === 0) return null;
 
     let totalSales = 0;
-    let totalOutstanding = 0;
     const salesCols: string[] = [];
-    const outstandingCols: string[] = [];
 
     parsed.targetColumns.forEach(tc => {
       const lower = tc.name.toLowerCase().trim();
       if (lower.includes('sales') || lower.includes('jual') || lower.includes('avg') || /^m(?:-\d+)?$/.test(lower) || lower.startsWith('m-') || lower === 'm') {
         salesCols.push(tc.name);
-      } else {
-        outstandingCols.push(tc.name);
       }
     });
 
-    const cabangVol: Record<string, { sales: number; outstanding: number; total: number }> = {};
+    const cabangVol: Record<string, { sales: number; total: number }> = {};
 
     for (const row of filtered) {
       const cbg = colCabang ? (String(row[colCabang] || 'Unknown')) : 'All';
-      if (!cabangVol[cbg]) cabangVol[cbg] = { sales: 0, outstanding: 0, total: 0 };
+      if (!cabangVol[cbg]) cabangVol[cbg] = { sales: 0, total: 0 };
 
       salesCols.forEach(col => {
         const val = Number(row[col]) || 0;
@@ -329,28 +339,15 @@ export default function HistorySalesPage() {
         cabangVol[cbg].sales += val;
         cabangVol[cbg].total += val;
       });
-
-      outstandingCols.forEach(col => {
-        const val = Number(row[col]) || 0;
-        totalOutstanding += val;
-        cabangVol[cbg].outstanding += val;
-        cabangVol[cbg].total += val;
-      });
     }
 
     const sortedCabang = Object.entries(cabangVol).sort((a, b) => b[1].total - a[1].total);
     const topCabang = sortedCabang.length > 0 ? { name: sortedCabang[0][0], ...sortedCabang[0][1] } : null;
-    const ratioNum = totalSales > 0 ? ((totalOutstanding / totalSales) * 100) : 0;
-    const ratio = totalSales > 0 ? ratioNum.toFixed(1) + "%" : "N/A";
 
     return {
       totalSales,
-      totalOutstanding,
       topCabang,
-      ratio,
-      ratioNum,
       salesCols,
-      outstandingCols,
       cabangVol,
       totalRows: filtered.length
     };
@@ -381,17 +378,16 @@ export default function HistorySalesPage() {
     if (chartFilter === 'avg3') {
       return parsed.targetColumns.filter(tc => tc.name.toLowerCase().includes('avg'));
     }
-    const targetSet = new Set(chartFilter === 'sales' ? executiveSummary.salesCols : executiveSummary.outstandingCols);
+    const targetSet = new Set(executiveSummary.salesCols);
     return parsed.targetColumns.filter(tc => targetSet.has(tc.name));
   }, [parsed, executiveSummary, chartFilter]);
 
   // Table Data grouped per Cabang + Category for detailed comparison & growth analysis
   const tableData = useMemo(() => {
     if (!parsed || !executiveSummary || filtered.length === 0) return [];
-    const map: Record<string, { cabang: string; grup: string; category: string; sales: number; outstanding: number; total: number; avg3: number; m: number; m1: number }> = {};
+    const map: Record<string, { cabang: string; grup: string; category: string; sales: number; total: number; avg3: number; m: number; m1: number }> = {};
     
     const salesSet = new Set(executiveSummary.salesCols);
-    const outSet = new Set(executiveSummary.outstandingCols);
     const colAvg = findColumn(parsed.headers, ['avg sales 3 bln', 'avg sales', 'avg']);
     const colM = parsed.headers.find(h => h.trim().toUpperCase() === 'M') || findColumn(parsed.headers, ['m', 'bulan m', 'sales m']);
     const colM1 = parsed.headers.find(h => h.trim().toUpperCase() === 'M-1' || h.trim().toUpperCase() === 'M - 1') || findColumn(parsed.headers, ['m-1', 'bulan m-1']);
@@ -403,16 +399,13 @@ export default function HistorySalesPage() {
       const key = `${cbg}___${grp}___${cat}`;
 
       if (!map[key]) {
-        map[key] = { cabang: cbg, grup: grp, category: cat, sales: 0, outstanding: 0, total: 0, avg3: 0, m: 0, m1: 0 };
+        map[key] = { cabang: cbg, grup: grp, category: cat, sales: 0, total: 0, avg3: 0, m: 0, m1: 0 };
       }
 
       parsed.targetColumns.forEach(tc => {
         const val = Number(String(row[tc.name] || 0).replace(/[^0-9.-]+/g, '')) || 0;
         if (salesSet.has(tc.name)) {
           map[key].sales += val;
-          map[key].total += val;
-        } else if (outSet.has(tc.name)) {
-          map[key].outstanding += val;
           map[key].total += val;
         }
       });
@@ -434,12 +427,11 @@ export default function HistorySalesPage() {
     });
 
     return Object.values(map).map(item => {
-      const ratio = item.sales > 0 ? toExactFloat((item.outstanding / item.sales) * 100, 2) : 0;
       const growthM = item.avg3 > 0 ? toExactFloat(((item.m - item.avg3) / item.avg3) * 100, 2) : 0;
       const growthM1 = item.avg3 > 0 ? toExactFloat(((item.m1 - item.avg3) / item.avg3) * 100, 2) : 0;
       const totalCbgAvg3 = cabangTotalAvg3[item.cabang] || 0;
       const kontribusi = totalCbgAvg3 > 0 ? toExactFloat((item.avg3 / totalCbgAvg3) * 100, 2) : 0;
-      return { ...item, ratio, growthM, growthM1, kontribusi };
+      return { ...item, growthM, growthM1, kontribusi };
     }).sort((a, b) => {
       if (a.cabang !== b.cabang) return a.cabang.localeCompare(b.cabang);
       if (a.grup !== b.grup) return a.grup.localeCompare(b.grup);
@@ -512,10 +504,9 @@ export default function HistorySalesPage() {
   // Insentif Analysis Grouping by Cabang & Category Insentif + M to M-5
   const insentifAnalysis = useMemo(() => {
     if (!parsed || !colCategoryInsentif || filtered.length === 0) return [];
-    const map: Record<string, { key: string; name: string; cabang: string; categoryInsentif: string; totalSales: number; totalOutstanding: number; itemCount: number; periods: Record<string, number> }> = {};
+    const map: Record<string, { key: string; name: string; cabang: string; categoryInsentif: string; totalSales: number; itemCount: number; periods: Record<string, number> }> = {};
     
     const salesSet = new Set(executiveSummary?.salesCols || []);
-    const outSet = new Set(executiveSummary?.outstandingCols || []);
     const periodNames = ['M', 'M-1', 'M-2', 'M-3', 'M-4', 'M-5'];
     const periodCols: Record<string, string | undefined> = {};
     periodNames.forEach(p => {
@@ -532,18 +523,15 @@ export default function HistorySalesPage() {
       const name = `${cbg} - ${grup} - ${category}`;
 
       if (!map[key]) {
-        map[key] = { key, name, cabang: cbg, category, categoryInsentif: cat, totalSales: 0, totalOutstanding: 0, itemCount: 0, periods: { 'M': 0, 'M-1': 0, 'M-2': 0, 'M-3': 0, 'M-4': 0, 'M-5': 0 } };
+        map[key] = { key, name, cabang: cbg, category, categoryInsentif: cat, totalSales: 0, itemCount: 0, periods: { 'M': 0, 'M-1': 0, 'M-2': 0, 'M-3': 0, 'M-4': 0, 'M-5': 0 } };
       }
       map[key].itemCount += 1;
 
       let rowSales = 0;
-      let rowOut = 0;
       parsed.targetColumns.forEach(tc => {
         const val = Number(String(row[tc.name] || 0).replace(/[^0-9.-]+/g, '')) || 0;
         if (salesSet.has(tc.name)) {
           rowSales += val;
-        } else if (outSet.has(tc.name)) {
-          rowOut += val;
         }
       });
 
@@ -555,12 +543,10 @@ export default function HistorySalesPage() {
       });
 
       map[key].totalSales += rowSales;
-      map[key].totalOutstanding += rowOut;
     }
 
     return Object.values(map).map(item => {
-      const ratio = item.totalSales > 0 ? (item.totalOutstanding / item.totalSales) * 100 : 0;
-      return { ...item, labelKey: `${item.cabang} (${item.categoryInsentif})`, ratio };
+      return { ...item, labelKey: `${item.cabang} (${item.categoryInsentif})` };
     }).sort((a, b) => b.totalSales - a.totalSales);
   }, [parsed, filtered, colCabang, colCategoryInsentif, executiveSummary]);
 
@@ -749,34 +735,24 @@ export default function HistorySalesPage() {
     return { underAvg, over125, normalRange, list };
   }, [parsed, filtered, colCabang]);
 
-  // 3. Table Sales vs Outstanding Insights
-  const tableSalesVsOutInsights = useMemo(() => {
+  // 3. Table Sales Insights
+  const tableSalesInsights = useMemo(() => {
     if (!tableData || tableData.length === 0) return null;
     let countPositiveGrowth = 0;
     let countNegativeGrowth = 0;
     let totalSalesVol = 0;
-    let totalOutVol = 0;
-    let highestOutRatioItem: any = null;
 
     tableData.forEach(row => {
       totalSalesVol += row.sales;
-      totalOutVol += row.outstanding;
       if (row.growthM > 0) countPositiveGrowth++;
       else if (row.growthM < 0) countNegativeGrowth++;
-
-      if (row.sales > 50 && (!highestOutRatioItem || row.ratio > highestOutRatioItem.ratio)) {
-        highestOutRatioItem = row;
-      }
     });
 
-    const globalOutRatio = totalSalesVol > 0 ? Number(((totalOutVol / totalSalesVol) * 100).toFixed(1)) : 0;
     const topContributors = [...tableData].sort((a, b) => b.kontribusi - a.kontribusi).slice(0, 3);
 
     return {
       countPositiveGrowth,
       countNegativeGrowth,
-      globalOutRatio,
-      highestOutRatioItem,
       topContributors
     };
   }, [tableData]);
@@ -968,10 +944,10 @@ export default function HistorySalesPage() {
               <TrendingUp className="w-3.5 h-3.5" /> Dashboard Data Harian • History Sales
             </div>
             <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white flex items-center gap-3">
-              History Sales & Outstanding <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-sky-400 to-cyan-300">(Analytics Engine)</span>
+              History Sales <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-sky-400 to-cyan-300">(Analytics Engine)</span>
             </h1>
             <p className="text-slate-300 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
-              Pemantauan performa penjualan historis terhadap pesanan tertunggak (outstanding). Menganalisa metrik otomatis dari sheet Data Compile secara aktual dan riil.
+              Pemantauan performa penjualan historis. Menganalisa metrik otomatis dari sheet Data Compile secara aktual dan riil.
             </p>
           </div>
 
@@ -1013,9 +989,9 @@ export default function HistorySalesPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm text-slate-700 mb-6">
             <div className="space-y-2">
-              <h4 className="font-semibold text-slate-900">📌 Analisis Sales vs Outstanding:</h4>
+              <h4 className="font-semibold text-slate-900">📌 Analisis Sales Historis:</h4>
               <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-                Modul ini otomatis mendeteksi kolom metrik berlabel <i>Sales, AVG Sales,</i> atau <i>Jual</i> sebagai Volume Penjualan, dan metrik lainnya sebagai <i>Outstanding Order / Hold Delivery</i>.
+                Modul ini otomatis mendeteksi kolom metrik berlabel <i>Sales, AVG Sales,</i> atau <i>Jual</i> sebagai Volume Penjualan.
               </p>
             </div>
             <div className="space-y-2">
@@ -1032,7 +1008,7 @@ export default function HistorySalesPage() {
               onFileUpload={handleFileUpload}
               isLoading={isProcessing}
               label="Upload Data History Sales (Sheet: Data Compile)"
-              description="Drag & drop file Excel/CSV di sini. Sistem otomatis mendeteksi metrik penjualan dan outstanding."
+              description="Drag & drop file Excel/CSV di sini. Sistem otomatis mendeteksi metrik penjualan."
             />
           </div>
         </GlassCard>
@@ -1040,28 +1016,13 @@ export default function HistorySalesPage() {
 
       {/* ─── EXECUTIVE KPI SUMMARY CHIPS ─── */}
       {executiveSummary && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <KPICard
             title="Total Volume Sales"
             value={`${formatNumberCompact(executiveSummary.totalSales)}`}
             trend="Akumulasi Penjualan Cabang"
             icon={<TrendingUp className="w-5 h-5 text-blue-400" />}
             className="border-blue-500/20 bg-blue-500/5 hover:border-blue-500/40 transition"
-          />
-          <KPICard
-            title="Total Outstanding Order"
-            value={`${formatNumberCompact(executiveSummary.totalOutstanding)}`}
-            trend="Pesanan Belum Terkirim / Hold"
-            icon={<AlertCircle className="w-5 h-5 text-amber-400" />}
-            className="border-amber-500/20 bg-amber-500/5 hover:border-amber-500/40 transition"
-          />
-          <KPICard
-            title="Rasio Outstanding / Sales"
-            value={executiveSummary.ratio}
-            trend={executiveSummary.ratioNum > 25 ? "Rasio Tinggi (>25% Peringatan)" : "Rasio Terkendali (<25%)"}
-            isAlert={executiveSummary.ratioNum > 25}
-            icon={<AlertTriangle className={`w-5 h-5 ${executiveSummary.ratioNum > 25 ? 'text-rose-400' : 'text-emerald-400'}`} />}
-            className={`transition ${executiveSummary.ratioNum > 25 ? 'border-rose-500/20 bg-rose-500/5 hover:border-rose-500/40' : 'border-emerald-500/20 bg-emerald-500/5 hover:border-emerald-500/40'}`}
           />
           <KPICard
             title="Cabang Kontribusi Tertinggi"
@@ -1075,8 +1036,8 @@ export default function HistorySalesPage() {
 
       {/* ─── FILTER CONTROLS & SELECTION (EXPANDED & OVERFLOW-VISIBLE) ─── */}
       <GlassCard allowOverflow={true} className="p-6 border-slate-200 bg-white backdrop-blur-xl mb-10 shadow-xl">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
-          <div className="space-y-2">
+        <div className="flex flex-wrap items-end gap-6">
+          <div className="flex-1 min-w-[200px] space-y-2">
             <label className="text-xs font-bold text-slate-700 block uppercase tracking-wider">🌍 Filter Region:</label>
             <MultiSelect
               options={regions}
@@ -1086,7 +1047,7 @@ export default function HistorySalesPage() {
               placeholder="Pilih Region..."
             />
           </div>
-          <div className="space-y-2">
+          <div className="flex-1 min-w-[200px] space-y-2">
             <label className="text-xs font-bold text-slate-700 block uppercase tracking-wider">🏢 Filter Cabang:</label>
             <MultiSelect
               options={cabangs}
@@ -1096,7 +1057,7 @@ export default function HistorySalesPage() {
               placeholder="Pilih Cabang..."
             />
           </div>
-          <div className="space-y-2">
+          <div className="flex-1 min-w-[200px] space-y-2">
             <label className="text-xs font-bold text-slate-700 block uppercase tracking-wider">📦 Filter Kategori Item:</label>
             <MultiSelect
               options={categories}
@@ -1106,7 +1067,7 @@ export default function HistorySalesPage() {
               placeholder="Pilih Kategori..."
             />
           </div>
-          <div className="space-y-2">
+          <div className="flex-1 min-w-[200px] space-y-2">
             <label className="text-xs font-bold text-purple-300 block uppercase tracking-wider">💎 Filter Category Insentif:</label>
             <MultiSelect
               options={categoryInsentifs.length > 0 ? categoryInsentifs : ['All', 'Tier 1 (High Performance)', 'Tier 2 (Core Growth)', 'Tier 3 (Standard)', 'Non-Insentif']}
@@ -1116,7 +1077,17 @@ export default function HistorySalesPage() {
               placeholder="Pilih Insentif..."
             />
           </div>
-          <div className="space-y-2">
+          <div className="flex-1 min-w-[200px] space-y-2">
+            <label className="text-xs font-bold text-emerald-500 block uppercase tracking-wider">🏷️ Filter Status DOI:</label>
+            <MultiSelect
+              options={statusDois.length > 0 ? statusDois : ['All']}
+              selected={selectedStatusDoi}
+              onChange={setSelectedStatusDoi}
+              selectAllLabel="Semua Status DOI"
+              placeholder="Pilih Status DOI..."
+            />
+          </div>
+          <div className="flex-1 min-w-[200px] space-y-2">
             <label className="text-xs font-bold text-slate-700 block uppercase tracking-wider">📍 Sorot Grafik Cabang:</label>
             <select
               value={selectedCabangForChart}
@@ -1145,7 +1116,7 @@ export default function HistorySalesPage() {
                 Grafik &amp; Analisa Matriks ABC-XYZ (Volume vs Fluktuasi Permintaan)
               </h3>
               <p className="text-xs text-slate-300 mt-1 max-w-3xl leading-relaxed">
-                Menggabungkan klasifikasi <b>ABC</b> (kontribusi volume sales) dengan <b>XYZ</b> (koefisien variasi permintaan M s/d M-5) untuk menentukan strategi stok yang presisi.
+                <mark className="bg-amber-300/20 text-amber-100 rounded px-1.5 py-0.5">Menggabungkan klasifikasi <b>ABC</b> (kontribusi volume sales) dengan <b>XYZ</b> (koefisien variasi permintaan M s/d M-5) untuk menentukan strategi stok yang presisi.</mark>
               </p>
             </div>
             <div className="flex flex-col items-end gap-1 font-mono text-xs text-slate-700 bg-slate-50 p-3 rounded-xl border border-slate-200 shrink-0">
@@ -1220,14 +1191,14 @@ export default function HistorySalesPage() {
         </GlassCard>
       )}
 
-      {/* ─── VISUALIZATION CHART: SALES VS OUTSTANDING ─── */}
+      {/* ─── VISUALIZATION CHART: SALES KOMPARASI ─── */}
       {chartData && chartData.length > 0 && (
         <GlassCard className="p-6 border-blue-500/30 bg-gradient-to-b from-slate-900/90 to-slate-950/90 shadow-2xl">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 pb-4 mb-6 gap-3">
             <div>
               <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
                 <BarChart3 className="w-5 h-5 text-blue-400" />
-                Grafik Komparasi Volume Sales vs Outstanding per Cabang
+                Grafik Komparasi Volume Sales per Cabang
               </h3>
               <p className="text-xs text-slate-600 mt-1">
                 Sorotan: <b className="text-cyan-400">{selectedCabangForChart === 'All' ? 'Seluruh Cabang' : selectedCabangForChart}</b> • Data Mode: <b className="text-emerald-300">AKTUAL & RIIL</b>
@@ -1250,14 +1221,6 @@ export default function HistorySalesPage() {
                 }`}
               >
                 📈 Fokus Sales
-              </button>
-              <button
-                onClick={() => setChartFilter('outstanding')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 ${
-                  chartFilter === 'outstanding' ? 'bg-amber-600 text-slate-900 shadow-md scale-105' : 'text-slate-600 hover:text-amber-400'
-                }`}
-              >
-                ⚠️ Fokus Outstanding
               </button>
               <button
                 onClick={() => setChartFilter('avg3')}
@@ -1306,8 +1269,6 @@ export default function HistorySalesPage() {
                     lower === 'transfer order' ||
                     lower.includes('vessel') || 
                     lower.includes('hold') || 
-                    lower.includes('outstanding') || 
-                    lower.includes('order') ||
                     lower.includes('inbound');
 
                   let barColor = COLORS[idx % COLORS.length];
@@ -1322,7 +1283,6 @@ export default function HistorySalesPage() {
                       key={tc.name}
                       dataKey={tc.name}
                       name={isSupplyOrOutstanding ? `📦 ${tc.name}` : `📊 ${tc.name} (Sales Vol)`}
-                      stackId={isSupplyOrOutstanding ? "supply_outstanding" : undefined}
                       fill={barColor}
                       maxBarSize={60}
                     />
@@ -1505,13 +1465,13 @@ export default function HistorySalesPage() {
         </GlassCard>
       )}
 
-      {/* ─── TABEL COMPLEMENTARY: ANALISIS PERFORMANCE & ZONASI OUTSTANDING ─── */}
+      {/* ─── TABEL COMPLEMENTARY: ANALISIS PERFORMANCE SALES ─── */}
       <GlassCard className="p-6 border-slate-200 bg-white shadow-2xl overflow-hidden">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-slate-200 pb-4 mb-6 gap-4">
           <div>
             <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2.5">
               <FileSpreadsheet className="w-5 h-5 text-blue-400" />
-              Tabel Analisis Komparatif Sales vs Outstanding ({tableData.length} Kombinasi Cabang / Grup / Kategori)
+              Tabel Analisis Komparatif Sales ({tableData.length} Kombinasi Cabang / Grup / Kategori)
             </h3>
             <p className="text-xs text-slate-600 mt-1">
               Rincian performa penjualan, rata-rata 3 bulan, serta % kontribusi per kombinasi Cabang, Grup, & Kategori secara real-time.
@@ -1526,44 +1486,29 @@ export default function HistorySalesPage() {
           </button>
         </div>
 
-        {/* ─── INSIGHT TABEL SALES VS OUTSTANDING ─── */}
-        {tableSalesVsOutInsights && (
+        {/* ─── INSIGHT TABEL SALES ─── */}
+        {tableSalesInsights && (
           <div className="mb-6 p-5 rounded-2xl bg-gradient-to-r from-blue-950/40 via-slate-900 to-slate-950 border border-blue-500/30 shadow-lg">
             <div className="flex items-center gap-2 text-blue-400 font-extrabold text-sm sm:text-base mb-3 border-b border-blue-500/20 pb-2.5">
               <Sparkles className="w-5 h-5 text-blue-400" />
-              <span>Insight Evaluasi Komparatif Sales vs Outstanding Order</span>
+              <span>Insight Evaluasi Komparatif Sales</span>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
               <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
                 <span className="text-slate-600 font-bold text-[10px] uppercase block mb-1">Tren Pertumbuhan (M vs AVG 3 Bln)</span>
                 <div className="flex items-center justify-between text-sm font-extrabold mt-2">
-                  <span className="text-emerald-400 flex items-center gap-1">▲ {tableSalesVsOutInsights.countPositiveGrowth} Kombinasi Positif</span>
-                  <span className="text-rose-400 flex items-center gap-1">▼ {tableSalesVsOutInsights.countNegativeGrowth} Melambat</span>
+                  <span className="text-emerald-400 flex items-center gap-1">▲ {tableSalesInsights.countPositiveGrowth} Kombinasi Positif</span>
+                  <span className="text-rose-400 flex items-center gap-1">▼ {tableSalesInsights.countNegativeGrowth} Melambat</span>
                 </div>
                 <p className="text-[11px] text-slate-600 mt-2 leading-tight">
                   Menunjukkan perbandingan persentase item yang mengalami pertumbuhan volume pada bulan berjalan dibanding rata-rata 3 bulan.
                 </p>
               </div>
 
-              <div className="p-3.5 rounded-xl bg-amber-950/20 border border-amber-500/30">
-                <span className="text-amber-300 font-bold text-[10px] uppercase block mb-1">Rasio Outstanding Tertinggi (Bottleneck)</span>
-                {tableSalesVsOutInsights.highestOutRatioItem ? (
-                  <div>
-                    <div className="font-extrabold text-white text-sm truncate mt-1">📍 {tableSalesVsOutInsights.highestOutRatioItem.cabang} ({tableSalesVsOutInsights.highestOutRatioItem.category})</div>
-                    <div className="text-xs font-mono font-black text-amber-400 mt-1">Rasio Out/Sales: {tableSalesVsOutInsights.highestOutRatioItem.ratio.toFixed(1)}% ({tableSalesVsOutInsights.highestOutRatioItem.outstanding.toLocaleString('id-ID')} Unit Hold)</div>
-                    <p className="text-[11px] text-amber-200 mt-1.5 leading-tight">
-                      ⚠️ Kombinasi ini mengalami tunggakan pesanan paling tinggi terhadap penjualan aktual. Perlu intervensi logistik segera!
-                    </p>
-                  </div>
-                ) : (
-                  <span className="text-slate-400 text-xs">Tidak ada data outstanding signifikan.</span>
-                )}
-              </div>
-
               <div className="p-3.5 rounded-xl bg-purple-950/20 border border-purple-500/30">
                 <span className="text-purple-300 font-bold text-[10px] uppercase block mb-1">Top Kontributor Terhadap AVG Sales</span>
                 <div className="space-y-1.5 mt-2">
-                  {tableSalesVsOutInsights.topContributors.map((tc, idx) => (
+                  {tableSalesInsights.topContributors.map((tc, idx) => (
                     <div key={idx} className="flex justify-between items-center text-xs">
                       <span className="text-white font-bold truncate pr-2">🏆 {tc.cabang} ({tc.category})</span>
                       <span className="text-purple-300 font-mono font-black shrink-0">{tc.kontribusi.toFixed(1)}% Vol</span>
@@ -1627,7 +1572,7 @@ export default function HistorySalesPage() {
                           <span className="text-[10px] px-2 py-0.5 bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded-full font-bold">🏆 TOP</span>
                         )}
                       </div>
-                      <div className="text-[11px] text-slate-600 mt-0.5">Sales & Outstanding Track</div>
+                      <div className="text-[11px] text-slate-600 mt-0.5">Sales Track</div>
                     </td>
                     <td className="py-3.5 px-4 border-l border-slate-200 align-middle">
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-800 border border-slate-200 font-bold text-xs">
