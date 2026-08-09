@@ -16,11 +16,13 @@ import {
 import toast from 'react-hot-toast';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  Legend, ResponsiveContainer
+  Legend, ResponsiveContainer, ComposedChart, Line
 } from 'recharts';
 import { get, set } from 'idb-keyval';
 import { parseDynamicCSV, findColumn, ParsedData } from '@/lib/csvParser';
 import { getStandardFilename } from '@/utils/export';
+import { ExportHtmlButton } from '@/components/ui/ExportHtmlButton';
+import * as XLSX from 'xlsx';
 
 const COLORS = ['#a855f7', '#3b82f6', '#f97316', '#eab308', '#22c55e', '#ef4444', '#06b6d4', '#ec4899', '#8b5cf6', '#10b981'];
 
@@ -358,7 +360,24 @@ function generateDemoPRUpdate(): ParsedData {
       { index: 12, name: 'Qty' }
     ],
     data,
-    processed_at: new Date().toISOString()
+    processed_at: new Date().toISOString(),
+    sheetNames: ['PR Update', 'Lead Time'],
+    sheets: {
+      'PR Update': {
+        headers: ['PO', 'NoPR', 'Branch Name', 'GRUP', 'Category', 'Description', 'STATUS Compile', 'No Container', 'bl', 'Shipping Line', 'Tanggal ETA', 'Week ETA', 'Qty'],
+        targetColumns: [{ index: 12, name: 'Qty' }],
+        data: data
+      },
+      'Lead Time': {
+        headers: ['YEAR ETA', 'MONTH ETA', 'REGION RCPT', 'BRANCH RCPT BRANCH', 'CONTAINER', 'TGL SPPB', 'TGL ETA BY PIB', 'TOR DATE', 'DAYS SPPB - ETA', 'DAYS BONGKAR - SPPB - 1', 'TOTAL DAYS'],
+        targetColumns: [],
+        data: [
+          { 'YEAR ETA': 2026, 'MONTH ETA': '08. Aug', 'REGION RCPT': 'REG-1', 'BRANCH RCPT BRANCH': 'Surabaya', 'CONTAINER': 'MRTU1234567', 'TGL SPPB': '2026-08-01', 'TGL ETA BY PIB': '2026-07-25', 'TOR DATE': '2026-08-05', 'DAYS SPPB - ETA': 7, 'DAYS BONGKAR - SPPB - 1': 3, 'TOTAL DAYS': 10 },
+          { 'YEAR ETA': 2026, 'MONTH ETA': '08. Aug', 'REGION RCPT': 'REG-2', 'BRANCH RCPT BRANCH': 'Jakarta', 'CONTAINER': 'TEMU7654321', 'TGL SPPB': '2026-08-02', 'TGL ETA BY PIB': '2026-07-28', 'TOR DATE': '2026-08-06', 'DAYS SPPB - ETA': 5, 'DAYS BONGKAR - SPPB - 1': 3, 'TOTAL DAYS': 8 },
+          { 'YEAR ETA': 2026, 'MONTH ETA': '08. Aug', 'REGION RCPT': 'REG-3', 'BRANCH RCPT BRANCH': 'Bandung', 'CONTAINER': 'SPIL8899001', 'TGL SPPB': '2026-08-03', 'TGL ETA BY PIB': '2026-07-20', 'TOR DATE': '2026-08-10', 'DAYS SPPB - ETA': 14, 'DAYS BONGKAR - SPPB - 1': 6, 'TOTAL DAYS': 20 },
+        ]
+      }
+    }
   };
 
   syncToTrackingContainer(parsedDemo);
@@ -369,6 +388,7 @@ export default function PRUpdatePage() {
   const [parsed, setParsed] = useState<ParsedData | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showHowTo, setShowHowTo] = useState<boolean>(false);
+  const [activeTab, setActiveTab] = useState<'pr_update' | 'lead_time'>('pr_update');
   const [activeScenario, setActiveScenario] = useState<ScenarioType>('current');
   const [selectedCabangForChart, setSelectedCabangForChart] = useState<string>('All');
   
@@ -381,6 +401,101 @@ export default function PRUpdatePage() {
   const [selectedEta, setSelectedEta] = useState<string[]>(['All']);
   const [selectedStatusCompile, setSelectedStatusCompile] = useState<string[]>(['All']);
   const [chartViewMode, setChartViewMode] = useState<'eta' | 'cabang' | 'container'>('eta');
+
+  
+  const leadTimeData = useMemo(() => {
+    if (!parsed || !parsed.sheets) return null;
+    const ltKey = Object.keys(parsed.sheets).find(k => k.toLowerCase().includes('lead time'));
+    if (!ltKey) return null;
+
+    const data = parsed.sheets[ltKey].data || [];
+    if (data.length === 0) return null;
+
+    let totalDaysSum = 0;
+    let bongkarDaysSum = 0;
+    let sppbEtaDaysSum = 0;
+    let countTotal = 0;
+    let countBongkar = 0;
+    let countSppbEta = 0;
+
+    const trendByMonth: Record<string, { totalDays: number, sppbEta: number, bongkar: number, countTotal: number, countSppbEta: number, countBongkar: number }> = {};
+    const branchComparison: Record<string, { totalDays: number, count: number }> = {};
+
+    data.forEach(r => {
+      const td = Number(r['TOTAL DAYS']);
+      if (!isNaN(td)) {
+        totalDaysSum += td;
+        countTotal++;
+      }
+      
+      const bongkar = Number(r['DAYS BONGKAR - SPPB - 1']);
+      if (!isNaN(bongkar)) {
+        bongkarDaysSum += bongkar;
+        countBongkar++;
+      }
+      
+      const sppbEta = Number(r['DAYS SPPB - ETA']);
+      if (!isNaN(sppbEta)) {
+        sppbEtaDaysSum += sppbEta;
+        countSppbEta++;
+      }
+
+      const month = String(r['YEAR ETA/MONTH ETA'] || r['MONTH ETA'] || 'Unknown');
+      if (!trendByMonth[month]) trendByMonth[month] = { totalDays: 0, sppbEta: 0, bongkar: 0, countTotal: 0, countSppbEta: 0, countBongkar: 0 };
+      if (!isNaN(td)) {
+        trendByMonth[month].totalDays += td;
+        trendByMonth[month].countTotal++;
+      }
+      if (!isNaN(sppbEta)) {
+        trendByMonth[month].sppbEta += sppbEta;
+        trendByMonth[month].countSppbEta++;
+      }
+      if (!isNaN(bongkar)) {
+        trendByMonth[month].bongkar += bongkar;
+        trendByMonth[month].countBongkar++;
+      }
+
+      const branch = String(r['BRANCH RCPT BRANCH'] || 'Unknown');
+      if (!branchComparison[branch]) branchComparison[branch] = { totalDays: 0, count: 0 };
+      if (!isNaN(td)) {
+        branchComparison[branch].totalDays += td;
+        branchComparison[branch].count++;
+      }
+    });
+
+    const urgentList: any[] = [];
+    data.forEach(r => {
+      const waitDays = Number(r['TOTAL DAYS']) || 0;
+      if (waitDays > 0) {
+        urgentList.push({
+          container: r['CONTAINER'] || '-',
+          region: r['REGION RCPT'] || '-',
+          branch: r['BRANCH RCPT BRANCH'] || '-',
+          waitDays: waitDays
+        });
+      }
+    });
+    urgentList.sort((a, b) => b.waitDays - a.waitDays);
+
+    return {
+      avgTotalDays: countTotal ? (totalDaysSum / countTotal).toFixed(1) : '0',
+      avgBongkarDays: countBongkar ? (bongkarDaysSum / countBongkar).toFixed(1) : '0',
+      avgSppbEtaDays: countSppbEta ? (sppbEtaDaysSum / countSppbEta).toFixed(1) : '0',
+      trendData: Object.entries(trendByMonth).map(([k, v]) => ({
+        month: k,
+        avgDays: v.countTotal ? Math.round((v.totalDays / v.countTotal) * 10) / 10 : 0,
+        avgSppbEta: v.countSppbEta ? Math.round((v.sppbEta / v.countSppbEta) * 10) / 10 : 0,
+        avgBongkar: v.countBongkar ? Math.round((v.bongkar / v.countBongkar) * 10) / 10 : 0
+      })).sort((a, b) => a.month.localeCompare(b.month)),
+      branchData: Object.entries(branchComparison).map(([k, v]) => ({
+        branch: k,
+        avgDays: v.count ? Math.round((v.totalDays / v.count) * 10) / 10 : 0
+      })).sort((a, b) => b.avgDays - a.avgDays),
+      urgentContainers: urgentList.slice(0, 10),
+      raw: data
+    };
+  }, [parsed]);
+
 
   // Excel-like column filters for Table Detail
   const [colFilters, setColFilters] = useState<Record<string, { search: string; selected: string[] }>>({});
@@ -408,18 +523,30 @@ export default function PRUpdatePage() {
   };
 
   const handleDownloadTemplate = () => {
-    const headers = 'PO,NoPR,Branch Name,GRUP,Category,Description,STATUS Compile,No Container,bl,Shipping Line,Tanggal ETA,Week ETA,Qty';
-    const row1 = 'PO-2026-101,PR-08-01,Surabaya,Minyak Goreng Premium,Food Basic,Minyak Goreng 2L,ON VESSEL,MRTU1234567,BL-MRT-9988,Meratus Line,2026-08-10,Week 2 Agu,2500';
-    const row2 = 'PO-2026-102,PR-08-02,Jakarta,Beras Setra Ramos,Groceries Premium,Beras Premium 5kg,SPJM,TEMU7654321,BL-TMS-7766,Temas Line,2026-08-15,Week 3 Agu,1800';
-    const row3 = 'PO-2026-103,PR-08-03,Bandung,Gula Pasir Kristal,Baking Ingredients,Gula Kristal 1kg,HOLD DELIVERY,-,-,-,2026-08-18,Week 3 Agu,3200';
-    const blob = new Blob(['\ufeff' + headers + '\n' + row1 + '\n' + row2 + '\n' + row3], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'template_pr_update_tracking_13col.csv';
-    link.click();
-    URL.revokeObjectURL(url);
-    toast.success('📁 Template CSV PR Update & Tracking Container (13 Kolom) Berhasil Diunduh');
+    const wb = XLSX.utils.book_new();
+    
+    // Sheet 1: PR Update
+    const ws1Data = [
+      ['PO','NoPR','Branch Name','GRUP','Category','Description','STATUS Compile','No Container','bl','Shipping Line','Tanggal ETA','Week ETA','Qty'],
+      ['PO-2026-101','PR-08-01','Surabaya','Minyak Goreng Premium','Food Basic','Minyak Goreng 2L','ON VESSEL','MRTU1234567','BL-MRT-9988','Meratus Line','2026-08-10','Week 2 Agu',2500],
+      ['PO-2026-102','PR-08-02','Jakarta','Beras Setra Ramos','Groceries Premium','Beras Premium 5kg','SPJM','TEMU7654321','BL-TMS-7766','Temas Line','2026-08-15','Week 3 Agu',1800],
+      ['PO-2026-103','PR-08-03','Bandung','Gula Pasir Kristal','Baking Ingredients','Gula Kristal 1kg','HOLD DELIVERY','-','-','-','2026-08-18','Week 3 Agu',3200]
+    ];
+    const ws1 = XLSX.utils.aoa_to_sheet(ws1Data);
+    XLSX.utils.book_append_sheet(wb, ws1, "PR Update");
+
+    // Sheet 2: Lead Time
+    const ws2Data = [
+      ['YEAR ETA','MONTH ETA','REGION RCPT','BRANCH RCPT BRANCH','CONTAINER','TGL SPPB','TGL ETA BY PIB','TOR DATE','DAYS SPPB - ETA','DAYS BONGKAR - SPPB - 1','TOTAL DAYS'],
+      [2026,'08. Aug','REG-1','Surabaya','MRTU1234567','2026-08-01','2026-07-25','2026-08-05',7,3,10],
+      [2026,'08. Aug','REG-2','Jakarta','TEMU7654321','2026-08-02','2026-07-28','2026-08-06',5,3,8],
+      [2026,'08. Aug','REG-3','Bandung','SPIL8899001','2026-08-03','2026-07-20','2026-08-10',14,6,20]
+    ];
+    const ws2 = XLSX.utils.aoa_to_sheet(ws2Data);
+    XLSX.utils.book_append_sheet(wb, ws2, "Lead Time");
+
+    XLSX.writeFile(wb, "template_pr_update_leadtime.xlsx");
+    toast.success('📁 Template Excel PR Update & Lead Time Berhasil Diunduh');
   };
 
   const handleFileUpload = async (file: File) => {
@@ -794,9 +921,9 @@ export default function PRUpdatePage() {
   };
 
   return (
-    <div className="space-y-8 pb-16 min-h-screen animate-fade-in text-foreground">
+    <div id="export-container" className="space-y-8 pb-16 min-h-screen animate-fade-in text-foreground">
       {/* ─── HERO BANNER HEADER ─── */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-purple-950 to-slate-900 p-6 sm:p-8 border border-purple-500/20 shadow-2xl">
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-purple-950 to-slate-900 p-6 sm:p-8 border border-purple-500/20 shadow-2xl no-export">
         <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#a855f7_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2">
@@ -808,13 +935,18 @@ export default function PRUpdatePage() {
             </h1>
             <p className="text-slate-700 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
               <span className="bg-amber-100 text-amber-900 px-2 py-1 rounded font-medium shadow-sm inline-block">
-                Modul gabungan pemantauan Purchase Requisition dan Live Tracking Container kapal (On Vessel, SPJM, Hold) dengan format <b>13 kolom terpadu</b>. Kini dilengkapi grafik persebaran Category dan filter kolom ala Excel.
+                Modul gabungan pemantauan Purchase Requisition dan Live Tracking Container kapal (On Vessel, SPJM, Hold).
               </span>
             </p>
           </div>
 
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
             <TimestampBadge timestamp={parsed?.processed_at || new Date().toISOString()} label="Olah Terakhir:" />
+            <ExportHtmlButton 
+              elementId="export-container" 
+              moduleName="PR_Update_Lead_Time" 
+              processedAt={parsed?.processed_at} 
+            />
             <button
               onClick={() => setShowHowTo(!showHowTo)}
               className="w-full sm:w-auto px-4 py-2 bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2"
@@ -876,8 +1008,26 @@ export default function PRUpdatePage() {
         </GlassCard>
       )}
 
-      {/* ─── TAB SWITCHER 3 JALUR SKENARIO ANALISIS ─── */}
-      <div className="space-y-3">
+      {/* ─── MAIN MODULE TAB SWITCHER ─── */}
+      <div className="flex flex-wrap items-center gap-4 bg-slate-900/50 p-2 rounded-xl border border-slate-700/50">
+        <button
+          onClick={() => setActiveTab('pr_update')}
+          className={`flex-1 py-3 px-6 rounded-lg font-bold text-sm transition-all duration-300 flex items-center justify-center gap-2 ${activeTab === 'pr_update' ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/25' : 'bg-transparent text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
+        >
+          <FileBarChart className="w-4 h-4" /> Analisa PR & Status
+        </button>
+        <button
+          onClick={() => setActiveTab('lead_time')}
+          className={`flex-1 py-3 px-6 rounded-lg font-bold text-sm transition-all duration-300 flex items-center justify-center gap-2 ${activeTab === 'lead_time' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/25' : 'bg-transparent text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
+        >
+          <Timer className="w-4 h-4" /> Analisa Lead Time
+        </button>
+      </div>
+
+      {activeTab === 'pr_update' && (
+        <div className="space-y-8 animate-fade-in">
+          {/* ─── TAB SWITCHER 3 JALUR SKENARIO ANALISIS ─── */}
+          <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-bold uppercase tracking-wider text-purple-400 flex items-center gap-2">
             <Zap className="w-4 h-4" /> Pilih 3 Jalur Simulasi Rantai Pasok PR/PO:
@@ -1082,7 +1232,7 @@ export default function PRUpdatePage() {
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
                 <XAxis dataKey={chartViewMode === 'eta' ? 'eta' : 'cabang'} stroke="#94a3b8" tick={{ fill: '#e2e8f0', fontSize: 11, fontWeight: 600 }} angle={-35} textAnchor="end" height={90} />
-                <YAxis stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 12 }} tickFormatter={(val) => Number(val).toLocaleString('id-ID')} />
+                <YAxis stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 12 }} width={100} tickFormatter={(val) => Number(val).toLocaleString('en-US')} />
                 <Tooltip
                   content={chartViewMode === 'container' ? <CustomContainerTooltip /> : <CustomStackedTooltip />}
                   wrapperStyle={{ zIndex: 999999, pointerEvents: 'none', outline: 'none' }}
@@ -1133,7 +1283,7 @@ export default function PRUpdatePage() {
           </div>
           
           <div className="flex items-center gap-2 shrink-0">
-            <span className="px-4 py-2 rounded-xl bg-white border-2 border-amber-500/60 font-black text-xs sm:text-sm text-amber-300 shadow-lg flex items-center gap-2">
+            <span className="px-4 py-2 rounded-xl bg-amber-500/20 border-2 border-amber-500/60 font-black text-xs sm:text-sm text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.3)] flex items-center gap-2">
               <Timer className="w-4 h-4 text-amber-400 animate-spin-slow" />
               Total Overdue: {overdueInsights.length} PO
             </span>
@@ -1142,53 +1292,53 @@ export default function PRUpdatePage() {
 
         {/* Mini KPI Cards for Overdue Insights */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-          <div className="p-4 rounded-2xl bg-gradient-to-br from-purple-950/60 to-slate-900 border border-purple-500/40 shadow-lg flex items-center justify-between">
+          <div className="p-4 rounded-2xl bg-gradient-to-br from-purple-950/80 to-slate-900 border border-purple-500/50 shadow-[0_0_20px_rgba(168,85,247,0.25)] flex items-center justify-between transition-all hover:scale-[1.02]">
             <div>
               <div className="text-xs text-purple-300 font-extrabold uppercase tracking-wider flex items-center gap-1.5">
                 <span>🟣 SPJM Overdue</span>
               </div>
-              <div className="text-xl sm:text-2xl font-black text-slate-900 mt-1.5">
+              <div className="text-xl sm:text-2xl font-black text-white mt-1.5 drop-shadow-md">
                 {overdueInsights.filter(x => x.statusCategory === 'SPJM').length} <span className="text-xs font-semibold text-purple-300">Dokumen</span>
               </div>
-              <div className="text-[11px] text-purple-300/90 font-mono font-bold mt-1 bg-purple-900/40 px-2 py-0.5 rounded border border-purple-500/30 inline-block">
+              <div className="text-[11px] text-purple-100 font-mono font-bold mt-1 bg-purple-900/60 px-2 py-0.5 rounded border border-purple-500/50 inline-block shadow-sm">
                 Total Qty: {overdueInsights.filter(x => x.statusCategory === 'SPJM').reduce((s, x) => s + x.qty, 0).toLocaleString('id-ID')}
               </div>
             </div>
-            <div className="w-12 h-12 rounded-2xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-300 text-2xl font-black shadow-inner">
+            <div className="w-12 h-12 rounded-2xl bg-purple-500/20 border border-purple-400/50 flex items-center justify-center text-purple-300 text-2xl font-black shadow-[0_0_15px_rgba(168,85,247,0.4)]">
               🟣
             </div>
           </div>
 
-          <div className="p-4 rounded-2xl bg-gradient-to-br from-rose-950/60 to-slate-900 border border-rose-500/40 shadow-lg flex items-center justify-between">
+          <div className="p-4 rounded-2xl bg-gradient-to-br from-rose-950/80 to-slate-900 border border-rose-500/50 shadow-[0_0_20px_rgba(244,63,94,0.25)] flex items-center justify-between transition-all hover:scale-[1.02]">
             <div>
               <div className="text-xs text-rose-300 font-extrabold uppercase tracking-wider flex items-center gap-1.5">
                 <span>🔴 Hold Delivery Overdue</span>
               </div>
-              <div className="text-xl sm:text-2xl font-black text-slate-900 mt-1.5">
+              <div className="text-xl sm:text-2xl font-black text-white mt-1.5 drop-shadow-md">
                 {overdueInsights.filter(x => x.statusCategory === 'HOLD').length} <span className="text-xs font-semibold text-rose-300">Dokumen</span>
               </div>
-              <div className="text-[11px] text-rose-300/90 font-mono font-bold mt-1 bg-rose-900/40 px-2 py-0.5 rounded border border-rose-500/30 inline-block">
+              <div className="text-[11px] text-rose-100 font-mono font-bold mt-1 bg-rose-900/60 px-2 py-0.5 rounded border border-rose-500/50 inline-block shadow-sm">
                 Total Qty: {overdueInsights.filter(x => x.statusCategory === 'HOLD').reduce((s, x) => s + x.qty, 0).toLocaleString('id-ID')}
               </div>
             </div>
-            <div className="w-12 h-12 rounded-2xl bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-rose-300 text-2xl font-black shadow-inner">
+            <div className="w-12 h-12 rounded-2xl bg-rose-500/20 border border-rose-400/50 flex items-center justify-center text-rose-300 text-2xl font-black shadow-[0_0_15px_rgba(244,63,94,0.4)]">
               🔴
             </div>
           </div>
 
-          <div className="p-4 rounded-2xl bg-gradient-to-br from-blue-950/60 to-slate-900 border border-blue-500/40 shadow-lg flex items-center justify-between">
+          <div className="p-4 rounded-2xl bg-gradient-to-br from-blue-950/80 to-slate-900 border border-blue-500/50 shadow-[0_0_20px_rgba(59,130,246,0.25)] flex items-center justify-between transition-all hover:scale-[1.02]">
             <div>
               <div className="text-xs text-blue-300 font-extrabold uppercase tracking-wider flex items-center gap-1.5">
                 <span>🔵 On Vessel Overdue</span>
               </div>
-              <div className="text-xl sm:text-2xl font-black text-slate-900 mt-1.5">
+              <div className="text-xl sm:text-2xl font-black text-white mt-1.5 drop-shadow-md">
                 {overdueInsights.filter(x => x.statusCategory === 'VESSEL').length} <span className="text-xs font-semibold text-blue-300">Dokumen</span>
               </div>
-              <div className="text-[11px] text-blue-300/90 font-mono font-bold mt-1 bg-blue-900/40 px-2 py-0.5 rounded border border-blue-500/30 inline-block">
+              <div className="text-[11px] text-blue-100 font-mono font-bold mt-1 bg-blue-900/60 px-2 py-0.5 rounded border border-blue-500/50 inline-block shadow-sm">
                 Total Qty: {overdueInsights.filter(x => x.statusCategory === 'VESSEL').reduce((s, x) => s + x.qty, 0).toLocaleString('id-ID')}
               </div>
             </div>
-            <div className="w-12 h-12 rounded-2xl bg-blue-500/20 border border-blue-500/40 flex items-center justify-center text-blue-300 text-2xl font-black shadow-inner">
+            <div className="w-12 h-12 rounded-2xl bg-blue-500/20 border border-blue-400/50 flex items-center justify-center text-blue-300 text-2xl font-black shadow-[0_0_15px_rgba(59,130,246,0.4)]">
               🔵
             </div>
           </div>
@@ -1648,6 +1798,124 @@ export default function PRUpdatePage() {
           )}
         </GlassCard>
       )}
+      </div>
+      )}
+
+      {/* ─── LEAD TIME MODULE ─── */}
+      {activeTab === 'lead_time' && leadTimeData && (
+        <div className="space-y-8 animate-fade-in">
+          <GlassCard className="p-6 border-slate-200 bg-white shadow-2xl">
+            <h2 className="text-xl font-black text-slate-900 flex items-center gap-2 mb-4 border-b border-slate-200 pb-3">
+              <Timer className="w-6 h-6 text-indigo-600" /> Analisa Lead Time Aktual
+            </h2>
+            
+            {/* KPI Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+              <div className="bg-white border border-slate-200 p-6 rounded-xl flex items-center gap-4 shadow-md">
+                <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600"><Clock className="w-6 h-6"/></div>
+                <div>
+                  <div className="text-sm text-slate-500 font-bold tracking-wide">Avg Total Days (SPPB to Bongkar)</div>
+                  <div className="text-3xl font-black text-slate-800 drop-shadow-sm">{leadTimeData.avgTotalDays} <span className="text-sm text-slate-500 font-normal">hari</span></div>
+                </div>
+              </div>
+              <div className="bg-white border border-slate-200 p-6 rounded-xl flex items-center gap-4 shadow-md">
+                <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600"><Truck className="w-6 h-6"/></div>
+                <div>
+                  <div className="text-sm text-slate-500 font-bold tracking-wide">Avg Days SPPB to ETA</div>
+                  <div className="text-3xl font-black text-slate-800 drop-shadow-sm">{leadTimeData.avgSppbEtaDays} <span className="text-sm text-slate-500 font-normal">hari</span></div>
+                </div>
+              </div>
+              <div className="bg-white border border-slate-200 p-6 rounded-xl flex items-center gap-4 shadow-md">
+                <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center text-amber-600"><Package className="w-6 h-6"/></div>
+                <div>
+                  <div className="text-sm text-slate-500 font-bold tracking-wide">Avg Days ETA to Bongkar</div>
+                  <div className="text-3xl font-black text-slate-800 drop-shadow-sm">{leadTimeData.avgBongkarDays} <span className="text-sm text-slate-500 font-normal">hari</span></div>
+                </div>
+              </div>
+            </div>
+
+            {/* Charts */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-md">
+                <h3 className="text-sm font-bold text-slate-800 mb-4">Tren History Lead Time (per Bulan)</h3>
+                <div className="h-[300px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart data={leadTimeData.trendData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                      <XAxis dataKey="month" stroke="#64748b" fontSize={12} fontWeight="bold" />
+                      <YAxis stroke="#64748b" fontSize={12} />
+                      <Tooltip contentStyle={{ backgroundColor: '#ffffff', borderColor: '#cbd5e1', color: '#1e293b' }} />
+                      <Legend />
+                      <Bar dataKey="avgDays" name="Avg Total Days" fill="#4f46e5" radius={[4,4,0,0]} barSize={40} />
+                      <Line type="monotone" dataKey="avgSppbEta" name="Avg SPPB to ETA" stroke="#10b981" strokeWidth={3} dot={{ r: 4 }} />
+                      <Line type="monotone" dataKey="avgBongkar" name="Avg ETA to Bongkar" stroke="#f59e0b" strokeWidth={3} dot={{ r: 4 }} />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+              
+              <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-md">
+                <h3 className="text-sm font-bold text-slate-800 mb-4">Perbandingan Cabang (Avg Total Days)</h3>
+                <div className="h-[300px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={leadTimeData.branchData} layout="vertical">
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
+                      <XAxis type="number" stroke="#64748b" fontSize={12} />
+                      <YAxis dataKey="branch" type="category" stroke="#64748b" fontSize={12} width={100} />
+                      <Tooltip contentStyle={{ backgroundColor: '#ffffff', borderColor: '#cbd5e1', color: '#1e293b' }} />
+                      <Bar dataKey="avgDays" name="Avg Total Days" fill="#10b981" radius={[0,4,4,0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+            
+            {/* Urgent Containers */}
+            <div className="mt-8 bg-white rounded-xl p-6 border border-rose-200 shadow-md">
+              <h3 className="text-sm font-bold text-rose-600 mb-4 flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5" /> Top 10 Kontainer Urgent Untuk Segera Dibongkar (Berdasarkan Total Hari Menunggu)
+              </h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-200 bg-slate-50">
+                      <th className="p-3 text-slate-700 font-semibold rounded-tl-lg">Region</th>
+                      <th className="p-3 text-slate-700 font-semibold">Cabang</th>
+                      <th className="p-3 text-slate-700 font-semibold">No. Kontainer</th>
+                      <th className="p-3 text-slate-700 font-semibold text-right rounded-tr-lg">Total Days (Tunggu)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {leadTimeData.urgentContainers.map((c: any, i: number) => (
+                      <tr key={i} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                        <td className="p-3 text-slate-600">{c.region}</td>
+                        <td className="p-3 text-slate-900 font-medium">{c.branch}</td>
+                        <td className="p-3 text-indigo-600 font-mono text-xs">{c.container}</td>
+                        <td className="p-3 text-right font-bold text-rose-600">{c.waitDays} <span className="text-xs font-normal text-slate-400">Hari</span></td>
+                      </tr>
+                    ))}
+                    {leadTimeData.urgentContainers.length === 0 && (
+                      <tr>
+                        <td colSpan={4} className="p-4 text-center text-slate-500 italic">Tidak ada data kontainer urgent.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            
+          </GlassCard>
+        </div>
+      )}
+      
+      {activeTab === 'lead_time' && !leadTimeData && (
+        <div className="flex flex-col items-center justify-center min-h-[40vh] bg-slate-900/50 rounded-2xl border border-slate-700/50 text-slate-400 p-8 text-center">
+          <Timer className="w-12 h-12 text-slate-500 mb-4" />
+          <h3 className="text-lg font-bold text-slate-300">Data Lead Time Tidak Ditemukan</h3>
+          <p className="text-sm mt-2 max-w-md">Sheet "Lead Time" tidak ditemukan di dalam file Excel yang diunggah. Pastikan Anda mengunggah file Excel terbaru menggunakan format template yang baru.</p>
+        </div>
+      )}
     </div>
   );
 }
+

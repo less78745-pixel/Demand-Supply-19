@@ -26,7 +26,7 @@ export function MultiSelect({
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const allOptions = options.filter((opt) => opt !== "All");
-  const filteredOptions = allOptions.filter((opt) => opt.toLowerCase().includes(searchTerm.toLowerCase()));
+  const filteredOptions = allOptions.filter((opt) => String(opt).toLowerCase().includes(searchTerm.toLowerCase()));
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {

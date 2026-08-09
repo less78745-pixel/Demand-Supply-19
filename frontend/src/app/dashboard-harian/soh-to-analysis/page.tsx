@@ -1220,7 +1220,7 @@ export default function SOHAnalysisPage() {
                 <BarChart data={weeklyGroupedData} margin={{ top: 20, right: 30, left: 10, bottom: 20 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
                   <XAxis dataKey="week" stroke="#94a3b8" tick={{ fill: '#e2e8f0', fontSize: 13, fontWeight: 700 }} height={40} />
-                  <YAxis stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 12 }} />
+                  <YAxis stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 12 }} width={100} tickFormatter={(val) => Number(val).toLocaleString('en-US')} />
                   <Tooltip
                     cursor={{ fill: 'rgba(255, 255, 255, 0.08)', stroke: '#f97316', strokeWidth: 1 }}
                     contentStyle={{ backgroundColor: '#020617', borderColor: '#f97316', borderRadius: '12px', boxShadow: '0 10px 30px rgba(0,0,0,0.9)', color: '#ffffff', opacity: 1, padding: '12px', zIndex: 100 }}
@@ -1240,7 +1240,7 @@ export default function SOHAnalysisPage() {
                 <BarChart data={onHandByCategoryData} margin={{ top: 20, right: 30, left: 10, bottom: 50 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
                   <XAxis dataKey="category" stroke="#94a3b8" tick={{ fill: '#e2e8f0', fontSize: 12, fontWeight: 600 }} angle={-15} textAnchor="end" height={60} />
-                  <YAxis stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 12 }} />
+                  <YAxis stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 12 }} width={100} tickFormatter={(val) => Number(val).toLocaleString('en-US')} />
                   <Tooltip
                     cursor={{ fill: 'rgba(255, 255, 255, 0.08)', stroke: '#10b981', strokeWidth: 1 }}
                     contentStyle={{ backgroundColor: '#020617', borderColor: '#10b981', borderRadius: '12px', boxShadow: '0 10px 30px rgba(0,0,0,0.9)', color: '#ffffff', opacity: 1, padding: '12px', zIndex: 100 }}
@@ -1259,7 +1259,7 @@ export default function SOHAnalysisPage() {
                 <BarChart data={pivotData} margin={{ top: 20, right: 30, left: 10, bottom: 20 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
                   <XAxis dataKey="cabang" stroke="#94a3b8" tick={{ fill: '#e2e8f0', fontSize: 12, fontWeight: 600 }} angle={-15} textAnchor="end" height={50} />
-                  <YAxis stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 12 }} />
+                  <YAxis stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 12 }} width={100} tickFormatter={(val) => Number(val).toLocaleString('en-US')} />
                   <Tooltip
                     cursor={{ fill: 'rgba(255, 255, 255, 0.08)', stroke: '#10b981', strokeWidth: 1 }}
                     contentStyle={{ backgroundColor: '#020617', borderColor: '#10b981', borderRadius: '12px', boxShadow: '0 10px 30px rgba(0,0,0,0.9)', color: '#ffffff', opacity: 1, padding: '12px', zIndex: 100 }}

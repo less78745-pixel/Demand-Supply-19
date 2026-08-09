@@ -13,9 +13,10 @@ interface KPICardProps {
   trend?: string;
   isAlert?: boolean;
   className?: string;
+  valueClassName?: string;
 }
 
-export function KPICard({ title, value, icon, trend, isAlert, className }: KPICardProps) {
+export function KPICard({ title, value, icon, trend, isAlert, className, valueClassName }: KPICardProps) {
   return (
     <div className={cn(
       "glass p-6 rounded-xl flex items-start gap-4 relative overflow-hidden group",
@@ -32,7 +33,7 @@ export function KPICard({ title, value, icon, trend, isAlert, className }: KPICa
       <div className="min-w-0 flex-1">
         <h3 className="text-sm font-medium text-muted-foreground truncate" title={title}>{title}</h3>
         <div className="mt-1 flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-2">
-          <span className="text-xl sm:text-2xl lg:text-3xl font-bold text-foreground tracking-tight truncate" title={String(value)}>{value}</span>
+          <span className={cn("text-2xl sm:text-3xl lg:text-4xl font-black text-foreground tracking-tight break-words", valueClassName)} title={String(value)}>{value}</span>
           {trend && (
             <span className={cn(
               "text-xs font-medium truncate",

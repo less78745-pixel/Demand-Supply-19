@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routers import occupancy, forecast, export, simulator, inventory, chat
 from routers import safety_stock, rebalancing, landed_cost, control_tower
-from routers import ddmrp, route_optimization
+from routers import ddmrp, route_optimization, wh_trans_mp
 
 app = FastAPI(title="Demand Supply Planning API")
 
@@ -30,6 +30,7 @@ app.include_router(landed_cost.router, prefix="/api/v1", tags=["SCM - Landed Cos
 app.include_router(control_tower.router, prefix="/api/v1", tags=["SCM - Control Tower"])
 app.include_router(ddmrp.router, prefix="/api/v1", tags=["DDMRP"])
 app.include_router(route_optimization.router, prefix="/api/v1", tags=["Route Optimization"])
+app.include_router(wh_trans_mp.router, prefix="/api/v1", tags=["WH-TRANS-MP"])
 
 @app.get("/")
 def read_root():

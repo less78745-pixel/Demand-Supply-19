@@ -1,0 +1,919 @@
+      let risingVol = 0;
+
+      let healthyVol = 0;
+
+      
+
+      parsed.data.filter(d => 
+
+        d['BULAN'] === bulan &&
+
+        (selectedCabang.includes('All') || selectedCabang.includes(d['Branch Name'])) &&
+
+        (selectedCategory.includes('All') || selectedCategory.includes(d['Category'])) &&
+
+        (selectedStatus.includes('All') || selectedStatus.includes(d['Status Product']))
+
+      ).forEach(r => {
+
+        const rawStatus = (r['Status Product'] || '').toLowerCase();
+
+        if (rawStatus === 'dead moving') deadVol += (r['Value'] || 0);
+
+        else if (rawStatus === 'fast moving') risingVol += (r['Value'] || 0);
+
+        else healthyVol += (r['Value'] || 0);
+
+      });
+
+
+
+      return {
+
+        name: bulan,
+
+        'Dead Stock Value': deadVol,
+
+        'Fast Moving Value': risingVol,
+
+        'Healthy Value': healthyVol
+
+      };
+
+    });
+
+  }, [parsed, selectedCabang, selectedCategory, selectedStatus]);
+
+
+
+  // Aggregate Multi-Dimensional Trend Data
+
+  const multiDimensionalTrendData = useMemo(() => {
+
+    if (!parsed) return { data: [], series: [], uniqueStatuses: [], targetGroups: [], GROUP_COLORS: [], OPACITIES: [] };
+
+    
+
+    // Apply local filters
+
+    let filtered = parsed.data.filter(d => 
+
+      (localCabang.includes('All') || localCabang.includes(d['Branch Name'])) &&
+
+      (localCategory.includes('All') || localCategory.includes(d['Category'])) &&
+
+      (localStatus.includes('All') || localStatus.includes(d['Status Product']))
+
+    );
+
+
+
+    // Find Target Groups
+
+    const overallGroupMap: Record<string, number> = {};
+
+    filtered.forEach(r => {
+
+      const key = r[trendGrouping] || 'Unknown';
+
+      overallGroupMap[key] = (overallGroupMap[key] || 0) + (r['Value'] || 0); 
+
+    });
+
+    
+
+    let targetGroups = Object.keys(overallGroupMap).sort((a, b) => overallGroupMap[b] - overallGroupMap[a]);
+
+    
+
+    // LIMIT TO TOP 5 ONLY IF CATEGORY
+
+    if (trendGrouping === 'Category') {
+
+      targetGroups = targetGroups.slice(0, 5);
+
+    }
+
+
+
+    // Keep only rows belonging to target groups
+
+    filtered = filtered.filter(r => targetGroups.includes(r[trendGrouping] || 'Unknown'));
+
+
+
+    // Determine the stack dimension (what makes up the blocks inside a bar)
+
+    let stackGrouping = 'Status Product';
+
+    if (trendGrouping === 'Status Product') {
+
+      stackGrouping = 'Category';
+
+    }
+
+
+
+    // Unique Stacks in this filtered data
+
+    let targetStacks: string[] = [];
+
+    if (stackGrouping === 'Status Product') {
+
+      targetStacks = Array.from(new Set(filtered.map(d => d['Status Product'] || 'Unknown'))).sort();
+
+    } else {
+
+      const stackMap: Record<string, number> = {};
+
+      filtered.forEach(r => {
+
+        const key = r[stackGrouping] || 'Unknown';
+
+        stackMap[key] = (stackMap[key] || 0) + (r['Value'] || 0);
+
+      });
+
+      targetStacks = Object.keys(stackMap).sort((a, b) => stackMap[b] - stackMap[a]).slice(0, 5);
+
+    }
+
+    
+
+    // Filter out rows that don't belong to the target stacks (if it was sliced to Top 5)
+
+    if (stackGrouping === 'Category') {
+
+      filtered = filtered.filter(r => targetStacks.includes(r[stackGrouping] || 'Unknown'));
+
+    }
+
+
+
+    // Group by BULAN
+
+    const monthMap: Record<string, any> = {};
+
+    
+
+    filtered.forEach(r => {
+
+      const bulan = r['BULAN'] || 'Unknown';
+
+      const groupKey = r[trendGrouping] || 'Unknown';
+
+      const stackKey = r[stackGrouping] || 'Unknown';
+
+      
+
+      if (!monthMap[bulan]) {
+
+        monthMap[bulan] = { name: bulan };
+
+      }
+
+      
+
+      const dataKey = `${groupKey}||${stackKey}`;
+
+      
+
+      if (!monthMap[bulan][dataKey]) monthMap[bulan][dataKey] = 0;
+
+      
+
+      let valToAdd = 0;
+
+      if (trendMetric === 'Value') valToAdd = r['Value'] || 0;
+
+      else if (trendMetric === 'CBM') valToAdd = r['CBM'] || 0;
+
+      else valToAdd = r['On Hand'] || 0;
+
+
+
+      monthMap[bulan][dataKey] += valToAdd;
+
+    });
+
+
+
+    const uniqueBulans = Array.from(new Set(parsed.data.map(d => d['BULAN']))).filter(Boolean).sort();
+
+    const result = uniqueBulans.map(b => monthMap[b]).filter(Boolean);
+
+
+
+    // Build series definition
+
+    const series: Array<{ dataKey: string, stackId: string, group: string, status: string, color: string, opacity: number }> = [];
+
+    const GROUP_COLORS = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#6366f1', '#84cc16'];
+
+    const OPACITIES = [1, 0.75, 0.5, 0.25, 0.1];
+
+
+
+    targetGroups.forEach((group, gIdx) => {
+
+      targetStacks.forEach((stack, sIdx) => {
+
+        series.push({
+
+          dataKey: `${group}||${stack}`,
+
+          stackId: group, // This makes it stack by group!
+
+          group: group,
+
+          status: stack, // 'status' is now used as the stack label
+
+          color: GROUP_COLORS[gIdx % GROUP_COLORS.length],
+
+          opacity: OPACITIES[sIdx % OPACITIES.length]
+
+        });
+
+      });
+
+    });
+
+
+
+    return { data: result, series, targetGroups, uniqueStatuses: targetStacks, GROUP_COLORS, OPACITIES };
+
+  }, [parsed, localCabang, localCategory, localStatus, trendGrouping, trendMetric]);
+
+
+
+  const trendInsights = useMemo(() => {
+
+    if (!parsed || !parsed.data) return null;
+
+    
+
+    const branchMap: Record<string, number> = {};
+
+    const catDeadMap: Record<string, number> = {};
+
+    const catFastMap: Record<string, number> = {};
+
+    
+
+    parsed.data.forEach(d => {
+
+      const cabang = d['Branch Name'] || 'Unknown';
+
+      const cat = d['Category'] || 'Unknown';
+
+      const status = (d['Status Product'] || '').toLowerCase();
+
+      const val = d['Value'] || 0;
+
+      
+
+      if (status.includes('dead') || status.includes('slow')) {
+
+        branchMap[cabang] = (branchMap[cabang] || 0) + val;
+
+        catDeadMap[cat] = (catDeadMap[cat] || 0) + val;
+
+      }
+
+      
+
+      if (status.includes('fast')) {
+
+        catFastMap[cat] = (catFastMap[cat] || 0) + val;
+
+      }
+
+    });
+
+    
+
+    const worstBranch = Object.entries(branchMap).sort((a, b) => b[1] - a[1])[0];
+
+    const worstCat = Object.entries(catDeadMap).sort((a, b) => b[1] - a[1])[0];
+
+    const bestCat = Object.entries(catFastMap).sort((a, b) => b[1] - a[1])[0];
+
+    
+
+    return {
+
+      worstBranch: worstBranch ? { name: worstBranch[0], val: worstBranch[1] } : null,
+
+      worstCat: worstCat ? { name: worstCat[0], val: worstCat[1] } : null,
+
+      bestCat: bestCat ? { name: bestCat[0], val: bestCat[1] } : null
+
+    };
+
+  }, [parsed]);
+
+
+
+
+
+  const handleExport = () => {
+
+    if (analyzedData.length === 0) return;
+
+    const header = ['ItemCode', 'NAMA BARANG', 'Kategori', 'Cabang', 'Tren (4th->0th)', 'DOI (Hari)', 'Value Tertahan (Rp)', 'Utilisasi Gudang (CBM)', 'Status Analisis', 'Rekomendasi Action'].map(h => `"${h}"`).join(',');
+
+    const lines = [header];
+
+
+
+    analyzedData.forEach(row => {
+
+      const line = [
+
+        `"${row.ItemCode}"`, `"${row['NAMA BARANG']}"`, `"${row.Category}"`, `"${row['Branch Name']}"`,
+
+        `"${row.trendStr}"`, row.DOI, row.Value, row.CBM,
+
+        `"${row.analysisStatus}"`, `"${row.action}"`
+
+      ].join(',');
+
+      lines.push(line);
+
+    });
+
+
+
+    const blob = new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement('a');
+
+    link.href = url;
+
+    link.download = getStandardFilename(`SKU_Velocity_ActionPlan`, new Date().toISOString(), 'csv');
+
+    link.click();
+
+    URL.revokeObjectURL(url);
+
+    toast.success('Action Plan Berhasil Diekspor!');
+
+  };
+
+
+
+  return (
+
+    <div id="export-container" className="space-y-8 pb-16 min-h-screen animate-fade-in text-foreground">
+
+      {/* HEADER SECTION */}
+
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-6 sm:p-8 border border-indigo-500/20 shadow-2xl no-export">
+
+        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#6366f1_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
+
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+
+          <div className="space-y-2">
+
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 uppercase tracking-widest">
+
+              <Activity className="w-3.5 h-3.5" /> Dashboard Data Harian • SKU Velocity
+
+            </div>
+
+            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white flex items-center gap-3">
+
+              SKU Velocity Analysis <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-300">(Dead Stock vs Fast Moving)</span>
+
+            </h1>
+
+            <p className="text-slate-300 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
+
+              Modul analitik cerdas untuk membedah kinerja barang: mengidentifikasi item yang menyedot modal (Kandidat Discontinue) dan item yang berpotensi kehabisan stok di masa tren naik (Rising Star).
+
+            </p>
+
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+
+            <TimestampBadge timestamp={parsed?.processed_at || new Date().toISOString()} label="Olah Terakhir:" />
+
+            <ExportHtmlButton elementId="export-container" moduleName="SKU_Velocity_Insights" processedAt={parsed?.processed_at} />
+            <button
+
+              onClick={() => setShowHowTo(!showHowTo)}
+
+              className="w-full sm:w-auto px-4 py-2 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2"
+
+            >
+
+              <HelpCircle className="w-4 h-4" />
+
+              {showHowTo ? 'Tutup Panduan' : 'Panduan & Template'}
+
+            </button>
+
+          </div>
+
+        </div>
+
+      </div>
+
+
+
+      {showHowTo && (
+
+        <GlassCard className="p-6 border-indigo-500/30 bg-white backdrop-blur-xl animate-fade-in">
+
+          <div className="flex items-center justify-between border-b border-slate-200 pb-4 mb-6">
+
+            <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+
+              <FileSpreadsheet className="w-5 h-5 text-indigo-500" /> Panduan Raw Data SKU Velocity
+
+            </h3>
+
+            <div className="flex flex-wrap gap-2">
+
+              <button
+
+                onClick={handleDownloadTemplate}
+
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-indigo-600/20"
+
+              >
+
+                <Download className="w-4 h-4" /> Unduh Template CSV
+
+              </button>
+
+              <button
+
+                onClick={handleGenerateDemo}
+
+                className="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-purple-500/20"
+
+              >
+
+                <Sparkles className="w-4 h-4" /> Gunakan Data Demo
+
+              </button>
+
+            </div>
+
+          </div>
+
+          <FileUploader
+
+            onFileUpload={handleFileUpload}
+
+            isLoading={isProcessing}
+
+            label="Upload Data SKU Velocity (Excel/CSV)"
+
+            description="File harus memuat kolom: ItemCode, NAMA BARANG, Category, On Hand, Value, 4th s/d 0th, AVG SALES MONTH, DOI, Qty Receipt, CBM."
+
+          />
+
+        </GlassCard>
+
+      )}
+
+
+
+      {/* EXECUTIVE SUMMARY KPI */}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+
+        <div className="p-6 rounded-2xl bg-gradient-to-br from-rose-950/80 to-slate-900 border border-rose-500/50 shadow-[0_0_20px_rgba(244,63,94,0.15)] relative overflow-hidden transition-all hover:scale-[1.02]">
+
+          <div className="absolute top-4 right-4 w-12 h-12 rounded-full bg-rose-500/20 border border-rose-500/30 flex items-center justify-center">
+
+            <AlertOctagon className="w-6 h-6 text-rose-400" />
+
+          </div>
+
+          <h3 className="text-sm font-extrabold text-rose-300 uppercase tracking-wider mb-2">Dead Stock Trapped Value</h3>
+
+          <div className="text-3xl font-black text-white drop-shadow-md">{formatNumberCompact(executiveSummary.deadStockValue)}</div>
+
+          <div className="mt-3 flex items-center gap-3 text-xs text-rose-200">
+
+            <span className="font-mono bg-rose-900/50 px-2 py-1 rounded border border-rose-500/30">{executiveSummary.deadStockCount} SKU</span>
+
+            <span>Menyita <b>{executiveSummary.deadStockCBM.toFixed(1)} m³</b> kapasitas gudang</span>
+
+          </div>
+
+        </div>
+
+
+
+        <div className="p-6 rounded-2xl bg-gradient-to-br from-emerald-950/80 to-slate-900 border border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.15)] relative overflow-hidden transition-all hover:scale-[1.02]">
+
+          <div className="absolute top-4 right-4 w-12 h-12 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center">
+
+            <Rocket className="w-6 h-6 text-emerald-400" />
+
+          </div>
+
+          <h3 className="text-sm font-extrabold text-emerald-300 uppercase tracking-wider mb-2">Fast Moving Opportunities</h3>
+
+          <div className="text-3xl font-black text-white drop-shadow-md">{executiveSummary.risingStarCount} SKU</div>
+
+          <div className="mt-3 flex items-center gap-3 text-xs text-emerald-200">
+
+            <span>Potensi Loss: <b>{formatNumberCompact(executiveSummary.risingStarLostSalesVal)}</b> bila OOS</span>
+
+          </div>
+
+        </div>
+
+        
+
+        <div className="p-6 rounded-2xl bg-gradient-to-br from-indigo-950/80 to-slate-900 border border-indigo-500/50 shadow-[0_0_20px_rgba(99,102,241,0.15)] relative overflow-hidden transition-all hover:scale-[1.02]">
+
+          <div className="absolute top-4 right-4 w-12 h-12 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center">
+
+            <CheckCircle2 className="w-6 h-6 text-indigo-400" />
+
+          </div>
+
+          <h3 className="text-sm font-extrabold text-indigo-300 uppercase tracking-wider mb-2">Total Evaluated SKU</h3>
+
+          <div className="text-3xl font-black text-white drop-shadow-md">{executiveSummary.totalItems}</div>
+
+          <div className="mt-3 flex items-center gap-3 text-xs text-indigo-200">
+
+            <span>Data SKU tervalidasi siap untuk pengambilan keputusan.</span>
+
+          </div>
+
+        </div>
+
+      </div>
+
+
+
+      {/* AUTOMATED INSIGHTS NARRATIVE */}
+
+      <GlassCard className="p-6 border-indigo-500/40 bg-gradient-to-br from-slate-900 to-slate-800 shadow-2xl">
+
+        <h2 className="text-xl font-black text-white flex items-center gap-2 mb-4 border-b border-slate-700 pb-3">
+
+          <Sparkles className="w-6 h-6 text-amber-400 animate-pulse" /> Supply Chain Automated Insights
+
+        </h2>
+
+        
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+          <div className="bg-slate-900 p-4 rounded-xl border border-rose-500/50 shadow-inner">
+
+            <h4 className="text-rose-400 font-bold mb-2 flex items-center gap-2"><AlertTriangle className="w-4 h-4"/> Critical Dead Stock Insight</h4>
+
+            <p className="text-sm text-slate-300 mb-3 leading-relaxed">
+
+              Saat ini terdapat <b>{formatRp(executiveSummary.deadStockValue)}</b> modal kerja dan <b>{executiveSummary.deadStockCBM.toFixed(1)} m³</b> kapasitas gudang yang terperangkap pada <b>{executiveSummary.deadStockCount} SKU Dead Stock</b>.
+
+            </p>
+
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Top 5 Kategori Mendesak (Rasionalisasi):</p>
+
+            <ul className="text-xs text-slate-300 space-y-1.5 list-disc pl-4">
+
+              {executiveSummary.topDeadCats.map((c, i) => (
+
+                <li key={i}>
+
+                  <span className="text-rose-300 font-semibold">{c.cat}</span> (Tertahan: {formatNumberCompact(c.val)} | Rata-rata DOI: &gt;{c.doiAvg} Hari)
+
+                </li>
+
+              ))}
+
+            </ul>
+
+            <div className="mt-4 px-3 py-2 bg-rose-500/20 rounded-lg border border-rose-500/50 text-xs text-rose-100 font-medium">
+
+              <b>Saran Tindakan:</b> Pertimbangkan bundling promo atau diskon khusus untuk membebaskan modal dan ruang.
+
+            </div>
+
+          </div>
+
+
+
+          <div className="bg-slate-900 p-4 rounded-xl border border-emerald-500/50 shadow-inner">
+
+            <h4 className="text-emerald-400 font-bold mb-2 flex items-center gap-2"><Rocket className="w-4 h-4"/> Peluang Cuan (Fast Moving)</h4>
+
+            <p className="text-sm text-slate-300 mb-3 leading-relaxed">
+
+              Terdapat <b>{executiveSummary.risingStarCount} SKU</b> yang menunjukkan tren kenaikan penjualan ekstrem beruntun, namun stoknya (DOI) kritis di bawah 30 hari dan minim jadwal penerimaan (Receipt).
+
+            </p>
+
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Top 5 SKU Butuh Percepatan Replenishment:</p>
+
+            <ul className="text-xs text-slate-300 space-y-1.5 list-disc pl-4">
+
+              {executiveSummary.topRisingSKUs.map((s, i) => (
+
+                <li key={i}>
+
+                  <span className="text-emerald-300 font-semibold">{s.name}</span> (Value: {formatNumberCompact(s.value)})
+
+                </li>
+
+              ))}
+
+            </ul>
+
+            <div className="mt-4 px-3 py-2 bg-emerald-500/20 rounded-lg border border-emerald-500/50 text-xs text-emerald-100 font-medium">
+
+              <b>Saran Tindakan:</b> Expedite PO saat ini, amankan ketersediaan barang.
+
+            </div>
+
+          </div>
+
+        </div>
+
+
+
+        {executiveSummary.topCrossBranchOpps.length > 0 && (
+
+          <div className="mt-4 bg-slate-900 p-4 rounded-xl border border-indigo-500/50 shadow-inner">
+
+            <h4 className="text-indigo-400 font-bold mb-2 flex items-center gap-2">🔄 Cross-Branch Rebalancing Insight</h4>
+
+            <p className="text-sm text-slate-300 mb-3 leading-relaxed">
+
+              Terdapat <b>{executiveSummary.topCrossBranchOpps.length} rekomendasi pemindahan stok</b> (rebalancing) untuk SKU yang berstatus mati/lambat di satu cabang, namun tergolong <b>Fast Moving</b> di cabang lainnya.
+
+            </p>
+
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Top 10 SKU Rekomendasi Rebalancing (Berdasarkan Value Tertahan):</p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+
+              {executiveSummary.topCrossBranchOpps.map((s, i) => (
+
+                <div key={i} className="bg-slate-800/50 p-3 rounded border border-slate-700/50">
+
+                  <div className="text-indigo-300 font-semibold mb-1 text-sm">{s.name}</div>
+
+                  <div className="text-xs text-slate-300 mb-1">Total Value Tertahan: <b>{formatNumberCompact(s.trappedValue)}</b></div>
+
+                  <div className="text-xs text-slate-400">
+
+                    <span className="text-rose-400">Dead/Slow di:</span> {s.badBranches.join(', ')}<br/>
+
+                    <span className="text-emerald-400">Fast Moving di:</span> {s.goodBranches.join(', ')}
+
+                  </div>
+
+                </div>
+
+              ))}
+
+            </div>
+
+          </div>
+
+        )}
+
+      </GlassCard>
+
+
+
+      {/* FILTER CONTROLS */}
+
+      <GlassCard allowOverflow={true} className="p-6 border-slate-200 bg-white shadow-xl relative z-40 no-export">
+
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+
+          <div className="space-y-2">
+
+            <label className="text-xs font-bold text-slate-700 block uppercase">📅 Bulan:</label>
+
+            <MultiSelect options={bulans} selected={selectedBulan} onChange={setSelectedBulan} selectAllLabel="Semua Bulan" placeholder="Pilih Bulan..." />
+
+          </div>
+
+          <div className="space-y-2">
+
+            <label className="text-xs font-bold text-slate-700 block uppercase">🏢 Cabang:</label>
+
+            <MultiSelect options={cabangs} selected={selectedCabang} onChange={setSelectedCabang} selectAllLabel="Semua Cabang" placeholder="Pilih Cabang..." />
+
+          </div>
+
+          <div className="space-y-2">
+
+            <label className="text-xs font-bold text-slate-700 block uppercase">📦 Kategori:</label>
+
+            <MultiSelect options={categories} selected={selectedCategory} onChange={setSelectedCategory} selectAllLabel="Semua Kategori" placeholder="Pilih Kategori..." />
+
+          </div>
+
+          <div className="space-y-2">
+
+            <label className="text-xs font-bold text-slate-700 block uppercase">🔖 Status Product:</label>
+
+            <MultiSelect options={statuses} selected={selectedStatus} onChange={setSelectedStatus} selectAllLabel="Semua Status" placeholder="Pilih Status..." />
+
+          </div>
+
+          <div className="space-y-2">
+
+            <label className="text-xs font-bold text-slate-700 block uppercase">🎯 Sorotan Matrix:</label>
+
+            <select
+
+              value={activeHighlight}
+
+              onChange={(e) => setActiveHighlight(e.target.value as any)}
+
+              className="w-full h-[42px] rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-bold focus:border-indigo-500 outline-none"
+
+            >
+
+              <option value="All">Lihat Semua SKU</option>
+
+              <option value="DeadStock">🔴 Hanya Kandidat Discontinue</option>
+
+              <option value="RisingStar">🟢 Hanya Fast Moving</option>
+
+            </select>
+
+          </div>
+
+        </div>
+
+      </GlassCard>
+
+
+
+      {/* VISUALIZATION QUADRANTS */}
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+
+        {/* Scatter Plot */}
+
+        <GlassCard className="p-6 border-indigo-500/30 bg-slate-900 shadow-2xl">
+
+          <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
+
+            <BarChart3 className="w-5 h-5 text-indigo-400" /> Kuadran Analisis (DOI vs Volume Penjualan)
+
+          </h3>
+
+          <p className="text-xs text-slate-400 mb-4">
+
+            Ukuran gelembung mewakili <b>Total Value Tertahan</b>. Merah = Discontinue, Hijau = Fast Moving.
+
+          </p>
+
+          <div className="h-[400px] w-full bg-slate-950/50 rounded-xl p-2 border border-slate-800">
+
+            <ResponsiveContainer width="100%" height="100%">
+
+              <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+
+                <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
+
+                <XAxis type="number" dataKey="avgSales" name="Rata-rata Penjualan" stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 11 }} tickFormatter={formatNum} label={{ value: 'Rata-rata Penjualan/Bulan', position: 'insideBottom', fill: '#94a3b8', fontSize: 11, offset: -10 }} />
+
+                <YAxis type="number" dataKey="doi" name="DOI (Hari)" stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 11 }} label={{ value: 'Days of Inventory (DOI)', angle: -90, position: 'insideLeft', fill: '#94a3b8', fontSize: 11 }} />
+
+                <ZAxis type="number" dataKey="value" range={[50, 600]} name="Value Tertahan" />
+
+                <Tooltip
+
+                  cursor={{ strokeDasharray: '3 3' }}
+
+                  contentStyle={{ backgroundColor: '#0f172a', borderColor: '#3b82f6', borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}
+
+                  formatter={(value: any, name: any) => name === 'Value Tertahan' ? formatRp(value) : formatNum(value)}
+
+                  labelFormatter={() => ''}
+
+                  content={({ active, payload }: any) => {
+
+                    if (active && payload && payload.length) {
+
+                      const data = payload[0].payload;
+
+                      return (
+
+                        <div className="bg-slate-900 border border-slate-700 p-3 rounded-xl shadow-xl">
+
+                          <p className="text-white font-bold mb-1 border-b border-slate-700 pb-1">{data.name}</p>
+
+                          <p className="text-xs text-slate-300">Status: <span style={{color: data.fill}} className="font-bold">{data.status}</span></p>
+
+                          <p className="text-xs text-slate-300">Avg Sales: {formatNum(data.avgSales)}</p>
+
+                          <p className="text-xs text-slate-300">DOI: {data.doi} Hari</p>
+
+                          <p className="text-xs text-slate-300">Value: {formatRp(data.value)}</p>
+
+                        </div>
+
+                      );
+
+                    }
+
+                    return null;
+
+                  }}
+
+                />
+
+                <Scatter data={scatterData} opacity={0.8}>
+
+                  {scatterData.map((entry, index) => (
+
+                    <Cell key={`cell-${index}`} fill={entry.fill} />
+
+                  ))}
+
+                </Scatter>
+
+              </ScatterChart>
+
+            </ResponsiveContainer>
+
+          </div>
+
+        </GlassCard>
+
+
+
+        {/* Trend Line Chart */}
+
+        <GlassCard className="p-6 border-indigo-500/30 bg-slate-900 shadow-2xl">
+
+          <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
+
+            <TrendingUp className="w-5 h-5 text-purple-400" /> Tren Nilai Penjualan Berdasarkan Bulan (Agregat SKU)
+
+          </h3>
+
+          <p className="text-xs text-slate-400 mb-4">
+
+            Perbandingan total nilai (Value) pergerakan antar klasifikasi matriks berdasar kelompok bulan.
+
+          </p>
+
+          <div className="h-[400px] w-full bg-slate-950/50 rounded-xl p-2 border border-slate-800">
+
+            <ResponsiveContainer width="100%" height="100%">
+
+              <LineChart data={trendData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+
+                <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
+
+                <XAxis dataKey="name" stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 12, fontWeight: 600 }} />
+
+                <YAxis stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 11 }} tickFormatter={(val) => formatNumberCompact(val)} width={60} />
+
+                <Tooltip
+
+                  contentStyle={{ backgroundColor: '#0f172a', borderColor: '#6366f1', borderRadius: '12px' }}
+
+                  formatter={(val: any) => [formatRp(val), undefined]}
+
+                />
+
+                <Legend wrapperStyle={{ paddingTop: '10px' }} />
+
+                <Line type="monotone" dataKey="Dead Stock Value" stroke="#f43f5e" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+
+                <Line type="monotone" dataKey="Fast Moving Value" stroke="#10b981" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+
+                <Line type="monotone" dataKey="Healthy Value" stroke="#94a3b8" strokeWidth={2} strokeDasharray="5 5" dot={false} />
+
+              </LineChart>
+
+            </ResponsiveContainer>
+
+          </div>
+
+        </GlassCard>
+
+      </div>
+
+
+
+      {/* TREND ANALISIS MULTIDIMENSI */}
+
+      <GlassCard className="p-6 border-slate-200 bg-white shadow-2xl overflow-hidden mt-8">
+

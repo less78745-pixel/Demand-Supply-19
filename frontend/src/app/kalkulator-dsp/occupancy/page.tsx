@@ -12,6 +12,7 @@ import { MultiSelect } from '@/components/ui/MultiSelect';
 import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import toast from 'react-hot-toast';
 import { getStandardFilename } from '@/utils/export';
+import { ExportHtmlButton } from '@/components/ui/ExportHtmlButton';
 
 type ScenarioType = 'actual' | 'surge' | 'expansion';
 
@@ -141,6 +142,13 @@ function generateDemoOccupancy() {
     kpi_summary: { avg_occupancy: 46.8, max_occupancy: 51.3, categories_at_risk: 0 },
     shortage_alerts: [],
     inventory_analysis: {
+      kpi_summary: {
+        total_categories: 3,
+        a_class_count: 2,
+        z_class_count: 2,
+        dead_stock_count: 1,
+        stockout_risk_count: 0
+      },
       matrix_data: [
         { cabang: 'DC Jakarta', category: 'Electronics & Spareparts', class: 'A-X', volume: 5200, mean_sales: 140, cv: 0.2, doh: 22, on_hand: 3080, trend_pct: 5, stockout_risk: false, strategy: 'Continuous Review, tight safety stock. High value, predictable.' },
         { cabang: 'DC Surabaya', category: 'Fast Moving Consumer', class: 'A-Z', volume: 3800, mean_sales: 110, cv: 0.75, doh: 12, on_hand: 1320, trend_pct: -2, stockout_risk: false, strategy: 'Collaborative forecasting needed. Risk of high-cost stockouts.' },
@@ -551,6 +559,7 @@ export default function OccupancyPage() {
             >
               <Download className="w-4 h-4" /> Simpan Sesi
             </button>
+            <ExportHtmlButton elementId="export-container" moduleName="Occupancy_Analisa" processedAt={results?.processed_at} />
             <button
               onClick={() => setShowHowTo(!showHowTo)}
               className="w-full sm:w-auto px-4 py-2 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2"
@@ -1294,3 +1303,4 @@ export default function OccupancyPage() {
     </div>
   );
 }
+

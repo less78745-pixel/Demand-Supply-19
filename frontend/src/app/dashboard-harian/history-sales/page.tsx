@@ -1734,7 +1734,8 @@ export default function HistorySalesPage() {
                 <YAxis stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 12 }} />
                 <Tooltip
                   itemSorter={(item) => -getMonthScore(String(item.dataKey))}
-                  contentStyle={{ backgroundColor: '#0f172a', borderColor: '#3b82f6', borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}
+                  contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 1)', borderColor: '#3b82f6', borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,1)' }}
+                  wrapperStyle={{ opacity: 1, zIndex: 1000 }}
                   labelStyle={{ color: '#38bdf8', fontWeight: 'bold', borderBottom: '1px solid #334155', paddingBottom: '4px' }}
                   formatter={(val: any, name: any) => [Number(val).toLocaleString('en-US', { maximumFractionDigits: 2 }), name]}
                 />
@@ -1819,7 +1820,7 @@ export default function HistorySalesPage() {
               </div>
               <div className="h-[350px] w-full mt-2">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={cabangOnlySupplyVsAvg3} margin={{ top: 20, right: 20, left: 30, bottom: 60 }}>
+                  <ComposedChart data={cabangOnlySupplyVsAvg3} margin={{ top: 20, right: 20, left: 30, bottom: 60 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
                     <XAxis dataKey="cabang" stroke="#94a3b8" tick={{ fill: '#e2e8f0', fontSize: 11, fontWeight: 600 }} angle={-25} textAnchor="end" height={60} />
                     <YAxis stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 11 }} tickFormatter={(val) => val.toLocaleString('id-ID')} />
@@ -1831,11 +1832,14 @@ export default function HistorySalesPage() {
                           return (
                             <div className="bg-slate-900 border border-emerald-500/30 p-3 rounded-xl shadow-xl">
                               <p className="text-emerald-400 font-bold mb-2 border-b border-slate-700 pb-1">{label}</p>
-                              {payload.map((entry: any, index: number) => (
-                                <p key={index} style={{ color: entry.color }} className="text-sm">
-                                  {entry.name}: {Number(entry.value).toLocaleString('id-ID')} Unit
-                                </p>
-                              ))}
+                              {payload.map((entry: any, index: number) => {
+                                if (entry.dataKey === 'totalSupply') return null; // Hide the invisible line from tooltip
+                                return (
+                                  <p key={index} style={{ color: entry.color }} className="text-sm">
+                                    {entry.name}: {Number(entry.value).toLocaleString('id-ID')} Unit
+                                  </p>
+                                );
+                              })}
                               <p className="text-amber-400 font-bold mt-2 pt-1 border-t border-slate-700 text-sm">
                                 Rasio Pasokan: {times}x Lipat ({(data.ratio).toFixed(1)}%)
                               </p>
@@ -1846,7 +1850,9 @@ export default function HistorySalesPage() {
                       }}
                     />
                     <Legend wrapperStyle={{ paddingTop: '10px', fontSize: '12px', fontWeight: 'bold', color: '#fff' }} />
-                    <Bar dataKey="totalSupply" name="Total Pasokan" fill="#10b981" maxBarSize={50}>
+                    
+                    {/* Invisible Line to hold the Total Label correctly at the top */}
+                    <Line dataKey="totalSupply" stroke="transparent" strokeWidth={0} activeDot={false} dot={false} isAnimationActive={false}>
                       <LabelList 
                         dataKey={(data: any) => data.avg3 > 0 ? (data.totalSupply / data.avg3).toFixed(1) + 'x' : '0x'} 
                         position="top" 
@@ -1854,9 +1860,15 @@ export default function HistorySalesPage() {
                         fontSize={11} 
                         fontWeight="bold" 
                       />
-                    </Bar>
+                    </Line>
+
+                    <Bar dataKey="soh" stackId="supply" name="SOH" fill="#10b981" maxBarSize={50} />
+                    <Bar dataKey="to" stackId="supply" name="TO" fill="#f97316" maxBarSize={50} />
+                    <Bar dataKey="vessel" stackId="supply" name="Vessel" fill="#3b82f6" maxBarSize={50} />
+                    <Bar dataKey="holdDelivery" stackId="supply" name="Hold" fill="#f59e0b" maxBarSize={50} />
+                    <Bar dataKey="spjm" stackId="supply" name="SPJM" fill="#a855f7" maxBarSize={50} />
                     <Bar dataKey="avg3" name="Rata-Rata Sales 3 Bln" fill="#f43f5e" maxBarSize={50} />
-                  </BarChart>
+                  </ComposedChart>
                 </ResponsiveContainer>
               </div>
             </div>
@@ -2000,6 +2012,7 @@ export default function HistorySalesPage() {
                 <YAxis stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 12 }} domain={[0, supplyVsMonthlySales.maxY]} tickFormatter={(val) => val.toLocaleString('id-ID')} />
                 <Tooltip
                   contentStyle={{ backgroundColor: '#0f172a', borderColor: '#eab308', borderRadius: '12px', padding: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.8)' }}
+                  itemStyle={{ color: '#ffffff' }}
                   formatter={(val: any) => [Number(val).toLocaleString('id-ID') + ' Unit', 'Volume Sales']}
                   labelStyle={{ color: '#fde047', fontWeight: 'bold' }}
                 />
@@ -2062,7 +2075,7 @@ export default function HistorySalesPage() {
           <div className="mb-6 p-5 rounded-2xl bg-gradient-to-r from-blue-950/40 via-slate-900 to-slate-950 border border-blue-500/30 shadow-lg">
             <div className="flex items-center gap-2 text-blue-400 font-extrabold text-sm sm:text-base mb-3 border-b border-blue-500/20 pb-2.5">
               <Sparkles className="w-5 h-5 text-blue-400" />
-              <span>Insight Evaluasi Komparatif Sales</span>
+              <mark className="bg-blue-500/20 text-blue-200 rounded px-2 py-0.5">Insight Evaluasi Komparatif Sales</mark>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
               <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
@@ -2231,9 +2244,9 @@ export default function HistorySalesPage() {
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[11px] font-black bg-purple-500/20 text-purple-300 border border-purple-500/40 uppercase tracking-widest mb-2 shadow-sm">
                 <Award className="w-3.5 h-3.5" /> Analisis Tambahan • Group by Cabang & Category Insentif
               </div>
-              <h3 className="text-lg sm:text-xl font-extrabold text-slate-900 flex items-center gap-2.5">
+              <h3 className="text-lg sm:text-xl font-extrabold text-white flex items-center gap-2.5">
                 <BarChart3 className="w-5 h-5 text-purple-400" />
-                Performa Volume Sales per Category Insentif
+                <mark className="bg-purple-500/20 text-purple-200 rounded px-2 py-0.5">Performa Volume Sales per Category Insentif</mark>
               </h3>
               <p className="text-xs text-slate-300 mt-1">
                 Pengelompokan riwayat penjualan dari <b>{dynamicMonthLabels.M} sampai {dynamicMonthLabels.M5}</b> berdasarkan kombinasi <b>Cabang &amp; Kategori Insentif</b>.

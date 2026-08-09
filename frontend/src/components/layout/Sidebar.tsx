@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Activity, LineChart, Package,
   FileBarChart, TrendingUp, ClipboardList,
   Network, ShieldCheck, ArrowLeftRight, Ship, Radar,
-  ChevronRight, CalendarClock, Calculator, Layers, Route, Anchor, X
+  ChevronRight, CalendarClock, Calculator, Layers, Route, Anchor, X, MapPin
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthStore, canAccess } from '@/stores/useAuthStore';
@@ -29,6 +29,7 @@ const MENU_ITEMS: MenuItem[] = [
       { name: 'SOH-TO-Vessel', href: '/dashboard-harian/soh-to-analysis', icon: ClipboardList },
       { name: 'History Sales-Outstanding', href: '/dashboard-harian/history-sales', icon: TrendingUp },
       { name: 'PR Update & Tracking Container', href: '/dashboard-harian/pr-update', icon: Anchor },
+      { name: 'SKU Velocity', href: '/dashboard-harian/sku-velocity', icon: Activity },
     ],
   },
   {
@@ -40,6 +41,7 @@ const MENU_ITEMS: MenuItem[] = [
       { name: 'Sales Forecasting', href: '/kalkulator-dsp/forecast', icon: LineChart },
       { name: 'DDMRP Buffer', href: '/kalkulator-dsp/ddmrp', icon: Layers },
       { name: 'Route Optimization', href: '/kalkulator-dsp/route-optimization', icon: Route },
+      { name: 'WH-TRANS-MP', href: '/kalkulator-dsp/wh-trans-mp', icon: MapPin },
     ],
   },
   {
