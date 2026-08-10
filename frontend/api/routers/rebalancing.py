@@ -28,9 +28,11 @@ async def analyze_rebalancing_endpoint(
         def parse_and_save_file(upload: UploadFile, contents: bytes) -> tuple[pd.DataFrame, str]:
             name = upload.filename or "file.csv"
             
-            # Save file to local storage
+            import tempfile
+            STORAGE_DIR = os.path.join(tempfile.gettempdir(), "wms_storage", "uploads")
             unique_name = f"{uuid.uuid4()}_{name}"
-            file_path = f"storage/uploads/{unique_name}"
+            file_path = os.path.join(STORAGE_DIR, unique_name)
+            
             with open(file_path, "wb") as f:
                 f.write(contents)
             

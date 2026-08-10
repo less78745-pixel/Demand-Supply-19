@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+import tempfile
 import os
 
 from database import engine
@@ -9,8 +10,10 @@ from schemas import models
 # Initialize DB tables
 models.Base.metadata.create_all(bind=engine)
 
-# Create storage directory if it doesn't exist
-os.makedirs("storage/uploads", exist_ok=True)
+# Use /tmp for ephemeral storage to avoid Vercel Read-Only File System Crash
+STORAGE_DIR = os.path.join(tempfile.gettempdir(), "wms_storage")
+UPLOADS_DIR = os.path.join(STORAGE_DIR, "uploads")
+os.makedirs(UPLOADS_DIR, exist_ok=True)
 
 from routers import occupancy, forecast, export, simulator, inventory, chat
 from routers import safety_stock, rebalancing, landed_cost, control_tower
@@ -20,7 +23,7 @@ from routers import results # We will create this
 app = FastAPI(title="Demand Supply Planning API")
 
 # Mount static files for uploads
-app.mount("/storage", StaticFiles(directory="storage"), name="storage")
+app.mount("/storage", StaticFiles(directory=STORAGE_DIR), name="storage")
 
 from fastapi.middleware.gzip import GZipMiddleware
 
