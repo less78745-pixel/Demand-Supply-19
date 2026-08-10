@@ -176,7 +176,7 @@ export default function WHTransMPPage() {
                 className="w-1/2 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl font-bold transition-all text-sm flex items-center justify-center gap-2"
               >
                 <Database className="w-4 h-4" />
-                Data Demo
+                Proses & Simpan ke Global (Demo)
               </button>
             </div>
 
@@ -214,7 +214,7 @@ export default function WHTransMPPage() {
               className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-all shadow-lg shadow-indigo-200 hover:shadow-xl hover:shadow-indigo-300 flex items-center justify-center gap-2 disabled:opacity-50"
             >
               <Play className="w-5 h-5" />
-              Run Clustering
+              Proses & Simpan ke Global
             </button>
           </div>
 

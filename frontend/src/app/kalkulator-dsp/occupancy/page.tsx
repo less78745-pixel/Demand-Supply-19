@@ -634,7 +634,7 @@ export default function OccupancyPage() {
                 onClick={handleGenerateDemo}
                 className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-slate-900 font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-indigo-500/20"
               >
-                <Zap className="w-4 h-4" /> Gunakan Data Demo
+                <Zap className="w-4 h-4" /> Proses & Simpan ke Global (Demo)
               </button>
             </div>
           </div>

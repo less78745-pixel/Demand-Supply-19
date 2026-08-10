@@ -291,7 +291,7 @@ export default function DDMRPPage() {
                 onClick={handleGenerateDemo}
                 className="px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-slate-900 font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-blue-500/20"
               >
-                <Cpu className="w-4 h-4" /> Gunakan Data Demo
+                <Cpu className="w-4 h-4" /> Proses & Simpan ke Global (Demo)
               </button>
             </div>
           </div>
@@ -432,7 +432,7 @@ export default function DDMRPPage() {
                     ) : (
                       <>
                         <Cpu className="w-4 h-4" />
-                        Hitung & Simpan ke Global
+                        Proses & Simpan ke Global
                       </>
                     )}
                   </button>

@@ -355,7 +355,7 @@ export default function LandedCostPage() {
                 onClick={handleGenerateDemo}
                 className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-slate-900 font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-cyan-500/20"
               >
-                <Zap className="w-4 h-4" /> Gunakan Data Demo
+                <Zap className="w-4 h-4" /> Proses & Simpan ke Global (Demo)
               </button>
             </div>
           </div>
@@ -448,7 +448,7 @@ export default function LandedCostPage() {
             onClick={handleGenerateDemo}
             className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-slate-900 font-bold rounded-xl shadow-lg transition flex items-center gap-2 text-xs sm:text-sm"
           >
-            <Zap className="w-4 h-4" /> Gunakan Data Demo
+            <Zap className="w-4 h-4" /> Proses & Simpan ke Global (Demo)
           </button>
         </div>
       </div>
