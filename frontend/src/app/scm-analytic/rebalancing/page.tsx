@@ -8,7 +8,8 @@ import {
   ArrowLeftRight, Download, Truck, DollarSign, AlertTriangle,
   Package, CheckCircle, Info, UploadCloud, FileSpreadsheet, X, Zap, HelpCircle, FastForward, ShieldAlert
 } from 'lucide-react';
-import { uploadRebalancingFiles, getGlobalResult } from '@/lib/api';
+import { uploadRebalancingFiles } from '@/lib/api';
+import { supabase } from '@/lib/supabase';
 import toast from 'react-hot-toast';
 import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import { getStandardFilename } from '@/utils/export';
@@ -189,13 +190,21 @@ export default function RebalancingPage() {
   };
 
   useEffect(() => {
-    const fetchGlobalData = async () => {
+    const fetchInitialData = async () => {
       try {
-        const res = await getGlobalResult('rebalancing');
-        if (res.data) {
-          setResults(normalizeData(res.data));
+        const { data, error } = await supabase
+          .from('processed_results')
+          .select('*')
+          .eq('module', 'rebalancing')
+          .order('created_at', { ascending: false })
+          .limit(1);
+          
+        if (data && data.length > 0) {
+          const row = data[0];
+          const parsed = JSON.parse(row.result_json);
+          parsed.processed_at = row.created_at;
+          setResults(normalizeData(parsed));
         } else {
-          // If no global data exists yet, load demo data so page isn't empty
           if (!results) setResults(normalizeData(generateDemoRebalancing()));
         }
       } catch (err) {
@@ -203,12 +212,31 @@ export default function RebalancingPage() {
       }
     };
     
-    // Initial fetch
-    fetchGlobalData();
+    // 1. Initial fetch directly from Supabase
+    fetchInitialData();
     
-    // Polling every 3 seconds for real-time updates across devices
-    const intervalId = setInterval(fetchGlobalData, 3000);
-    return () => clearInterval(intervalId);
+    // 2. Real-time Subscription (WebSockets)
+    const channel = supabase
+      .channel('rebalancing_updates')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'processed_results', filter: 'module=eq.rebalancing' },
+        (payload) => {
+          try {
+            const newData = JSON.parse(payload.new.result_json);
+            newData.processed_at = payload.new.created_at;
+            setResults(normalizeData(newData));
+            toast.success('Pembaruan data dari pengguna lain diterima!', { icon: '🔄' });
+          } catch (e) {
+            console.error("Failed parsing realtime data", e);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
