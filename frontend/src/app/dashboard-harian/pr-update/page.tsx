@@ -19,6 +19,7 @@ import {
   Legend, ResponsiveContainer, ComposedChart, Line
 } from 'recharts';
 import { get, set } from 'idb-keyval';
+import { supabase } from '@/lib/supabase';
 import { parseDynamicCSV, findColumn, ParsedData } from '@/lib/csvParser';
 import { getStandardFilename } from '@/utils/export';
 import { ExportHtmlButton } from '@/components/ui/ExportHtmlButton';
@@ -503,16 +504,58 @@ export default function PRUpdatePage() {
   const [modalSearchInput, setModalSearchInput] = useState<string>('');
 
   useEffect(() => {
-    get('last_pr_update').then(saved => {
-      if (saved && saved.data && saved.data.length > 0) {
-        setParsed(saved);
+    const fetchGlobalData = async () => {
+      const { data, error } = await supabase
+        .from('processed_results')
+        .select('*')
+        .eq('module', 'pr_update')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (!error && data && data.result_json) {
+        const parsedData = JSON.parse(data.result_json);
+        setParsed(parsedData);
       } else {
-        setParsed(generateDemoPRUpdate());
+        get('last_pr_update').then(saved => {
+          if (saved && saved.data && saved.data.length > 0) {
+            setParsed(saved);
+          } else {
+            handleGenerateDemo();
+          }
+        }).catch(err => {
+          console.warn('Failed to load state from IndexDB', err);
+          handleGenerateDemo();
+        });
       }
-    }).catch(err => {
-      console.warn('Failed to load PR Update state from IndexDB', err);
-      setParsed(generateDemoPRUpdate());
-    });
+    };
+
+    fetchGlobalData();
+
+    const channel = supabase
+      .channel('pr_update_changes')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'processed_results', filter: "module=eq.pr_update" },
+        (payload) => {
+          const timestampStr = sessionStorage.getItem('last_processed_at_pr_update');
+          if (payload.new && payload.new.result_json) {
+            const parsedData = JSON.parse(payload.new.result_json);
+            if (!timestampStr || parsedData.processed_at !== timestampStr) {
+              setParsed(parsedData);
+              toast.success('🔄 Pembaruan data dari pengguna lain diterima!', {
+                icon: '🔄',
+                style: { background: '#10B981', color: '#fff' },
+              });
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const handleGenerateDemo = () => {
@@ -976,7 +1019,7 @@ export default function PRUpdatePage() {
                 onClick={handleGenerateDemo}
                 className="px-4 py-2 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-slate-900 font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-purple-500/20"
               >
-                <Sparkles className="w-4 h-4" /> Gunakan Data Demo (+ SPJM)
+                <Sparkles className="w-4 h-4" /> Proses & Simpan ke Global (Demo) (+ SPJM)
               </button>
             </div>
           </div>

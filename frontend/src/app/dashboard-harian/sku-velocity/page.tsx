@@ -17,6 +17,7 @@ import {
   Legend, ResponsiveContainer, LineChart, Line, ComposedChart, BarChart, Bar, ZAxis, Cell
 } from 'recharts';
 import { get, set } from 'idb-keyval';
+import { supabase } from '@/lib/supabase';
 import { parseDynamicCSV, ParsedData } from '@/lib/csvParser';
 import { getStandardFilename } from '@/utils/export';
 import { ExportHtmlButton } from '@/components/ui/ExportHtmlButton';
@@ -63,16 +64,58 @@ export default function SKUVelocityPage() {
   }, [parsed]);
 
   useEffect(() => {
-    get('last_sku_velocity_data').then(saved => {
-      if (saved && saved.data && saved.data.length > 0) {
-        setParsed(saved);
+    const fetchGlobalData = async () => {
+      const { data, error } = await supabase
+        .from('processed_results')
+        .select('*')
+        .eq('module', 'sku_velocity')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (!error && data && data.result_json) {
+        const parsedData = JSON.parse(data.result_json);
+        setParsed(parsedData);
       } else {
-        handleGenerateDemo();
+        get('last_sku_velocity_data').then(saved => {
+          if (saved && saved.data && saved.data.length > 0) {
+            setParsed(saved);
+          } else {
+            handleGenerateDemo();
+          }
+        }).catch(err => {
+          console.warn('Failed to load state from IndexDB', err);
+          handleGenerateDemo();
+        });
       }
-    }).catch(err => {
-      console.warn('Failed to load state from IndexDB', err);
-      handleGenerateDemo();
-    });
+    };
+
+    fetchGlobalData();
+
+    const channel = supabase
+      .channel('sku_velocity_changes')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'processed_results', filter: "module=eq.sku_velocity" },
+        (payload) => {
+          const timestampStr = sessionStorage.getItem('last_processed_at_sku_velocity');
+          if (payload.new && payload.new.result_json) {
+            const parsedData = JSON.parse(payload.new.result_json);
+            if (!timestampStr || parsedData.processed_at !== timestampStr) {
+              setParsed(parsedData);
+              toast.success('🔄 Pembaruan data dari pengguna lain diterima!', {
+                icon: '🔄',
+                style: { background: '#10B981', color: '#fff' },
+              });
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const handleGenerateDemo = () => {
@@ -157,6 +200,11 @@ export default function SKUVelocityPage() {
       processed_at: new Date().toISOString()
     };
     
+    const timestamp = new Date().toISOString();
+    demoData.processed_at = timestamp;
+    sessionStorage.setItem('last_processed_at_sku_velocity', timestamp);
+    supabase.from('processed_results').insert([{ module: 'sku_velocity', result_json: JSON.stringify(demoData) }]).then();
+    
     setParsed(demoData);
     toast.success('Data Demo SKU Velocity Berhasil Dimuat!');
   };
@@ -191,6 +239,10 @@ export default function SKUVelocityPage() {
       } catch (e) {
         console.warn('Data terlalu besar untuk IndexDB', e);
       }
+      const timestamp = new Date().toISOString();
+      parsedData.processed_at = timestamp;
+      sessionStorage.setItem('last_processed_at_sku_velocity', timestamp);
+      await supabase.from('processed_results').insert([{ module: 'sku_velocity', result_json: JSON.stringify(parsedData) }]);
       toast.success('File berhasil diproses!', { id: 'upload' });
     } catch (err: any) {
       toast.error(err.message || 'Gagal memproses file', { id: 'upload' });
@@ -853,7 +905,7 @@ export default function SKUVelocityPage() {
 
               >
 
-                <Sparkles className="w-4 h-4" /> Gunakan Data Demo
+                <Sparkles className="w-4 h-4" /> Proses & Simpan ke Global (Demo)
 
               </button>
 

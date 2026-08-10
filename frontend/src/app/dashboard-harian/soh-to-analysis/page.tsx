@@ -18,6 +18,7 @@ import {
   Legend, ResponsiveContainer, PieChart, Pie, Cell
 } from 'recharts';
 import { get, set } from 'idb-keyval';
+import { supabase } from '@/lib/supabase';
 import { parseDynamicCSV, findColumn, ParsedData } from '@/lib/csvParser';
 import { getStandardFilename } from '@/utils/export';
 import { formatNumberCompact } from '@/lib/utils';
@@ -272,27 +273,75 @@ export default function SOHAnalysisPage() {
   const [sohColFilters, setSohColFilters] = useState<Record<string, { search?: string; selected?: string[] }>>({});
 
   useEffect(() => {
-    get('last_soh_data').then(saved => {
-      if (saved && saved.data && saved.data.length > 0 && saved.sheetNames && saved.sheetNames.length > 1) {
-        setParsed(saved);
-        if (saved.sheetNames && saved.sheetNames.length > 0) {
-          setSelectedSheetName(saved.sheetNames[0]);
+    const fetchGlobalData = async () => {
+      const { data, error } = await supabase
+        .from('processed_results')
+        .select('*')
+        .eq('module', 'soh_to_analysis')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (!error && data && data.result_json) {
+        const parsedData = JSON.parse(data.result_json);
+        setParsed(parsedData);
+        if (parsedData.sheetNames && parsedData.sheetNames.length > 0) {
+          setSelectedSheetName(parsedData.sheetNames[0]);
         }
       } else {
-        const demo = generateDemoSOH();
-        setParsed(demo);
-        if (demo.sheetNames && demo.sheetNames.length > 0) {
-          setSelectedSheetName(demo.sheetNames[0]);
+        get('last_soh_data').then(saved => {
+          if (saved && saved.data && saved.data.length > 0 && saved.sheetNames && saved.sheetNames.length > 1) {
+            setParsed(saved);
+            if (saved.sheetNames && saved.sheetNames.length > 0) {
+              setSelectedSheetName(saved.sheetNames[0]);
+            }
+          } else {
+            const demo = generateDemoSOH();
+            setParsed(demo);
+            if (demo.sheetNames && demo.sheetNames.length > 0) {
+              setSelectedSheetName(demo.sheetNames[0]);
+            }
+          }
+        }).catch(err => {
+          console.warn('Failed to load SOH state from IndexDB', err);
+          const demo = generateDemoSOH();
+          setParsed(demo);
+          if (demo.sheetNames && demo.sheetNames.length > 0) {
+            setSelectedSheetName(demo.sheetNames[0]);
+          }
+        });
+      }
+    };
+
+    fetchGlobalData();
+
+    const channel = supabase
+      .channel('soh_to_analysis_changes')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'processed_results', filter: "module=eq.soh_to_analysis" },
+        (payload) => {
+          const timestampStr = sessionStorage.getItem('last_processed_at_soh_to_analysis');
+          if (payload.new && payload.new.result_json) {
+            const parsedData = JSON.parse(payload.new.result_json);
+            if (!timestampStr || parsedData.processed_at !== timestampStr) {
+              setParsed(parsedData);
+              if (parsedData.sheetNames && parsedData.sheetNames.length > 0) {
+                setSelectedSheetName(parsedData.sheetNames[0]);
+              }
+              toast.success('🔄 Pembaruan data dari pengguna lain diterima!', {
+                icon: '🔄',
+                style: { background: '#10B981', color: '#fff' },
+              });
+            }
+          }
         }
-      }
-    }).catch(err => {
-      console.warn('Failed to load SOH state from IndexDB', err);
-      const demo = generateDemoSOH();
-      setParsed(demo);
-      if (demo.sheetNames && demo.sheetNames.length > 0) {
-        setSelectedSheetName(demo.sheetNames[0]);
-      }
-    });
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   useEffect(() => {
@@ -322,6 +371,10 @@ export default function SOHAnalysisPage() {
     if (demo.sheetNames && demo.sheetNames.length > 0) {
       setSelectedSheetName(demo.sheetNames[0]);
     }
+    const timestamp = new Date().toISOString();
+    demo.processed_at = timestamp;
+    sessionStorage.setItem('last_processed_at_soh_to_analysis', timestamp);
+    supabase.from('processed_results').insert([{ module: 'soh_to_analysis', result_json: JSON.stringify(demo) }]).then();
     toast.success('🎉 Data Demo SOH-TO-Vessel (2 Sheet: Qty & Value) Berhasil Dimuat!');
   };
 
@@ -359,6 +412,10 @@ export default function SOHAnalysisPage() {
       } catch (e) {
         console.warn('Data terlalu besar untuk disimpan di IndexDB', e);
       }
+      const timestamp = new Date().toISOString();
+      parsedData.processed_at = timestamp;
+      sessionStorage.setItem('last_processed_at_soh_to_analysis', timestamp);
+      await supabase.from('processed_results').insert([{ module: 'soh_to_analysis', result_json: JSON.stringify(parsedData) }]);
       toast.success('✅ Data SOH & TO Berhasil Diproses!', { id: 'soh' });
     } catch (err: any) {
       toast.error(err.message || 'Gagal memproses file', { id: 'soh' });
@@ -964,7 +1021,7 @@ export default function SOHAnalysisPage() {
                 onClick={handleGenerateDemo}
                 className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-slate-900 font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-emerald-500/20"
               >
-                <Sparkles className="w-4 h-4" /> Gunakan Data Demo 5-Pilar
+                <Sparkles className="w-4 h-4" /> Proses & Simpan ke Global (Demo) 5-Pilar
               </button>
             </div>
           </div>

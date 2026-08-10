@@ -18,6 +18,7 @@ import {
   Legend, ResponsiveContainer, ComposedChart, Line, ReferenceArea, ReferenceLine, Cell, LabelList
 } from 'recharts';
 import { get, set } from 'idb-keyval';
+import { supabase } from '@/lib/supabase';
 import { parseDynamicCSV, findColumn, ParsedData } from '@/lib/csvParser';
 import { getStandardFilename } from '@/utils/export';
 import { formatNumberCompact } from '@/lib/utils';
@@ -356,16 +357,58 @@ export default function HistorySalesPage() {
   const [table2ColFilters, setTable2ColFilters] = useState<Record<string, { search?: string; selected?: string[] }>>({});
 
   useEffect(() => {
-    get('last_history_sales').then(saved => {
-      if (saved && saved.data && saved.data.length > 0) {
-        setFormattedParsed(saved);
+    const fetchGlobalData = async () => {
+      const { data, error } = await supabase
+        .from('processed_results')
+        .select('*')
+        .eq('module', 'history_sales')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (!error && data && data.result_json) {
+        const parsedData = JSON.parse(data.result_json);
+        setParsed(parsedData);
       } else {
-        setFormattedParsed(generateDemoHistorySales());
+        get('last_history_sales').then(saved => {
+          if (saved && saved.data && saved.data.length > 0) {
+            setParsed(saved);
+          } else {
+            handleGenerateDemo();
+          }
+        }).catch(err => {
+          console.warn('Failed to load state from IndexDB', err);
+          handleGenerateDemo();
+        });
       }
-    }).catch(err => {
-      console.warn('Failed to load History Sales state from IndexDB', err);
-      setFormattedParsed(generateDemoHistorySales());
-    });
+    };
+
+    fetchGlobalData();
+
+    const channel = supabase
+      .channel('history_sales_changes')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'processed_results', filter: "module=eq.history_sales" },
+        (payload) => {
+          const timestampStr = sessionStorage.getItem('last_processed_at_history_sales');
+          if (payload.new && payload.new.result_json) {
+            const parsedData = JSON.parse(payload.new.result_json);
+            if (!timestampStr || parsedData.processed_at !== timestampStr) {
+              setParsed(parsedData);
+              toast.success('🔄 Pembaruan data dari pengguna lain diterima!', {
+                icon: '🔄',
+                style: { background: '#10B981', color: '#fff' },
+              });
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const handleGenerateDemo = () => {
@@ -1446,7 +1489,7 @@ export default function HistorySalesPage() {
                 onClick={handleGenerateDemo}
                 className="px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-slate-900 font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-blue-500/20"
               >
-                <Sparkles className="w-4 h-4" /> Gunakan Data Demo
+                <Sparkles className="w-4 h-4" /> Proses & Simpan ke Global (Demo)
               </button>
             </div>
           </div>
