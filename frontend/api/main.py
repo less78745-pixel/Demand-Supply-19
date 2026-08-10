@@ -1,10 +1,26 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+import os
+
+from database import engine
+from schemas import models
+
+# Initialize DB tables
+models.Base.metadata.create_all(bind=engine)
+
+# Create storage directory if it doesn't exist
+os.makedirs("storage/uploads", exist_ok=True)
+
 from routers import occupancy, forecast, export, simulator, inventory, chat
 from routers import safety_stock, rebalancing, landed_cost, control_tower
 from routers import ddmrp, route_optimization, wh_trans_mp
+from routers import results # We will create this
 
 app = FastAPI(title="Demand Supply Planning API")
+
+# Mount static files for uploads
+app.mount("/storage", StaticFiles(directory="storage"), name="storage")
 
 from fastapi.middleware.gzip import GZipMiddleware
 
@@ -31,6 +47,7 @@ app.include_router(control_tower.router, prefix="/api/v1", tags=["SCM - Control 
 app.include_router(ddmrp.router, prefix="/api/v1", tags=["DDMRP"])
 app.include_router(route_optimization.router, prefix="/api/v1", tags=["Route Optimization"])
 app.include_router(wh_trans_mp.router, prefix="/api/v1", tags=["WH-TRANS-MP"])
+app.include_router(results.router, prefix="/api/v1", tags=["Global Results"])
 
 @app.get("/")
 def read_root():

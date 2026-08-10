@@ -165,7 +165,6 @@ export const uploadRouteOptimizationFile = async (
 };
 
 
-// WH-TRANS-MP (Anti-Gravity Logistics Network)
 export const getWHTransDummyData = async (numCustomers: number = 100) => {
   const response = await api.get(`/wh-trans/dummy-data?num_customers=${numCustomers}`);
   return response.data;
@@ -182,5 +181,11 @@ export const uploadWHTransFile = async (file: File, numHubs: number, costPerCbmK
   formData.append('num_hubs', String(numHubs));
   formData.append('cost_per_cbm_km', String(costPerCbmKm));
   const response = await api.post(`/wh-trans/file`, formData);
+  return response.data;
+};
+
+// ── Global Results Polling API ──
+export const getGlobalResult = async (moduleName: string) => {
+  const response = await api.get(`/results/${moduleName}`);
   return response.data;
 };

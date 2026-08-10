@@ -8,7 +8,7 @@ import {
   ArrowLeftRight, Download, Truck, DollarSign, AlertTriangle,
   Package, CheckCircle, Info, UploadCloud, FileSpreadsheet, X, Zap, HelpCircle, FastForward, ShieldAlert
 } from 'lucide-react';
-import { uploadRebalancingFiles } from '@/lib/api';
+import { uploadRebalancingFiles, getGlobalResult } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import { getStandardFilename } from '@/utils/export';
@@ -185,21 +185,31 @@ export default function RebalancingPage() {
   const handleGenerateDemo = () => {
     const demo = normalizeData(generateDemoRebalancing());
     setResults(demo);
-    try { localStorage.setItem('lastRebalancing', JSON.stringify(demo)); } catch {}
     toast.success('🎉 Data Demo Stock Rebalancing Berhasil Dimuat!');
   };
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('lastRebalancing');
-      if (saved) {
-        setResults(normalizeData(JSON.parse(saved)));
-      } else {
-        setResults(normalizeData(generateDemoRebalancing()));
+    const fetchGlobalData = async () => {
+      try {
+        const res = await getGlobalResult('rebalancing');
+        if (res.data) {
+          setResults(normalizeData(res.data));
+        } else {
+          // If no global data exists yet, load demo data so page isn't empty
+          if (!results) setResults(normalizeData(generateDemoRebalancing()));
+        }
+      } catch (err) {
+        if (!results) setResults(normalizeData(generateDemoRebalancing()));
       }
-    } catch {
-      setResults(normalizeData(generateDemoRebalancing()));
-    }
+    };
+    
+    // Initial fetch
+    fetchGlobalData();
+    
+    // Polling every 3 seconds for real-time updates across devices
+    const intervalId = setInterval(fetchGlobalData, 3000);
+    return () => clearInterval(intervalId);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleAnalyze = async () => {
@@ -213,7 +223,6 @@ export default function RebalancingPage() {
       const data = normalizeData(await uploadRebalancingFiles(stockFile, demandFile, freightFile));
       if (data) data.processed_at = data.processed_at || new Date().toISOString();
       setResults(data);
-      try { localStorage.setItem('lastRebalancing', JSON.stringify(data)); } catch {}
       toast.success('Optimasi selesai!', { id: 'rb' });
     } catch (err: any) {
       const msg = err.response?.data?.detail || err.message || 'Gagal memproses.';
