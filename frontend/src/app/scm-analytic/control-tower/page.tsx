@@ -13,6 +13,7 @@ import { uploadControlTowerFile } from '@/lib/api';
 import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import toast from 'react-hot-toast';
 import { getStandardFilename } from '@/utils/export';
+import { supabase } from '@/lib/supabase';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   Legend, ResponsiveContainer, Cell,
@@ -168,16 +169,59 @@ export default function ControlTowerPage() {
   };
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('lastControlTower');
-      if (saved) {
-        setResults(normalizeData(JSON.parse(saved)));
-      } else {
+    const fetchInitialData = async () => {
+      try {
+        const { data: dbData, error } = await supabase
+          .from('processed_results')
+          .select('*')
+          .eq('module', 'control_tower')
+          .order('created_at', { ascending: false })
+          .limit(1);
+          
+        if (dbData && dbData.length > 0) {
+          const row = dbData[0];
+          const parsed = JSON.parse(row.result_json);
+          parsed.processed_at = row.created_at;
+          setResults(normalizeData(parsed));
+        } else {
+          setResults(normalizeData(generateDemoControlTower()));
+        }
+      } catch (err) {
         setResults(normalizeData(generateDemoControlTower()));
       }
-    } catch {
-      setResults(normalizeData(generateDemoControlTower()));
-    }
+    };
+    
+    fetchInitialData();
+    
+    const channel = supabase
+      .channel('control_tower_updates')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'processed_results', filter: 'module=eq.control_tower' },
+        (payload) => {
+          try {
+            const newData = JSON.parse(payload.new.result_json);
+            newData.processed_at = payload.new.created_at;
+            
+            const lastProcessedAt = sessionStorage.getItem('last_processed_at_control_tower');
+            if (lastProcessedAt === newData.processed_at) return;
+
+            setResults(normalizeData(newData));
+            toast.success('Pembaruan data dari pengguna lain diterima!', { 
+              icon: '🔄',
+              duration: 5000,
+              style: { background: '#22c55e', color: '#fff', fontWeight: 'bold' } 
+            });
+          } catch (e) {
+            console.error("Failed parsing realtime data", e);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const handleFileUpload = async (file: File) => {
@@ -187,6 +231,7 @@ export default function ControlTowerPage() {
       const data = normalizeData(await uploadControlTowerFile(file));
       if (data) data.processed_at = data.processed_at || new Date().toISOString();
       setResults(data);
+      sessionStorage.setItem('last_processed_at_control_tower', data.processed_at);
       try { localStorage.setItem('lastControlTower', JSON.stringify(data)); } catch {}
       toast.success('Control Tower analysis selesai!', { id: 'ct' });
     } catch (err: any) {

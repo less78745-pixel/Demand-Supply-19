@@ -1,4 +1,8 @@
-from fastapi import APIRouter, UploadFile, File, Query
+from fastapi import APIRouter, UploadFile, File, Query, Depends
+from sqlalchemy.orm import Session
+from database import get_db
+from schemas.models import ProcessedResult
+import json
 from fastapi.responses import JSONResponse
 import pandas as pd
 import io
@@ -11,6 +15,7 @@ router = APIRouter()
 async def analyze_safety_stock_endpoint(
     file: UploadFile = File(...),
     service_level: float = Query(0.95, ge=0.80, le=0.99),
+    db: Session = Depends(get_db)
 ):
     """
     Analyze Safety Stock & ROP from uploaded Excel/CSV file.
@@ -37,6 +42,17 @@ async def analyze_safety_stock_endpoint(
         from services.safety_stock_engine import analyze_safety_stock
         result = analyze_safety_stock(df, service_level=service_level)
         
+        # Save to DB for global visibility
+        try:
+            result_str = json.dumps(result)
+            db_result = ProcessedResult(module="safety_stock", result_json=result_str)
+            db.add(db_result)
+            db.commit()
+            db.refresh(db_result)
+            result["processed_at"] = db_result.created_at.isoformat()
+        except Exception as e:
+            print("Failed to save to DB:", e)
+            
         return result
         
     except ValueError as ve:

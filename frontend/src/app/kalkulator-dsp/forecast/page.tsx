@@ -13,6 +13,7 @@ import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import toast from 'react-hot-toast';
 import { getStandardFilename } from '@/utils/export';
 import * as XLSX from 'xlsx';
+import { supabase } from '@/lib/supabase';
 
 type ScenarioType = 'actual' | 'promo' | 'recession';
 
@@ -117,26 +118,71 @@ export default function ForecastPage() {
     toast.success('🎉 Data Demo ML Forecasting Berhasil Dimuat!');
   };
 
-  // ── Restore previous results from localStorage ──
+  // ── Restore previous results from Supabase ──
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('lastForecast');
-      if (saved) {
-        const data = JSON.parse(saved);
-        setResults(data);
-        if (data.best_model && data.available_methods) {
-          setSelectedMethod(data.available_methods[0] || data.best_model);
+    const fetchInitialData = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('processed_results')
+          .select('*')
+          .eq('module', 'forecast')
+          .order('created_at', { ascending: false })
+          .limit(1);
+          
+        if (data && data.length > 0) {
+          const row = data[0];
+          const parsed = JSON.parse(row.result_json);
+          parsed.processed_at = row.created_at;
+          setResults(parsed);
+          if (parsed.best_model && parsed.available_methods) {
+            setSelectedMethod(parsed.available_methods[0] || parsed.best_model);
+          }
+        } else {
+          const demo = generateDemoForecast();
+          setResults(demo);
+          setSelectedMethod(demo.available_methods[0]);
         }
-      } else {
+      } catch (err) {
         const demo = generateDemoForecast();
         setResults(demo);
         setSelectedMethod(demo.available_methods[0]);
       }
-    } catch {
-      const demo = generateDemoForecast();
-      setResults(demo);
-      setSelectedMethod(demo.available_methods[0]);
-    }
+    };
+    
+    fetchInitialData();
+    
+    const channel = supabase
+      .channel('forecast_updates')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'processed_results', filter: 'module=eq.forecast' },
+        (payload) => {
+          try {
+            const newData = JSON.parse(payload.new.result_json);
+            newData.processed_at = payload.new.created_at;
+            
+            const lastProcessedAt = sessionStorage.getItem('last_processed_at_forecast');
+            if (lastProcessedAt === newData.processed_at) return;
+
+            setResults(newData);
+            if (newData.best_model && newData.available_methods) {
+              setSelectedMethod(newData.available_methods[0] || newData.best_model);
+            }
+            toast.success('Pembaruan data dari pengguna lain diterima!', { 
+              icon: '🔄',
+              duration: 5000,
+              style: { background: '#22c55e', color: '#fff', fontWeight: 'bold' } 
+            });
+          } catch (e) {
+            console.error("Failed parsing realtime data", e);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const handleFileUpload = async (file: File) => {
@@ -164,6 +210,7 @@ export default function ForecastPage() {
         data.processed_at = data.processed_at || new Date().toISOString();
         setResults(data);
         setSelectedMethod(data.best_model);
+        sessionStorage.setItem('last_processed_at_forecast', data.processed_at);
         try {
           localStorage.setItem('lastForecast', JSON.stringify(data));
         } catch (e) {

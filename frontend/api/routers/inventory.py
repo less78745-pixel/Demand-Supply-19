@@ -1,4 +1,8 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
+from sqlalchemy.orm import Session
+from database import get_db
+from schemas.models import ProcessedResult
+import json
 import pandas as pd
 import io
 from services.inventory_engine import run_inventory_analysis, run_inventory_from_mrp_bytes
@@ -6,7 +10,7 @@ from services.inventory_engine import run_inventory_analysis, run_inventory_from
 router = APIRouter()
 
 @router.post("/analyze/inventory")
-async def analyze_inventory(file: UploadFile = File(...)):
+async def analyze_inventory(file: UploadFile = File(...), db: Session = Depends(get_db)):
     if not file.filename.lower().endswith(('.xlsx', '.xls', '.csv')):
         raise HTTPException(status_code=400, detail="Only Excel or CSV files are supported")
         
@@ -24,8 +28,9 @@ async def analyze_inventory(file: UploadFile = File(...)):
             except Exception:
                 pass
             if is_mrp_multi_sheet:
-                return run_inventory_from_mrp_bytes(contents)
-            df = pd.read_excel(io.BytesIO(contents))
+                results = run_inventory_from_mrp_bytes(contents)
+            else:
+                df = pd.read_excel(io.BytesIO(contents))
         elif file.filename.lower().endswith('.csv'):
             try:
                 # auto-detect comma vs semicolon
@@ -35,13 +40,26 @@ async def analyze_inventory(file: UploadFile = File(...)):
         else:
             df = pd.read_excel(io.BytesIO(contents))
         
-        # Basic schema check
-        required_cols = ['Category', 'Date', 'Penjualan', 'On Hand']
-        missing = [c for c in required_cols if c not in df.columns]
-        if missing:
-            raise HTTPException(status_code=400, detail=f"Missing columns: {missing}")
+        if not is_mrp_multi_sheet:
+            # Basic schema check
+            required_cols = ['Category', 'Date', 'Penjualan', 'On Hand']
+            missing = [c for c in required_cols if c not in df.columns]
+            if missing:
+                raise HTTPException(status_code=400, detail=f"Missing columns: {missing}")
+                
+            results = run_inventory_analysis(df)
             
-        results = run_inventory_analysis(df)
+        # Save to DB for global visibility
+        try:
+            result_str = json.dumps(results)
+            db_result = ProcessedResult(module="inventory", result_json=result_str)
+            db.add(db_result)
+            db.commit()
+            db.refresh(db_result)
+            results["processed_at"] = db_result.created_at.isoformat()
+        except Exception as e:
+            print("Failed to save to DB:", e)
+            
         return results
         
     except Exception as e:

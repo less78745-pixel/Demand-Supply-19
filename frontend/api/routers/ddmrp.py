@@ -1,4 +1,8 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
+from sqlalchemy.orm import Session
+from database import get_db
+from schemas.models import ProcessedResult
+import json
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional
@@ -51,6 +55,7 @@ async def analyze_ddmrp_file_endpoint(
     on_hand: float = 200.0,
     on_order: float = 0.0,
     qualified_demand: float = 50.0,
+    db: Session = Depends(get_db)
 ):
     """Run DDMRP analysis from uploaded sales data file."""
     if not file.filename.lower().endswith(('.xlsx', '.xls', '.csv')):
@@ -86,6 +91,17 @@ async def analyze_ddmrp_file_endpoint(
         if "error" in result:
             raise HTTPException(status_code=400, detail=result["error"])
 
+        # Save to DB for global visibility
+        try:
+            result_str = json.dumps(result)
+            db_result = ProcessedResult(module="ddmrp", result_json=result_str)
+            db.add(db_result)
+            db.commit()
+            db.refresh(db_result)
+            result["processed_at"] = db_result.created_at.isoformat()
+        except Exception as e:
+            print("Failed to save to DB:", e)
+
         return result
 
     except Exception as e:
@@ -97,7 +113,7 @@ async def analyze_ddmrp_file_endpoint(
 
 
 @router.post("/analyze/ddmrp/phase2-projection")
-async def analyze_ddmrp_phase2_endpoint(file: UploadFile = File(...)):
+async def analyze_ddmrp_phase2_endpoint(file: UploadFile = File(...), db: Session = Depends(get_db)):
     """Run DDMRP Phase 2: Proyeksi Inventory & Occupancy (16 Weeks) from uploaded Excel file."""
     if not file.filename.lower().endswith(('.xlsx', '.xls', '.csv')):
         raise HTTPException(status_code=400, detail="Hanya file Excel (.xlsx, .xls) atau CSV yang didukung untuk simulasi ini.")
@@ -108,6 +124,18 @@ async def analyze_ddmrp_phase2_endpoint(file: UploadFile = File(...)):
             raise HTTPException(status_code=400, detail=result["error"])
         # Remove _df before returning JSON
         result.pop("_df", None)
+        
+        # Save to DB for global visibility
+        try:
+            result_str = json.dumps(result)
+            db_result = ProcessedResult(module="ddmrp_phase2", result_json=result_str)
+            db.add(db_result)
+            db.commit()
+            db.refresh(db_result)
+            result["processed_at"] = db_result.created_at.isoformat()
+        except Exception as e:
+            print("Failed to save to DB:", e)
+            
         return result
     except Exception as e:
         import traceback

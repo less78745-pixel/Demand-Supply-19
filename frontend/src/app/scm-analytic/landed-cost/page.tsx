@@ -11,6 +11,7 @@ import { uploadLandedCostFiles } from '@/lib/api';
 import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import { getStandardFilename } from '@/utils/export';
 import toast from 'react-hot-toast';
+import { supabase } from '@/lib/supabase';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   Legend, ResponsiveContainer, Cell,
@@ -188,16 +189,59 @@ export default function LandedCostPage() {
   };
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('lastLandedCost');
-      if (saved) {
-        setResults(normalizeData(JSON.parse(saved)));
-      } else {
+    const fetchInitialData = async () => {
+      try {
+        const { data: dbData, error } = await supabase
+          .from('processed_results')
+          .select('*')
+          .eq('module', 'landed_cost')
+          .order('created_at', { ascending: false })
+          .limit(1);
+          
+        if (dbData && dbData.length > 0) {
+          const row = dbData[0];
+          const parsed = JSON.parse(row.result_json);
+          parsed.processed_at = row.created_at;
+          setResults(normalizeData(parsed));
+        } else {
+          setResults(normalizeData(generateDemoLandedCost()));
+        }
+      } catch (err) {
         setResults(normalizeData(generateDemoLandedCost()));
       }
-    } catch {
-      setResults(normalizeData(generateDemoLandedCost()));
-    }
+    };
+    
+    fetchInitialData();
+    
+    const channel = supabase
+      .channel('landed_cost_updates')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'processed_results', filter: 'module=eq.landed_cost' },
+        (payload) => {
+          try {
+            const newData = JSON.parse(payload.new.result_json);
+            newData.processed_at = payload.new.created_at;
+            
+            const lastProcessedAt = sessionStorage.getItem('last_processed_at_landed_cost');
+            if (lastProcessedAt === newData.processed_at) return;
+
+            setResults(normalizeData(newData));
+            toast.success('Pembaruan data dari pengguna lain diterima!', { 
+              icon: '🔄',
+              duration: 5000,
+              style: { background: '#22c55e', color: '#fff', fontWeight: 'bold' } 
+            });
+          } catch (e) {
+            console.error("Failed parsing realtime data", e);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const handleAnalyze = async () => {
@@ -211,6 +255,7 @@ export default function LandedCostPage() {
       const data = normalizeData(await uploadLandedCostFiles(trackingFile, allocationFile, exchangeRate));
       if (data) data.processed_at = data.processed_at || new Date().toISOString();
       setResults(data);
+      sessionStorage.setItem('last_processed_at_landed_cost', data.processed_at);
       try { localStorage.setItem('lastLandedCost', JSON.stringify(data)); } catch {}
       toast.success('Analisis Landed Cost selesai!', { id: 'lc' });
     } catch (err: any) {
@@ -328,7 +373,7 @@ export default function LandedCostPage() {
             </div>
             <button onClick={handleAnalyze} disabled={isProcessing || !trackingFile || !allocationFile}
               className="px-8 py-3 bg-cyan-600 text-slate-900 rounded-xl hover:bg-cyan-500 disabled:opacity-50 transition text-sm font-bold uppercase tracking-wide flex items-center gap-2 shadow-lg shadow-cyan-600/20">
-              {isProcessing ? 'Memproses...' : <><Ship className="w-4 h-4" /> Hitung Landed Cost dari File</>}
+              {isProcessing ? 'Memproses...' : <><Ship className="w-4 h-4" /> Proses & Simpan ke Global</>}
             </button>
           </div>
         </GlassCard>

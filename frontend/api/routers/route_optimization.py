@@ -1,4 +1,8 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
+from sqlalchemy.orm import Session
+from database import get_db
+from schemas.models import ProcessedResult
+import json
 from pydantic import BaseModel
 from typing import Optional
 
@@ -40,7 +44,7 @@ class RouteOptimizationInput(BaseModel):
 
 
 @router.post("/analyze/route-optimization")
-async def analyze_route_optimization(params: RouteOptimizationInput):
+async def analyze_route_optimization(params: RouteOptimizationInput, db: Session = Depends(get_db)):
     """Run route optimization with multiple methods."""
     try:
         if params.use_demo_data:
@@ -71,6 +75,17 @@ async def analyze_route_optimization(params: RouteOptimizationInput):
 
         if "error" in result:
             raise HTTPException(status_code=400, detail=result["error"])
+
+        # Save to DB for global visibility
+        try:
+            result_str = json.dumps(result)
+            db_result = ProcessedResult(module="route_optimization", result_json=result_str)
+            db.add(db_result)
+            db.commit()
+            db.refresh(db_result)
+            result["processed_at"] = db_result.created_at.isoformat()
+        except Exception as e:
+            print("Failed to save to DB:", e)
 
         return result
 
@@ -105,7 +120,8 @@ async def analyze_route_optimization_file(
     emission_factor_kg_per_km: float = Form(0.00027),
     traffic_factor: float = Form(1.0),
     avg_speed_kmh: float = Form(40),
-    service_time_per_stop_mins: float = Form(30)
+    service_time_per_stop_mins: float = Form(30),
+    db: Session = Depends(get_db)
 ):
     """Run route optimization from an uploaded Excel or CSV file."""
     try:
@@ -157,6 +173,17 @@ async def analyze_route_optimization_file(
 
         if "error" in result:
             raise HTTPException(status_code=400, detail=result["error"])
+
+        # Save to DB for global visibility
+        try:
+            result_str = json.dumps(result)
+            db_result = ProcessedResult(module="route_optimization", result_json=result_str)
+            db.add(db_result)
+            db.commit()
+            db.refresh(db_result)
+            result["processed_at"] = db_result.created_at.isoformat()
+        except Exception as e:
+            print("Failed to save to DB:", e)
 
         return result
 

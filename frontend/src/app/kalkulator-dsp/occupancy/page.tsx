@@ -13,6 +13,7 @@ import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import toast from 'react-hot-toast';
 import { getStandardFilename } from '@/utils/export';
 import { ExportHtmlButton } from '@/components/ui/ExportHtmlButton';
+import { supabase } from '@/lib/supabase';
 
 type ScenarioType = 'actual' | 'surge' | 'expansion';
 
@@ -221,18 +222,61 @@ export default function OccupancyPage() {
     toast.success('🎉 Data Demo Occupancy & Inventory Berhasil Dimuat!');
   };
 
-  // ── Restore previous results from localStorage ──
+  // ── Restore previous results from Supabase ──
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('lastOccupancy');
-      if (saved) {
-        setResults(JSON.parse(saved));
-      } else {
+    const fetchInitialData = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('processed_results')
+          .select('*')
+          .eq('module', 'occupancy')
+          .order('created_at', { ascending: false })
+          .limit(1);
+          
+        if (data && data.length > 0) {
+          const row = data[0];
+          const parsed = JSON.parse(row.result_json);
+          parsed.processed_at = row.created_at;
+          setResults(parsed);
+        } else {
+          setResults(generateDemoOccupancy());
+        }
+      } catch (err) {
         setResults(generateDemoOccupancy());
       }
-    } catch {
-      setResults(generateDemoOccupancy());
-    }
+    };
+    
+    fetchInitialData();
+    
+    const channel = supabase
+      .channel('occupancy_updates')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'processed_results', filter: 'module=eq.occupancy' },
+        (payload) => {
+          try {
+            const newData = JSON.parse(payload.new.result_json);
+            newData.processed_at = payload.new.created_at;
+            
+            const lastProcessedAt = sessionStorage.getItem('last_processed_at_occupancy');
+            if (lastProcessedAt === newData.processed_at) return;
+
+            setResults(newData);
+            toast.success('Pembaruan data dari pengguna lain diterima!', { 
+              icon: '🔄',
+              duration: 5000,
+              style: { background: '#22c55e', color: '#fff', fontWeight: 'bold' } 
+            });
+          } catch (e) {
+            console.error("Failed parsing realtime data", e);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const [selectedCabang,   setSelectedCabang]   = useState<string[]>(['All']);
@@ -248,6 +292,7 @@ export default function OccupancyPage() {
       const data = await uploadOccupancyFile(file);
       data.processed_at = data.processed_at || new Date().toISOString();
       setResults(data);
+      sessionStorage.setItem('last_processed_at_occupancy', data.processed_at);
       try {
         localStorage.setItem('lastOccupancy', JSON.stringify(data));
       } catch (e) {

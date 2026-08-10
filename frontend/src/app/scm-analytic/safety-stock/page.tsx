@@ -13,6 +13,7 @@ import {
 import { uploadSafetyStockFile } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { getStandardFilename } from '@/utils/export';
+import { supabase } from '@/lib/supabase';
 
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -166,16 +167,59 @@ export default function SafetyStockPage() {
   };
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('lastSafetyStock');
-      if (saved) {
-        setResults(normalizeData(JSON.parse(saved)));
-      } else {
+    const fetchInitialData = async () => {
+      try {
+        const { data: dbData, error } = await supabase
+          .from('processed_results')
+          .select('*')
+          .eq('module', 'safety_stock')
+          .order('created_at', { ascending: false })
+          .limit(1);
+          
+        if (dbData && dbData.length > 0) {
+          const row = dbData[0];
+          const parsed = JSON.parse(row.result_json);
+          parsed.processed_at = row.created_at;
+          setResults(normalizeData(parsed));
+        } else {
+          setResults(normalizeData(generateDemoSafetyStock()));
+        }
+      } catch (err) {
         setResults(normalizeData(generateDemoSafetyStock()));
       }
-    } catch {
-      setResults(normalizeData(generateDemoSafetyStock()));
-    }
+    };
+    
+    fetchInitialData();
+    
+    const channel = supabase
+      .channel('safety_stock_updates')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'processed_results', filter: 'module=eq.safety_stock' },
+        (payload) => {
+          try {
+            const newData = JSON.parse(payload.new.result_json);
+            newData.processed_at = payload.new.created_at;
+            
+            const lastProcessedAt = sessionStorage.getItem('last_processed_at_safety_stock');
+            if (lastProcessedAt === newData.processed_at) return;
+
+            setResults(normalizeData(newData));
+            toast.success('Pembaruan data dari pengguna lain diterima!', { 
+              icon: '🔄',
+              duration: 5000,
+              style: { background: '#22c55e', color: '#fff', fontWeight: 'bold' } 
+            });
+          } catch (e) {
+            console.error("Failed parsing realtime data", e);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const handleFileUpload = async (file: File) => {
@@ -185,6 +229,7 @@ export default function SafetyStockPage() {
       const data = normalizeData(await uploadSafetyStockFile(file));
       if (data) data.processed_at = data.processed_at || new Date().toISOString();
       setResults(data);
+      sessionStorage.setItem('last_processed_at_safety_stock', data.processed_at);
       try { localStorage.setItem('lastSafetyStock', JSON.stringify(data)); } catch {}
       toast.success('Analisis Safety Stock selesai!', { id: 'ss' });
     } catch (err: any) {

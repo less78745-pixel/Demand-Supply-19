@@ -1,4 +1,8 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
+from sqlalchemy.orm import Session
+from database import get_db
+from schemas.models import ProcessedResult
+import json
 from fastapi.responses import Response
 import pandas as pd
 import io
@@ -23,7 +27,7 @@ async def get_mrp_template():
         raise HTTPException(status_code=500, detail=f"Gagal generate template: {str(e)}")
 
 @router.post("/analyze/occupancy")
-async def analyze_occupancy(file: UploadFile = File(...)):
+async def analyze_occupancy(file: UploadFile = File(...), db: Session = Depends(get_db)):
     if not file.filename.lower().endswith(('.xlsx', '.xls', '.csv')):
         raise HTTPException(status_code=400, detail="Only Excel or CSV files are supported")
         
@@ -63,6 +67,17 @@ async def analyze_occupancy(file: UploadFile = File(...)):
         df_clean = clean_occupancy_data(df)
         
         results = calculate_occupancy(df_clean)
+        
+        # Save to DB for global visibility
+        try:
+            result_str = json.dumps(results)
+            db_result = ProcessedResult(module="occupancy", result_json=result_str)
+            db.add(db_result)
+            db.commit()
+            db.refresh(db_result)
+            results["processed_at"] = db_result.created_at.isoformat()
+        except Exception as e:
+            print("Failed to save to DB:", e)
         
         return results
         

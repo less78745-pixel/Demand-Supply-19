@@ -1,4 +1,8 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
+from sqlalchemy.orm import Session
+from database import get_db
+from schemas.models import ProcessedResult
+import json
 import pandas as pd
 import io
 from utils.validators import validate_forecast_schema
@@ -8,7 +12,7 @@ from services.forecast_engine import run_forecast_pipeline
 router = APIRouter()
 
 @router.post("/analyze/forecast")
-async def analyze_forecast(file: UploadFile = File(...)):
+async def analyze_forecast(file: UploadFile = File(...), db: Session = Depends(get_db)):
     if not file.filename.lower().endswith(('.xlsx', '.xls', '.csv')):
         raise HTTPException(status_code=400, detail="Only Excel or CSV files are supported")
         
@@ -37,6 +41,17 @@ async def analyze_forecast(file: UploadFile = File(...)):
         df_clean = clean_forecast_data(df)
         
         results = run_forecast_pipeline(df_clean)
+        
+        # Save to DB for global visibility
+        try:
+            result_str = json.dumps(results)
+            db_result = ProcessedResult(module="forecast", result_json=result_str)
+            db.add(db_result)
+            db.commit()
+            db.refresh(db_result)
+            results["processed_at"] = db_result.created_at.isoformat()
+        except Exception as e:
+            print("Failed to save to DB:", e)
         
         return results
         

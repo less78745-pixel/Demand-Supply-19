@@ -11,6 +11,8 @@ import {
 import { simulateWHTrans, uploadWHTransFile } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { FileUploader } from '@/components/ui/FileUploader';
+import { supabase } from '@/lib/supabase';
+import { useEffect } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer
 } from 'recharts';
@@ -29,6 +31,63 @@ export default function WHTransMPPage() {
   const handleDownloadTemplate = () => {
     window.open('/wh_trans_template.xlsx', '_blank');
   };
+
+  // ── Restore previous results from Supabase ──
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      try {
+        const { data: dbData, error } = await supabase
+          .from('processed_results')
+          .select('*')
+          .eq('module', 'wh_trans_mp')
+          .order('created_at', { ascending: false })
+          .limit(1);
+          
+        if (dbData && dbData.length > 0) {
+          const row = dbData[0];
+          const parsed = JSON.parse(row.result_json);
+          parsed.processed_at = row.created_at;
+          setData(parsed.data_summary);
+          setSimulationResult(parsed.result);
+        }
+      } catch (err) {
+        console.error("Failed fetching initial wh-trans data:", err);
+      }
+    };
+    
+    fetchInitialData();
+    
+    const channel = supabase
+      .channel('wh_trans_mp_updates')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'processed_results', filter: 'module=eq.wh_trans_mp' },
+        (payload) => {
+          try {
+            const newData = JSON.parse(payload.new.result_json);
+            newData.processed_at = payload.new.created_at;
+            
+            const lastProcessedAt = sessionStorage.getItem('last_processed_at_wh_trans_mp');
+            if (lastProcessedAt === newData.processed_at) return;
+
+            setData(newData.data_summary);
+            setSimulationResult(newData.result);
+            toast.success('Pembaruan data dari pengguna lain diterima!', { 
+              icon: '🔄',
+              duration: 5000,
+              style: { background: '#22c55e', color: '#fff', fontWeight: 'bold' } 
+            });
+          } catch (e) {
+            console.error("Failed parsing realtime data", e);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   const handleLoadDemo = async () => {
     try {
@@ -50,8 +109,10 @@ export default function WHTransMPPage() {
     try {
       setLoading(true);
       const res = await uploadWHTransFile(file, numHubs, costPerCbmKm);
+      res.processed_at = res.processed_at || new Date().toISOString();
       setData(res.data_summary);
       setSimulationResult(res.result);
+      sessionStorage.setItem('last_processed_at_wh_trans_mp', res.processed_at);
       toast.success('Simulation completed');
     } catch (err: any) {
       toast.error(err.message || 'Failed to run simulation');

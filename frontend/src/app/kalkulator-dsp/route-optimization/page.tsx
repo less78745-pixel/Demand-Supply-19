@@ -18,7 +18,7 @@ import toast from 'react-hot-toast';
 import { FileUploader } from '@/components/ui/FileUploader';
 import { MultiSelect } from '@/components/ui/MultiSelect';
 import { exportToExcel } from '@/utils/export';
-import { get, set } from 'idb-keyval';
+import { supabase } from '@/lib/supabase';
 
 // ═══════════════════════════════════════════════
 //  LITERATURE REFERENCE DATA
@@ -211,16 +211,59 @@ export default function RouteOptimizationPage() {
   };
 
   useEffect(() => {
-    get('last_route_optimization_result').then(saved => {
-      if (saved && Array.isArray(saved) && saved.length > 0) {
-        setResults(saved);
-      } else {
+    const fetchInitialData = async () => {
+      try {
+        const { data: dbData, error } = await supabase
+          .from('processed_results')
+          .select('*')
+          .eq('module', 'route_optimization')
+          .order('created_at', { ascending: false })
+          .limit(1);
+          
+        if (dbData && dbData.length > 0) {
+          const row = dbData[0];
+          const parsed = JSON.parse(row.result_json);
+          parsed.forEach((r: any) => { r.processed_at = row.created_at; });
+          setResults(parsed);
+        } else {
+          setResults(generateDemoRoute());
+        }
+      } catch (err) {
         setResults(generateDemoRoute());
       }
-    }).catch(err => {
-      console.warn('Failed to load Route Optimization state from IndexDB', err);
-      setResults(generateDemoRoute());
-    });
+    };
+    
+    fetchInitialData();
+    
+    const channel = supabase
+      .channel('route_optimization_updates')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'processed_results', filter: 'module=eq.route_optimization' },
+        (payload) => {
+          try {
+            const newData = JSON.parse(payload.new.result_json);
+            newData.forEach((r: any) => { r.processed_at = payload.new.created_at; });
+            
+            const lastProcessedAt = sessionStorage.getItem('last_processed_at_route_optimization');
+            if (lastProcessedAt === newData[0]?.processed_at) return;
+
+            setResults(newData);
+            toast.success('Pembaruan data dari pengguna lain diterima!', { 
+              icon: '🔄',
+              duration: 5000,
+              style: { background: '#22c55e', color: '#fff', fontWeight: 'bold' } 
+            });
+          } catch (e) {
+            console.error("Failed parsing realtime data", e);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   // Form state
@@ -268,7 +311,7 @@ export default function RouteOptimizationPage() {
       const now = new Date().toISOString();
       const updatedRes = rawRes.map((r: any) => ({ ...r, processed_at: r.processed_at || now }));
       setResults(updatedRes);
-      try { await set('last_route_optimization_result', updatedRes); } catch (e) { console.warn('Failed to save state to IndexDB', e); }
+      sessionStorage.setItem('last_processed_at_route_optimization', updatedRes[0]?.processed_at);
       setSelectedGroup(0);
       setSelectedMethod(0);
       toast.success('Optimasi rute selesai!', { id: 'route' });
@@ -303,7 +346,7 @@ export default function RouteOptimizationPage() {
       const now = new Date().toISOString();
       const updatedRes = rawRes.map((r: any) => ({ ...r, processed_at: r.processed_at || now }));
       setResults(updatedRes);
-      try { await set('last_route_optimization_result', updatedRes); } catch (e) { console.warn('Failed to save state to IndexDB', e); }
+      sessionStorage.setItem('last_processed_at_route_optimization', updatedRes[0]?.processed_at);
       setSelectedGroup(0);
       setSelectedMethod(0);
       toast.success('Optimasi rute dari file selesai!', { id: 'route' });
@@ -511,7 +554,7 @@ export default function RouteOptimizationPage() {
                   ) : (
                     <>
                       <Cpu className="w-4 h-4" />
-                      Jalankan Optimasi (Demo Data Jakarta)
+                      Jalankan & Simpan ke Global (Demo Jakarta)
                     </>
                   )}
                 </button>

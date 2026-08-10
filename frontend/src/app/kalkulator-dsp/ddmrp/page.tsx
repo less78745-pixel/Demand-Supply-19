@@ -16,7 +16,7 @@ import { FileUploader } from '@/components/ui/FileUploader';
 import { MultiSelect } from '@/components/ui/MultiSelect';
 import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import { exportToExcel } from '@/utils/export';
-import { get, set } from 'idb-keyval';
+import { supabase } from '@/lib/supabase';
 
 // ═══════════════════════════════════════════════
 //  LITERATURE REFERENCE DATA
@@ -129,16 +129,59 @@ export default function DDMRPPage() {
   };
 
   useEffect(() => {
-    get('last_ddmrp_result').then(saved => {
-      if (saved) {
-        setResults(saved);
-      } else {
+    const fetchInitialData = async () => {
+      try {
+        const { data: dbData, error } = await supabase
+          .from('processed_results')
+          .select('*')
+          .eq('module', 'ddmrp')
+          .order('created_at', { ascending: false })
+          .limit(1);
+          
+        if (dbData && dbData.length > 0) {
+          const row = dbData[0];
+          const parsed = JSON.parse(row.result_json);
+          parsed.processed_at = row.created_at;
+          setResults(parsed);
+        } else {
+          setResults(generateDemoDDMRP());
+        }
+      } catch (err) {
         setResults(generateDemoDDMRP());
       }
-    }).catch(err => {
-      console.warn('Failed to load DDMRP state from IndexDB', err);
-      setResults(generateDemoDDMRP());
-    });
+    };
+    
+    fetchInitialData();
+    
+    const channel = supabase
+      .channel('ddmrp_updates')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'processed_results', filter: 'module=eq.ddmrp' },
+        (payload) => {
+          try {
+            const newData = JSON.parse(payload.new.result_json);
+            newData.processed_at = payload.new.created_at;
+            
+            const lastProcessedAt = sessionStorage.getItem('last_processed_at_ddmrp');
+            if (lastProcessedAt === newData.processed_at) return;
+
+            setResults(newData);
+            toast.success('Pembaruan data dari pengguna lain diterima!', { 
+              icon: '🔄',
+              duration: 5000,
+              style: { background: '#22c55e', color: '#fff', fontWeight: 'bold' } 
+            });
+          } catch (e) {
+            console.error("Failed parsing realtime data", e);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   // Form state
@@ -163,8 +206,9 @@ export default function DDMRPPage() {
 
     try {
       const data = await analyzeDDMRPManual(form);
+      data.processed_at = data.processed_at || new Date().toISOString();
       setResults(data);
-      try { await set('last_ddmrp_result', data); } catch(e) { console.warn('Failed to save to IndexDB', e); }
+      sessionStorage.setItem('last_processed_at_ddmrp', data.processed_at);
       toast.success('Analisis DDMRP selesai!', { id: 'ddmrp' });
     } catch (error: any) {
       console.error(error);
@@ -180,8 +224,9 @@ export default function DDMRPPage() {
     try {
       const { adu, cov_override, ...restParams } = form; // Don't pass manual ADU/CoV
       const data = await uploadDDMRPFile(file, restParams);
+      data.processed_at = data.processed_at || new Date().toISOString();
       setResults(data);
-      try { await set('last_ddmrp_result', data); } catch(e) { console.warn('Failed to save to IndexDB', e); }
+      sessionStorage.setItem('last_processed_at_ddmrp', data.processed_at);
       toast.success('Analisis DDMRP dari file selesai!', { id: 'ddmrp' });
     } catch (error: any) {
       console.error(error);
@@ -387,7 +432,7 @@ export default function DDMRPPage() {
                     ) : (
                       <>
                         <Cpu className="w-4 h-4" />
-                        Hitung Buffer DDMRP
+                        Hitung & Simpan ke Global
                       </>
                     )}
                   </button>

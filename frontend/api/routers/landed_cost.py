@@ -1,4 +1,8 @@
-from fastapi import APIRouter, UploadFile, File, Form
+from fastapi import APIRouter, UploadFile, File, Form, Depends
+from sqlalchemy.orm import Session
+from database import get_db
+from schemas.models import ProcessedResult
+import json
 from fastapi.responses import JSONResponse
 import pandas as pd
 import io
@@ -12,6 +16,7 @@ async def analyze_landed_cost_endpoint(
     tracking_file: UploadFile = File(...),
     allocation_file: UploadFile = File(...),
     exchange_rate: str = Form("16000"),
+    db: Session = Depends(get_db)
 ):
     """
     Analyze import container clearance and landed cost.
@@ -44,6 +49,17 @@ async def analyze_landed_cost_endpoint(
         from services.landed_cost_engine import analyze_landed_cost
         result = analyze_landed_cost(tracking_df, allocation_df, exchange_rate=rate)
         
+        # Save to DB for global visibility
+        try:
+            result_str = json.dumps(result)
+            db_result = ProcessedResult(module="landed_cost", result_json=result_str)
+            db.add(db_result)
+            db.commit()
+            db.refresh(db_result)
+            result["processed_at"] = db_result.created_at.isoformat()
+        except Exception as e:
+            print("Failed to save to DB:", e)
+            
         return result
         
     except ValueError as ve:
