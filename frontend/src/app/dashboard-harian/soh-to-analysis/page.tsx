@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
+import LZString from 'lz-string';
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { GlassCard } from '@/components/ui/GlassCard';
@@ -282,7 +283,11 @@ export default function SOHAnalysisPage() {
         .single();
 
       if (!error && data && data.result_json) {
-        const parsedData = JSON.parse(data.result_json);
+        let parsedData = JSON.parse(data.result_json);
+        if (parsedData.compressed && parsedData.data) {
+          const decompressed = LZString.decompressFromBase64(parsedData.data);
+          if (decompressed) parsedData = JSON.parse(decompressed);
+        }
         setParsed(parsedData);
         if (parsedData.sheetNames && parsedData.sheetNames.length > 0) {
           setSelectedSheetName(parsedData.sheetNames[0]);
@@ -322,7 +327,11 @@ export default function SOHAnalysisPage() {
         (payload) => {
           const timestampStr = sessionStorage.getItem('last_processed_at_soh_to_analysis');
           if (payload.new && payload.new.result_json) {
-            const parsedData = JSON.parse(payload.new.result_json);
+            let parsedData = JSON.parse(payload.new.result_json);
+            if (parsedData.compressed && parsedData.data) {
+              const decompressed = LZString.decompressFromBase64(parsedData.data);
+              if (decompressed) parsedData = JSON.parse(decompressed);
+            }
             if (!timestampStr || parsedData.processed_at !== timestampStr) {
               setParsed(parsedData);
               if (parsedData.sheetNames && parsedData.sheetNames.length > 0) {
@@ -372,7 +381,7 @@ export default function SOHAnalysisPage() {
     toast.loading('Menyimpan ke Global DB...', { id: 'save-global' });
     const timestamp = new Date().toISOString();
     const dataCopy = { ...parsed, processed_at: timestamp };
-        const { error } = await supabase.from('processed_results').insert([{ module: 'soh_to_analysis', result_json: JSON.stringify(dataCopy) }]);
+        const { error } = await supabase.from('processed_results').insert([{ module: 'soh_to_analysis', result_json: JSON.stringify({ compressed: true, data: LZString.compressToBase64(JSON.stringify(dataCopy)) }) }]);
     if (error) {
       toast.error('Gagal menyimpan ke Global DB', { id: 'save-global' });
     } else {

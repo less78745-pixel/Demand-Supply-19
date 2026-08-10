@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
+import LZString from 'lz-string';
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { GlassCard } from '@/components/ui/GlassCard';
@@ -513,7 +514,11 @@ export default function PRUpdatePage() {
         .single();
 
       if (!error && data && data.result_json) {
-        const parsedData = JSON.parse(data.result_json);
+        let parsedData = JSON.parse(data.result_json);
+        if (parsedData.compressed && parsedData.data) {
+          const decompressed = LZString.decompressFromBase64(parsedData.data);
+          if (decompressed) parsedData = JSON.parse(decompressed);
+        }
         setParsed(parsedData);
       } else {
         get('last_pr_update').then(saved => {
@@ -539,7 +544,11 @@ export default function PRUpdatePage() {
         (payload) => {
           const timestampStr = sessionStorage.getItem('last_processed_at_pr_update');
           if (payload.new && payload.new.result_json) {
-            const parsedData = JSON.parse(payload.new.result_json);
+            let parsedData = JSON.parse(payload.new.result_json);
+            if (parsedData.compressed && parsedData.data) {
+              const decompressed = LZString.decompressFromBase64(parsedData.data);
+              if (decompressed) parsedData = JSON.parse(decompressed);
+            }
             if (!timestampStr || parsedData.processed_at !== timestampStr) {
               setParsed(parsedData);
               toast.success('🔄 Pembaruan data dari pengguna lain diterima!', {
@@ -565,7 +574,7 @@ export default function PRUpdatePage() {
     toast.loading('Menyimpan ke Global DB...', { id: 'save-global' });
     const timestamp = new Date().toISOString();
     const dataCopy = { ...parsed, processed_at: timestamp };
-        const { error } = await supabase.from('processed_results').insert([{ module: 'pr_update', result_json: JSON.stringify(dataCopy) }]);
+        const { error } = await supabase.from('processed_results').insert([{ module: 'pr_update', result_json: JSON.stringify({ compressed: true, data: LZString.compressToBase64(JSON.stringify(dataCopy)) }) }]);
     if (error) {
       toast.error('Gagal menyimpan ke Global DB', { id: 'save-global' });
     } else {

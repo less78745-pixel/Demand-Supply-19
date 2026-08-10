@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
+import LZString from 'lz-string';
 
 import React, { useState, useEffect } from 'react';
 import { GlassCard } from '@/components/ui/GlassCard';
@@ -129,7 +130,7 @@ export default function DDMRPPage() {
     const timestamp = new Date().toISOString();
     const dataCopy = { ...results, processed_at: timestamp };
     sessionStorage.setItem('last_processed_at_ddmrp', timestamp);
-    const { error } = await supabase.from('processed_results').insert([{ module: 'ddmrp', result_json: JSON.stringify(dataCopy) }]);
+    const { error } = await supabase.from('processed_results').insert([{ module: 'ddmrp', result_json: JSON.stringify({ compressed: true, data: LZString.compressToBase64(JSON.stringify(dataCopy)) }) }]);
     if (error) {
       toast.error('Gagal menyimpan ke Global DB', { id: 'save-global' });
     } else {

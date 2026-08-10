@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
+import LZString from 'lz-string';
 
 import React, { useState } from 'react';
 import { GlassCard } from '@/components/ui/GlassCard';

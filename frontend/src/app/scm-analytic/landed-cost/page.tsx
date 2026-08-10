@@ -1,4 +1,5 @@
 "use client";
+import LZString from 'lz-string';
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { GlassCard } from '@/components/ui/GlassCard';
@@ -189,7 +190,7 @@ export default function LandedCostPage() {
     const timestamp = new Date().toISOString();
     const dataCopy = { ...results, processed_at: timestamp };
     sessionStorage.setItem('last_processed_at_landed_cost', timestamp);
-    const { error } = await supabase.from('processed_results').insert([{ module: 'landed_cost', result_json: JSON.stringify(dataCopy) }]);
+    const { error } = await supabase.from('processed_results').insert([{ module: 'landed_cost', result_json: JSON.stringify({ compressed: true, data: LZString.compressToBase64(JSON.stringify(dataCopy)) }) }]);
     if (error) {
       toast.error('Gagal menyimpan ke Global DB', { id: 'save-global' });
     } else {
