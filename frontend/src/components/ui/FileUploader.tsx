@@ -3,8 +3,9 @@
 import React, { useCallback, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { motion, AnimatePresence } from 'framer-motion';
-import { UploadCloud, FileSpreadsheet, X, CheckCircle } from 'lucide-react';
+import { UploadCloud, FileSpreadsheet, X, CheckCircle, Lock } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuthStore, canUpload } from '@/stores/useAuthStore';
 
 interface FileUploaderProps {
   onFileUpload: (file: File) => void;
@@ -30,6 +31,8 @@ export function FileUploader({
   templateName = "template.csv"
 }: FileUploaderProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const { user } = useAuthStore();
+  const hasUploadAccess = canUpload(user?.role);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     if (acceptedFiles.length > 0) {
@@ -43,8 +46,32 @@ export function FileUploader({
     onDrop,
     accept: acceptedTypes,
     maxFiles: 1,
-    disabled: isLoading,
+    disabled: isLoading || !hasUploadAccess,
   });
+
+  // Locked state for non-Super Admin users
+  if (!hasUploadAccess) {
+    return (
+      <div className="w-full">
+        <div className={cn(
+          "relative overflow-hidden rounded-lg border border-dashed p-3 flex flex-col items-center justify-center min-h-[90px] w-full opacity-50 cursor-not-allowed",
+          "border-white/10 bg-white/[0.02]"
+        )}>
+          <div className="flex flex-col items-center text-center space-y-1.5">
+            <div className="p-1.5 rounded-full bg-white/5 text-slate-500">
+              <Lock className="w-5 h-5" />
+            </div>
+            <div className="flex flex-col items-center">
+              <h3 className="text-xs font-bold text-slate-500 tracking-wide">{label}</h3>
+              <p className="text-[10px] text-slate-600 mt-0.5 max-w-[200px] leading-tight">
+                Akses upload hanya untuk Super Admin
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full">

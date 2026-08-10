@@ -65,7 +65,7 @@ export default function LoginPage() {
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   className="block w-full pl-10 pr-3 py-2.5 bg-background border border-border rounded-lg focus:ring-1 focus:ring-primary focus:border-primary transition text-foreground sm:text-sm outline-none"
-                  placeholder="e.g. AFIF, R1, SPV"
+                  placeholder="e.g. AFIF, DSP, R1, R2..."
                   required
                 />
               </div>

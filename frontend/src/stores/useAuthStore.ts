@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type UserRole = 'Super Admin' | 'Supervisor' | 'Regional';
+export type UserRole = 'Super Admin' | 'DSP' | 'Regional';
 
 interface User {
   id: string;
@@ -25,64 +25,55 @@ export const USERS_DB: Record<string, UserCredentials> = {
     password: 'out19',
     user: { id: 'u-afif', name: 'AFIF', role: 'Super Admin' },
   },
+  DSP: {
+    password: 'DSP',
+    user: { id: 'u-dsp', name: 'DSP', role: 'DSP' },
+  },
   R1: {
-    password: 'DSP19',
+    password: 'R1',
     user: { id: 'u-r1', name: 'R1', role: 'Regional' },
   },
   R2: {
-    password: 'DSP19',
+    password: 'R2',
     user: { id: 'u-r2', name: 'R2', role: 'Regional' },
   },
   R3: {
-    password: 'DSP19',
+    password: 'R3',
     user: { id: 'u-r3', name: 'R3', role: 'Regional' },
   },
   R4: {
-    password: 'DSP19',
+    password: 'R4',
     user: { id: 'u-r4', name: 'R4', role: 'Regional' },
   },
-  SPV: {
-    password: 'DSP19',
-    user: { id: 'u-spv', name: 'SPV', role: 'Supervisor' },
-  },
 };
+
+// All routes available in the application
+const ALL_ROUTES = [
+  '/dashboard',
+  '/dashboard-harian',
+  '/kalkulator-dsp',
+  '/scm-analytic',
+  // Legacy routes (redirect)
+  '/occupancy',
+  '/forecast',
+  '/soh-to-analysis',
+  '/history-sales',
+  '/pr-update',
+];
 
 // --- Role-based menu access ---
 // Which routes each role can access
 export const ROLE_ACCESS: Record<UserRole, string[]> = {
-  'Super Admin': [
-    '/dashboard',
-    '/dashboard-harian',
-    '/kalkulator-dsp',
-    '/scm-analytic',
-    // Legacy routes (redirect)
-    '/occupancy',
-    '/forecast',
-    '/soh-to-analysis',
-    '/history-sales',
-    '/pr-update',
-  ],
-  Supervisor: [
-    '/dashboard-harian',
-    '/kalkulator-dsp/forecast',
-    '/kalkulator-dsp/ddmrp',
-    // Legacy routes (redirect)
-    '/forecast',
-    '/soh-to-analysis',
-    '/history-sales',
-    '/pr-update',
-  ],
-  Regional: [
-    '/dashboard-harian',
-    '/kalkulator-dsp/forecast',
-    '/kalkulator-dsp/ddmrp',
-    // Legacy routes (redirect)
-    '/forecast',
-    '/soh-to-analysis',
-    '/history-sales',
-    '/pr-update',
-  ],
+  'Super Admin': ALL_ROUTES,
+  DSP: ALL_ROUTES,
+  Regional: ALL_ROUTES,
 };
+
+// --- Upload permission ---
+// Only Super Admin can upload data files
+export function canUpload(role: UserRole | undefined): boolean {
+  return role === 'Super Admin';
+}
 
 export function authenticate(
   username: string,
