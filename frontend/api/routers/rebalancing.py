@@ -30,6 +30,7 @@ async def analyze_rebalancing_endpoint(
             
             import tempfile
             STORAGE_DIR = os.path.join(tempfile.gettempdir(), "wms_storage", "uploads")
+            os.makedirs(STORAGE_DIR, exist_ok=True)
             unique_name = f"{uuid.uuid4()}_{name}"
             file_path = os.path.join(STORAGE_DIR, unique_name)
             
