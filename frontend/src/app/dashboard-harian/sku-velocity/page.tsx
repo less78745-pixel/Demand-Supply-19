@@ -9,8 +9,7 @@ import { MultiSelect } from '@/components/ui/MultiSelect';
 import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import {
   ClipboardList, Download, Info, Package, BarChart3,
-  Layers, Sparkles, FileSpreadsheet, Zap, CheckCircle2, TrendingUp, AlertTriangle, AlertOctagon, Rocket, Activity, HelpCircle, AlertCircle
-, Cloud } from 'lucide-react';
+  Layers, Sparkles, FileSpreadsheet, Zap, CheckCircle2, TrendingUp, AlertTriangle, AlertOctagon, Rocket, Activity, HelpCircle, AlertCircle, Cloud } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -126,7 +125,7 @@ export default function SKUVelocityPage() {
     toast.loading('Menyimpan ke Global DB...', { id: 'save-global' });
     const timestamp = new Date().toISOString();
     const dataCopy = { ...parsed, processed_at: timestamp };
-        const { error } = 
+        const { error } = await supabase.from('processed_results').insert([{ module: 'sku_velocity', result_json: JSON.stringify(dataCopy) }]);
     if (error) {
       toast.error('Gagal menyimpan ke Global DB', { id: 'save-global' });
     } else {

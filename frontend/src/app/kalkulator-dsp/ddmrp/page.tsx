@@ -8,8 +8,7 @@ import { DDMRPBufferChart } from '@/components/charts/DDMRPBufferChart';
 import {
   Layers, Activity, TrendingDown, TrendingUp, AlertTriangle,
   ChevronDown, ChevronUp, BookOpen, Cpu, Package, Truck,
-  Info, ShieldCheck, BarChart3, Calculator, FileSpreadsheet,
-, Cloud } from 'lucide-react';
+  Info, ShieldCheck, BarChart3, Calculator, FileSpreadsheet, Cloud } from 'lucide-react';
 import { analyzeDDMRPManual, uploadDDMRPFile } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { FileUploader } from '@/components/ui/FileUploader';

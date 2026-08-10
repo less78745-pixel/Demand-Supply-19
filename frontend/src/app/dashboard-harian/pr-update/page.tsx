@@ -11,8 +11,7 @@ import {
   FileBarChart, Info, Calendar, BarChart3, Clock, Table as TableIcon, Download,
   Sparkles, Layers, HelpCircle, FileSpreadsheet, Zap, AlertTriangle, CheckCircle2,
   TrendingUp, Truck, AlertCircle, ExternalLink, Globe, Filter, Search, X, Check, RefreshCw,
-  Package, Timer, ShieldAlert
-, Cloud } from 'lucide-react';
+  Package, Timer, ShieldAlert, Cloud } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -566,7 +565,7 @@ export default function PRUpdatePage() {
     toast.loading('Menyimpan ke Global DB...', { id: 'save-global' });
     const timestamp = new Date().toISOString();
     const dataCopy = { ...parsed, processed_at: timestamp };
-        const { error } = 
+        const { error } = await supabase.from('processed_results').insert([{ module: 'pr_update', result_json: JSON.stringify(dataCopy) }]);
     if (error) {
       toast.error('Gagal menyimpan ke Global DB', { id: 'save-global' });
     } else {

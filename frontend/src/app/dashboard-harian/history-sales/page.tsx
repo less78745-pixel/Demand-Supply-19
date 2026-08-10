@@ -10,8 +10,7 @@ import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import {
   TrendingUp, BarChart3, Download, Sparkles,
   AlertCircle, Award, Layers, HelpCircle, FileSpreadsheet, AlertTriangle,
-  Filter, Search, X, RefreshCw, CheckCircle2, Info, ArrowUpRight, ArrowDownRight, ShieldAlert, Zap
-, Cloud } from 'lucide-react';
+  Filter, Search, X, RefreshCw, CheckCircle2, Info, ArrowUpRight, ArrowDownRight, ShieldAlert, Zap, Cloud } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -419,7 +418,7 @@ export default function HistorySalesPage() {
     toast.loading('Menyimpan ke Global DB...', { id: 'save-global' });
     const timestamp = new Date().toISOString();
     const dataCopy = { ...parsed, processed_at: timestamp };
-        const { error } = 
+        const { error } = await supabase.from('processed_results').insert([{ module: 'history_sales', result_json: JSON.stringify(dataCopy) }]);
     if (error) {
       toast.error('Gagal menyimpan ke Global DB', { id: 'save-global' });
     } else {
