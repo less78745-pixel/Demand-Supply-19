@@ -180,6 +180,23 @@ export default function LandedCostPage() {
   const [activeScenario, setActiveScenario] = useState<ScenarioType>('actual');
   const [showHowTo, setShowHowTo] = useState(false);
 
+  const handleSaveToGlobal = async () => {
+    if (!results) {
+      toast.error("Tidak ada data untuk disimpan.");
+      return;
+    }
+    toast.loading('Menyimpan ke Global DB...', { id: 'save-global' });
+    const timestamp = new Date().toISOString();
+    const dataCopy = { ...results, processed_at: timestamp };
+    sessionStorage.setItem('last_processed_at_landed_cost', timestamp);
+    const { error } = await supabase.from('processed_results').insert([{ module: 'landed_cost', result_json: JSON.stringify(dataCopy) }]);
+    if (error) {
+      toast.error('Gagal menyimpan ke Global DB', { id: 'save-global' });
+    } else {
+      toast.success('Berhasil disimpan ke Global DB!', { id: 'save-global' });
+    }
+  };
+
   const handleGenerateDemo = () => {
     const demo = normalizeData(generateDemoLandedCost());
     setResults(demo);
@@ -355,7 +372,14 @@ export default function LandedCostPage() {
                 onClick={handleGenerateDemo}
                 className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-slate-900 font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-cyan-500/20"
               >
-                <Zap className="w-4 h-4" /> Proses & Simpan ke Global (Demo)
+                <Zap className="w-4 h-4" /> Gunakan Data Demo
+              </button>
+              <button
+                onClick={handleSaveToGlobal}
+                disabled={!results}
+                className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg"
+              >
+                <Cloud className="w-4 h-4" /> Simpan ke Global
               </button>
             </div>
           </div>
@@ -373,7 +397,7 @@ export default function LandedCostPage() {
             </div>
             <button onClick={handleAnalyze} disabled={isProcessing || !trackingFile || !allocationFile}
               className="px-8 py-3 bg-cyan-600 text-slate-900 rounded-xl hover:bg-cyan-500 disabled:opacity-50 transition text-sm font-bold uppercase tracking-wide flex items-center gap-2 shadow-lg shadow-cyan-600/20">
-              {isProcessing ? 'Memproses...' : <><Ship className="w-4 h-4" /> Proses & Simpan ke Global</>}
+              {isProcessing ? 'Memproses...' : <><Ship className="w-4 h-4" /> Hitung</>}
             </button>
           </div>
         </GlassCard>
@@ -448,8 +472,15 @@ export default function LandedCostPage() {
             onClick={handleGenerateDemo}
             className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-slate-900 font-bold rounded-xl shadow-lg transition flex items-center gap-2 text-xs sm:text-sm"
           >
-            <Zap className="w-4 h-4" /> Proses & Simpan ke Global (Demo)
+            <Zap className="w-4 h-4" /> Gunakan Data Demo
           </button>
+              <button
+                onClick={handleSaveToGlobal}
+                disabled={!results}
+                className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg"
+              >
+                <Cloud className="w-4 h-4" /> Simpan ke Global
+              </button>
         </div>
       </div>
 

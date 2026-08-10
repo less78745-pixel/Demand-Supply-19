@@ -80,9 +80,9 @@ async def analyze_route_optimization(params: RouteOptimizationInput, db: Session
         try:
             result_str = json.dumps(result)
             db_result = ProcessedResult(module="route_optimization", result_json=result_str)
-            db.add(db_result)
-            db.commit()
-            db.refresh(db_result)
+            # db.add(db_result)
+            # db.commit()
+            # db.refresh(db_result)
             result["processed_at"] = db_result.created_at.isoformat()
         except Exception as e:
             print("Failed to save to DB:", e)
@@ -178,9 +178,9 @@ async def analyze_route_optimization_file(
         try:
             result_str = json.dumps(result)
             db_result = ProcessedResult(module="route_optimization", result_json=result_str)
-            db.add(db_result)
-            db.commit()
-            db.refresh(db_result)
+            # db.add(db_result)
+            # db.commit()
+            # db.refresh(db_result)
             result["processed_at"] = db_result.created_at.isoformat()
         except Exception as e:
             print("Failed to save to DB:", e)

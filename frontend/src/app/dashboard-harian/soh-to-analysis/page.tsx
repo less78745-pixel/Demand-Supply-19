@@ -11,7 +11,7 @@ import {
   ClipboardList, Download, Info, Package, BarChart3,
   Layers, HelpCircle, Sparkles, FileSpreadsheet, Zap, AlertTriangle, CheckCircle2, TrendingUp,
   Filter, Search, X, RefreshCw
-} from 'lucide-react';
+, Cloud } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -365,6 +365,22 @@ export default function SOHAnalysisPage() {
     return parsed;
   }, [parsed, selectedSheetName]);
 
+  const handleSaveToGlobal = async () => {
+    if (!parsed) {
+      toast.error("Tidak ada data untuk disimpan.");
+      return;
+    }
+    toast.loading('Menyimpan ke Global DB...', { id: 'save-global' });
+    const timestamp = new Date().toISOString();
+    const dataCopy = { ...parsed, processed_at: timestamp };
+        const { error } = 
+    if (error) {
+      toast.error('Gagal menyimpan ke Global DB', { id: 'save-global' });
+    } else {
+      toast.success('Berhasil disimpan ke Global DB!', { id: 'save-global' });
+    }
+  };
+
   const handleGenerateDemo = () => {
     const demo = generateDemoSOH();
     setParsed(demo);
@@ -373,8 +389,7 @@ export default function SOHAnalysisPage() {
     }
     const timestamp = new Date().toISOString();
     demo.processed_at = timestamp;
-    sessionStorage.setItem('last_processed_at_soh_to_analysis', timestamp);
-    supabase.from('processed_results').insert([{ module: 'soh_to_analysis', result_json: JSON.stringify(demo) }]).then();
+        
     toast.success('🎉 Data Demo SOH-TO-Vessel (2 Sheet: Qty & Value) Berhasil Dimuat!');
   };
 
@@ -414,8 +429,7 @@ export default function SOHAnalysisPage() {
       }
       const timestamp = new Date().toISOString();
       parsedData.processed_at = timestamp;
-      sessionStorage.setItem('last_processed_at_soh_to_analysis', timestamp);
-      await supabase.from('processed_results').insert([{ module: 'soh_to_analysis', result_json: JSON.stringify(parsedData) }]);
+            
       toast.success('✅ Data SOH & TO Berhasil Diproses!', { id: 'soh' });
     } catch (err: any) {
       toast.error(err.message || 'Gagal memproses file', { id: 'soh' });
@@ -1021,7 +1035,14 @@ export default function SOHAnalysisPage() {
                 onClick={handleGenerateDemo}
                 className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-slate-900 font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-emerald-500/20"
               >
-                <Sparkles className="w-4 h-4" /> Proses & Simpan ke Global (Demo) 5-Pilar
+                <Sparkles className="w-4 h-4" /> Gunakan Data Demo 5-Pilar
+              </button>
+              <button
+                onClick={handleSaveToGlobal}
+                disabled={!parsed}
+                className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg"
+              >
+                <Cloud className="w-4 h-4" /> Simpan ke Global
               </button>
             </div>
           </div>

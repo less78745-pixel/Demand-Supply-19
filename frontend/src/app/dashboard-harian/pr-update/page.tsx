@@ -12,7 +12,7 @@ import {
   Sparkles, Layers, HelpCircle, FileSpreadsheet, Zap, AlertTriangle, CheckCircle2,
   TrendingUp, Truck, AlertCircle, ExternalLink, Globe, Filter, Search, X, Check, RefreshCw,
   Package, Timer, ShieldAlert
-} from 'lucide-react';
+, Cloud } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -558,6 +558,22 @@ export default function PRUpdatePage() {
     };
   }, []);
 
+  const handleSaveToGlobal = async () => {
+    if (!parsed) {
+      toast.error("Tidak ada data untuk disimpan.");
+      return;
+    }
+    toast.loading('Menyimpan ke Global DB...', { id: 'save-global' });
+    const timestamp = new Date().toISOString();
+    const dataCopy = { ...parsed, processed_at: timestamp };
+        const { error } = 
+    if (error) {
+      toast.error('Gagal menyimpan ke Global DB', { id: 'save-global' });
+    } else {
+      toast.success('Berhasil disimpan ke Global DB!', { id: 'save-global' });
+    }
+  };
+
   const handleGenerateDemo = () => {
     const demo = generateDemoPRUpdate();
     setParsed(demo);
@@ -1019,7 +1035,14 @@ export default function PRUpdatePage() {
                 onClick={handleGenerateDemo}
                 className="px-4 py-2 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-slate-900 font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-purple-500/20"
               >
-                <Sparkles className="w-4 h-4" /> Proses & Simpan ke Global (Demo) (+ SPJM)
+                <Sparkles className="w-4 h-4" /> Gunakan Data Demo (+ SPJM)
+              </button>
+              <button
+                onClick={handleSaveToGlobal}
+                disabled={!parsed}
+                className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg"
+              >
+                <Cloud className="w-4 h-4" /> Simpan ke Global
               </button>
             </div>
           </div>

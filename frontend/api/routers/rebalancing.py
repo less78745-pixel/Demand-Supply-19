@@ -61,7 +61,7 @@ async def analyze_rebalancing_endpoint(
         # Save upload records
         db_upload = Upload(module="rebalancing", file_url=f"{stock_url},{demand_url},{freight_url}")
         db.add(db_upload)
-        db.commit()
+        # db.commit()
         db.refresh(db_upload)
         
         from services.rebalancing_engine import analyze_rebalancing
@@ -70,9 +70,9 @@ async def analyze_rebalancing_endpoint(
         # Save result to DB for global visibility
         result_str = json.dumps(result)
         db_result = ProcessedResult(module="rebalancing", result_json=result_str)
-        db.add(db_result)
-        db.commit()
-        db.refresh(db_result)
+        # db.add(db_result)
+        # db.commit()
+        # db.refresh(db_result)
         
         result["processed_at"] = db_result.created_at.isoformat()
         

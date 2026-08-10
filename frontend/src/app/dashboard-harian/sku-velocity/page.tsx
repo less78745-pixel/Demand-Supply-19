@@ -10,7 +10,7 @@ import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import {
   ClipboardList, Download, Info, Package, BarChart3,
   Layers, Sparkles, FileSpreadsheet, Zap, CheckCircle2, TrendingUp, AlertTriangle, AlertOctagon, Rocket, Activity, HelpCircle, AlertCircle
-} from 'lucide-react';
+, Cloud } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -118,6 +118,22 @@ export default function SKUVelocityPage() {
     };
   }, []);
 
+  const handleSaveToGlobal = async () => {
+    if (!parsed) {
+      toast.error("Tidak ada data untuk disimpan.");
+      return;
+    }
+    toast.loading('Menyimpan ke Global DB...', { id: 'save-global' });
+    const timestamp = new Date().toISOString();
+    const dataCopy = { ...parsed, processed_at: timestamp };
+        const { error } = 
+    if (error) {
+      toast.error('Gagal menyimpan ke Global DB', { id: 'save-global' });
+    } else {
+      toast.success('Berhasil disimpan ke Global DB!', { id: 'save-global' });
+    }
+  };
+
   const handleGenerateDemo = () => {
     const branches = ['Gudang JKT', 'Gudang SBY', 'Gudang MDN', 'Gudang BPN'];
     const categories = ['Home Care', 'Personal Care', 'Food & Beverage', 'Electronics', 'Apparel'];
@@ -202,8 +218,7 @@ export default function SKUVelocityPage() {
     
     const timestamp = new Date().toISOString();
     demoData.processed_at = timestamp;
-    sessionStorage.setItem('last_processed_at_sku_velocity', timestamp);
-    supabase.from('processed_results').insert([{ module: 'sku_velocity', result_json: JSON.stringify(demoData) }]).then();
+        
     
     setParsed(demoData);
     toast.success('Data Demo SKU Velocity Berhasil Dimuat!');
@@ -241,8 +256,7 @@ export default function SKUVelocityPage() {
       }
       const timestamp = new Date().toISOString();
       parsedData.processed_at = timestamp;
-      sessionStorage.setItem('last_processed_at_sku_velocity', timestamp);
-      await supabase.from('processed_results').insert([{ module: 'sku_velocity', result_json: JSON.stringify(parsedData) }]);
+            
       toast.success('File berhasil diproses!', { id: 'upload' });
     } catch (err: any) {
       toast.error(err.message || 'Gagal memproses file', { id: 'upload' });
@@ -905,8 +919,15 @@ export default function SKUVelocityPage() {
 
               >
 
-                <Sparkles className="w-4 h-4" /> Proses & Simpan ke Global (Demo)
+                <Sparkles className="w-4 h-4" /> Gunakan Data Demo
 
+              </button>
+              <button
+                onClick={handleSaveToGlobal}
+                disabled={!parsed}
+                className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg"
+              >
+                <Cloud className="w-4 h-4" /> Simpan ke Global
               </button>
 
             </div>

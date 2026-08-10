@@ -9,7 +9,7 @@ import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import {
   ShieldCheck, AlertTriangle, TrendingUp, Package,
   Download, Activity, Layers, CheckCircle, XCircle, Info, Zap, HelpCircle, FileSpreadsheet, Clock
-} from 'lucide-react';
+, Cloud } from 'lucide-react';
 import { uploadSafetyStockFile } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { getStandardFilename } from '@/utils/export';
@@ -158,6 +158,23 @@ export default function SafetyStockPage() {
   const [selectedStatus, setSelectedStatus] = useState<string[]>(['All']);
   const [activeScenario, setActiveScenario] = useState<ScenarioType>('actual');
   const [showHowTo, setShowHowTo] = useState(false);
+
+  const handleSaveToGlobal = async () => {
+    if (!results) {
+      toast.error("Tidak ada data untuk disimpan.");
+      return;
+    }
+    toast.loading('Menyimpan ke Global DB...', { id: 'save-global' });
+    const timestamp = new Date().toISOString();
+    const dataCopy = { ...results, processed_at: timestamp };
+    sessionStorage.setItem('last_processed_at_safety_stock', timestamp);
+    const { error } = await supabase.from('processed_results').insert([{ module: 'safety_stock', result_json: JSON.stringify(dataCopy) }]);
+    if (error) {
+      toast.error('Gagal menyimpan ke Global DB', { id: 'save-global' });
+    } else {
+      toast.success('Berhasil disimpan ke Global DB!', { id: 'save-global' });
+    }
+  };
 
   const handleGenerateDemo = () => {
     const demo = normalizeData(generateDemoSafetyStock());
@@ -356,7 +373,14 @@ export default function SafetyStockPage() {
                 onClick={handleGenerateDemo}
                 className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-blue-600 hover:from-indigo-600 hover:to-blue-700 text-slate-900 font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-indigo-500/20"
               >
-                <Zap className="w-4 h-4" /> Proses & Simpan ke Global (Demo)
+                <Zap className="w-4 h-4" /> Gunakan Data Demo
+              </button>
+              <button
+                onClick={handleSaveToGlobal}
+                disabled={!results}
+                className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg"
+              >
+                <Cloud className="w-4 h-4" /> Simpan ke Global
               </button>
             </div>
           </div>
@@ -449,8 +473,15 @@ export default function SafetyStockPage() {
             onClick={handleGenerateDemo}
             className="w-full sm:w-auto px-5 py-3 bg-gradient-to-r from-indigo-500 to-blue-600 hover:from-indigo-600 hover:to-blue-700 text-slate-900 font-bold rounded-xl shadow-lg transition flex items-center justify-center gap-2 text-sm"
           >
-            <Zap className="w-4 h-4" /> Proses & Simpan ke Global (Demo)
+            <Zap className="w-4 h-4" /> Gunakan Data Demo
           </button>
+              <button
+                onClick={handleSaveToGlobal}
+                disabled={!results}
+                className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg"
+              >
+                <Cloud className="w-4 h-4" /> Simpan ke Global
+              </button>
         </div>
       </GlassCard>
 

@@ -46,9 +46,9 @@ async def analyze_forecast(file: UploadFile = File(...), db: Session = Depends(g
         try:
             result_str = json.dumps(results)
             db_result = ProcessedResult(module="forecast", result_json=result_str)
-            db.add(db_result)
-            db.commit()
-            db.refresh(db_result)
+            # db.add(db_result)
+            # db.commit()
+            # db.refresh(db_result)
             results["processed_at"] = db_result.created_at.isoformat()
         except Exception as e:
             print("Failed to save to DB:", e)

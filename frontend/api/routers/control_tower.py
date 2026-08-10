@@ -41,9 +41,9 @@ async def analyze_control_tower_endpoint(
         try:
             result_str = json.dumps(result)
             db_result = ProcessedResult(module="control_tower", result_json=result_str)
-            db.add(db_result)
-            db.commit()
-            db.refresh(db_result)
+            # db.add(db_result)
+            # db.commit()
+            # db.refresh(db_result)
             result["processed_at"] = db_result.created_at.isoformat()
         except Exception as e:
             print("Failed to save to DB:", e)

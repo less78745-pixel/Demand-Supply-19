@@ -6,7 +6,7 @@ import { FileUploader } from '@/components/ui/FileUploader';
 import { KPICard } from '@/components/ui/KPICard';
 import { ForecastChart } from '@/components/charts/ForecastChart';
 import { ModelComparisonTable } from '@/components/charts/ModelComparisonTable';
-import { LineChart, Info, AlertTriangle, Cpu, Target, BrainCircuit, Download, BookOpen, ChevronDown, ChevronUp, Sparkles, HelpCircle, FileSpreadsheet, Zap, TrendingUp, TrendingDown } from 'lucide-react';
+import { LineChart, Info, AlertTriangle, Cpu, Target, BrainCircuit, Download, BookOpen, ChevronDown, ChevronUp, Sparkles, HelpCircle, FileSpreadsheet, Zap, TrendingUp, TrendingDown , Cloud } from 'lucide-react';
 import { uploadForecastFile } from '@/lib/api';
 import { MultiSelect } from '@/components/ui/MultiSelect';
 import { TimestampBadge } from '@/components/ui/TimestampBadge';
@@ -107,6 +107,23 @@ export default function ForecastPage() {
   const [selectedCabang, setSelectedCabang] = useState<string[]>(["All"]);
   const [selectedCategory, setSelectedCategory] = useState<string[]>(["All"]);
   const [selectedMethod, setSelectedMethod] = useState<string>("");
+
+  const handleSaveToGlobal = async () => {
+    if (!results) {
+      toast.error("Tidak ada data untuk disimpan.");
+      return;
+    }
+    toast.loading('Menyimpan ke Global DB...', { id: 'save-global' });
+    const timestamp = new Date().toISOString();
+    const dataCopy = { ...results, processed_at: timestamp };
+    sessionStorage.setItem('last_processed_at_forecast', timestamp);
+    const { error } = await supabase.from('processed_results').insert([{ module: 'forecast', result_json: JSON.stringify(dataCopy) }]);
+    if (error) {
+      toast.error('Gagal menyimpan ke Global DB', { id: 'save-global' });
+    } else {
+      toast.success('Berhasil disimpan ke Global DB!', { id: 'save-global' });
+    }
+  };
 
   const handleGenerateDemo = () => {
     const demo = generateDemoForecast();
@@ -466,7 +483,14 @@ export default function ForecastPage() {
                 onClick={handleGenerateDemo}
                 className="px-4 py-2 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-slate-900 font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-purple-500/20"
               >
-                <Zap className="w-4 h-4" /> Proses & Simpan ke Global (Demo)
+                <Zap className="w-4 h-4" /> Gunakan Data Demo
+              </button>
+              <button
+                onClick={handleSaveToGlobal}
+                disabled={!results}
+                className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg"
+              >
+                <Cloud className="w-4 h-4" /> Simpan ke Global
               </button>
             </div>
           </div>
@@ -565,6 +589,13 @@ export default function ForecastPage() {
           >
             <Zap className="w-4 h-4" /> Gunakan Data Demo
           </button>
+              <button
+                onClick={handleSaveToGlobal}
+                disabled={!results}
+                className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg"
+              >
+                <Cloud className="w-4 h-4" /> Simpan ke Global
+              </button>
         </div>
       </GlassCard>
 

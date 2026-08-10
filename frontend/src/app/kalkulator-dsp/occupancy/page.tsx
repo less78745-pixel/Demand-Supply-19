@@ -6,7 +6,7 @@ import { FileUploader } from '@/components/ui/FileUploader';
 import { KPICard } from '@/components/ui/KPICard';
 import { OccupancyChart } from '@/components/charts/OccupancyChart';
 import { InventoryChart } from '@/components/charts/InventoryChart';
-import { Activity, AlertTriangle, Info, TrendingUp, TrendingDown, AlertOctagon, Layers, Download, PackageSearch, LayoutGrid, CheckCircle, Sparkles, HelpCircle, FileSpreadsheet, Zap, ShieldAlert } from 'lucide-react';
+import { Activity, AlertTriangle, Info, TrendingUp, TrendingDown, AlertOctagon, Layers, Download, PackageSearch, LayoutGrid, CheckCircle, Sparkles, HelpCircle, FileSpreadsheet, Zap, ShieldAlert , Cloud } from 'lucide-react';
 import { uploadOccupancyFile, downloadOccupancyTemplate } from '@/lib/api';
 import { MultiSelect } from '@/components/ui/MultiSelect';
 import { TimestampBadge } from '@/components/ui/TimestampBadge';
@@ -209,6 +209,23 @@ export default function OccupancyPage() {
       toast.success('Template MRP Berhasil Diunduh!', { id: 'tpl' });
     } catch (e: any) {
       toast.error('Gagal mengunduh template: ' + (e?.message || 'Server offline'), { id: 'tpl' });
+    }
+  };
+
+  const handleSaveToGlobal = async () => {
+    if (!results) {
+      toast.error("Tidak ada data untuk disimpan.");
+      return;
+    }
+    toast.loading('Menyimpan ke Global DB...', { id: 'save-global' });
+    const timestamp = new Date().toISOString();
+    const dataCopy = { ...results, processed_at: timestamp };
+    sessionStorage.setItem('last_processed_at_occupancy', timestamp);
+    const { error } = await supabase.from('processed_results').insert([{ module: 'occupancy', result_json: JSON.stringify(dataCopy) }]);
+    if (error) {
+      toast.error('Gagal menyimpan ke Global DB', { id: 'save-global' });
+    } else {
+      toast.success('Berhasil disimpan ke Global DB!', { id: 'save-global' });
     }
   };
 
@@ -634,7 +651,14 @@ export default function OccupancyPage() {
                 onClick={handleGenerateDemo}
                 className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-slate-900 font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-indigo-500/20"
               >
-                <Zap className="w-4 h-4" /> Proses & Simpan ke Global (Demo)
+                <Zap className="w-4 h-4" /> Gunakan Data Demo
+              </button>
+              <button
+                onClick={handleSaveToGlobal}
+                disabled={!results}
+                className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg"
+              >
+                <Cloud className="w-4 h-4" /> Simpan ke Global
               </button>
             </div>
           </div>
@@ -747,6 +771,13 @@ export default function OccupancyPage() {
           >
             <Zap className="w-4 h-4" /> Gunakan Data Demo
           </button>
+              <button
+                onClick={handleSaveToGlobal}
+                disabled={!results}
+                className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg"
+              >
+                <Cloud className="w-4 h-4" /> Simpan ke Global
+              </button>
         </div>
       </GlassCard>
 
