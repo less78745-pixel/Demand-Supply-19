@@ -591,7 +591,7 @@ export default function RebalancingPage() {
             <div className="flex justify-center">
               <button onClick={handleAnalyze} disabled={isProcessing || !stockFile || !demandFile || !freightFile}
                 className="px-8 py-3 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50 transition text-sm font-bold uppercase tracking-wide flex items-center gap-2">
-                {isProcessing ? 'Memproses...' : 'Jalankan Ulang Optimasi'}
+                {isProcessing ? 'Memproses...' : 'Proses & Simpan ke Global'}
               </button>
             </div>
           </GlassCard>
