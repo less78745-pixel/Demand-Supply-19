@@ -225,8 +225,17 @@ export default function RebalancingPage() {
           try {
             const newData = JSON.parse(payload.new.result_json);
             newData.processed_at = payload.new.created_at;
+            
+            // Filter Realtime: abaikan notifikasi jika data ini berasal dari tab/device kita sendiri
+            const lastProcessedAt = sessionStorage.getItem('last_processed_at');
+            if (lastProcessedAt === newData.processed_at) return;
+
             setResults(normalizeData(newData));
-            toast.success('Pembaruan data dari pengguna lain diterima!', { icon: '🔄' });
+            toast.success('Pembaruan data dari pengguna lain diterima!', { 
+              icon: '🔄',
+              duration: 5000,
+              style: { background: '#22c55e', color: '#fff', fontWeight: 'bold' } 
+            });
           } catch (e) {
             console.error("Failed parsing realtime data", e);
           }
@@ -251,7 +260,8 @@ export default function RebalancingPage() {
       const data = normalizeData(await uploadRebalancingFiles(stockFile, demandFile, freightFile));
       if (data) data.processed_at = data.processed_at || new Date().toISOString();
       setResults(data);
-      toast.success('Optimasi selesai!', { id: 'rb' });
+      sessionStorage.setItem('last_processed_at', data.processed_at);
+      toast.success('Optimasi selesai & Tersimpan secara Global!', { id: 'rb' });
     } catch (err: any) {
       const msg = err.response?.data?.detail || err.message || 'Gagal memproses.';
       toast.error(typeof msg === 'string' ? msg : JSON.stringify(msg), { id: 'rb' });
@@ -358,7 +368,7 @@ export default function RebalancingPage() {
               {isProcessing ? (
                 <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Memproses...</>
               ) : (
-                <><ArrowLeftRight className="w-4 h-4" /> Jalankan Optimasi dari 3 File</>
+                <><ArrowLeftRight className="w-4 h-4" /> Proses & Simpan ke Global</>
               )}
             </button>
           </div>
