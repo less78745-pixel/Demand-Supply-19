@@ -26,6 +26,21 @@ rls_sqls = [
         END IF;
     END $$;
     """,
+    # Allow public INSERT access (so frontend JS client can save)
+    """
+    DO $$
+    BEGIN
+        IF NOT EXISTS (
+            SELECT 1 FROM pg_policies 
+            WHERE tablename = 'processed_results' 
+            AND policyname = 'Allow public insert access'
+        ) THEN
+            CREATE POLICY "Allow public insert access"
+            ON processed_results FOR INSERT
+            WITH CHECK (true);
+        END IF;
+    END $$;
+    """,
     # Enable RLS on uploads
     "ALTER TABLE uploads ENABLE ROW LEVEL SECURITY;",
     # Allow public SELECT on uploads too

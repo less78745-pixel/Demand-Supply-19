@@ -4,7 +4,7 @@ from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
 
 # Use PostgreSQL from DATABASE_URL if available (e.g. from Supabase/Vercel ENV)
 # Fallback to SQLite for local development without DB setup
