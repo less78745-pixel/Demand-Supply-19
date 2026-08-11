@@ -3,6 +3,8 @@ from sqlalchemy.orm import Session
 from database import get_db
 from schemas.models import ProcessedResult
 import json
+import asyncio
+from datetime import datetime
 from fastapi.responses import Response
 import pandas as pd
 import io
@@ -32,10 +34,10 @@ async def analyze_occupancy(file: UploadFile = File(...), db: Session = Depends(
         raise HTTPException(status_code=400, detail="Only Excel or CSV files are supported")
         
     try:
+        is_mrp_multi_sheet = False
         contents = await file.read()
         if file.filename.lower().endswith(('.xlsx', '.xls')):
             import openpyxl
-            is_mrp_multi_sheet = False
             try:
                 wb = openpyxl.load_workbook(io.BytesIO(contents), read_only=True)
                 sheet_names = wb.sheetnames
@@ -45,7 +47,8 @@ async def analyze_occupancy(file: UploadFile = File(...), db: Session = Depends(
             except Exception:
                 pass
             if is_mrp_multi_sheet:
-                return calculate_mrp_occupancy_from_bytes(contents)
+                results = await asyncio.to_thread(calculate_mrp_occupancy_from_bytes, contents)
+                return results
             df = pd.read_excel(io.BytesIO(contents))
         elif file.filename.lower().endswith('.csv'):
             try:
@@ -66,7 +69,8 @@ async def analyze_occupancy(file: UploadFile = File(...), db: Session = Depends(
         validate_occupancy_schema(df)
         df_clean = clean_occupancy_data(df)
         
-        results = calculate_occupancy(df_clean)
+        # Run heavy computation in a separate thread to avoid blocking the event loop
+        results = await asyncio.to_thread(calculate_occupancy, df_clean)
         
         # Save to DB for global visibility
         try:
@@ -75,9 +79,10 @@ async def analyze_occupancy(file: UploadFile = File(...), db: Session = Depends(
             # db.add(db_result)
             # db.commit()
             # db.refresh(db_result)
-            results["processed_at"] = db_result.created_at.isoformat()
+            results["processed_at"] = (db_result.created_at or datetime.now()).isoformat()
         except Exception as e:
             print("Failed to save to DB:", e)
+            results["processed_at"] = datetime.now().isoformat()
         
         return results
         

@@ -3,15 +3,12 @@ import axios from 'axios';
 /**
  * API Configuration
  *
- * Both in development and production, the frontend calls /api/v1/*
- * - Development: next.config.mjs rewrites /api/* → localhost:8000/api/*
- * - Production (Vercel): vercel.json rewrites /api/v1/* → Python serverless function
- *
- * NO external URLs needed. Everything is same-origin.
+ * In production (Vercel): vercel.json rewrites /api/v1/* → Python serverless function
+ * In development: Direct call to FastAPI on 127.0.0.1:8000 to bypass Next.js rewrites 30s timeout limitation
  */
 export const api = axios.create({
-  baseURL: '/api/v1',
-  timeout: 120000, // 2 minutes for ML processing
+  baseURL: process.env.NODE_ENV === 'production' ? '/api/v1' : 'http://127.0.0.1:8000/api/v1',
+  timeout: 300000, // 5 minutes for heavy ML processing (forecast runs 16 models)
 });
 
 // Intercept errors and surface backend detail messages
@@ -107,7 +104,8 @@ export const uploadControlTowerFile = async (file: File) => {
  */
 export const checkBackendHealth = async (): Promise<boolean> => {
   try {
-    await axios.get('/health', { timeout: 5000 });
+    const healthUrl = process.env.NODE_ENV === 'production' ? '/health' : 'http://127.0.0.1:8000/health';
+    await axios.get(healthUrl, { timeout: 5000 });
     return true;
   } catch {
     return false;

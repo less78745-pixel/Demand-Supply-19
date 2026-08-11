@@ -1903,6 +1903,7 @@ export default function HistorySalesPage() {
                         if (active && payload && payload.length) {
                           const data = payload[0].payload;
                           const times = data.avg3 > 0 ? (data.totalSupply / data.avg3).toFixed(1) : 0;
+                          const sohTimes = data.avg3 > 0 ? (data.soh / data.avg3).toFixed(1) : 0;
                           return (
                             <div className="bg-slate-900 border border-emerald-500/30 p-3 rounded-xl shadow-xl">
                               <p className="text-emerald-400 font-bold mb-2 border-b border-slate-700 pb-1">{label}</p>
@@ -1914,8 +1915,11 @@ export default function HistorySalesPage() {
                                   </p>
                                 );
                               })}
-                              <p className="text-amber-400 font-bold mt-2 pt-1 border-t border-slate-700 text-sm">
-                                Rasio Pasokan: {times}x Lipat ({(data.ratio).toFixed(1)}%)
+                              <p className="text-emerald-400 font-bold mt-2 pt-1 border-t border-slate-700 text-sm">
+                                Rasio On Hand Month: {sohTimes}x Lipat
+                              </p>
+                              <p className="text-amber-400 font-bold mt-1 text-sm">
+                                Rasio Pasokan Month: {times}x Lipat ({(data.ratio).toFixed(1)}%)
                               </p>
                             </div>
                           );
@@ -2520,79 +2524,7 @@ export default function HistorySalesPage() {
         </GlassCard>
       )}
 
-      {/* ─── FULL DATA TABLE (SEMUA KOLOM RAW DATA DENGAN FILTER ALA EXCEL) ─── */}
-      {parsed && parsed.headers && (
-        <GlassCard className="p-6 border-slate-200 bg-white shadow-2xl overflow-hidden">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 pb-4 mb-6 gap-4">
-            <div>
-              <div className="flex items-center gap-3">
-                <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2.5">
-                  <BarChart3 className="w-5 h-5 text-emerald-400" />
-                  Data Detail (Semua 32 Kolom Raw Data - Terintegrasi M-12 s/d M) ({displayedRawData.length} dari {filtered.length} baris)
-                </h3>
-                {Object.keys(rawColFilters).some(k => rawColFilters[k]?.search || (rawColFilters[k]?.selected && rawColFilters[k]?.selected.length > 0)) && (
-                  <button
-                    onClick={() => { setRawColFilters({}); toast.success('Semua filter kolom raw data dibersihkan!'); }}
-                    className="px-3 py-1 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5" /> Reset Filter Kolom
-                  </button>
-                )}
-              </div>
-              <p className="text-xs text-slate-600 mt-1">
-                Dilengkapi <b className="text-emerald-400">Filter Kolom ala Excel</b> (klik ikon filter di setiap header untuk cari & pilih data pada seluruh 32 kolom).
-              </p>
-            </div>
-          </div>
 
-          {/* Excel Filter Modal Popover for Raw Data */}
-          <ExcelColFilterModal
-            activeCol={activeRawColModal}
-            setActiveCol={setActiveRawColModal}
-            searchInput={rawModalSearchInput}
-            setSearchInput={setRawModalSearchInput}
-            colFilters={rawColFilters}
-            setColFilters={setRawColFilters}
-            uniqueValues={currentRawUniqueValues}
-          />
-
-          <div className="overflow-x-auto rounded-xl border border-slate-200 max-h-[600px] overflow-y-auto">
-            <table className="w-full text-left text-xs border-collapse min-w-[1200px]">
-              <thead className="bg-slate-50 text-slate-700 uppercase font-bold sticky top-0 z-20 shadow-md">
-                <tr className="border-b border-slate-200 text-[10px] tracking-wider text-center">
-                  {parsed.headers.map((h) => (
-                    <th key={h} className="py-3 px-3 border-l border-slate-200 whitespace-nowrap">
-                      <div className="flex items-center gap-1.5 justify-between">
-                        <span>{h}</span>
-                        <button onClick={() => { setActiveRawColModal(h); setRawModalSearchInput(rawColFilters[h]?.search || ''); }} className="p-1 hover:bg-slate-100 rounded text-slate-600 hover:text-slate-900 transition"><Filter className="w-3.5 h-3.5 text-emerald-400" /></button>
-                      </div>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/80 text-slate-700 text-center">
-                {displayedRawData.slice(0, 100).map((row, idx) => (
-                  <tr key={idx} className="hover:bg-slate-100 transition">
-                    {parsed.headers.map((h) => {
-                      const val = row[h];
-                      return (
-                        <td key={h} className="py-2.5 px-3 border-l border-slate-200 whitespace-nowrap">
-                          {typeof val === 'number' ? val.toLocaleString('id-ID') : (val || '-')}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {displayedRawData.length > 100 && (
-            <p className="text-xs text-slate-600 mt-4 italic">
-              * Menampilkan 100 baris pertama dari total {displayedRawData.length} baris data (setelah filter)...
-            </p>
-          )}
-        </GlassCard>
-      )}
     </div>
   );
 }

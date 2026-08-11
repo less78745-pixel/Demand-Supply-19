@@ -636,7 +636,7 @@ def calculate_occupancy(df: pd.DataFrame) -> dict:
     df_cat_balances = pd.DataFrame(category_balances)
     daily_data, shortage_alerts = [], []
     if not df_cat_balances.empty:
-        all_dates = pd.date_range(start=df_cat_balances['Date'].min(), end=df_cat_balances['Date'].max(), freq='D')
+        all_dates = pd.date_range(start=df_cat_balances['Date'].min(), end=df_cat_balances['Date'].max(), freq='D', name='Date')
         pivoted = df_cat_balances.pivot(index='Date', columns=['Cabang', 'Category'], values='running_balance').reindex(all_dates).ffill().fillna(0)
         filled_cat_balances = pivoted.unstack().reset_index(name='running_balance')
         for cabang in cabangs:

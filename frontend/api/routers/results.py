@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 import json
+from datetime import datetime
 
 from database import get_db
 from schemas.models import ProcessedResult
@@ -24,7 +25,7 @@ def get_latest_result(module_name: str, db: Session = Depends(get_db)):
         # result_json is stored as string in DB, parse it back to dict
         data = json.loads(result.result_json)
         # Append the DB timestamp as processed_at
-        data["processed_at"] = result.created_at.isoformat()
+        data["processed_at"] = (result.created_at or datetime.now()).isoformat()
         return {"data": data}
     except Exception as e:
         raise HTTPException(status_code=500, detail="Failed to parse result data")

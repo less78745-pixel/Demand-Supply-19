@@ -12,15 +12,15 @@ def _mape(y_true, y_pred):
     mask = y_true != 0
     if not mask.any():
         return 0.0
-    return float(np.mean(np.abs((y_true[mask] - y_pred[mask]) / y_true[mask])) * 100)
+    return _safe_float(np.mean(np.abs((y_true[mask] - y_pred[mask]) / y_true[mask])) * 100)
 
 def _bias(y_true, y_pred):
     y_true, y_pred = np.array(y_true, dtype=float), np.array(y_pred, dtype=float)
-    return float(np.sum(y_pred - y_true))
+    return _safe_float(np.sum(y_pred - y_true))
 
 def _mad(y_true, y_pred):
     y_true, y_pred = np.array(y_true, dtype=float), np.array(y_pred, dtype=float)
-    return float(np.mean(np.abs(y_pred - y_true)))
+    return _safe_float(np.mean(np.abs(y_pred - y_true)))
 
 def _safe_float(v):
     try:
@@ -714,10 +714,10 @@ def run_forecast_pipeline(df: pd.DataFrame) -> dict:
         if count > 0:
             model_comparison.append({
                 'model': m_name,
-                'mape': sum(metrics['mape']) / count,
-                'bias': sum(metrics['bias']) / count,
-                'mad': sum(metrics['mad']) / count,
-                'rmse': sum(metrics['rmse']) / count
+                'mape': _safe_float(sum(metrics['mape']) / count),
+                'bias': _safe_float(sum(metrics['bias']) / count),
+                'mad': _safe_float(sum(metrics['mad']) / count),
+                'rmse': _safe_float(sum(metrics['rmse']) / count)
             })
     
     # Sort model comparison by MAPE

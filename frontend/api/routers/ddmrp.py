@@ -8,6 +8,8 @@ from pydantic import BaseModel
 from typing import Optional
 import pandas as pd
 import io
+import asyncio
+from datetime import datetime
 
 from services.ddmrp_engine import analyze_ddmrp_manual, analyze_ddmrp_from_file, project_ddmrp_inventory_occupancy
 
@@ -78,7 +80,8 @@ async def analyze_ddmrp_file_endpoint(
 
         df.columns = df.columns.str.strip()
 
-        result = analyze_ddmrp_from_file(
+        result = await asyncio.to_thread(
+            analyze_ddmrp_from_file,
             df=df,
             dlt_days=dlt_days,
             moq=moq,
@@ -98,9 +101,10 @@ async def analyze_ddmrp_file_endpoint(
             # db.add(db_result)
             # db.commit()
             # db.refresh(db_result)
-            result["processed_at"] = db_result.created_at.isoformat()
+            result["processed_at"] = (db_result.created_at or datetime.now()).isoformat()
         except Exception as e:
             print("Failed to save to DB:", e)
+            result["processed_at"] = datetime.now().isoformat()
 
         return result
 
@@ -119,7 +123,7 @@ async def analyze_ddmrp_phase2_endpoint(file: UploadFile = File(...), db: Sessio
         raise HTTPException(status_code=400, detail="Hanya file Excel (.xlsx, .xls) atau CSV yang didukung untuk simulasi ini.")
     try:
         contents = await file.read()
-        result = project_ddmrp_inventory_occupancy(contents)
+        result = await asyncio.to_thread(project_ddmrp_inventory_occupancy, contents)
         if "error" in result:
             raise HTTPException(status_code=400, detail=result["error"])
         # Remove _df before returning JSON
@@ -132,9 +136,10 @@ async def analyze_ddmrp_phase2_endpoint(file: UploadFile = File(...), db: Sessio
             # db.add(db_result)
             # db.commit()
             # db.refresh(db_result)
-            result["processed_at"] = db_result.created_at.isoformat()
+            result["processed_at"] = (db_result.created_at or datetime.now()).isoformat()
         except Exception as e:
             print("Failed to save to DB:", e)
+            result["processed_at"] = datetime.now().isoformat()
             
         return result
     except Exception as e:

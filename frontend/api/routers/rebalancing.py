@@ -6,6 +6,8 @@ import io
 import os
 import json
 import uuid
+import asyncio
+from datetime import datetime
 import traceback
 
 from database import get_db
@@ -62,10 +64,10 @@ async def analyze_rebalancing_endpoint(
         db_upload = Upload(module="rebalancing", file_url=f"{stock_url},{demand_url},{freight_url}")
         db.add(db_upload)
         # db.commit()
-        db.refresh(db_upload)
+        # db.refresh(db_upload)
         
         from services.rebalancing_engine import analyze_rebalancing
-        result = analyze_rebalancing(stock_df, demand_df, freight_df)
+        result = await asyncio.to_thread(analyze_rebalancing, stock_df, demand_df, freight_df)
         
         # Save result to DB for global visibility
         result_str = json.dumps(result)
@@ -74,7 +76,11 @@ async def analyze_rebalancing_endpoint(
         # db.commit()
         # db.refresh(db_result)
         
-        result["processed_at"] = db_result.created_at.isoformat()
+        try:
+            result["processed_at"] = (db_result.created_at or datetime.now()).isoformat()
+        except Exception as e:
+            print("Failed to save to DB:", e)
+            result["processed_at"] = datetime.now().isoformat()
         
         return result
         

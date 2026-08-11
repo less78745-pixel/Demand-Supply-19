@@ -6,6 +6,8 @@ import json
 from pydantic import BaseModel
 from typing import Dict, Any
 import logging
+import asyncio
+from datetime import datetime
 from services.wh_trans_mp_service import generate_dummy_data, simulate_network, parse_wh_trans_file
 
 
@@ -26,9 +28,9 @@ def get_dummy_data(num_customers: int = 100):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/wh-trans/simulate")
-def run_simulation(req: SimulateRequest, db: Session = Depends(get_db)):
+async def run_simulation(req: SimulateRequest, db: Session = Depends(get_db)):
     try:
-        result = simulate_network(req.data, req.num_hubs)
+        result = await asyncio.to_thread(simulate_network, req.data, req.num_hubs)
         response_data = {"status": "success", "result": result}
         
         # Save to DB for global visibility
@@ -38,9 +40,10 @@ def run_simulation(req: SimulateRequest, db: Session = Depends(get_db)):
             # db.add(db_result)
             # db.commit()
             # db.refresh(db_result)
-            response_data["processed_at"] = db_result.created_at.isoformat()
+            response_data["processed_at"] = (db_result.created_at or datetime.now()).isoformat()
         except Exception as e:
             logger.error(f"Failed to save to DB: {e}")
+            response_data["processed_at"] = datetime.now().isoformat()
             
         return response_data
     except Exception as e:
@@ -67,9 +70,10 @@ async def run_simulation_file(
             # db.add(db_result)
             # db.commit()
             # db.refresh(db_result)
-            response_data["processed_at"] = db_result.created_at.isoformat()
+            response_data["processed_at"] = (db_result.created_at or datetime.now()).isoformat()
         except Exception as e:
             logger.error(f"Failed to save to DB: {e}")
+            response_data["processed_at"] = datetime.now().isoformat()
             
         return response_data
     except Exception as e:

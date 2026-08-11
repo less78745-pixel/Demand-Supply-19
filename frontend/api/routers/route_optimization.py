@@ -3,6 +3,8 @@ from sqlalchemy.orm import Session
 from database import get_db
 from schemas.models import ProcessedResult
 import json
+import asyncio
+from datetime import datetime
 from pydantic import BaseModel
 from typing import Optional
 
@@ -71,7 +73,7 @@ async def analyze_route_optimization(params: RouteOptimizationInput, db: Session
             "ga_pop_size": params.ga_pop_size,
         }
 
-        result = run_route_optimization(run_params)
+        result = await asyncio.to_thread(run_route_optimization, run_params)
 
         if "error" in result:
             raise HTTPException(status_code=400, detail=result["error"])
@@ -83,9 +85,10 @@ async def analyze_route_optimization(params: RouteOptimizationInput, db: Session
             # db.add(db_result)
             # db.commit()
             # db.refresh(db_result)
-            result["processed_at"] = db_result.created_at.isoformat()
+            result["processed_at"] = (db_result.created_at or datetime.now()).isoformat()
         except Exception as e:
             print("Failed to save to DB:", e)
+            result["processed_at"] = datetime.now().isoformat()
 
         return result
 
@@ -169,7 +172,7 @@ async def analyze_route_optimization_file(
             "ga_pop_size": ga_pop_size,
         }
 
-        result = analyze_routes_from_file(df, run_params)
+        result = await asyncio.to_thread(analyze_routes_from_file, df, run_params)
 
         if "error" in result:
             raise HTTPException(status_code=400, detail=result["error"])
@@ -181,9 +184,10 @@ async def analyze_route_optimization_file(
             # db.add(db_result)
             # db.commit()
             # db.refresh(db_result)
-            result["processed_at"] = db_result.created_at.isoformat()
+            result["processed_at"] = (db_result.created_at or datetime.now()).isoformat()
         except Exception as e:
             print("Failed to save to DB:", e)
+            result["processed_at"] = datetime.now().isoformat()
 
         return result
 

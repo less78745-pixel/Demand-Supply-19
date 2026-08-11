@@ -3,6 +3,8 @@ from sqlalchemy.orm import Session
 from database import get_db
 from schemas.models import ProcessedResult
 import json
+import asyncio
+from datetime import datetime
 import pandas as pd
 import io
 from utils.validators import validate_forecast_schema
@@ -40,7 +42,8 @@ async def analyze_forecast(file: UploadFile = File(...), db: Session = Depends(g
         validate_forecast_schema(df)
         df_clean = clean_forecast_data(df)
         
-        results = run_forecast_pipeline(df_clean)
+        # Run heavy ML computation in a separate thread to avoid blocking the event loop
+        results = await asyncio.to_thread(run_forecast_pipeline, df_clean)
         
         # Save to DB for global visibility
         try:
@@ -49,9 +52,10 @@ async def analyze_forecast(file: UploadFile = File(...), db: Session = Depends(g
             # db.add(db_result)
             # db.commit()
             # db.refresh(db_result)
-            results["processed_at"] = db_result.created_at.isoformat()
+            results["processed_at"] = (db_result.created_at or datetime.now()).isoformat()
         except Exception as e:
             print("Failed to save to DB:", e)
+            results["processed_at"] = datetime.now().isoformat()
         
         return results
         

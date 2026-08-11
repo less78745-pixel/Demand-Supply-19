@@ -3,6 +3,8 @@ from sqlalchemy.orm import Session
 from database import get_db
 from schemas.models import ProcessedResult
 import json
+import asyncio
+from datetime import datetime
 from fastapi.responses import JSONResponse
 import pandas as pd
 import io
@@ -40,7 +42,7 @@ async def analyze_safety_stock_endpoint(
             )
         
         from services.safety_stock_engine import analyze_safety_stock
-        result = analyze_safety_stock(df, service_level=service_level)
+        result = await asyncio.to_thread(analyze_safety_stock, df, service_level)
         
         # Save to DB for global visibility
         try:
@@ -49,9 +51,10 @@ async def analyze_safety_stock_endpoint(
             # db.add(db_result)
             # db.commit()
             # db.refresh(db_result)
-            result["processed_at"] = db_result.created_at.isoformat()
+            result["processed_at"] = (db_result.created_at or datetime.now()).isoformat()
         except Exception as e:
             print("Failed to save to DB:", e)
+            result["processed_at"] = datetime.now().isoformat()
             
         return result
         

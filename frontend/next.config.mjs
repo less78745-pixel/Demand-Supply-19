@@ -6,6 +6,10 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  // Increase proxy timeout for heavy ML computation endpoints
+  serverRuntimeConfig: {
+    proxyTimeout: 300000, // 5 minutes
+  },
   // In development, proxy /api/v1/* to local FastAPI at port 8000
   // In production (Vercel), the /api/* path is handled by Python serverless function via vercel.json
   async rewrites() {

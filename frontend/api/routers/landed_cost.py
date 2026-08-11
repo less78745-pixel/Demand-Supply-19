@@ -3,6 +3,8 @@ from sqlalchemy.orm import Session
 from database import get_db
 from schemas.models import ProcessedResult
 import json
+import asyncio
+from datetime import datetime
 from fastapi.responses import JSONResponse
 import pandas as pd
 import io
@@ -47,7 +49,7 @@ async def analyze_landed_cost_endpoint(
             rate = 16000.0
         
         from services.landed_cost_engine import analyze_landed_cost
-        result = analyze_landed_cost(tracking_df, allocation_df, exchange_rate=rate)
+        result = await asyncio.to_thread(analyze_landed_cost, tracking_df, allocation_df, rate)
         
         # Save to DB for global visibility
         try:
@@ -56,9 +58,10 @@ async def analyze_landed_cost_endpoint(
             # db.add(db_result)
             # db.commit()
             # db.refresh(db_result)
-            result["processed_at"] = db_result.created_at.isoformat()
+            result["processed_at"] = (db_result.created_at or datetime.now()).isoformat()
         except Exception as e:
             print("Failed to save to DB:", e)
+            result["processed_at"] = datetime.now().isoformat()
             
         return result
         

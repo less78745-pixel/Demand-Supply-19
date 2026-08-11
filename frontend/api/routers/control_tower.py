@@ -3,6 +3,8 @@ from sqlalchemy.orm import Session
 from database import get_db
 from schemas.models import ProcessedResult
 import json
+import asyncio
+from datetime import datetime
 from fastapi.responses import JSONResponse
 import pandas as pd
 import io
@@ -35,7 +37,7 @@ async def analyze_control_tower_endpoint(
             return JSONResponse(status_code=400, content={"detail": "File kosong."})
         
         from services.control_tower_engine import analyze_control_tower
-        result = analyze_control_tower(df)
+        result = await asyncio.to_thread(analyze_control_tower, df)
         
         # Save to DB for global visibility
         try:
@@ -44,9 +46,10 @@ async def analyze_control_tower_endpoint(
             # db.add(db_result)
             # db.commit()
             # db.refresh(db_result)
-            result["processed_at"] = db_result.created_at.isoformat()
+            result["processed_at"] = (db_result.created_at or datetime.now()).isoformat()
         except Exception as e:
             print("Failed to save to DB:", e)
+            result["processed_at"] = datetime.now().isoformat()
             
         return result
         
