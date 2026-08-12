@@ -11,6 +11,7 @@ import {
   ChevronDown, ChevronUp, BookOpen, Cpu, Package, Truck,
   Info, ShieldCheck, BarChart3, Calculator, FileSpreadsheet, Cloud } from 'lucide-react';
 import { analyzeDDMRPManual, uploadDDMRPFile } from '@/lib/api';
+import { get, set } from 'idb-keyval';
 import toast from 'react-hot-toast';
 import { FileUploader } from '@/components/ui/FileUploader';
 import { MultiSelect } from '@/components/ui/MultiSelect';

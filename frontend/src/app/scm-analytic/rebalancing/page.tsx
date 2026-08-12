@@ -7,7 +7,7 @@ import { KPICard } from '@/components/ui/KPICard';
 import { MultiSelect } from '@/components/ui/MultiSelect';
 import {
   ArrowLeftRight, Download, Truck, DollarSign, AlertTriangle,
-  Package, CheckCircle, Info, UploadCloud, FileSpreadsheet, X, Zap, HelpCircle, FastForward, ShieldAlert
+  Package, CheckCircle, Info, UploadCloud, Cloud, FileSpreadsheet, X, Zap, HelpCircle, FastForward, ShieldAlert
 } from 'lucide-react';
 import { uploadRebalancingFiles } from '@/lib/api';
 import { supabase } from '@/lib/supabase';

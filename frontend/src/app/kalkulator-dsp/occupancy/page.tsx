@@ -6,8 +6,7 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { FileUploader } from '@/components/ui/FileUploader';
 import { KPICard } from '@/components/ui/KPICard';
 import { OccupancyChart } from '@/components/charts/OccupancyChart';
-import { InventoryChart } from '@/components/charts/InventoryChart';
-import { Activity, AlertTriangle, Info, TrendingUp, TrendingDown, AlertOctagon, Layers, Download, PackageSearch, LayoutGrid, CheckCircle, Sparkles, HelpCircle, FileSpreadsheet, Zap, ShieldAlert, Cloud } from 'lucide-react';
+import { Activity, AlertTriangle, Info, TrendingUp, TrendingDown, AlertOctagon, Layers, Download, Sparkles, HelpCircle, FileSpreadsheet, Zap, Cloud } from 'lucide-react';
 import { uploadOccupancyFile, downloadOccupancyTemplate } from '@/lib/api';
 import { MultiSelect } from '@/components/ui/MultiSelect';
 import { TimestampBadge } from '@/components/ui/TimestampBadge';
@@ -108,12 +107,7 @@ function generateDemoOccupancy() {
     { name: 'DC Makassar', capacity: 13500, hand: 6200 },
   ];
 
-  const forecastSeries: Record<string, number[]> = {
-    'DC Jakarta': [50.67, 48.33, 49.67, 49.67, 51.33, 51.0],
-    'DC Surabaya': [48.82, 48.24, 45.29, 45.29, 43.53, 42.35],
-    'DC Medan': [45.56, 45.56, 45.0, 46.11, 46.11, 45.0],
-    'DC Makassar': [45.93, 45.93, 45.56, 46.3, 46.3, 45.56]
-  };
+
   const targetSeries: Record<string, number[]> = {
     'DC Jakarta': [50.0, 46.67, 47.0, 46.0, 46.67, 45.33],
     'DC Surabaya': [49.41, 49.41, 47.06, 47.65, 46.47, 45.88],
@@ -123,7 +117,7 @@ function generateDemoOccupancy() {
 
   const daily_data: any[] = [];
   branches.forEach(b => {
-    const series = forecastSeries[b.name] || [50, 50, 50, 50, 50, 50];
+    const series = targetSeries[b.name] || [50, 50, 50, 50, 50, 50];
     dates.forEach((dt, idx) => {
       const pct = series[idx];
       const currentHand = Math.round((pct / 100) * b.capacity);
@@ -141,25 +135,15 @@ function generateDemoOccupancy() {
   return {
     processed_at: new Date().toISOString(),
     daily_data,
-    kpi_summary: { avg_occupancy: 46.8, max_occupancy: 51.3, categories_at_risk: 0 },
-    shortage_alerts: [],
-    inventory_analysis: {
-      kpi_summary: {
-        total_categories: 3,
-        a_class_count: 2,
-        z_class_count: 2,
-        dead_stock_count: 1,
-        stockout_risk_count: 0
-      },
-      matrix_data: [
-        { cabang: 'DC Jakarta', category: 'Electronics & Spareparts', class: 'A-X', volume: 5200, mean_sales: 140, cv: 0.2, doh: 22, on_hand: 3080, trend_pct: 5, stockout_risk: false, strategy: 'Continuous Review, tight safety stock. High value, predictable.' },
-        { cabang: 'DC Surabaya', category: 'Fast Moving Consumer', class: 'A-Z', volume: 3800, mean_sales: 110, cv: 0.75, doh: 12, on_hand: 1320, trend_pct: -2, stockout_risk: false, strategy: 'Collaborative forecasting needed. Risk of high-cost stockouts.' },
-        { cabang: 'DC Medan', category: 'Apparel & Textiles', class: 'C-Z', volume: 800, mean_sales: 5, cv: 1.2, doh: 115, on_hand: 575, trend_pct: -15, stockout_risk: false, strategy: 'Candidate for discontinuation or consignment stock.' }
-      ],
-      dead_stock: [
-        { cabang: 'DC Medan', category: 'Apparel & Textiles', doh: 115, on_hand: 575, class: 'C-Z' }
-      ]
-    },
+    kpi_summary: { avg_occupancy: 46.8, max_occupancy: 51.3, categories_at_risk: 1 },
+    shortage_alerts: [
+      { cabang: 'DC Jakarta', category: 'General - Electronics', date: 'JAN-4', deficit: 150 }
+    ],
+    mos_data: [
+      { Cabang: 'DC Jakarta', Grup: 'General', Week: 'JAN-1', Balance: 1000, Target: 1000, Harga: 15000, Value_per_Week: 15000000, MOS: 1.5 },
+      { Cabang: 'DC Surabaya', Grup: 'General', Week: 'JAN-1', Balance: 1190, Target: 1190, Harga: 21000, Value_per_Week: 25000000, MOS: 2.1 }
+    ],
+
     over_occupancy_insights: [
       'PERBANDINGAN SKENARIO - DC Jakarta: pada periode JAN-1, utilisasi gudang stabil di kisaran 50.67% dari total kapasitas 30,000 unit.',
       'STATUS GUDANG - Seluruh 4 Distribution Center (DC Jakarta, Surabaya, Medan, Makassar) beroperasi pada level occupancy ideal (42% - 51%), tidak terdeteksi risiko over-kapasitas maupun shortage.'
@@ -172,7 +156,6 @@ function generateDemoOccupancy() {
         'TREN - DC Surabaya (Forecast): balance utilisasi turun stabil dari 48.82% (JAN-1) menjadi 42.35% (FEB-2). Status utilisasi kapasitas gudang optimal.',
         'STATUS GUDANG - Seluruh 4 Distribution Center (DC Jakarta, Surabaya, Medan, Makassar) beroperasi pada level occupancy ideal (42% - 51%), tidak terdeteksi risiko over-kapasitas maupun shortage.'
       ],
-      occupancy_series_forecast: forecastSeries,
       occupancy_series_target: targetSeries
     },
     ddmrp_results: {
@@ -183,7 +166,6 @@ function generateDemoOccupancy() {
         'TREN - DC Surabaya (Forecast): balance utilisasi turun stabil dari 48.82% (JAN-1) menjadi 42.35% (FEB-2). Status utilisasi kapasitas gudang optimal.',
         'STATUS GUDANG - Seluruh 4 Distribution Center (DC Jakarta, Surabaya, Medan, Makassar) beroperasi pada level occupancy ideal (42% - 51%), tidak terdeteksi risiko over-kapasitas maupun shortage.'
       ],
-      occupancy_series_forecast: forecastSeries,
       occupancy_series_target: targetSeries
     }
   };
@@ -235,9 +217,8 @@ export default function OccupancyPage() {
     setResults(demo);
     try {
       localStorage.setItem('lastOccupancy', JSON.stringify(demo));
-      if (demo.inventory_analysis) localStorage.setItem('lastInventory', JSON.stringify(demo.inventory_analysis));
     } catch(e){}
-    toast.success('🎉 Data Demo Occupancy & Inventory Berhasil Dimuat!');
+    toast.success('🎉 Data Demo Occupancy Berhasil Dimuat!');
   };
 
   // ── Restore previous results from Supabase ──
@@ -299,8 +280,7 @@ export default function OccupancyPage() {
 
   const [selectedCabang,   setSelectedCabang]   = useState<string[]>(['All']);
   const [selectedDate,     setSelectedDate]     = useState<string[]>(['All']);
-  const [selectedCategory, setSelectedCategory] = useState<string[]>(['All']);
-  const [selectedClass,    setSelectedClass]    = useState<string[]>(['All']);
+
 
   // ── Upload handler ──
   const handleFileUpload = async (file: File) => {
@@ -316,12 +296,6 @@ export default function OccupancyPage() {
       } catch (e) {
         console.warn('Data terlalu besar untuk disimpan di memori browser');
       }
-      // Also save inventory data separately for dashboard compatibility
-      if (data.inventory_analysis) {
-        try {
-          localStorage.setItem('lastInventory', JSON.stringify(data.inventory_analysis));
-        } catch(e) {}
-      }
       toast.success('Analysis complete!', { id: 'occ' });
     } catch (err: any) {
       const msg = err.response?.data?.detail || err.message || 'Failed to process. Check columns.';
@@ -331,78 +305,61 @@ export default function OccupancyPage() {
     }
   };
 
-  // ── CSV export with insights ──
+  // ── CSV export step-by-step complete data ──
   const handleExport = () => {
-    if (!results?.daily_data) return;
-    const rows = results.daily_data;
+    if (!results) return;
+    const lines = [];
+
+    // Gunakan data aktif (terfilter) agar hasil export sesuai dengan layar
+    const exportDailyData = filteredData && filteredData.length > 0 ? filteredData : (results.daily_data || []);
+    const exportKpi = kpiMetrics || results.kpi_summary || {};
+    const exportShortage = filteredShortageAlerts && filteredShortageAlerts.length > 0 ? filteredShortageAlerts : (results.shortage_alerts || []);
+    const exportMos = results.mos_data || [];
     
-    // Main data section
-    const header = ['Date','Cabang','Total On Hand','Capacity','Occupancy Pct (%)'];
-    const lines = [
-      header.join(','),
-      ...rows.map((r: any) =>
-        [r.date, r.cabang, r.total_on_hand, r.capacity, r.occupancy_pct].join(',')
-      ),
-    ];
+    // Fallback over occupancy insights from state or raw results
+    const rawInsights = results.over_occupancy_insights || [];
+    const derivedInsights = (insights.over || []).map((o: any) => `TREN - ${o.cabang} pada ${o.date}: Over Kapasitas (${o.occupancy_pct}%)`);
+    const exportWarnings = derivedInsights.length > 0 ? derivedInsights : rawInsights;
+
+    // STEP 1: RAW/DAILY DATA (Kapasitas & Occupancy)
+    if (exportDailyData.length) {
+      lines.push('--- STEP 1: HASIL HITUNG OCCUPANCY (KAPASITAS) ---');
+      lines.push('Date,Cabang,Total On Hand,Capacity,Occupancy Pct (%)');
+      exportDailyData.forEach((r: any) =>
+        lines.push([r.date, r.cabang, r.total_on_hand, r.capacity, r.occupancy_pct].join(','))
+      );
+    }
     
-    // KPI Summary section
+    // STEP 2: SUMMARY & KPI
     lines.push('');
-    lines.push('--- DSP INSIGHT: KPI SUMMARY ---');
-    lines.push(`Avg Occupancy (%),${results.kpi_summary?.avg_occupancy || 0}`);
-    lines.push(`Max Occupancy (%),${results.kpi_summary?.max_occupancy || 0}`);
-    lines.push(`Categories at Risk,${results.kpi_summary?.categories_at_risk || 0}`);
+    lines.push('--- STEP 2: KPI & SUMMARY ---');
+    lines.push(`Avg Occupancy (%),${(exportKpi as any).avg || (exportKpi as any).avg_occupancy || 0}`);
+    lines.push(`Max Occupancy (%),${(exportKpi as any).peak || (exportKpi as any).max_occupancy || 0}`);
+    lines.push(`Categories at Risk,${(exportKpi as any).riskCount || (exportKpi as any).categories_at_risk || 0}`);
 
-    // Over Occupancy Insights
-    const overData = rows.filter((d: any) => d.occupancy_pct > 100);
-    if (overData.length > 0) {
+    // STEP 3: MOS & HARGA
+    if (exportMos.length > 0) {
       lines.push('');
-      lines.push('--- DSP INSIGHT: OVER OCCUPANCY (> 100%) ---');
-      lines.push('Date,Cabang,Occupancy Pct (%)');
-      overData.forEach((d: any) => lines.push(`${d.date},${d.cabang},${d.occupancy_pct}`));
-    }
-
-    // Lower Occupancy Insights
-    const lowerData = rows.filter((d: any) => d.occupancy_pct < 50);
-    if (lowerData.length > 0) {
-      lines.push('');
-      lines.push('--- DSP INSIGHT: LOWER OCCUPANCY (< 50%) ---');
-      lines.push('Date,Cabang,Occupancy Pct (%)');
-      lowerData.forEach((d: any) => lines.push(`${d.date},${d.cabang},${d.occupancy_pct}`));
-    }
-
-    // Shortage Alerts
-    const alerts = results.shortage_alerts || [];
-    if (alerts.length > 0) {
-      lines.push('');
-      lines.push('--- DSP INSIGHT: SHORTAGE ALERTS (DEFICIT) ---');
-      lines.push('Cabang,Category,Date,Deficit');
-      alerts.forEach((a: any) => lines.push(`${a.cabang},${a.category},${a.date},${a.deficit}`));
-    }
-
-    // Inventory Analysis (if available)
-    const inv = results.inventory_analysis;
-    if (inv?.matrix_data?.length > 0) {
-      lines.push('');
-      lines.push('--- DSP INSIGHT: INVENTORY ABC-XYZ CLASSIFICATION ---');
-      lines.push('Cabang,Category,Class,Volume,Mean Sales,CV,DOH,On Hand,Trend (%),Risk,Strategy');
-      inv.matrix_data.forEach((r: any) => {
-        const risk = r.stockout_risk ? 'STOCKOUT' : r.overstock ? 'OVERSTOCK' : 'OK';
-        lines.push(`"${r.cabang}","${r.category}","${r.class}",${r.volume},${r.mean_sales},${r.cv},${r.doh},${r.on_hand},${r.trend_pct},"${risk}","${r.strategy}"`);
+      lines.push('--- STEP 3: PERHITUNGAN MOS & HARGA CONTAINER ---');
+      lines.push('Cabang,Grup,Week,Balance,Target,Harga,Value per Week,MOS');
+      exportMos.forEach((m: any) => {
+        lines.push(`${m.Cabang},${m.Grup},${m.Week},${m.Balance},${m.Target},${m.Harga},${m.Value_per_Week},${m.MOS}`);
       });
-
-      if (inv.dead_stock?.length > 0) {
-        lines.push('');
-        lines.push('--- DSP INSIGHT: DEAD STOCK (DOH > 90 HARI) ---');
-        lines.push('Cabang,Category,DOH,On Hand,Class');
-        inv.dead_stock.forEach((d: any) => lines.push(`${d.cabang},${d.category},${d.doh},${d.on_hand},${d.class}`));
-      }
     }
 
-    // Over Occupancy Insights
-    if (results.over_occupancy_insights?.length) {
+    // STEP 4: SHORTAGE & DEFICIT
+    if (exportShortage.length > 0) {
       lines.push('');
-      lines.push('--- WARNING: RAWAN PENUH (>90%) ---');
-      results.over_occupancy_insights.forEach((ins: string) => {
+      lines.push('--- STEP 4: SHORTAGE ALERTS (DEFICIT) ---');
+      lines.push('Cabang,Category,Date,Deficit');
+      exportShortage.forEach((a: any) => lines.push(`${a.cabang},${a.category},${a.date},${a.deficit}`));
+    }
+
+    // STEP 5: WARNINGS
+    if (exportWarnings.length > 0) {
+      lines.push('');
+      lines.push('--- STEP 5: WARNING OVER OCCUPANCY (>90%) ---');
+      exportWarnings.forEach((ins: string) => {
         lines.push(`"${ins}"`);
       });
     }
@@ -411,18 +368,18 @@ export default function OccupancyPage() {
     const url = URL.createObjectURL(blob);
     const a    = document.createElement('a');
     a.href     = url;
-    a.download = getStandardFilename("Occupancy_Capacity", results?.processed_at || new Date().toISOString(), "csv");
+    a.download = getStandardFilename("Hasil_Pengolahan_Lengkap_Occupancy", results?.processed_at || new Date().toISOString(), "csv");
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    toast.success('Full report exported with DSP Insights!');
+    toast.success('Data Hasil Pengolahan Lengkap berhasil diekspor!');
   };
 
   const handleExportWorkspace = () => {
-    if (!results && !mrpData) {
+    if (!results) {
       toast.error('Tidak ada data untuk disimpan!');
       return;
     }
-    const workspace = { mrpData, results };
+    const workspace = { results };
     const blob = new Blob([JSON.stringify(workspace)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -440,7 +397,6 @@ export default function OccupancyPage() {
     reader.onload = (event) => {
       try {
         const data = JSON.parse(event.target?.result as string);
-        if (data.mrpData) setMrpData(data.mrpData);
         if (data.results) setResults(data.results);
         toast.success('Workspace berhasil dimuat! Sesi dipulihkan.');
       } catch (err) {
@@ -462,15 +418,7 @@ export default function OccupancyPage() {
     return ['All', ...Array.from(new Set<string>(results.daily_data.map((d: any) => d.date))).sort()];
   }, [results]);
 
-  const invCategories = useMemo(() => {
-    if (!results?.inventory_analysis?.matrix_data) return [];
-    return ['All', ...Array.from(new Set<string>(results.inventory_analysis.matrix_data.map((d: any) => d.category)))];
-  }, [results]);
 
-  const invClasses = useMemo(() => {
-    if (!results?.inventory_analysis?.matrix_data) return [];
-    return ['All', ...Array.from(new Set<string>(results.inventory_analysis.matrix_data.map((d: any) => d.class)))];
-  }, [results]);
 
   const filteredData = useMemo(() => {
     if (!results?.daily_data) return [];
@@ -493,23 +441,15 @@ export default function OccupancyPage() {
     return { over, lower };
   }, [filteredData]);
 
-  const filteredInvData = useMemo(() => {
-    if (!results?.inventory_analysis?.matrix_data) return [];
-    return results.inventory_analysis.matrix_data.filter((d: any) =>
-      (selectedCabang.includes('All') || selectedCabang.includes(d.cabang)) &&
-      (selectedCategory.includes('All') || selectedCategory.includes(d.category)) &&
-      (selectedClass.includes('All') || selectedClass.includes(d.class))
-    );
-  }, [results, selectedCabang, selectedCategory, selectedClass]);
+
 
   const filteredShortageAlerts = useMemo(() => {
     if (!results?.shortage_alerts) return [];
     return results.shortage_alerts.filter((a: any) =>
       (selectedCabang.includes('All') || selectedCabang.includes(a.cabang)) &&
-      (selectedDate.includes('All') || selectedDate.includes(a.date)) &&
-      (selectedCategory.includes('All') || selectedCategory.includes(a.category))
+      (selectedDate.includes('All') || selectedDate.includes(a.date))
     );
-  }, [results, selectedCabang, selectedDate, selectedCategory]);
+  }, [results, selectedCabang, selectedDate]);
 
   const kpiMetrics = useMemo(() => {
     if (!filteredData || filteredData.length === 0) {
@@ -561,18 +501,7 @@ export default function OccupancyPage() {
       });
     }
 
-    if (filteredInvData && filteredInvData.length > 0) {
-      filteredInvData.forEach((item: any) => {
-        if (item.stockout_risk || item.xyz === 'Z' || item.doh > 90) {
-          const key = `${item.cabang}-${item.category}`;
-          if (!riskMap.has(key)) {
-            const reason = item.stockout_risk ? `Stockout Risk (DOH: ${item.doh})` : item.doh > 90 ? `Dead Stock (DOH: ${item.doh})` : `High Volatility (${item.class})`;
-            const score = item.stockout_risk ? 500 : item.doh > 90 ? 300 : 100;
-            riskMap.set(key, { category: item.category, cabang: item.cabang, reason, score });
-          }
-        }
-      });
-    }
+
 
     const riskList = Array.from(riskMap.values()).sort((a, b) => b.score - a.score);
     const top5RiskCategories = riskList.slice(0, 5);
@@ -587,7 +516,7 @@ export default function OccupancyPage() {
       riskCount,
       top5RiskCategories,
     };
-  }, [filteredData, filteredShortageAlerts, filteredInvData, results]);
+  }, [filteredData, filteredShortageAlerts, results]);
 
   const mrpData = results?.mrp_results || results?.ddmrp_results;
 
@@ -987,8 +916,8 @@ export default function OccupancyPage() {
               </div>
               <div className="flex gap-3 shrink-0">
                 <button onClick={handleExport}
-                  className="px-5 py-2.5 bg-slate-100 text-slate-900 border border-slate-200 rounded-xl hover:border-sky-500 hover:bg-slate-700 transition text-sm flex items-center gap-2 font-bold shadow-md">
-                  <Download className="w-4 h-4 text-sky-400" /> Export CSV
+                  className="px-5 py-2.5 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white border-transparent rounded-xl transition text-sm flex items-center gap-2 font-bold shadow-md">
+                  <Download className="w-4 h-4 text-white" /> Export Hasil Olah (Lengkap)
                 </button>
               </div>
             </div>
@@ -1103,30 +1032,14 @@ export default function OccupancyPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/5 font-medium">
-                        {Object.keys(mrpData.occupancy_series_forecast || mrpData.occupancy_series_target || {})
+                        {Object.keys(mrpData.occupancy_series_target || {})
                           .filter((cabang) => selectedCabang.includes('All') || selectedCabang.includes(cabang))
                           .map((cabang) => {
-                          const fVals = mrpData.occupancy_series_forecast?.[cabang] || [];
                           const tVals = mrpData.occupancy_series_target?.[cabang] || [];
                           return (
                             <React.Fragment key={cabang}>
-                              <tr className="bg-white hover:bg-slate-100 transition">
-                                <td className="py-3 px-4 font-bold text-indigo-700 text-sm" rowSpan={2}>{cabang}</td>
-                                <td className="py-2 px-3 text-center font-bold text-blue-700 bg-blue-500/10 rounded">Forecast</td>
-                                {fVals.map((v: number, vIdx: number) => {
-                                  const isOver = v > 100;
-                                  const isHigh = v >= 90 && v <= 100;
-                                  return (
-                                    <td key={vIdx} className={`py-2.5 px-3 text-right text-sm font-bold ${
-                                      isOver ? 'text-rose-600 bg-rose-500/20 font-black' : isHigh ? 'text-amber-600 font-extrabold' : 'text-slate-800'
-                                    }`}>
-                                      {v.toFixed(1)}%
-                                      {isOver && <span className="block text-[9px] font-extrabold text-rose-600 uppercase tracking-tighter">Over Capacity!</span>}
-                                    </td>
-                                  );
-                                })}
-                              </tr>
                               <tr className="bg-white hover:bg-slate-100 transition border-b border-slate-200">
+                                <td className="py-3 px-4 font-bold text-indigo-700 text-sm" rowSpan={1}>{cabang}</td>
                                 <td className="py-2 px-3 text-center font-bold text-emerald-700 bg-emerald-500/10 rounded">Target</td>
                                 {tVals.map((v: number, vIdx: number) => {
                                   const isOver = v > 100;
@@ -1183,197 +1096,49 @@ export default function OccupancyPage() {
                 );
               })()}
 
-              {/* Matplotlib Generated Charts Grid */}
-              {mrpData.charts && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {Object.entries(mrpData.charts).map(([key, b64]: [string, any], idx) => {
-                    if (!b64) return null;
-                    const titleMap: Record<string, string> = {
-                      balance_forecast: "📈 Tren Balance - Skenario Forecast",
-                      balance_target: "📈 Tren Balance - Skenario Target",
-                      occupancy_forecast: "🏢 Occupancy Gudang - Skenario Forecast",
-                      occupancy_target: "🏢 Occupancy Gudang - Skenario Target"
-                    };
-                    return (
-                      <div key={idx} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-inner">
-                        <h4 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2 border-b border-white/5 pb-2">
-                          {titleMap[key] || key}
-                        </h4>
-                        <div className="overflow-hidden rounded-xl bg-white/5 flex items-center justify-center">
-                          <img
-                            src={`data:image/png;base64,${b64}`}
-                            alt={titleMap[key] || key}
-                            className="w-full h-auto object-contain rounded-lg hover:scale-[1.02] transition-transform duration-300"
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
             </GlassCard>
           )}
 
-          {/* ═══ INVENTORY INTELLIGENCE SECTION ═══ */}
-          {results.inventory_analysis && (
-            <>
-              <div className="border-t border-border pt-8">
-                <h2 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-3 uppercase mb-6">
-                  <PackageSearch className="w-7 h-7 text-primary" />
-                  Inventory Intelligence (ABC-XYZ)
-                </h2>
-
-                {/* Inventory KPI Row */}
-                <div className="grid md:grid-cols-4 gap-6 mb-6">
-                  <KPICard title="Total Kategori" value={results.inventory_analysis.kpi_summary?.total_categories || 0} icon={<LayoutGrid />} />
-                  <KPICard title="Class A (Fast Movers)" value={results.inventory_analysis.kpi_summary?.a_class_count || 0} icon={<CheckCircle />} />
-                  <KPICard title="High Volatility (Z)" value={results.inventory_analysis.kpi_summary?.z_class_count || 0} icon={<AlertTriangle />} />
-                  <KPICard title="Dead Stock (DOH>90)" value={results.inventory_analysis.kpi_summary?.dead_stock_count || 0}
-                    icon={<AlertOctagon />} isAlert={(results.inventory_analysis.kpi_summary?.dead_stock_count || 0) > 0} />
-                </div>
-
-                {/* Stockout warning */}
-                {(results.inventory_analysis.kpi_summary?.stockout_risk_count ?? 0) > 0 && (
-                  <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-md flex items-center gap-3 mb-6">
-                    <AlertOctagon className="w-5 h-5 text-destructive shrink-0" />
-                    <span className="text-sm text-foreground">
-                      <b>{results.inventory_analysis.kpi_summary.stockout_risk_count}</b> kategori berisiko stockout (DOH &lt; 14 hari).
-                      Segera lakukan replenishment.
-                    </span>
-                  </div>
-                )}
-
-                {/* Chart + filters (Overflow visible) */}
-                <GlassCard allowOverflow={true} className="mb-10 p-6 bg-white border-slate-200 shadow-xl relative z-30">
-                  <div className="flex flex-col justify-between mb-6 gap-6 border-b border-slate-200 pb-6">
-                    <div>
-                      <h3 className="text-lg font-bold text-foreground uppercase tracking-wide">ABC-XYZ Matrix Chart</h3>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-5 max-w-4xl">
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">🏢 Filter Cabang:</label>
-                          <MultiSelect
-                            options={cabangs}
-                            selected={selectedCabang}
-                            onChange={setSelectedCabang}
-                            selectAllLabel="Semua Cabang"
-                            placeholder="Pilih Cabang..."
-                          />
-                        </div>
-                        {invCategories.length > 1 && (
-                          <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">📦 Filter Kategori:</label>
-                            <MultiSelect
-                              options={invCategories}
-                              selected={selectedCategory}
-                              onChange={setSelectedCategory}
-                              selectAllLabel="Semua Kategori"
-                              placeholder="Pilih Kategori..."
-                            />
-                          </div>
-                        )}
-                        {invClasses.length > 1 && (
-                          <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">🏷️ Filter Class ABC-XYZ:</label>
-                            <MultiSelect
-                              options={invClasses}
-                              selected={selectedClass}
-                              onChange={setSelectedClass}
-                              selectAllLabel="Semua Class"
-                              placeholder="Pilih Class..."
-                            />
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {filteredInvData.length > 0
-                    ? <InventoryChart data={filteredInvData} />
-                    : <div className="h-40 flex items-center justify-center text-muted-foreground text-sm font-medium">
-                        Tidak ada data untuk filter yang dipilih.
-                      </div>
-                  }
-                </GlassCard>
-
-                {/* Detailed Insights Table */}
-                <GlassCard className="mt-6">
-                  <h3 className="text-lg font-bold text-foreground mb-4 uppercase tracking-wide">
-                    Detailed Insights — Semua Kombinasi Cabang × Kategori
-                  </h3>
-                  <PaginatedTable
-                    data={filteredInvData}
-                    pageSize={50}
-                    renderTable={(slicedData) => (
-                      <div className="overflow-x-auto max-h-[620px] overflow-y-auto">
-                        <table className="w-full text-xs text-left text-muted-foreground min-w-[1100px]">
-                          <thead className="text-xs text-foreground uppercase bg-muted/50 border-b border-border sticky top-0 font-bold tracking-wider">
-                            <tr>
-                              <th className="px-3 py-3">Cabang</th>
-                              <th className="px-3 py-3">Category</th>
-                              <th className="px-3 py-3 text-center">Class</th>
-                              <th className="px-3 py-3 text-right">Volume</th>
-                              <th className="px-3 py-3 text-right">Mean Sales</th>
-                              <th className="px-3 py-3 text-right">CV</th>
-                              <th className="px-3 py-3 text-right">DOH</th>
-                              <th className="px-3 py-3 text-right">On Hand</th>
-                              <th className="px-3 py-3 text-center">Trend</th>
-                              <th className="px-3 py-3 text-center">Risk</th>
-                              <th className="px-3 py-3">Strategy</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {slicedData.map((row: any, idx: number) => {
-                              const abcColor =
-                                row.abc === 'A' ? 'text-primary font-bold' :
-                                row.abc === 'B' ? 'text-orange-500' : 'text-muted-foreground';
-                              const xyzColor =
-                                row.xyz === 'X' ? 'text-blue-500' :
-                                row.xyz === 'Y' ? 'text-yellow-500' : 'text-destructive';
-                              const dohColor = row.doh > 90 ? 'text-destructive font-bold' :
-                                               row.doh < 14 ? 'text-orange-500 font-bold' : 'text-foreground';
-                              const trendColor = row.trend_pct > 5 ? 'text-primary' :
-                                                 row.trend_pct < -5 ? 'text-destructive' : 'text-muted-foreground';
-
-                              return (
-                                <tr key={idx} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                                  <td className="px-3 py-3 font-medium text-foreground">{row.cabang}</td>
-                                  <td className="px-3 py-3 font-medium text-foreground">{row.category}</td>
-                                  <td className="px-3 py-3 text-center">
-                                    <span className={`font-mono font-bold text-sm ${abcColor}`}>{row.abc}</span>
-                                    <span className={`font-mono font-bold text-sm ${xyzColor}`}>{row.xyz}</span>
-                                  </td>
-                                  <td className="px-3 py-3 text-right font-medium text-foreground">{Number(row.volume).toLocaleString()}</td>
-                                  <td className="px-3 py-3 text-right font-medium text-foreground">{Number(row.mean_sales).toLocaleString()}</td>
-                                  <td className="px-3 py-3 text-right text-muted-foreground">{Number(row.cv).toFixed(2)}</td>
-                                  <td className={`px-3 py-3 text-right ${dohColor}`}>{row.doh}</td>
-                                  <td className="px-3 py-3 text-right font-medium text-foreground">{Number(row.on_hand).toLocaleString()}</td>
-                                  <td className={`px-3 py-3 text-center font-medium ${trendColor}`}>
-                                    {row.trend_pct > 0 ? '▲' : row.trend_pct < 0 ? '▼' : '—'}
-                                    {' '}{Math.abs(row.trend_pct).toFixed(1)}%
-                                  </td>
-                                  <td className="px-3 py-3 text-center">
-                                    {row.stockout_risk && (
-                                      <span className="bg-destructive/10 text-destructive text-xs px-1.5 py-0.5 rounded font-bold mr-1">STOCKOUT</span>
-                                    )}
-                                    {row.overstock && (
-                                      <span className="bg-orange-500/10 text-orange-600 text-xs px-1.5 py-0.5 rounded font-bold">OVERSTOCK</span>
-                                    )}
-                                    {!row.stockout_risk && !row.overstock && (
-                                      <span className="text-muted-foreground font-semibold text-xs">OK</span>
-                                    )}
-                                  </td>
-                                  <td className="px-3 py-3 text-muted-foreground text-xs max-w-xs leading-relaxed">{row.strategy}</td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  />
-                </GlassCard>
+          {/* ═══ SHEET HARGA CONTAINER / MOS ═══ */}
+          {results.mos_data && results.mos_data.length > 0 && (
+            <GlassCard className="p-6 border-cyan-500/30 bg-gradient-to-br from-slate-900/90 via-cyan-950/20 to-slate-900/90 shadow-2xl relative z-30 mb-10">
+              <h3 className="text-xl font-extrabold text-slate-100 uppercase tracking-wide flex items-center gap-2.5 mb-4">
+                <FileSpreadsheet className="w-6 h-6 text-cyan-400" />
+                Sheet Harga Container & Kalkulasi MOS
+              </h3>
+              <div className="overflow-x-auto rounded-xl border border-slate-700 bg-slate-800/50 shadow-xl">
+                <table className="w-full text-xs text-left text-slate-200">
+                  <thead className="bg-slate-900/80 text-cyan-300 uppercase font-extrabold border-b border-slate-700 tracking-wider">
+                    <tr>
+                      <th className="py-2.5 px-4 font-semibold">Cabang</th>
+                      <th className="py-2.5 px-4 font-semibold">Grup</th>
+                      <th className="py-2.5 px-4 font-semibold text-center">Week</th>
+                      <th className="py-2.5 px-4 font-semibold text-right">Balance</th>
+                      <th className="py-2.5 px-4 font-semibold text-right">Target</th>
+                      <th className="py-2.5 px-4 font-semibold text-right">Harga</th>
+                      <th className="py-2.5 px-4 font-semibold text-right">Value per Week</th>
+                      <th className="py-2.5 px-4 font-semibold text-right rounded-tr-lg">MOS</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-700">
+                    {results.mos_data
+                      .filter((row: any) => selectedCabang.includes('All') || selectedCabang.includes(row.Cabang))
+                      .map((row: any, i: number) => (
+                      <tr key={i} className="hover:bg-slate-700/30 transition">
+                        <td className="py-2.5 px-4 font-medium">{row.Cabang}</td>
+                        <td className="py-2.5 px-4">{row.Grup}</td>
+                        <td className="py-2.5 px-4 text-center">{row.Week}</td>
+                        <td className="py-2.5 px-4 text-right font-mono">{Number(row.Balance).toLocaleString('en-US')}</td>
+                        <td className="py-2.5 px-4 text-right font-mono">{Number(row.Target).toLocaleString('en-US')}</td>
+                        <td className="py-2.5 px-4 text-right font-mono">Rp {Number(row.Harga).toLocaleString('id-ID')}</td>
+                        <td className="py-2.5 px-4 text-right font-mono">Rp {Number(row.Value_per_Week).toLocaleString('id-ID')}</td>
+                        <td className="py-2.5 px-4 text-right font-mono font-bold text-emerald-400">{Number(row.MOS).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-            </>
+            </GlassCard>
           )}
         </div>
       )}

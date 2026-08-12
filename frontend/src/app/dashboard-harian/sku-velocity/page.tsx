@@ -317,7 +317,7 @@ export default function SKUVelocityPage() {
 
     if (activeHighlight === 'DeadStock') {
       result = result.filter(r => r.analysisStatus.includes('Discontinue'));
-    } else if (activeHighlight === 'FastMoving') {
+    } else if (activeHighlight === 'RisingStar') {
       result = result.filter(r => r.analysisStatus.includes('Fast'));
     }
 
@@ -338,7 +338,7 @@ export default function SKUVelocityPage() {
     
     // Detailed Maps for Insights
     const deadCatMap: Record<string, { val: number, doiAvg: number, count: number }> = {};
-    const risingSKUMap: Record<string, { trendStr: string, doi: number, demand: number, name: string }> = {};
+    const risingSKUMap: Record<string, { trendStr: string, doi: number, demand: number, name: string, value: number }> = {};
 
     latestData.forEach(r => {
       if (r.analysisStatus.includes('Discontinue')) {
@@ -364,7 +364,7 @@ export default function SKUVelocityPage() {
         risingSKUMap[r['ItemCode']] = {
           name: r['NAMA BARANG'],
           trendStr: `+${Math.round((((r['0th']||0) - (r['1st']||0)) / (r['1st']||1)) * 100)}% vs bulan lalu`,
-          doi: Number(r['DOI'] || 0).toFixed(1),
+          doi: Number(r['DOI'] || 0),
           demand: r['0th'] || 0,
           value: r['Value'] || 0
         };

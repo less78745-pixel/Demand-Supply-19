@@ -508,30 +508,31 @@ def calculate_mrp_occupancy_from_bytes(file_bytes: bytes) -> dict:
             agg_bal_t[key][w] += bt[w]
             agg_target[key][w] += rec.target[w]
 
+    print("AGG_BAL_T:", agg_bal_t)
     mos_rows = []
     for (cab, grp), bals in agg_bal_t.items():
         harga = harga_dict.get((cab, grp), 0.0)
         targs = agg_target[(cab, grp)]
         for w in range(n_weeks):
             val_perhitungan = bals[w]
-            # TAHAP 5.b: Lookup & Pembagian Harga
-            if harga == 0:
-                hasil_bagi_harga = 0.0
-            else:
-                hasil_bagi_harga = val_perhitungan / harga
+            # TAHAP 5.b: Perkalian Nilai Inventory
+            nilai_inventory = val_perhitungan * harga
             
             # TAHAP 5.d: Kalkulasi Final MOS
             val_target = targs[w]
             if val_target == 0:
                 mos = 0.0
             else:
-                mos = hasil_bagi_harga / val_target
+                mos = (val_perhitungan * harga) / (val_target * harga) if harga != 0 else (val_perhitungan / val_target)
             
             mos_rows.append({
                 "Cabang": cab,
                 "Grup": grp,
                 "Week": period_labels[w],
-                "Hasil_Bagi_Harga": hasil_bagi_harga,
+                "Balance": val_perhitungan,
+                "Target": val_target,
+                "Harga": harga,
+                "Value_per_Week": nilai_inventory,
                 "MOS": mos
             })
             
@@ -559,12 +560,12 @@ def calculate_mrp_occupancy_from_bytes(file_bytes: bytes) -> dict:
         if "Sheet Hasil" in wb_form.sheetnames:
             del wb_form["Sheet Hasil"]
         ws_mos = wb_form.create_sheet("Sheet Hasil")
-        headers = ["No", "Cabang", "Grup", "Week", "Hasil_Bagi_Harga", "MOS"]
+        headers = ["No", "Cabang", "Grup", "Week", "Balance", "Target", "Harga", "Value_per_Week", "MOS"]
         for i, h in enumerate(headers, start=1):
             style_header_cell(ws_mos, 1, i, h, FILL_HEADER2)
         for i, row in enumerate(df_mos.to_dict('records'), start=1):
             ws_mos.append([
-                i, row["Cabang"], row["Grup"], row["Week"], row["Hasil_Bagi_Harga"], row["MOS"]
+                i, row["Cabang"], row["Grup"], row["Week"], row["Balance"], row["Target"], row["Harga"], row["Value_per_Week"], row["MOS"]
             ])
             
     out_buf = io.BytesIO()
@@ -612,6 +613,7 @@ def calculate_mrp_occupancy_from_bytes(file_bytes: bytes) -> dict:
             "max_occupancy": round(max_occ, 1),
             "categories_at_risk": len(shortage_alerts)
         },
+        "mos_data": df_mos.to_dict('records') if not df_mos.empty else [],
         "over_occupancy_insights": insights,
         "inventory_analysis": None,
         "mrp_results": {
@@ -710,6 +712,7 @@ def generate_mrp_template_bytes() -> bytes:
     ws_raw = wb.active
     ws_raw.title = "Raw"
     ws_wh = wb.create_sheet("WH")
+    ws_harga = wb.create_sheet("Harga Container")
 
     n_weeks = 6
     col_start_week = 6  # Kolom F (1-indexed = 6)
@@ -798,6 +801,26 @@ def generate_mrp_template_bytes() -> bytes:
     ws_wh.column_dimensions["E"].width = 18
     ws_wh.column_dimensions["G"].width = 14
     ws_wh.column_dimensions["H"].width = 10
+
+    # B.4: Template Harga Container
+    harga_headers = ["No", "Cabang", "Grup", "Harga"]
+    for i, h in enumerate(harga_headers, start=1):
+        style_header_cell(ws_harga, 1, i, h, FILL_HEADER2)
+    
+    sample_harga = [
+        [1, "DC Jakarta", "FMCG", 15000000],
+        [2, "DC Surabaya", "Electronics", 25000000],
+        [3, "DC Medan", "Apparel", 12000000],
+        [4, "DC Makassar", "Automotive", 18000000]
+    ]
+    for row_idx, row_data in enumerate(sample_harga, start=2):
+        for col_idx, val in enumerate(row_data, start=1):
+            cell = ws_harga.cell(row=row_idx, column=col_idx, value=val)
+            cell.border = BORDER
+            
+    ws_harga.column_dimensions["B"].width = 15
+    ws_harga.column_dimensions["C"].width = 15
+    ws_harga.column_dimensions["D"].width = 18
 
     out_buf = io.BytesIO()
     wb.save(out_buf)

@@ -81,7 +81,7 @@ const SCENARIOS = [
 ];
 
 // ===== PRECISION & ACCURACY COMPUTATION ENGINE =====
-export const parseHighPrecision = (val: any): number => {
+const parseHighPrecision = (val: any): number => {
   if (typeof val === 'number') return isNaN(val) ? 0 : val;
   if (val === null || val === undefined || val === '') return 0;
   const str = String(val).trim();
@@ -100,7 +100,7 @@ export const parseHighPrecision = (val: any): number => {
   return isNaN(parsed) ? 0 : parsed;
 };
 
-export const toExactFloat = (num: number, decimals: number = 2): number => {
+const toExactFloat = (num: number, decimals: number = 2): number => {
   if (isNaN(num) || !isFinite(num)) return 0;
   return Number(Math.round(Number(num + 'e' + decimals)) + 'e-' + decimals);
 };
@@ -460,6 +460,7 @@ export default function SOHAnalysisPage() {
   // Filter options
   const cabangs = useMemo(() => currentData && colCabang ? ['All', ...Array.from(new Set(currentData.data.map(d => d[colCabang]).filter(v => v && !String(v).includes('#N/A') && !String(v).includes('#REF!') && String(v).toLowerCase() !== 'semua cabang'))).sort()] : [], [currentData, colCabang]);
   const categories = useMemo(() => currentData && colCategory ? ['All', ...Array.from(new Set(currentData.data.map(d => d[colCategory]).filter(v => v && !String(v).includes('#N/A') && !String(v).includes('#REF!') && String(v).toLowerCase() !== 'semua kategori'))).sort()] : [], [currentData, colCategory]);
+  const grups = useMemo(() => currentData && colGrup ? ['All', ...Array.from(new Set(currentData.data.map(d => d[colGrup]).filter(v => v && !String(v).includes('#N/A') && !String(v).includes('#REF!') && String(v).toLowerCase() !== 'semua grup'))).sort()] : [], [currentData, colGrup]);
   const insentifs = useMemo(() => currentData && colInsentif ? ['All', ...Array.from(new Set(currentData.data.map(d => d[colInsentif]).filter(v => v && !String(v).includes('#N/A') && !String(v).includes('#REF!') && String(v).toLowerCase() !== 'semua insentif'))).sort()] : [], [currentData, colInsentif]);
   const dois = useMemo(() => currentData && colDoi ? ['All', ...Array.from(new Set(currentData.data.map(d => d[colDoi]).filter(v => v && !String(v).includes('#N/A') && !String(v).includes('#REF!') && String(v).toLowerCase() !== 'semua doi'))).sort()] : [], [currentData, colDoi]);
 
@@ -529,40 +530,40 @@ export default function SOHAnalysisPage() {
     }).sort((a, b) => b.total - a.total);
   }, [currentData, filtered, colCabang, selectedCabangForChart]);
 
-  // Weekly Grouped Data with Category Breakdown (Stacked TO vs Vessel W1-W4)
+  // Weekly Grouped Data with Group Breakdown (Stacked TO vs Vessel W1-W4)
   const weeklyGroupedData = useMemo(() => {
     if (!currentData || filtered.length === 0) return [];
     const weeks = [1, 2, 3, 4];
-    const activeCategories = categories.filter(c => c !== 'All');
+    const activeGrups = grups.filter(g => g !== 'All');
 
     return weeks.map(w => {
       const item: Record<string, any> = { week: `Week ${w}` };
-      activeCategories.forEach(cat => {
-        item[`${cat} (TO)`] = 0;
-        item[`${cat} (Vessel)`] = 0;
+      activeGrups.forEach(grup => {
+        item[`${grup} (TO)`] = 0;
+        item[`${grup} (Vessel)`] = 0;
       });
 
       for (const row of filtered) {
         const cbg = colCabang ? (row[colCabang] || 'Unknown') : 'All';
         if (selectedCabangForChart !== 'All' && cbg !== selectedCabangForChart) continue;
         
-        const cat = colCategory ? (row[colCategory] || 'Umum') : 'Umum';
+        const grup = colGrup ? (row[colGrup] || 'Umum') : 'Umum';
 
         currentData.targetColumns.forEach(tc => {
           const name = tc.name.toLowerCase();
           if (name.includes(`week ${w}`) || name.endsWith(`w${w}`) || name.includes(`wk ${w}`) || name.includes(`minggu ${w}`)) {
             const val = Math.round(Number(row[tc.name]) || 0);
             if (name.includes('to') || name.startsWith('to') || name.includes('transfer')) {
-              item[`${cat} (TO)`] = (item[`${cat} (TO)`] || 0) + val;
+              item[`${grup} (TO)`] = (item[`${grup} (TO)`] || 0) + val;
             } else if (name.includes('vessel') || name.includes('kapal') || name.includes('laut')) {
-              item[`${cat} (Vessel)`] = (item[`${cat} (Vessel)`] || 0) + val;
+              item[`${grup} (Vessel)`] = (item[`${grup} (Vessel)`] || 0) + val;
             }
           }
         });
       }
       return item;
     });
-  }, [currentData, filtered, colCabang, colCategory, selectedCabangForChart, categories]);
+  }, [currentData, filtered, colCabang, colGrup, selectedCabangForChart, grups]);
 
   // On Hand detail per Category
   const onHandByCategoryData = useMemo(() => {
@@ -716,9 +717,9 @@ export default function SOHAnalysisPage() {
 
     for (const row of detailedTableData) {
       if (selectedCabangForChart !== 'All' && row.cabang !== selectedCabangForChart) continue;
-      const cat = row.category || 'Umum';
-      if (!map[cat]) map[cat] = 0;
-      map[cat] += (row.totalSupply || 0);
+      const grp = row.grup || 'Umum';
+      if (!map[grp]) map[grp] = 0;
+      map[grp] += (row.totalSupply || 0);
     }
 
     const grandTotal = Object.values(map).reduce((a, b) => a + b, 0);
@@ -726,8 +727,8 @@ export default function SOHAnalysisPage() {
 
     return Object.entries(map)
       .filter(([_, val]) => val > 0)
-      .map(([cat, val], idx) => ({
-        name: cat,
+      .map(([grp, val], idx) => ({
+        name: grp,
         value: val,
         percentage: Number(((val / grandTotal) * 100).toFixed(1)),
         color: COLORS[idx % COLORS.length]
@@ -1255,7 +1256,7 @@ export default function SOHAnalysisPage() {
             <div>
               <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
                 <BarChart3 className="w-5 h-5 text-emerald-400" />
-                {chartMode === 'weekly' ? 'Grafik Grouping Mingguan: TO vs Vessel per Kategori (W1 - W4)' : chartMode === 'stock' ? 'Detail On Hand (Fisik) per Kategori Barang' : 'Grafik Komparasi Pilar SOH & Inbound per Cabang'}
+                {chartMode === 'weekly' ? 'Grafik Grouping Mingguan: TO vs Vessel per Group (W1 - W4)' : chartMode === 'stock' ? 'Detail On Hand (Fisik) per Kategori Barang' : 'Grafik Komparasi Pilar SOH & Inbound per Cabang'}
               </h3>
               <p className="text-xs text-slate-600 mt-1">
                 Sorotan: <b className="text-cyan-400">{selectedCabangForChart === 'All' ? 'Seluruh Cabang' : selectedCabangForChart}</b> • Skenario Aktif: <b className="text-amber-300">{activeScenario.toUpperCase()}</b> • Satuan: <b className="text-emerald-400">{unitLabel}</b>
@@ -1296,7 +1297,7 @@ export default function SOHAnalysisPage() {
                 <Info className="w-4 h-4 text-cyan-400 shrink-0" />
                 <b>Batang Kembar per Minggu:</b> Batang Kiri = Stack Transfer Order (TO) | Batang Kanan (Garis Biru) = Stack On Vessel (Kapal)
               </span>
-              <span className="text-slate-600 text-[11px] italic">Warna segmen mewakili breakdown per kategori barang</span>
+              <span className="text-slate-600 text-[11px] italic">Warna segmen mewakili breakdown per grup barang</span>
             </div>
           )}
 
@@ -1315,11 +1316,11 @@ export default function SOHAnalysisPage() {
                     formatter={(value: any, name: any) => [`${Number(value || 0).toLocaleString('id-ID')} ${unitLabel}`, name || '']}
                   />
                   <Legend wrapperStyle={{ paddingTop: '16px', fontSize: '11px', fontWeight: 'bold' }} />
-                  {categories.filter(c => c !== 'All').map((cat, idx) => (
-                    <Bar key={`to-${cat}`} dataKey={`${cat} (TO)`} name={`${cat} (TO)`} stackId="TO" fill={TO_COLORS[idx % TO_COLORS.length]} maxBarSize={45} />
+                  {grups.filter(g => g !== 'All').map((grup, idx) => (
+                    <Bar key={`to-${grup}`} dataKey={`${grup} (TO)`} name={`${grup} (TO)`} stackId="TO" fill={TO_COLORS[idx % TO_COLORS.length]} maxBarSize={45} />
                   ))}
-                  {categories.filter(c => c !== 'All').map((cat, idx) => (
-                    <Bar key={`vessel-${cat}`} dataKey={`${cat} (Vessel)`} name={`${cat} (Vessel)`} stackId="Vessel" fill={VESSEL_COLORS[idx % VESSEL_COLORS.length]} stroke="#e2e8f0" strokeWidth={1} maxBarSize={45} opacity={0.95} />
+                  {grups.filter(g => g !== 'All').map((grup, idx) => (
+                    <Bar key={`vessel-${grup}`} dataKey={`${grup} (Vessel)`} name={`${grup} (Vessel)`} stackId="Vessel" fill={VESSEL_COLORS[idx % VESSEL_COLORS.length]} stroke="#e2e8f0" strokeWidth={1} maxBarSize={45} opacity={0.95} />
                   ))}
                 </BarChart>
               ) : chartMode === 'stock' ? (
@@ -1371,7 +1372,7 @@ export default function SOHAnalysisPage() {
           <div>
             <h2 className="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2">
               <Layers className="w-5 h-5 text-purple-400" />
-              Analisis Kontribusi & Proporsi Pasokan (Kategori Item, Status DOI & Status Insentif)
+              Analisis Kontribusi & Proporsi Pasokan (Grup Item, Status DOI & Status Insentif)
             </h2>
             <p className="text-xs text-slate-600 mt-0.5">
               Proporsi total stok pasokan (On Hand + Semua TO + Semua Vessel) dalam satuan <b className="text-emerald-400">{unitLabel}</b> di <b className="text-cyan-400">{selectedCabangForChart === 'All' ? 'Seluruh Cabang' : selectedCabangForChart}</b>.
@@ -1384,7 +1385,7 @@ export default function SOHAnalysisPage() {
           {pieCategoryData && pieCategoryData.length > 0 && (
             <GlassCard className="p-5 border-purple-500/30 bg-gradient-to-b from-slate-900/95 to-slate-950/95 shadow-2xl flex flex-col">
               <h3 className="text-sm font-black text-purple-300 border-b border-slate-200 pb-3 mb-3 flex items-center gap-2">
-                🏷️ Porsi per Kategori Item
+                🏷️ Porsi per Grup Item
               </h3>
               <div className="h-[240px] w-full shrink-0">
                 <ResponsiveContainer width="100%" height="100%">
@@ -1407,7 +1408,7 @@ export default function SOHAnalysisPage() {
                     <Tooltip
                       formatter={(value: any, name: any, props: any) => [
                         `${Number(value).toLocaleString('id-ID')} ${unitLabel} (${props.payload.percentage}%)`,
-                        `Kategori: ${name}`
+                        `Grup: ${name}`
                       ]}
                       contentStyle={{ backgroundColor: '#030712', borderColor: '#a855f7', borderRadius: '12px', color: '#fff', boxShadow: '0 10px 25px rgba(0,0,0,0.8)', padding: '10px' }}
                     />

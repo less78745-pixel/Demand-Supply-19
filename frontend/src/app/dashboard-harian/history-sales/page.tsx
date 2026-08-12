@@ -737,7 +737,7 @@ export default function HistorySalesPage() {
   // Table Data grouped per Cabang + Category for detailed comparison & growth analysis
   const tableData = useMemo(() => {
     if (!parsed || !executiveSummary || filtered.length === 0) return [];
-    const map: Record<string, { cabang: string; grup: string; category: string; sales: number; total: number; avg3: number; m: number; m1: number }> = {};
+    const map: Record<string, { cabang: string; grup: string; category: string; sales: number; total: number; avg3: number; m: number; m1: number; ratio: number }> = {};
     
     const salesSet = new Set(executiveSummary.salesCols);
     const colAvg = findColumn(parsed.headers, ['avg sales 3 bln', 'avg sales', 'avg']);
@@ -751,7 +751,7 @@ export default function HistorySalesPage() {
       const key = `${cbg}___${grp}___${cat}`;
 
       if (!map[key]) {
-        map[key] = { cabang: cbg, grup: grp, category: cat, sales: 0, total: 0, avg3: 0, m: 0, m1: 0 };
+        map[key] = { cabang: cbg, grup: grp, category: cat, sales: 0, total: 0, avg3: 0, m: 0, m1: 0, ratio: 0 };
       }
 
       parsed.targetColumns.forEach(tc => {
@@ -874,7 +874,7 @@ export default function HistorySalesPage() {
   // Insentif Analysis Grouping by Cabang & Category Insentif + M to M-5
   const insentifAnalysis = useMemo(() => {
     if (!parsed || !colCategoryInsentif || filtered.length === 0) return [];
-    const map: Record<string, { key: string; name: string; cabang: string; categoryInsentif: string; totalSales: number; itemCount: number; periods: Record<string, number> }> = {};
+    const map: Record<string, { key: string; name: string; cabang: string; categoryInsentif: string; totalSales: number; itemCount: number; periods: Record<string, number>; category: string; grup: string; ratio?: number }> = {};
     
     const salesSet = new Set(executiveSummary?.salesCols || []);
     const periodNames = ['M', 'M-1', 'M-2', 'M-3', 'M-4', 'M-5'];
@@ -893,7 +893,7 @@ export default function HistorySalesPage() {
       const name = `${cbg} - ${grup} - ${category}`;
 
       if (!map[key]) {
-        map[key] = { key, name, cabang: cbg, category, categoryInsentif: cat, totalSales: 0, itemCount: 0, periods: { 'M': 0, 'M-1': 0, 'M-2': 0, 'M-3': 0, 'M-4': 0, 'M-5': 0 } };
+        map[key] = { key, name, cabang: cbg, category, categoryInsentif: cat, grup: grup, totalSales: 0, itemCount: 0, periods: { 'M': 0, 'M-1': 0, 'M-2': 0, 'M-3': 0, 'M-4': 0, 'M-5': 0 } };
       }
       map[key].itemCount += 1;
 
@@ -1993,7 +1993,7 @@ export default function HistorySalesPage() {
                               </div>
                             </div>
                             <div className="text-right">
-                              <div className="font-mono font-black text-rose-700 text-sm">{item.ratio}%</div>
+                              <div className="font-mono font-black text-rose-700 text-sm">{(item.ratio || 0)}%</div>
                               <div className="text-[10px] text-rose-600 font-semibold">Defisit: {Math.round(item.diff).toLocaleString('id-ID')}</div>
                             </div>
                           </div>
@@ -2032,7 +2032,7 @@ export default function HistorySalesPage() {
                               </div>
                             </div>
                             <div className="text-right">
-                              <div className="font-mono font-black text-emerald-700 text-sm">{item.ratio}%</div>
+                              <div className="font-mono font-black text-emerald-700 text-sm">{(item.ratio || 0)}%</div>
                               <div className="text-[10px] text-emerald-600 font-semibold">Surplus: +{Math.round(item.diff).toLocaleString('id-ID')}</div>
                             </div>
                           </div>
@@ -2483,7 +2483,7 @@ export default function HistorySalesPage() {
                       item.insentifCat?.toLowerCase().includes(s)
                     );
                   }).map((item) => {
-                    const isAlert = item.ratio > 25;
+                    const isAlert = (item.ratio || 0) > 25;
                     return (
                       <tr key={item.key} className="hover:bg-slate-100 transition">
                         <td className="py-3 px-4 text-left font-extrabold text-slate-900 text-sm">
