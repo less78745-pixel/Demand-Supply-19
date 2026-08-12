@@ -128,9 +128,9 @@ def get_wh_rows(ws_wh: Worksheet):
 
 
 class RawRecord:
-    __slots__ = ("no", "cabang", "grup", "category", "onhand", "to", "vessel", "forecast", "target")
+    __slots__ = ("no", "cabang", "grup", "category", "onhand", "to", "vessel", "target")
 
-    def __init__(self, no, cabang, grup, category, onhand, to, vessel, forecast, target):
+    def __init__(self, no, cabang, grup, category, onhand, to, vessel, target):
         self.no = no
         self.cabang = str(cabang) if cabang is not None else "Unknown"
         self.grup = str(grup) if grup is not None else "General"
@@ -150,7 +150,7 @@ def read_raw_records(ws_raw: Worksheet, n_weeks: int):
     records = []
     for r in get_raw_rows(ws_raw):
         onhand = ws_raw.cell(row=r, column=ONHAND_COL).value or 0
-        to, vessel, forecast, target = [], [], [], []
+        to, vessel, target = [], [], []
         for w in range(n_weeks):
             c_to, c_vessel, c_forecast, c_target = raw_week_cols(w)
             to.append(ws_raw.cell(row=r, column=c_to).value or 0)
@@ -162,7 +162,7 @@ def read_raw_records(ws_raw: Worksheet, n_weeks: int):
             cabang=ws_raw.cell(row=r, column=2).value,
             grup=ws_raw.cell(row=r, column=3).value,
             category=ws_raw.cell(row=r, column=4).value,
-            onhand=onhand, to=to, vessel=vessel, forecast=forecast, target=target,
+            onhand=onhand, to=to, vessel=vessel, target=target,
         ))
     return records
 
@@ -253,7 +253,7 @@ def style_header_cell(ws, row, col, text, fill=None):
     return c
 
 
-def build_hasil_sheet(wb, sheet_name, ws_raw, raw_rows, n_weeks, demand_kind, period_labels):
+def build_hasil_sheet(wb, sheet_name, ws_raw, raw_rows, n_weeks, period_labels):
     assert demand_kind in ("forecast", "target")
 
     if sheet_name in wb.sheetnames:
@@ -289,7 +289,7 @@ def build_hasil_sheet(wb, sheet_name, ws_raw, raw_rows, n_weeks, demand_kind, pe
         perhitungan_col_letters = []
         for w in range(n_weeks):
             col_to, col_vessel, col_forecast, col_target = raw_week_cols(w)
-            col_demand = col_forecast if demand_kind == "forecast" else col_target
+            col_demand = col_target
             L_to = get_column_letter(col_to)
             L_vessel = get_column_letter(col_vessel)
             L_demand = get_column_letter(col_demand)
@@ -410,7 +410,7 @@ def generate_excel_workbook(wb: Workbook):
         ht_perhitungan_start, n_weeks, ht_last_row, period_labels
     )
 
-    order = ["Raw", "WH", "Hasil Forecast", "Hasil Target", "Occupancy Forecast", "Occupancy Target"]
+    order = ["Raw", "WH", "Harga Container", "Hasil Target", "Occupancy Target", "Sheet Hasil"]
     wb._sheets.sort(key=lambda s: order.index(s.title) if s.title in order else 999)
     return wb, period_labels, week_awal, n_weeks
 
