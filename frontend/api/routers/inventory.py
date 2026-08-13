@@ -8,6 +8,7 @@ from datetime import datetime
 import pandas as pd
 import io
 from services.inventory_engine import run_inventory_analysis, run_inventory_from_mrp_bytes
+from utils.response_guard import enforce_payload_budget
 
 router = APIRouter()
 
@@ -65,8 +66,8 @@ async def analyze_inventory(file: UploadFile = File(...), db: Session = Depends(
             print("Failed to save to DB:", e)
             results["processed_at"] = datetime.now().isoformat()
             
-        return results
-        
+        return enforce_payload_budget(results)
+
     except Exception as e:
         import traceback
         traceback.print_exc()

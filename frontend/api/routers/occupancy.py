@@ -14,6 +14,41 @@ from services.occupancy_engine import calculate_occupancy, calculate_mrp_occupan
 
 router = APIRouter()
 
+# Vercel Serverless Functions hard-cap the request/response body at 4.5MB
+# regardless of plan. If the computed result (mainly the reconstructed Excel
+# workbook re-embedded as base64) would still blow past that after the
+# duplicate-payload fix, degrade gracefully instead of letting the platform
+# kill the whole response with an opaque FUNCTION_PAYLOAD_TOO_LARGE error.
+RESPONSE_SAFE_LIMIT_BYTES = 4 * 1024 * 1024
+
+
+def _enforce_response_budget(results: dict) -> dict:
+    try:
+        size = len(json.dumps(results, default=str))
+    except Exception:
+        return results
+    if size <= RESPONSE_SAFE_LIMIT_BYTES:
+        return results
+
+    mrp = results.get("mrp_results")
+    if isinstance(mrp, dict) and mrp.get("excel_base64"):
+        mrp["excel_base64"] = None
+        mrp["excel_download_unavailable"] = True
+        results["warning"] = (
+            "Dataset terlalu besar untuk menyertakan file Excel hasil olahan dalam satu response "
+            "(batas payload server 4.5MB). Analisa & chart tetap ditampilkan; silakan pecah file "
+            "input menjadi beberapa batch (per cabang/periode) jika Anda memerlukan file Excel-nya."
+        )
+        size = len(json.dumps(results, default=str))
+        if size <= RESPONSE_SAFE_LIMIT_BYTES:
+            return results
+
+    raise HTTPException(
+        status_code=413,
+        detail="Dataset terlalu besar untuk diproses dalam satu request. Kurangi jumlah baris/minggu, "
+               "atau pecah file input menjadi beberapa batch yang lebih kecil.",
+    )
+
 @router.get("/analyze/occupancy/template")
 async def get_mrp_template():
     try:
@@ -48,7 +83,7 @@ async def analyze_occupancy(file: UploadFile = File(...), db: Session = Depends(
                 pass
             if is_mrp_multi_sheet:
                 results = await asyncio.to_thread(calculate_mrp_occupancy_from_bytes, contents)
-                return results
+                return _enforce_response_budget(results)
             df = pd.read_excel(io.BytesIO(contents))
         elif file.filename.lower().endswith('.csv'):
             try:

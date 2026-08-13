@@ -37,25 +37,6 @@ def _safe_list(arr):
     except Exception:
         return []
 
-def _compute_exog_factor(exog_train, steps):
-    if exog_train is None or len(exog_train) == 0:
-        return np.ones(steps)
-    try:
-        exog_mean = np.mean(exog_train, axis=0)
-        last_exog = exog_train[-1]
-        factors = []
-        for m, l in zip(exog_mean, last_exog):
-            if m > 0:
-                factors.append(l / m)
-            else:
-                factors.append(1.0)
-        avg_factor = float(np.mean(factors))
-        avg_factor = max(0.9, min(1.1, avg_factor)) # bound to 0.9-1.1 effect
-        return np.full(steps, avg_factor)
-    except Exception:
-        return np.ones(steps)
-
-
 def _ses_forecast(y_train, steps, alpha=0.3):
     """Simple Exponential Smoothing without statsmodels."""
     series = list(y_train)

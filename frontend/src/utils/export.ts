@@ -1,4 +1,3 @@
-import * as XLSX from 'xlsx';
 import { useAuthStore } from '@/stores/useAuthStore';
 
 /**
@@ -56,7 +55,7 @@ export function getStandardFilename(
  * Ekspor array data JSON ke file Excel (.xlsx) dengan standarisasi nama:
  * nama modul_waktu pengolahan terakhir_akun.xlsx
  */
-export function exportToExcel(
+export async function exportToExcel(
   data: any[],
   moduleName: string,
   sheetName: string = "Data",
@@ -66,7 +65,12 @@ export function exportToExcel(
     console.warn("No data to export");
     return;
   }
-  
+
+  // Loaded on demand: xlsx is ~300KB parsed and every page imports this module
+  // just for getStandardFilename, so a top-level import here was shipping xlsx
+  // to every route in the app whether or not it ever exports anything.
+  const XLSX = await import('xlsx');
+
   // Create Worksheet from JSON
   const worksheet = XLSX.utils.json_to_sheet(data);
   

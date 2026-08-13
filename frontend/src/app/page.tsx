@@ -20,7 +20,6 @@ export default function LoginPage() {
 
     const user = authenticate(username, password);
     if (user) {
-      localStorage.setItem('isAuthenticated', 'true');
       login(user);
       toast.success(`Welcome, ${user.name}!`, { icon: '🚀' });
       router.push('/dashboard');

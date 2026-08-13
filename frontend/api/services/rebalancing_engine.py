@@ -221,8 +221,8 @@ def analyze_rebalancing(stock_df: pd.DataFrame, demand_df: pd.DataFrame, freight
         route_summary[key]['total_cost'] += rec['total_cost']
         route_summary[key]['transfers'] += 1
     
-    savings = total_cost_central - total_cost
-    
+    savings = max(total_cost_central - total_cost, 0)
+
     return {
         'recommendations': recommendations,
         'infeasible': infeasible,
@@ -231,7 +231,7 @@ def analyze_rebalancing(stock_df: pd.DataFrame, demand_df: pd.DataFrame, freight
             'total_transfers': len(recommendations),
             'total_cost': _safe_float(total_cost),
             'total_cost_central': _safe_float(total_cost_central),
-            'savings': _safe_float(max(savings, 0)),
+            'savings': _safe_float(savings),
             'savings_pct': _safe_float((savings / total_cost_central * 100) if total_cost_central > 0 else 0),
             'infeasible_count': len(infeasible),
             'entities_served': len(set(r['entity'] for r in recommendations)),

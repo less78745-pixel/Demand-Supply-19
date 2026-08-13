@@ -103,10 +103,16 @@ def analyze_control_tower(df: pd.DataFrame) -> dict:
         total_stock=('Current_Stock', 'sum'),
         avg_rop=('ROP_Level', 'mean'),
         item_count=('Cabang', 'count'),
+        uploaded_region=('Region', 'first'),
     ).reset_index()
-    
-    # Add region
-    cabang_agg['Region'] = cabang_agg['Cabang'].map(REGION_MAP).fillna('Lainnya')
+
+    # Prefer the region the uploaded file actually specified; only fall back to the
+    # hardcoded REGION_MAP for branches that didn't supply one.
+    has_uploaded_region = cabang_agg['uploaded_region'].notna() & (cabang_agg['uploaded_region'].astype(str).str.strip() != '')
+    cabang_agg['Region'] = cabang_agg['uploaded_region'].where(
+        has_uploaded_region, cabang_agg['Cabang'].map(REGION_MAP)
+    ).fillna('Lainnya')
+    cabang_agg = cabang_agg.drop(columns=['uploaded_region'])
     
     branches = []
     alerts = []

@@ -1,5 +1,4 @@
 import Papa from 'papaparse';
-import * as XLSX from 'xlsx';
 
 export interface ParsedData {
   headers: string[];
@@ -168,10 +167,11 @@ export async function parseDynamicCSV(file: File): Promise<ParsedData> {
     const isExcel = /\.(xlsx|xls|xlsm|xlsb)$/i.test(file.name);
     if (isExcel) {
       const reader = new FileReader();
-      reader.onload = (e) => {
+      reader.onload = async (e) => {
         try {
           const buffer = e.target?.result;
           if (!buffer) return reject(new Error("Gagal membaca buffer file Excel"));
+          const XLSX = await import('xlsx');
           const data = new Uint8Array(buffer as ArrayBuffer);
           const workbook = XLSX.read(data, { type: 'array' });
           const sheetNames = workbook.SheetNames;

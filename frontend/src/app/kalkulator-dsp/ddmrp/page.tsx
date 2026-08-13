@@ -3,9 +3,9 @@
 import LZString from 'lz-string';
 
 import React, { useState, useEffect, useMemo } from 'react';
+import dynamic from 'next/dynamic';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { KPICard } from '@/components/ui/KPICard';
-import { DDMRPBufferChart } from '@/components/charts/DDMRPBufferChart';
 import {
   Layers, Activity, TrendingDown, TrendingUp, AlertTriangle,
   ChevronDown, ChevronUp, BookOpen, Cpu, Package, Truck,
@@ -20,6 +20,11 @@ import { exportToExcel } from '@/utils/export';
 import { supabase } from '@/lib/supabase';
 import { ExportHtmlButton } from '@/components/ui/ExportHtmlButton';
 import { ModuleExportConfig } from '@/utils/offlineExport';
+
+const DDMRPBufferChart = dynamic(
+  () => import('@/components/charts/DDMRPBufferChart').then(m => m.DDMRPBufferChart),
+  { ssr: false, loading: () => <div className="h-72 w-full animate-pulse rounded-xl bg-slate-100" /> }
+);
 
 // ═══════════════════════════════════════════════
 //  LITERATURE REFERENCE DATA

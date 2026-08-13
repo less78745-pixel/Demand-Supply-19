@@ -3,11 +3,10 @@
 import LZString from 'lz-string';
 
 import React, { useState, useEffect, useMemo } from 'react';
+import dynamic from 'next/dynamic';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { KPICard } from '@/components/ui/KPICard';
 import { TimestampBadge } from '@/components/ui/TimestampBadge';
-import { RouteMapChart } from '@/components/charts/RouteMapChart';
-import { SensitivityChart } from '@/components/charts/SensitivityChart';
 import {
   Route, TrendingDown, Truck, DollarSign, Fuel,
   ChevronDown, ChevronUp, BookOpen, Cpu, Map,
@@ -22,6 +21,15 @@ import { exportToExcel } from '@/utils/export';
 import { supabase } from '@/lib/supabase';
 import { ExportHtmlButton } from '@/components/ui/ExportHtmlButton';
 import { ModuleExportConfig } from '@/utils/offlineExport';
+
+const RouteMapChart = dynamic(
+  () => import('@/components/charts/RouteMapChart').then(m => m.RouteMapChart),
+  { ssr: false, loading: () => <div className="h-72 w-full animate-pulse rounded-xl bg-slate-100" /> }
+);
+const SensitivityChart = dynamic(
+  () => import('@/components/charts/SensitivityChart').then(m => m.SensitivityChart),
+  { ssr: false, loading: () => <div className="h-72 w-full animate-pulse rounded-xl bg-slate-100" /> }
+);
 
 // ═══════════════════════════════════════════════
 //  LITERATURE REFERENCE DATA

@@ -178,6 +178,16 @@ def nearest_neighbor(
 
         if route:
             routes.append(route)
+        else:
+            # No remaining customer fits even alone (its demand alone exceeds
+            # vehicle_capacity). Without forcing progress here, `remaining`
+            # never shrinks and this loop spins forever, hanging the request
+            # until the serverless function times out. Ship it as its own
+            # over-capacity route instead of hanging or silently dropping demand.
+            oversized = min(remaining, key=lambda j: dist_matrix[depot][j])
+            routes.append([oversized])
+            visited[oversized] = True
+            remaining.remove(oversized)
 
     return routes
 

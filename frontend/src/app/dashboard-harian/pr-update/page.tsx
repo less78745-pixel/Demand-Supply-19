@@ -24,7 +24,6 @@ import { parseDynamicCSV, findColumn, ParsedData } from '@/lib/csvParser';
 import { getStandardFilename } from '@/utils/export';
 import { ExportHtmlButton } from '@/components/ui/ExportHtmlButton';
 import { ModuleExportConfig } from '@/utils/offlineExport';
-import * as XLSX from 'xlsx';
 
 const COLORS = ['#a855f7', '#3b82f6', '#f97316', '#eab308', '#22c55e', '#ef4444', '#06b6d4', '#ec4899', '#8b5cf6', '#10b981'];
 
@@ -590,9 +589,10 @@ export default function PRUpdatePage() {
     toast.success('🎉 Data Demo PR Update & Status SPJM Berhasil Dimuat!');
   };
 
-  const handleDownloadTemplate = () => {
+  const handleDownloadTemplate = async () => {
+    const XLSX = await import('xlsx');
     const wb = XLSX.utils.book_new();
-    
+
     // Sheet 1: PR Update
     const ws1Data = [
       ['PO','NoPR','Branch Name','GRUP','Category','Description','STATUS Compile','No Container','bl','Shipping Line','Tanggal ETA','Week ETA','Qty'],

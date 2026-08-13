@@ -12,6 +12,7 @@ import asyncio
 from datetime import datetime
 
 from services.ddmrp_engine import analyze_ddmrp_manual, analyze_ddmrp_from_file, project_ddmrp_inventory_occupancy
+from utils.response_guard import enforce_payload_budget
 
 router = APIRouter()
 
@@ -41,7 +42,7 @@ async def analyze_ddmrp_manual_endpoint(params: DDMRPManualInput):
     """Run DDMRP analysis from manual form input (single SKU)."""
     try:
         result = analyze_ddmrp_manual(params.model_dump())
-        return result
+        return enforce_payload_budget(result)
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -106,7 +107,7 @@ async def analyze_ddmrp_file_endpoint(
             print("Failed to save to DB:", e)
             result["processed_at"] = datetime.now().isoformat()
 
-        return result
+        return enforce_payload_budget(result)
 
     except Exception as e:
         import traceback
@@ -140,8 +141,8 @@ async def analyze_ddmrp_phase2_endpoint(file: UploadFile = File(...), db: Sessio
         except Exception as e:
             print("Failed to save to DB:", e)
             result["processed_at"] = datetime.now().isoformat()
-            
-        return result
+
+        return enforce_payload_budget(result)
     except Exception as e:
         import traceback
         traceback.print_exc()

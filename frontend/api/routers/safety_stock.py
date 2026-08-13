@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, Query, Depends
+from fastapi import APIRouter, UploadFile, File, Query, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import get_db
 from schemas.models import ProcessedResult
@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 import pandas as pd
 import io
 import traceback
+from utils.response_guard import enforce_payload_budget
 
 router = APIRouter()
 
@@ -55,14 +56,16 @@ async def analyze_safety_stock_endpoint(
         except Exception as e:
             print("Failed to save to DB:", e)
             result["processed_at"] = datetime.now().isoformat()
-            
-        return result
-        
+
+        return enforce_payload_budget(result)
+
     except ValueError as ve:
         return JSONResponse(
             status_code=400,
             content={"detail": str(ve)}
         )
+    except HTTPException as he:
+        return JSONResponse(status_code=he.status_code, content={"detail": he.detail})
     except Exception as e:
         traceback.print_exc()
         return JSONResponse(

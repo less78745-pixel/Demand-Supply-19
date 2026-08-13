@@ -15,10 +15,14 @@ interface FileUploaderProps {
   description?: string;
   templateCsv?: string;
   templateName?: string;
+  /** Vercel Serverless Functions hard-cap request/response bodies at 4.5MB.
+   *  Reject oversized files client-side with a clear message instead of
+   *  letting the upload fail server-side with a cryptic 413. */
+  maxSizeMB?: number;
 }
 
-export function FileUploader({ 
-  onFileUpload, 
+export function FileUploader({
+  onFileUpload,
   isLoading = false,
   acceptedTypes = {
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
@@ -28,24 +32,36 @@ export function FileUploader({
   label = "Upload Dataset",
   description = "Drag & drop an Excel file here, or click to select",
   templateCsv,
-  templateName = "template.csv"
+  templateName = "template.csv",
+  maxSizeMB = 4,
 }: FileUploaderProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [rejectionError, setRejectionError] = useState<string | null>(null);
   const { user } = useAuthStore();
   const hasUploadAccess = canUpload(user?.role);
 
-  const onDrop = useCallback((acceptedFiles: File[]) => {
+  const onDrop = useCallback((acceptedFiles: File[], fileRejections: any[]) => {
+    if (fileRejections.length > 0) {
+      const reason = fileRejections[0]?.errors?.[0]?.code === 'file-too-large'
+        ? `File terlalu besar (maks ${maxSizeMB}MB). Kurangi jumlah baris/minggu lalu coba lagi.`
+        : 'File tidak didukung. Gunakan format Excel (.xlsx/.xls) atau CSV.';
+      setRejectionError(reason);
+      setSelectedFile(null);
+      return;
+    }
     if (acceptedFiles.length > 0) {
+      setRejectionError(null);
       const file = acceptedFiles[0];
       setSelectedFile(file);
       onFileUpload(file);
     }
-  }, [onFileUpload]);
+  }, [onFileUpload, maxSizeMB]);
 
   const { getRootProps, getInputProps, isDragActive, isDragReject } = useDropzone({
     onDrop,
     accept: acceptedTypes,
     maxFiles: 1,
+    maxSize: maxSizeMB * 1024 * 1024,
     disabled: isLoading || !hasUploadAccess,
   });
 
@@ -186,6 +202,11 @@ export function FileUploader({
           )}
         </AnimatePresence>
       </div>
+      {rejectionError && (
+        <p className="mt-1.5 text-[11px] font-medium text-destructive flex items-center gap-1">
+          <X className="w-3 h-3 shrink-0" /> {rejectionError}
+        </p>
+      )}
     </div>
   );
 }

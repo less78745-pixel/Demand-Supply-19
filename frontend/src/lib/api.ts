@@ -58,13 +58,6 @@ export const uploadInventoryFile = async (file: File) => {
   return response.data;
 };
 
-export const downloadReport = async (taskId: string) => {
-  const response = await api.get(`/export/${taskId}`, {
-    responseType: 'blob',
-  });
-  return response.data;
-};
-
 // ── SCM Analytic API Functions ──
 
 export const uploadSafetyStockFile = async (file: File) => {
@@ -152,7 +145,6 @@ export const uploadRouteOptimizationFile = async (
             formData.append(subKey, String(subVal));
           }
         });
-        formData.append(k, JSON.stringify(v));
       } else {
         formData.append(k, String(v));
       }
@@ -182,8 +174,3 @@ export const uploadWHTransFile = async (file: File, numHubs: number, costPerCbmK
   return response.data;
 };
 
-// ── Global Results Polling API ──
-export const getGlobalResult = async (moduleName: string) => {
-  const response = await api.get(`/results/${moduleName}`);
-  return response.data;
-};

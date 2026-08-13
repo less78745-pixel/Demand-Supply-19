@@ -23,7 +23,6 @@ import { getStandardFilename } from '@/utils/export';
 import { ExportHtmlButton } from '@/components/ui/ExportHtmlButton';
 import { ModuleExportConfig } from '@/utils/offlineExport';
 import { formatNumberCompact } from '@/lib/utils';
-import * as XLSX from 'xlsx';
 
 // Utility formatters
 const formatRp = (val: number) => `Rp ${val.toLocaleString('id-ID')}`;
@@ -135,7 +134,8 @@ export default function SKUVelocityPage() {
     toast.loading('Menyimpan ke Global DB...', { id: 'save-global' });
     const timestamp = new Date().toISOString();
     const dataCopy = { ...parsed, processed_at: timestamp };
-        const { error } = await supabase.from('processed_results').insert([{ module: 'sku_velocity', result_json: JSON.stringify({ compressed: true, data: LZString.compressToBase64(JSON.stringify(dataCopy)) }) }]);
+    sessionStorage.setItem('last_processed_at_sku_velocity', timestamp);
+    const { error } = await supabase.from('processed_results').insert([{ module: 'sku_velocity', result_json: JSON.stringify({ compressed: true, data: LZString.compressToBase64(JSON.stringify(dataCopy)) }) }]);
     if (error) {
       toast.error('Gagal menyimpan ke Global DB', { id: 'save-global' });
     } else {
@@ -233,9 +233,10 @@ export default function SKUVelocityPage() {
     toast.success('Data Demo SKU Velocity Berhasil Dimuat!');
   };
 
-  const handleDownloadTemplate = () => {
+  const handleDownloadTemplate = async () => {
     try {
       if (!parsed || !parsed.data) return;
+      const XLSX = await import('xlsx');
       const wb = XLSX.utils.book_new();
       const ws = XLSX.utils.json_to_sheet(parsed.data, { header: parsed.headers });
       XLSX.utils.book_append_sheet(wb, ws, "Raw Data");

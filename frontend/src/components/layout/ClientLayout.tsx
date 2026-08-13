@@ -11,7 +11,6 @@ import { useAuthStore, canAccess } from '@/stores/useAuthStore';
 export function ClientLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [mounted, setMounted] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { user, login } = useAuthStore();
 
@@ -20,10 +19,13 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     setMobileMenuOpen(false);
   }, [pathname]);
 
+  // Restore user from localStorage on first client mount. Deliberately does NOT
+  // gate the render below on this finishing: Sidebar/Navbar already treat a
+  // momentarily-null user as "not logged in yet" (empty menu / blank name),
+  // so there's nothing to blank the whole screen for. Blocking every hard
+  // page load behind a full-screen spinner just to run this localStorage
+  // read was the single biggest perceived-slowness contributor in the app.
   useEffect(() => {
-    setMounted(true);
-
-    // Restore user from localStorage
     const isAuth = localStorage.getItem('isAuthenticated');
     const savedUser = localStorage.getItem('authUser');
 
@@ -44,7 +46,6 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
 
   // Role-based route guard (runs when user or pathname changes)
   useEffect(() => {
-    if (!mounted) return;
     if (pathname === '/') return;
 
     const isAuth = localStorage.getItem('isAuthenticated');
@@ -57,14 +58,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     if (currentUser && !canAccess(currentUser.role, pathname)) {
       router.push('/dashboard');
     }
-  }, [pathname, mounted, router]);
-
-  if (!mounted) return (
-    <div className="h-screen w-full bg-background flex flex-col items-center justify-center">
-      <div className="w-12 h-12 border-3 border-primary/20 border-t-primary rounded-full animate-spin mb-4"></div>
-      <p className="text-muted-foreground animate-pulse font-medium tracking-wide text-sm">Menyiapkan Aplikasi...</p>
-    </div>
-  );
+  }, [pathname, router]);
 
   const isLoginPage = pathname === '/';
 

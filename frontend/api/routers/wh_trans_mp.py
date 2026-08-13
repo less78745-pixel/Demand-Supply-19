@@ -9,6 +9,7 @@ import logging
 import asyncio
 from datetime import datetime
 from services.wh_trans_mp_service import generate_dummy_data, simulate_network, parse_wh_trans_file
+from utils.response_guard import enforce_payload_budget
 
 
 logger = logging.getLogger(__name__)
@@ -44,8 +45,10 @@ async def run_simulation(req: SimulateRequest, db: Session = Depends(get_db)):
         except Exception as e:
             logger.error(f"Failed to save to DB: {e}")
             response_data["processed_at"] = datetime.now().isoformat()
-            
-        return response_data
+
+        return enforce_payload_budget(response_data)
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error running network simulation: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -74,8 +77,10 @@ async def run_simulation_file(
         except Exception as e:
             logger.error(f"Failed to save to DB: {e}")
             response_data["processed_at"] = datetime.now().isoformat()
-            
-        return response_data
+
+        return enforce_payload_budget(response_data)
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error processing WH-TRANS-MP file: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

@@ -10,6 +10,7 @@ import io
 from utils.validators import validate_forecast_schema
 from utils.imputation import clean_forecast_data
 from services.forecast_engine import run_forecast_pipeline
+from utils.response_guard import enforce_payload_budget
 
 router = APIRouter()
 
@@ -57,8 +58,8 @@ async def analyze_forecast(file: UploadFile = File(...), db: Session = Depends(g
             print("Failed to save to DB:", e)
             results["processed_at"] = datetime.now().isoformat()
         
-        return results
-        
+        return enforce_payload_budget(results)
+
     except Exception as e:
         import traceback
         traceback.print_exc()

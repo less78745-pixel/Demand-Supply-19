@@ -2,21 +2,28 @@
 import LZString from 'lz-string';
 
 import React, { useState, useMemo, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { FileUploader } from '@/components/ui/FileUploader';
 import { KPICard } from '@/components/ui/KPICard';
-import { ForecastChart } from '@/components/charts/ForecastChart';
-import { ModelComparisonTable } from '@/components/charts/ModelComparisonTable';
 import { LineChart, Info, AlertTriangle, Cpu, Target, BrainCircuit, Download, BookOpen, ChevronDown, ChevronUp, Sparkles, HelpCircle, FileSpreadsheet, Zap, TrendingUp, TrendingDown, Cloud } from 'lucide-react';
 import { uploadForecastFile } from '@/lib/api';
 import { MultiSelect } from '@/components/ui/MultiSelect';
 import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import toast from 'react-hot-toast';
 import { getStandardFilename } from '@/utils/export';
-import * as XLSX from 'xlsx';
 import { supabase } from '@/lib/supabase';
 import { ExportHtmlButton } from '@/components/ui/ExportHtmlButton';
 import { ModuleExportConfig } from '@/utils/offlineExport';
+
+const ForecastChart = dynamic(
+  () => import('@/components/charts/ForecastChart').then(m => m.ForecastChart),
+  { ssr: false, loading: () => <div className="h-72 w-full animate-pulse rounded-xl bg-slate-100" /> }
+);
+const ModelComparisonTable = dynamic(
+  () => import('@/components/charts/ModelComparisonTable').then(m => m.ModelComparisonTable),
+  { ssr: false, loading: () => <div className="h-40 w-full animate-pulse rounded-xl bg-slate-100" /> }
+);
 
 type ScenarioType = 'actual' | 'promo' | 'recession';
 
@@ -214,6 +221,7 @@ export default function ForecastPage() {
       
       // Mengubah file Excel menjadi CSV di frontend agar terhindar dari limit 4.5MB Vercel (413 Payload Too Large)
       if (file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls')) {
+        const XLSX = await import('xlsx');
         const buffer = await file.arrayBuffer();
         const wb = XLSX.read(buffer, { type: 'array' });
         const ws = wb.Sheets[wb.SheetNames[0]];
@@ -247,8 +255,9 @@ export default function ForecastPage() {
     }
   };
 
-  const handleExport = () => {
+  const handleExport = async () => {
     if (!results) return;
+    const XLSX = await import('xlsx');
 
     const methods = results.available_methods || ['SMA-3', 'SES', 'Trend', 'SARIMAX', 'XGBoost', 'SAMAI', 'BiLSTM', 'Hybrid Ensemble', 'Fb Prophet', 'ARIMAX', 'GNN', 'LightGBM', 'GARCH', 'Wavelet', 'LSTM-GRU'];
 

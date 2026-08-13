@@ -193,7 +193,7 @@ export default function DashboardOverview() {
     const branchSet = new Set<string>();
     for (const row of filtered) {
       if (!dateMap[row.date]) dateMap[row.date] = { date: row.date };
-      dateMap[row.date][row.cabang] = row.total_occupancy_pct || row.occupancy_pct;
+      dateMap[row.date][row.cabang] = row.occupancy_pct;
       branchSet.add(row.cabang);
     }
     return {
@@ -213,7 +213,7 @@ export default function DashboardOverview() {
     for (const row of fcData) {
       if (!matchesCabang(row.cabang)) continue;
       if (!cabangMap[row.cabang]) cabangMap[row.cabang] = { actuals: [], preds: [] };
-      cabangMap[row.cabang].actuals.push(row.actual);
+      if (row.actual != null) cabangMap[row.cabang].actuals.push(row.actual);
       const pred = row.forecasts?.[bestModel];
       if (pred != null) cabangMap[row.cabang].preds.push(pred);
     }

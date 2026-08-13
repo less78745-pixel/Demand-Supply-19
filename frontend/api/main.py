@@ -20,10 +20,9 @@ STORAGE_DIR = os.path.join(tempfile.gettempdir(), "wms_storage")
 UPLOADS_DIR = os.path.join(STORAGE_DIR, "uploads")
 os.makedirs(UPLOADS_DIR, exist_ok=True)
 
-from routers import occupancy, forecast, export, simulator, inventory, chat
+from routers import occupancy, forecast, simulator, inventory, chat
 from routers import safety_stock, rebalancing, landed_cost, control_tower
 from routers import ddmrp, route_optimization, wh_trans_mp
-from routers import results # We will create this
 
 app = FastAPI(title="Demand Supply Planning API")
 
@@ -44,7 +43,6 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 app.include_router(occupancy.router, prefix="/api/v1", tags=["Occupancy"])
 app.include_router(forecast.router, prefix="/api/v1", tags=["Forecast"])
-app.include_router(export.router, prefix="/api/v1", tags=["Export"])
 app.include_router(simulator.router, prefix="/api/v1", tags=["Simulator"])
 app.include_router(inventory.router, prefix="/api/v1", tags=["Inventory"])
 app.include_router(chat.router, prefix="/api/v1", tags=["Chat"])
@@ -55,7 +53,6 @@ app.include_router(control_tower.router, prefix="/api/v1", tags=["SCM - Control 
 app.include_router(ddmrp.router, prefix="/api/v1", tags=["DDMRP"])
 app.include_router(route_optimization.router, prefix="/api/v1", tags=["Route Optimization"])
 app.include_router(wh_trans_mp.router, prefix="/api/v1", tags=["WH-TRANS-MP"])
-app.include_router(results.router, prefix="/api/v1", tags=["Global Results"])
 
 @app.get("/")
 def read_root():

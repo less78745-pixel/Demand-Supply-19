@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from typing import Optional
 
 from services.route_optimization_engine import run_route_optimization, generate_demo_data
+from utils.response_guard import enforce_payload_budget
 
 router = APIRouter()
 
@@ -90,7 +91,7 @@ async def analyze_route_optimization(params: RouteOptimizationInput, db: Session
             print("Failed to save to DB:", e)
             result["processed_at"] = datetime.now().isoformat()
 
-        return result
+        return enforce_payload_budget(result)
 
     except Exception as e:
         import traceback
@@ -189,7 +190,7 @@ async def analyze_route_optimization_file(
             print("Failed to save to DB:", e)
             result["processed_at"] = datetime.now().isoformat()
 
-        return result
+        return enforce_payload_budget(result)
 
     except Exception as e:
         import traceback

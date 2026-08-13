@@ -353,6 +353,10 @@ def analyze_ddmrp_from_file(
         - Optional: SKU / Produk, Cabang
         - Optional: On-Hand, On-Order, Qualified Demand
     """
+    # Captured before renaming below — col_map renames a literal "adu" column to
+    # "sales", so checking df.columns for "adu" after the rename can never match.
+    original_cols_lower = set(str(c).strip().lower() for c in df.columns)
+
     col_map = {}
     for c in df.columns:
         cl = str(c).strip().lower()
@@ -441,7 +445,7 @@ def analyze_ddmrp_from_file(
         # Standard ADU vs XGBoost ADU
         if len(sales_list) == 1:
             # Jika tabel adalah rekap per barang (1 baris per SKU), cek apakah angkanya harian atau bulanan
-            adu = sales_list[0] if "adu" in [str(c).lower() for c in df.columns] else calc_adu(sales_list, period_days=30)
+            adu = sales_list[0] if "adu" in original_cols_lower else calc_adu(sales_list, period_days=30)
             if adu <= 0 and sales_list[0] > 0:
                 adu = sales_list[0] / 30.0
             xgb_adu = adu

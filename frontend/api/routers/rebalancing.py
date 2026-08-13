@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, Depends
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 import pandas as pd
@@ -12,6 +12,7 @@ import traceback
 
 from database import get_db
 from schemas.models import Upload, ProcessedResult
+from utils.response_guard import enforce_payload_budget
 
 router = APIRouter()
 
@@ -81,11 +82,13 @@ async def analyze_rebalancing_endpoint(
         except Exception as e:
             print("Failed to save to DB:", e)
             result["processed_at"] = datetime.now().isoformat()
-        
-        return result
-        
+
+        return enforce_payload_budget(result)
+
     except ValueError as ve:
         return JSONResponse(status_code=400, content={"detail": str(ve)})
+    except HTTPException as he:
+        return JSONResponse(status_code=he.status_code, content={"detail": he.detail})
     except Exception as e:
         traceback.print_exc()
         return JSONResponse(status_code=500, content={"detail": f"Error: {str(e)}"})

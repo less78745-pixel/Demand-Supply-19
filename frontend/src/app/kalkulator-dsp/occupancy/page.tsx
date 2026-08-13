@@ -2,10 +2,10 @@
 import LZString from 'lz-string';
 
 import React, { useState, useMemo, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { FileUploader } from '@/components/ui/FileUploader';
 import { KPICard } from '@/components/ui/KPICard';
-import { OccupancyChart } from '@/components/charts/OccupancyChart';
 import { Activity, AlertTriangle, Info, TrendingUp, TrendingDown, AlertOctagon, Layers, Download, Sparkles, HelpCircle, FileSpreadsheet, Zap, Cloud } from 'lucide-react';
 import { uploadOccupancyFile, downloadOccupancyTemplate } from '@/lib/api';
 import { MultiSelect } from '@/components/ui/MultiSelect';
@@ -15,6 +15,13 @@ import { getStandardFilename } from '@/utils/export';
 import { ExportHtmlButton } from '@/components/ui/ExportHtmlButton';
 import { ModuleExportConfig } from '@/utils/offlineExport';
 import { supabase } from '@/lib/supabase';
+
+// recharts pulls in ~150KB of d3 submodules; this chart only ever renders
+// after a file has been processed, so defer it out of the initial route bundle.
+const OccupancyChart = dynamic(
+  () => import('@/components/charts/OccupancyChart').then(m => m.OccupancyChart),
+  { ssr: false, loading: () => <div className="h-72 w-full animate-pulse rounded-xl bg-slate-100" /> }
+);
 
 type ScenarioType = 'actual' | 'surge' | 'expansion';
 
@@ -150,16 +157,6 @@ function generateDemoOccupancy() {
       'STATUS GUDANG - Seluruh 4 Distribution Center (DC Jakarta, Surabaya, Medan, Makassar) beroperasi pada level occupancy ideal (42% - 51%), tidak terdeteksi risiko over-kapasitas maupun shortage.'
     ],
     mrp_results: {
-      week_awal: 1,
-      period_labels: dates,
-      insights_list: [
-        'PERBANDINGAN SKENARIO - DC Jakarta: pada periode JAN-1, utilisasi gudang stabil di kisaran 50.67% dari total kapasitas 30,000 unit.',
-        'TREN - DC Surabaya (Forecast): balance utilisasi turun stabil dari 48.82% (JAN-1) menjadi 42.35% (FEB-2). Status utilisasi kapasitas gudang optimal.',
-        'STATUS GUDANG - Seluruh 4 Distribution Center (DC Jakarta, Surabaya, Medan, Makassar) beroperasi pada level occupancy ideal (42% - 51%), tidak terdeteksi risiko over-kapasitas maupun shortage.'
-      ],
-      occupancy_series_target: targetSeries
-    },
-    ddmrp_results: {
       week_awal: 1,
       period_labels: dates,
       insights_list: [

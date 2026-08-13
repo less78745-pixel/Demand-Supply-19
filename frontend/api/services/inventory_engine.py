@@ -33,23 +33,22 @@ def run_inventory_from_mrp_bytes(file_bytes: bytes) -> dict:
     
     inv_rows = []
     for rec in records:
-        bf = compute_balance_series(rec, n_weeks, "forecast")
+        bf = compute_balance_series(rec, n_weeks)
         for w in range(n_weeks):
             synth_date = (datetime(2026, 1, 1) + timedelta(weeks=w)).strftime("%Y-%m-%d")
             inv_rows.append({
                 "Cabang": rec.cabang,
                 "Category": f"{rec.grup} - {rec.category}",
                 "Date": synth_date,
-                "Penjualan": rec.forecast[w],
+                # `target` (demand) is used as the sales/Penjualan proxy — RawRecord has no
+                # separate forecast series, only onhand/to/vessel/target.
+                "Penjualan": rec.target[w],
                 "On Hand": bf[w],
                 "PeriodLabel": period_labels[w]
             })
             
     df_inv = pd.DataFrame(inv_rows)
     return run_inventory_analysis(df_inv)
-
-# Backward compatibility alias
-run_inventory_from_ddmrp_bytes = run_inventory_from_mrp_bytes
 
 
 def run_inventory_analysis(df: pd.DataFrame) -> dict:

@@ -603,6 +603,15 @@ def calculate_mrp_occupancy_from_bytes(file_bytes: bytes) -> dict:
     avg_occ = sum(d["occupancy_pct"] for d in daily_data) / len(daily_data) if daily_data else 0
     max_occ = max(d["occupancy_pct"] for d in daily_data) if daily_data else 0
 
+    # NOTE: `mrp_results` used to be duplicated verbatim into a legacy
+    # `ddmrp_results` key (a leftover from a module rename), and each of the
+    # two balance/occupancy chart PNGs was embedded both standalone AND baked
+    # into `html_report`. The frontend only ever reads `mrp_results` (falling
+    # back to `ddmrp_results` only when the former is absent, which never
+    # happens here), and never reads the standalone `charts` field. That
+    # quadrupled the JSON body for no functional benefit and was the direct
+    # cause of Vercel's 4.5MB FUNCTION_PAYLOAD_TOO_LARGE errors on this
+    # endpoint. Keep a single copy of everything.
     return {
         "processed_at": datetime.now().isoformat(),
         "daily_data": daily_data,
@@ -619,27 +628,11 @@ def calculate_mrp_occupancy_from_bytes(file_bytes: bytes) -> dict:
         "mrp_results": {
             "week_awal": week_awal,
             "period_labels": period_labels,
-            "charts": {
-                "balance_target": b64_bal_t,
-                "occupancy_target": b64_occ_t,
-            },
             "html_report": html_report,
             "excel_base64": excel_base64,
             "insights_list": insights,
             "occupancy_series_target": {str(k): [round(v * 100, 2) if v is not None else 0 for v in val] for k, val in occ_t.items()},
         },
-        "ddmrp_results": {
-            "week_awal": week_awal,
-            "period_labels": period_labels,
-            "charts": {
-                "balance_target": b64_bal_t,
-                "occupancy_target": b64_occ_t,
-            },
-            "html_report": html_report,
-            "excel_base64": excel_base64,
-            "insights_list": insights,
-            "occupancy_series_target": {str(k): [round(v * 100, 2) if v is not None else 0 for v in val] for k, val in occ_t.items()},
-        }
     }
 
 
@@ -698,7 +691,7 @@ def calculate_occupancy(df: pd.DataFrame) -> dict:
     return {
         "daily_data": daily_data, "branch_date_summary": daily_data, "shortage_alerts": shortage_alerts,
         "kpi_summary": {"avg_occupancy": round(avg_occ, 2), "max_occupancy": round(max_occ, 2), "categories_at_risk": len(shortage_alerts)},
-        "inventory_analysis": inventory_result
+        "inventory_analysis": None
     }
 
 
@@ -826,7 +819,3 @@ def generate_mrp_template_bytes() -> bytes:
     wb.save(out_buf)
     out_buf.seek(0)
     return out_buf.read()
-
-# Backward compatibility aliases
-calculate_ddmrp_occupancy_from_bytes = calculate_mrp_occupancy_from_bytes
-generate_ddmrp_template_bytes = generate_mrp_template_bytes

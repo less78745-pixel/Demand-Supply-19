@@ -24,11 +24,10 @@ import { getStandardFilename } from '@/utils/export';
 import { formatNumberCompact } from '@/lib/utils';
 import { ExportHtmlButton } from '@/components/ui/ExportHtmlButton';
 import { ModuleExportConfig } from '@/utils/offlineExport';
-import * as XLSX from 'xlsx';
 
 const COLORS = ['#3b82f6', '#f97316', '#22c55e', '#ef4444', '#a855f7', '#eab308', '#06b6d4', '#ec4899'];
 
-export const getMonthScore = (name: string) => {
+const getMonthScore = (name: string) => {
   const cleanName = (name || '').trim();
   if (cleanName.toLowerCase().includes('avg')) return 999999;
 
@@ -170,7 +169,7 @@ function generateDemoHistorySales(): ParsedData {
 }
 
 // ===== PRECISION & ACCURACY COMPUTATION ENGINE =====
-export const parseHighPrecision = (val: any): number => {
+const parseHighPrecision = (val: any): number => {
   if (typeof val === 'number') return isNaN(val) ? 0 : val;
   if (val === null || val === undefined || val === '') return 0;
   const str = String(val).trim();
@@ -189,7 +188,7 @@ export const parseHighPrecision = (val: any): number => {
   return isNaN(parsed) ? 0 : parsed;
 };
 
-export const toExactFloat = (num: number, decimals: number = 2): number => {
+const toExactFloat = (num: number, decimals: number = 2): number => {
   if (isNaN(num) || !isFinite(num)) return 0;
   return Number(Math.round(Number(num + 'e' + decimals)) + 'e-' + decimals);
 };
@@ -443,7 +442,8 @@ export default function HistorySalesPage() {
     toast.success('🎉 Data Demo History Sales Berhasil Dimuat!');
   };
 
-  const handleDownloadTemplate = () => {
+  const handleDownloadTemplate = async () => {
+    const XLSX = await import('xlsx');
     const wb = XLSX.utils.book_new();
 
     const ws1_data = [
@@ -1323,9 +1323,10 @@ export default function HistorySalesPage() {
     });
   }, [insentifAnalysis, table2ColFilters]);
 
-  const handleExport = () => {
+  const handleExport = async () => {
     if (!tableData || tableData.length === 0) return;
-    
+
+    const XLSX = await import('xlsx');
     const wb = XLSX.utils.book_new();
 
     // 1. Matriks ABC-XYZ

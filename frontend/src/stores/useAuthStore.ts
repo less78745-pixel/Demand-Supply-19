@@ -97,6 +97,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   login: (userData) => {
     localStorage.setItem('authUser', JSON.stringify(userData));
+    localStorage.setItem('isAuthenticated', 'true');
     set({ user: userData });
   },
   logout: () => {

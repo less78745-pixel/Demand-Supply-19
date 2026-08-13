@@ -24,7 +24,6 @@ import { supabase } from '@/lib/supabase';
 import { parseDynamicCSV, findColumn, ParsedData } from '@/lib/csvParser';
 import { getStandardFilename } from '@/utils/export';
 import { formatNumberCompact } from '@/lib/utils';
-import * as XLSX from 'xlsx';
 
 const COLORS = ['#f97316', '#3b82f6', '#22c55e', '#ef4444', '#a855f7', '#eab308', '#06b6d4', '#ec4899', '#14b8a6', '#6366f1', '#f43f5e', '#84cc16'];
 const TO_COLORS = ['#f97316', '#ef4444', '#eab308', '#ec4899', '#f43f5e', '#d946ef', '#fb923c', '#fde047']; // Warm tones
@@ -403,9 +402,10 @@ export default function SOHAnalysisPage() {
     toast.success('🎉 Data Demo SOH-TO-Vessel (2 Sheet: Qty & Value) Berhasil Dimuat!');
   };
 
-  const handleDownloadTemplate = () => {
+  const handleDownloadTemplate = async () => {
     try {
       const demo = generateDemoSOH();
+      const XLSX = await import('xlsx');
       const wb = XLSX.utils.book_new();
       if (demo.sheetNames && demo.sheets) {
         demo.sheetNames.forEach(name => {
