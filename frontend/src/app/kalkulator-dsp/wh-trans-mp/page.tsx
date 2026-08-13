@@ -2,7 +2,7 @@
 "use client";
 import LZString from 'lz-string';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { KPICard } from '@/components/ui/KPICard';
 import {
@@ -14,6 +14,8 @@ import toast from 'react-hot-toast';
 import { FileUploader } from '@/components/ui/FileUploader';
 import { supabase } from '@/lib/supabase';
 import { useEffect } from 'react';
+import { ExportHtmlButton } from '@/components/ui/ExportHtmlButton';
+import { ModuleExportConfig } from '@/utils/offlineExport';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer
 } from 'recharts';
@@ -123,11 +125,102 @@ export default function WHTransMPPage() {
   };
 
   // Format currency
-  const formatRp = (val: number) => 
+  const formatRp = (val: number) =>
     new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(val);
 
+  // ── Offline HTML export config: full raw hub/customer/red-zone dataset (not
+  // the sliced 50-row preview shown on screen) so the exported file's own
+  // filters can range over everything. ──
+  const hubsFlat = useMemo(() => {
+    if (!simulationResult?.summary?.hubs) return [];
+    return simulationResult.summary.hubs.map((h: any) => ({
+      hub_id: h.hub_id,
+      customer_count: h.customer_count,
+      allocated_volume: h.allocated_volume,
+      status: h.pushed ? 'Repulsed' : 'Optimal',
+    }));
+  }, [simulationResult]);
+
+  const hubsRepulsed = useMemo(
+    () => hubsFlat.filter((h: { status: string }) => h.status === 'Repulsed'),
+    [hubsFlat]
+  );
+
+  const customersFlat = useMemo(() => {
+    if (!data?.customers) return [];
+    return data.customers.map((c: any) => ({ id: c.id, lat: c.lat, lon: c.lon, volume: c.volume }));
+  }, [data]);
+
+  const redZonesFlat = useMemo(() => {
+    if (!data?.red_zones) return [];
+    return data.red_zones.map((rz: any) => ({ name: rz.name, lat: rz.lat, lon: rz.lon, radius: rz.radius }));
+  }, [data]);
+
+  const exportConfig: ModuleExportConfig | undefined = simulationResult ? {
+    moduleName: 'WH_Trans_MP',
+    processedAt: simulationResult.processed_at,
+    domElementId: 'export-container',
+    filters: [
+      { field: 'status', label: 'Filter Status Hub', options: ['Optimal', 'Repulsed'] },
+    ],
+    tables: [
+      {
+        id: 'hubs',
+        title: 'Hub Allocation Summary',
+        filterFields: ['status'],
+        data: hubsFlat,
+        columns: [
+          { key: 'hub_id', label: 'Hub ID' },
+          { key: 'customer_count', label: 'Customers', align: 'right', format: 'number' },
+          { key: 'allocated_volume', label: 'Vol Allocated (CBM)', align: 'right', format: 'number' },
+          { key: 'status', label: 'Status' },
+        ],
+      },
+      {
+        id: 'hubs_repulsed',
+        title: 'Hub Terkena Red Zone (Repulsed)',
+        data: hubsRepulsed,
+        emptyLabel: 'Tidak ada hub yang terkena red zone.',
+        columns: [
+          { key: 'hub_id', label: 'Hub ID' },
+          { key: 'customer_count', label: 'Customers', align: 'right', format: 'number' },
+          { key: 'allocated_volume', label: 'Vol Allocated (CBM)', align: 'right', format: 'number' },
+        ],
+      },
+      {
+        id: 'customers',
+        title: 'Demand Data (Seluruh Customer)',
+        data: customersFlat,
+        columns: [
+          { key: 'id', label: 'ID' },
+          { key: 'lat', label: 'Latitude', align: 'right', format: 'number', decimals: 4 },
+          { key: 'lon', label: 'Longitude', align: 'right', format: 'number', decimals: 4 },
+          { key: 'volume', label: 'Volume', align: 'right', format: 'number' },
+        ],
+      },
+      {
+        id: 'red_zones',
+        title: 'Red Zone Constraints',
+        data: redZonesFlat,
+        emptyLabel: 'Tidak ada Red Zone yang didefinisikan.',
+        columns: [
+          { key: 'name', label: 'Zone Name' },
+          { key: 'lat', label: 'Latitude', align: 'right', format: 'number', decimals: 4 },
+          { key: 'lon', label: 'Longitude', align: 'right', format: 'number', decimals: 4 },
+          { key: 'radius', label: 'Radius (KM)', align: 'right', format: 'number' },
+        ],
+      },
+    ],
+    kpis: [
+      { id: 'total_customers', label: 'Total Customers', sourceTableId: 'customers', field: 'volume', agg: 'count', decimals: 0 },
+      { id: 'total_volume', label: 'Total Volume (CBM)', sourceTableId: 'customers', field: 'volume', agg: 'sum', decimals: 0 },
+      { id: 'avg_alloc_volume', label: 'Avg Volume / Hub', sourceTableId: 'hubs', field: 'allocated_volume', agg: 'avg', decimals: 0, suffix: ' CBM' },
+      { id: 'hubs_repulsed_count', label: 'Hub Repulsed (Red Zone)', sourceTableId: 'hubs_repulsed', field: 'allocated_volume', agg: 'count', decimals: 0 },
+    ],
+  } : undefined;
+
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-8 animate-in fade-in zoom-in duration-500">
+    <div id="export-container" className="p-6 max-w-7xl mx-auto space-y-8 animate-in fade-in zoom-in duration-500">
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
@@ -141,12 +234,17 @@ export default function WHTransMPPage() {
             Decentralized Logistics Network Simulator
           </p>
         </div>
+        <div className="flex items-center gap-3">
+          {exportConfig
+            ? <ExportHtmlButton config={exportConfig} moduleName="WH_Trans_MP" processedAt={simulationResult?.processed_at} />
+            : <ExportHtmlButton elementId="export-container" moduleName="WH_Trans_MP" processedAt={simulationResult?.processed_at} />}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* Controls Panel */}
-        <GlassCard className="p-6 border-slate-200 bg-white/60 shadow-xl lg:col-span-1 h-fit">
+        <GlassCard className="no-export p-6 border-slate-200 bg-white/60 shadow-xl lg:col-span-1 h-fit">
           <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2 mb-6 pb-4 border-b border-slate-200">
             <Settings className="w-5 h-5 text-indigo-500" />
             Simulation Parameters
@@ -294,7 +392,7 @@ export default function WHTransMPPage() {
                   </div>
                 </GlassCard>
 
-                <GlassCard className="p-6 border-slate-200 bg-white shadow-xl">
+                <GlassCard className="no-export p-6 border-slate-200 bg-white shadow-xl">
                   <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
                     <MapPin className="w-5 h-5 text-indigo-500" />
                     Hub Allocation Summary
@@ -341,7 +439,7 @@ export default function WHTransMPPage() {
           
           {/* Raw Data Model */}
           {data && (
-            <GlassCard className="p-6 border-slate-200 bg-white shadow-xl mt-6">
+            <GlassCard className="no-export p-6 border-slate-200 bg-white shadow-xl mt-6">
               <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
                 <Database className="w-5 h-5 text-indigo-500" />
                 Raw Data Model (Preview)

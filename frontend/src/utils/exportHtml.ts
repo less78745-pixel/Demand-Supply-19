@@ -1,4 +1,8 @@
-export function getHtmlExportString(elementId: string): string {
+/**
+ * Clone a DOM element by id and strip anything marked `.no-export`
+ * (buttons, dead filter controls that won't work once cloned, etc.)
+ */
+export function cloneCleanedElement(elementId: string): HTMLElement {
   const elem = document.getElementById(elementId);
   if (!elem) {
     throw new Error(`Element dengan ID ${elementId} tidak ditemukan.`);
@@ -11,7 +15,14 @@ export function getHtmlExportString(elementId: string): string {
   const noExportNodes = clonedElem.querySelectorAll('.no-export');
   noExportNodes.forEach(node => node.parentNode?.removeChild(node));
 
-  // Kumpulkan semua CSS Rules dari styles dan linked stylesheets
+  return clonedElem;
+}
+
+/**
+ * Collect every CSS rule from the page's stylesheets as one inlinable string,
+ * so the exported file renders correctly with no network access.
+ */
+export function collectInlineCss(): string {
   let cssRules = '';
   for (let i = 0; i < document.styleSheets.length; i++) {
     const sheet = document.styleSheets[i];
@@ -26,6 +37,12 @@ export function getHtmlExportString(elementId: string): string {
       console.warn("Could not read CSS rules from stylesheet", sheet.href);
     }
   }
+  return cssRules;
+}
+
+export function getHtmlExportString(elementId: string): string {
+  const clonedElem = cloneCleanedElement(elementId);
+  const cssRules = collectInlineCss();
 
   // Gunakan body class agar tema gelap/terang (misal class 'dark') ikut terbawa
   const bodyClass = document.body.className;

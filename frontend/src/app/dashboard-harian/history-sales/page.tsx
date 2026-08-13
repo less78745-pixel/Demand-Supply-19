@@ -22,6 +22,8 @@ import { supabase } from '@/lib/supabase';
 import { parseDynamicCSV, findColumn, ParsedData } from '@/lib/csvParser';
 import { getStandardFilename } from '@/utils/export';
 import { formatNumberCompact } from '@/lib/utils';
+import { ExportHtmlButton } from '@/components/ui/ExportHtmlButton';
+import { ModuleExportConfig } from '@/utils/offlineExport';
 import * as XLSX from 'xlsx';
 
 const COLORS = ['#3b82f6', '#f97316', '#22c55e', '#ef4444', '#a855f7', '#eab308', '#06b6d4', '#ec4899'];
@@ -1464,8 +1466,81 @@ export default function HistorySalesPage() {
     toast.success('📊 Hasil Seluruh Analisis Berhasil Diekspor!');
   };
 
+  // ── Offline HTML export config: full computed tableData / insentifAnalysis
+  // (not the search-narrowed displayedTable1Data/displayedTable2Data) so the
+  // exported file's own filters can range over everything currently computed. ──
+  const exportConfig: ModuleExportConfig | undefined = parsed ? {
+    moduleName: 'History_Sales_Analytics',
+    processedAt: parsed.processed_at,
+    domElementId: 'export-container',
+    filters: [
+      { field: 'cabang', label: 'Filter Cabang', options: cabangs.filter((c) => c !== 'All') },
+      { field: 'category', label: 'Filter Kategori Item', options: categories.filter((c) => c !== 'All') },
+      { field: 'categoryInsentif', label: 'Filter Category Insentif', options: categoryInsentifs.filter((c) => c !== 'All') },
+    ],
+    tables: [
+      {
+        id: 'sales_table',
+        title: 'Tabel Analisis Komparatif Sales (Cabang / Grup / Kategori)',
+        filterFields: ['cabang', 'category'],
+        data: tableData,
+        columns: [
+          { key: 'cabang', label: 'Cabang / Wilayah' },
+          { key: 'grup', label: 'Grup' },
+          { key: 'category', label: 'Kategori Item' },
+          { key: 'sales', label: 'Total Volume Sales', align: 'right', format: 'number' },
+          { key: 'avg3', label: 'AVG Sales 3 Bln', align: 'right', format: 'number', decimals: 1 },
+          { key: 'kontribusiM', label: `% Kontribusi ${dynamicMonthLabels.M}`, align: 'right', format: 'percent', decimals: 1 },
+          { key: 'kontribusiM1', label: `% Kontribusi ${dynamicMonthLabels.M1}`, align: 'right', format: 'percent', decimals: 1 },
+          { key: 'm', label: `Volume ${dynamicMonthLabels.M}`, align: 'right', format: 'number' },
+          { key: 'm1', label: `Volume ${dynamicMonthLabels.M1}`, align: 'right', format: 'number' },
+          { key: 'growthM', label: `Growth ${dynamicMonthLabels.M} vs AVG (%)`, align: 'right', format: 'percent', decimals: 1, highlight: { below: 0, belowClass: 'wx-cell-bad' } },
+          { key: 'growthM1', label: `Growth ${dynamicMonthLabels.M1} vs AVG (%)`, align: 'right', format: 'percent', decimals: 1, highlight: { below: 0, belowClass: 'wx-cell-bad' } },
+        ],
+      },
+      {
+        id: 'insentif_summary',
+        title: 'Tabel Ringkasan Category Insentif (Cabang / Kategori)',
+        filterFields: ['cabang', 'category', 'categoryInsentif'],
+        emptyLabel: 'Tidak ada data category insentif untuk filter yang dipilih.',
+        data: (insentifAnalysis || []).map((item: any) => ({
+          cabang: item.cabang,
+          grup: item.grup,
+          category: item.category,
+          categoryInsentif: item.categoryInsentif,
+          totalSales: item.totalSales,
+          m: item.periods?.['M'] || 0,
+          m1: item.periods?.['M-1'] || 0,
+          m2: item.periods?.['M-2'] || 0,
+          m3: item.periods?.['M-3'] || 0,
+          m4: item.periods?.['M-4'] || 0,
+          m5: item.periods?.['M-5'] || 0,
+        })),
+        columns: [
+          { key: 'cabang', label: 'Cabang / Wilayah' },
+          { key: 'grup', label: 'Grup' },
+          { key: 'category', label: 'Kategori Item' },
+          { key: 'categoryInsentif', label: 'Category Insentif' },
+          { key: 'm', label: dynamicMonthLabels.M, align: 'right', format: 'number' },
+          { key: 'm1', label: dynamicMonthLabels.M1, align: 'right', format: 'number' },
+          { key: 'm2', label: dynamicMonthLabels.M2, align: 'right', format: 'number' },
+          { key: 'm3', label: dynamicMonthLabels.M3, align: 'right', format: 'number' },
+          { key: 'm4', label: dynamicMonthLabels.M4, align: 'right', format: 'number' },
+          { key: 'm5', label: dynamicMonthLabels.M5, align: 'right', format: 'number' },
+          { key: 'totalSales', label: 'Total Sales Vol', align: 'right', format: 'number' },
+        ],
+      },
+    ],
+    kpis: [
+      { id: 'total_sales', label: 'Total Volume Sales', sourceTableId: 'sales_table', field: 'sales', agg: 'sum', decimals: 0 },
+      { id: 'avg_growth_m', label: `Avg Growth ${dynamicMonthLabels.M} vs AVG`, sourceTableId: 'sales_table', field: 'growthM', agg: 'avg', decimals: 1, suffix: '%' },
+      { id: 'total_combos', label: 'Total Kombinasi Cabang/Grup/Kategori', sourceTableId: 'sales_table', field: 'sales', agg: 'count', decimals: 0 },
+      { id: 'total_insentif_sales', label: 'Total Sales (Category Insentif)', sourceTableId: 'insentif_summary', field: 'totalSales', agg: 'sum', decimals: 0 },
+    ],
+  } : undefined;
+
   return (
-    <div className="space-y-8 pb-16 min-h-screen animate-fade-in text-foreground">
+    <div id="export-container" className="space-y-8 pb-16 min-h-screen animate-fade-in text-foreground">
       {/* ─── HERO BANNER HEADER ─── */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 p-6 sm:p-8 border border-blue-500/20 shadow-2xl">
         <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#3b82f6_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
@@ -1484,9 +1559,12 @@ export default function HistorySalesPage() {
 
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
             <TimestampBadge timestamp={parsed?.processed_at || new Date().toISOString()} label="Olah Terakhir:" />
+            {exportConfig
+              ? <ExportHtmlButton config={exportConfig} moduleName="History_Sales_Analytics" processedAt={parsed?.processed_at} />
+              : <ExportHtmlButton elementId="export-container" moduleName="History_Sales_Analytics" processedAt={parsed?.processed_at} />}
             <button
               onClick={() => setShowHowTo(!showHowTo)}
-              className="w-full sm:w-auto px-4 py-2 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2"
+              className="no-export w-full sm:w-auto px-4 py-2 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2"
             >
               <HelpCircle className="w-4 h-4" />
               {showHowTo ? 'Tutup Panduan' : 'Panduan & Template'}
@@ -1554,7 +1632,7 @@ export default function HistorySalesPage() {
 
       {/* ─── EXECUTIVE KPI SUMMARY CHIPS ─── */}
       {executiveSummary && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="no-export grid grid-cols-1 sm:grid-cols-2 gap-4">
           <KPICard
             title="Total Volume Sales"
             value={`${formatNumberCompact(executiveSummary.totalSales)}`}
@@ -1573,7 +1651,7 @@ export default function HistorySalesPage() {
       )}
 
       {/* ─── FILTER CONTROLS & SELECTION (EXPANDED & OVERFLOW-VISIBLE) ─── */}
-      <GlassCard allowOverflow={true} className="p-6 border-slate-200 bg-white backdrop-blur-xl mb-10 shadow-xl">
+      <GlassCard allowOverflow={true} className="p-6 border-slate-200 bg-white backdrop-blur-xl mb-10 shadow-xl no-export">
         <div className="flex flex-wrap items-end gap-6">
           <div className="flex-1 min-w-[200px] space-y-2">
             <label className="text-xs font-bold text-slate-700 block uppercase tracking-wider">🌍 Filter Region:</label>
@@ -1772,7 +1850,7 @@ export default function HistorySalesPage() {
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-1.5 bg-slate-100 p-1.5 rounded-xl border border-slate-200 shrink-0">
+            <div className="no-export flex flex-wrap gap-1.5 bg-slate-100 p-1.5 rounded-xl border border-slate-200 shrink-0">
               <button
                 onClick={() => setChartGrouping('cabang')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 ${
@@ -2142,7 +2220,7 @@ export default function HistorySalesPage() {
 
           <button
             onClick={handleExport}
-            className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-slate-900 font-semibold text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-blue-600/20 shrink-0"
+            className="no-export px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-slate-900 font-semibold text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-blue-600/20 shrink-0"
           >
             <Download className="w-4 h-4" /> Ekspor Hasil ke Excel / CSV
           </button>
@@ -2187,7 +2265,7 @@ export default function HistorySalesPage() {
           </div>
         )}
 
-        <div className="flex justify-end mb-4">
+        <div className="no-export flex justify-end mb-4">
           <input
             type="text"
             placeholder="Cari Cabang / Grup / Kategori..."
@@ -2197,7 +2275,7 @@ export default function HistorySalesPage() {
           />
         </div>
 
-        <div className="overflow-x-auto rounded-xl border border-slate-200 max-h-[600px] overflow-y-auto">
+        <div className="no-export overflow-x-auto rounded-xl border border-slate-200 max-h-[600px] overflow-y-auto">
           <ExcelColFilterModal
             activeCol={activeTable1ColModal}
             setActiveCol={setActiveTable1ColModal}
@@ -2430,7 +2508,7 @@ export default function HistorySalesPage() {
             </div>
 
             {/* Tabel Ringkasan Insentif dengan M s/d M-5 */}
-            <div className="flex justify-end mb-4">
+            <div className="no-export flex justify-end mb-4">
               <input
                 type="text"
                 placeholder="Cari Cabang / Kategori Insentif..."
@@ -2440,7 +2518,7 @@ export default function HistorySalesPage() {
               />
             </div>
 
-            <div className="overflow-x-auto rounded-2xl border border-slate-200 max-h-[450px] overflow-y-auto bg-slate-50 shadow-lg">
+            <div className="no-export overflow-x-auto rounded-2xl border border-slate-200 max-h-[450px] overflow-y-auto bg-slate-50 shadow-lg">
               <ExcelColFilterModal
                 activeCol={activeTable2ColModal}
                 setActiveCol={setActiveTable2ColModal}

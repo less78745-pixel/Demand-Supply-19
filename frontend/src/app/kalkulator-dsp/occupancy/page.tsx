@@ -13,6 +13,7 @@ import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import toast from 'react-hot-toast';
 import { getStandardFilename } from '@/utils/export';
 import { ExportHtmlButton } from '@/components/ui/ExportHtmlButton';
+import { ModuleExportConfig } from '@/utils/offlineExport';
 import { supabase } from '@/lib/supabase';
 
 type ScenarioType = 'actual' | 'surge' | 'expansion';
@@ -520,8 +521,74 @@ export default function OccupancyPage() {
 
   const mrpData = results?.mrp_results || results?.ddmrp_results;
 
+  // ── Offline HTML export config: full raw dataset (not the live-narrowed
+  // filteredData) so the exported file's own filters can range over everything,
+  // not just whatever cabang/date/scenario was selected at export time. ──
+  const exportConfig: ModuleExportConfig | undefined = results ? {
+    moduleName: 'Occupancy_Analisa',
+    processedAt: results.processed_at,
+    domElementId: 'export-container',
+    filters: [
+      { field: 'cabang', label: 'Filter Cabang', options: cabangs.filter((c) => c !== 'All') },
+      { field: 'date', label: 'Filter Tanggal', options: dates.filter((d) => d !== 'All') },
+    ],
+    tables: [
+      {
+        id: 'daily_data',
+        title: 'Occupancy Harian (Semua Cabang & Tanggal)',
+        filterFields: ['cabang', 'date'],
+        data: results.daily_data || [],
+        columns: [
+          { key: 'cabang', label: 'Cabang' },
+          { key: 'date', label: 'Tanggal' },
+          { key: 'total_on_hand', label: 'Total On Hand', align: 'right', format: 'number' },
+          { key: 'capacity', label: 'Capacity', align: 'right', format: 'number' },
+          { key: 'occupancy_pct', label: 'Occupancy', align: 'right', format: 'percent', highlight: { above: 100, below: 50 } },
+        ],
+      },
+      {
+        id: 'shortage_alerts',
+        title: 'Shortage Alerts (Deficit)',
+        filterFields: ['cabang', 'date'],
+        data: results.shortage_alerts || [],
+        emptyLabel: 'Tidak ada shortage alert untuk filter yang dipilih.',
+        columns: [
+          { key: 'cabang', label: 'Cabang' },
+          { key: 'category', label: 'Category' },
+          { key: 'date', label: 'Tanggal' },
+          { key: 'deficit', label: 'Deficit', align: 'right', format: 'number' },
+        ],
+      },
+      {
+        id: 'mos_data',
+        title: 'Sheet Harga Container & Kalkulasi MOS',
+        filterFields: ['cabang'],
+        data: (results.mos_data || []).map((m: any) => ({
+          cabang: m.Cabang, grup: m.Grup, week: m.Week, balance: m.Balance,
+          target: m.Target, harga: m.Harga, value_per_week: m.Value_per_Week, mos: m.MOS,
+        })),
+        columns: [
+          { key: 'cabang', label: 'Cabang' },
+          { key: 'grup', label: 'Grup' },
+          { key: 'week', label: 'Week', align: 'center' },
+          { key: 'balance', label: 'Balance', align: 'right', format: 'number' },
+          { key: 'target', label: 'Target', align: 'right', format: 'number' },
+          { key: 'harga', label: 'Harga', align: 'right', format: 'currency-idr' },
+          { key: 'value_per_week', label: 'Value per Week', align: 'right', format: 'currency-idr' },
+          { key: 'mos', label: 'MOS', align: 'right', format: 'number', decimals: 2 },
+        ],
+      },
+    ],
+    kpis: [
+      { id: 'avg_occupancy', label: 'Avg Occupancy', sourceTableId: 'daily_data', field: 'occupancy_pct', agg: 'avg', suffix: '%' },
+      { id: 'peak_occupancy', label: 'Peak Occupancy', sourceTableId: 'daily_data', field: 'occupancy_pct', agg: 'max', suffix: '%' },
+      { id: 'min_occupancy', label: 'Min Occupancy', sourceTableId: 'daily_data', field: 'occupancy_pct', agg: 'min', suffix: '%' },
+      { id: 'shortage_count', label: 'Shortage Alerts', sourceTableId: 'shortage_alerts', field: 'deficit', agg: 'count', decimals: 0, suffix: '' },
+    ],
+  } : undefined;
+
   return (
-    <div className="space-y-8 max-w-[1550px] mx-auto pb-16 animate-in fade-in duration-500 text-foreground">
+    <div id="export-container" className="space-y-8 max-w-[1550px] mx-auto pb-16 animate-in fade-in duration-500 text-foreground">
 
       {/* ─── COMMAND TOWER HERO BANNER ─── */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-6 sm:p-8 border border-indigo-500/20 shadow-2xl">
@@ -541,20 +608,22 @@ export default function OccupancyPage() {
 
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 shrink-0">
             <TimestampBadge timestamp={results?.processed_at || new Date().toISOString()} label="Olah Terakhir:" />
-            <label className="w-full sm:w-auto px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2 cursor-pointer shadow-sm">
+            <label className="no-export w-full sm:w-auto px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2 cursor-pointer shadow-sm">
               <Download className="w-4 h-4 rotate-180" /> Buka Sesi (.dsp)
               <input type="file" accept=".dsp,.json" className="hidden" onChange={handleImportWorkspace} />
             </label>
             <button
               onClick={handleExportWorkspace}
-              className="w-full sm:w-auto px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white border border-indigo-500 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2 shadow-md"
+              className="no-export w-full sm:w-auto px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white border border-indigo-500 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2 shadow-md"
             >
               <Download className="w-4 h-4" /> Simpan Sesi
             </button>
-            <ExportHtmlButton elementId="export-container" moduleName="Occupancy_Analisa" processedAt={results?.processed_at} />
+            {exportConfig
+              ? <ExportHtmlButton config={exportConfig} moduleName="Occupancy_Analisa" processedAt={results?.processed_at} />
+              : <ExportHtmlButton elementId="export-container" moduleName="Occupancy_Analisa" processedAt={results?.processed_at} />}
             <button
               onClick={() => setShowHowTo(!showHowTo)}
-              className="w-full sm:w-auto px-4 py-2 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2"
+              className="no-export w-full sm:w-auto px-4 py-2 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2"
             >
               <HelpCircle className="w-4 h-4" />
               {showHowTo ? 'Tutup Panduan' : 'Panduan & Template'}
@@ -627,7 +696,7 @@ export default function OccupancyPage() {
       )}
 
       {/* ─── TAB SWITCHER 3 JALUR SKENARIO ANALISIS ─── */}
-      <div className="space-y-3">
+      <div className="no-export space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-2">
             <Zap className="w-4 h-4" /> Pilih 3 Jalur Simulasi & Uji Ketahanan Gudang:
@@ -673,7 +742,7 @@ export default function OccupancyPage() {
       </div>
 
       {/* ─── UPLOAD BOX WHEN RESULTS PRESENT OR HIDDEN ─── */}
-      <GlassCard className="p-4 bg-white border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <GlassCard className="no-export p-4 bg-white border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="flex-1 w-full">
           <FileUploader
             onFileUpload={handleFileUpload}
@@ -723,8 +792,8 @@ export default function OccupancyPage() {
 
           {/* ═══ OCCUPANCY SECTION ═══ */}
 
-          {/* KPI Row & Deep Insights */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {/* KPI Row & Deep Insights (frozen snapshot — a live, filterable copy is generated in the offline export section below) */}
+          <div className="no-export grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {/* Avg Occupancy */}
             <GlassCard className="flex flex-col justify-between p-5 border-primary/20">
               <div className="flex items-center justify-between">
@@ -807,9 +876,9 @@ export default function OccupancyPage() {
             </GlassCard>
           </div>
 
-          {/* Insights Row */}
+          {/* Insights Row (frozen snapshot — replaced by the filterable Occupancy Harian table in the offline export section) */}
           {(insights.over.length > 0 || insights.lower.length > 0) && (
-            <div className="grid md:grid-cols-2 gap-6">
+            <div className="no-export grid md:grid-cols-2 gap-6">
               {insights.over.length > 0 && (
                 <GlassCard className="border-orange-500/30 bg-orange-500/5">
                   <h3 className="text-lg font-bold text-orange-500 mb-4 flex items-center gap-2 uppercase tracking-wide">
@@ -890,8 +959,8 @@ export default function OccupancyPage() {
                 <p className="text-xs text-muted-foreground mt-1 font-medium">
                   Total On Hand (All Categories) ÷ Kapasitas Cabang
                 </p>
-                {/* Filters */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-5 max-w-2xl">
+                {/* Filters (live-only — dead after clone, so excluded from export; real offline filters are generated below) */}
+                <div className="no-export grid grid-cols-1 sm:grid-cols-2 gap-4 mt-5 max-w-2xl">
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">🏢 Filter Cabang:</label>
                     <MultiSelect
@@ -914,7 +983,7 @@ export default function OccupancyPage() {
                   </div>
                 </div>
               </div>
-              <div className="flex gap-3 shrink-0">
+              <div className="no-export flex gap-3 shrink-0">
                 <button onClick={handleExport}
                   className="px-5 py-2.5 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white border-transparent rounded-xl transition text-sm flex items-center gap-2 font-bold shadow-md">
                   <Download className="w-4 h-4 text-white" /> Export Hasil Olah (Lengkap)
@@ -930,9 +999,9 @@ export default function OccupancyPage() {
             }
           </GlassCard>
 
-          {/* Shortage Alerts */}
+          {/* Shortage Alerts (frozen snapshot — replaced by the filterable table in the offline export section) */}
           {filteredShortageAlerts.length > 0 && (
-            <GlassCard className="border-destructive/30 bg-destructive/5">
+            <GlassCard className="no-export border-destructive/30 bg-destructive/5">
               <h3 className="text-lg font-bold text-destructive mb-4 flex items-center gap-2 uppercase tracking-wide">
                 <AlertTriangle className="w-5 h-5" /> Shortage Alerts (Mengikuti Filter)
               </h3>
@@ -980,7 +1049,7 @@ export default function OccupancyPage() {
                     Hasil kalkulasi otomatis balance mingguan, rasio demand, dan occupancy gudang per periode ({mrpData.period_labels?.join(', ')}).
                   </p>
                 </div>
-                <div className="flex flex-wrap gap-3 shrink-0">
+                <div className="no-export flex flex-wrap gap-3 shrink-0">
                   {mrpData.excel_base64 && (
                     <button
                       onClick={() => {
@@ -1099,9 +1168,9 @@ export default function OccupancyPage() {
             </GlassCard>
           )}
 
-          {/* ═══ SHEET HARGA CONTAINER / MOS ═══ */}
+          {/* ═══ SHEET HARGA CONTAINER / MOS (frozen snapshot — replaced by the filterable table in the offline export section) ═══ */}
           {results.mos_data && results.mos_data.length > 0 && (
-            <GlassCard className="p-6 border-cyan-500/30 bg-gradient-to-br from-slate-900/90 via-cyan-950/20 to-slate-900/90 shadow-2xl relative z-30 mb-10">
+            <GlassCard className="no-export p-6 border-cyan-500/30 bg-gradient-to-br from-slate-900/90 via-cyan-950/20 to-slate-900/90 shadow-2xl relative z-30 mb-10">
               <h3 className="text-xl font-extrabold text-slate-100 uppercase tracking-wide flex items-center gap-2.5 mb-4">
                 <FileSpreadsheet className="w-6 h-6 text-cyan-400" />
                 Sheet Harga Container & Kalkulasi MOS

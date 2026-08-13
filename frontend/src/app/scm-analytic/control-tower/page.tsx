@@ -13,6 +13,8 @@ import { uploadControlTowerFile } from '@/lib/api';
 import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import toast from 'react-hot-toast';
 import { getStandardFilename } from '@/utils/export';
+import { ExportHtmlButton } from '@/components/ui/ExportHtmlButton';
+import { ModuleExportConfig } from '@/utils/offlineExport';
 import { supabase } from '@/lib/supabase';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -311,8 +313,70 @@ export default function ControlTowerPage() {
     toast.success('Control Tower report exported!');
   };
 
+  // ── Offline HTML export config: full raw branch dataset (not the live
+  // scenario/region/zone-narrowed `filtered`) so the exported file's own
+  // filters can range over everything, not just what was selected at
+  // export time. ──
+  const exportConfig: ModuleExportConfig | undefined = results ? {
+    moduleName: 'SCM_Control_Tower',
+    processedAt: results.processed_at,
+    domElementId: 'export-container',
+    filters: [
+      { field: 'region', label: 'Filter Region', options: regionOptions.filter((r) => r !== 'All') },
+      { field: 'zone', label: 'Filter Zone', options: zoneOptions.filter((z) => z !== 'All') },
+    ],
+    tables: [
+      {
+        id: 'branches',
+        title: 'Detail Health per Cabang',
+        filterFields: ['region', 'zone'],
+        data: results.branches || [],
+        columns: [
+          { key: 'cabang', label: 'Cabang' },
+          { key: 'region', label: 'Region' },
+          { key: 'in_stock_rate', label: 'In-Stock', align: 'right', format: 'percent', decimals: 0 },
+          { key: 'days_of_supply', label: 'Days of Supply', align: 'right', format: 'number' },
+          { key: 'otif_score', label: 'OTIF', align: 'right', format: 'percent', decimals: 0 },
+          { key: 'health_score', label: 'Health Score', align: 'right', format: 'percent', decimals: 0, highlight: { below: 65 } },
+          { key: 'zone', label: 'Zone' },
+          { key: 'total_stock', label: 'Total Stock', align: 'right', format: 'number' },
+        ],
+      },
+      {
+        id: 'red_zone_branches',
+        title: 'Cabang Zona Kritis (RED)',
+        filterFields: ['region'],
+        data: (results.branches || []).filter((b: any) => b.zone === 'RED'),
+        emptyLabel: 'Tidak ada cabang zona RED untuk filter yang dipilih.',
+        columns: [
+          { key: 'cabang', label: 'Cabang' },
+          { key: 'region', label: 'Region' },
+          { key: 'days_of_supply', label: 'Days of Supply', align: 'right', format: 'number' },
+        ],
+      },
+      {
+        id: 'alerts',
+        title: 'Exception Alerts',
+        filterFields: ['region'],
+        data: results.alerts || [],
+        emptyLabel: 'Tidak ada alert untuk filter yang dipilih.',
+        columns: [
+          { key: 'region', label: 'Region' },
+          { key: 'severity', label: 'Severity' },
+          { key: 'message', label: 'Message' },
+        ],
+      },
+    ],
+    kpis: [
+      { id: 'avg_health', label: 'Avg Health Score', sourceTableId: 'branches', field: 'health_score', agg: 'avg', decimals: 0, suffix: '%' },
+      { id: 'avg_in_stock', label: 'Avg In-Stock', sourceTableId: 'branches', field: 'in_stock_rate', agg: 'avg', decimals: 0, suffix: '%' },
+      { id: 'avg_otif', label: 'Avg OTIF', sourceTableId: 'branches', field: 'otif_score', agg: 'avg', decimals: 0, suffix: '%' },
+      { id: 'critical_count', label: 'Critical Branches', sourceTableId: 'red_zone_branches', field: 'cabang', agg: 'count', decimals: 0, suffix: '' },
+    ],
+  } : undefined;
+
   return (
-    <div className="space-y-8 max-w-[1550px] mx-auto pb-16 animate-in fade-in duration-500 text-foreground">
+    <div id="export-container" className="space-y-8 max-w-[1550px] mx-auto pb-16 animate-in fade-in duration-500 text-foreground">
 
       {/* ─── COMMAND TOWER HERO BANNER ─── */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-6 sm:p-8 border border-indigo-500/20 shadow-2xl">
@@ -332,9 +396,12 @@ export default function ControlTowerPage() {
 
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 shrink-0">
             <TimestampBadge timestamp={results?.processed_at || new Date().toISOString()} label="Olah Terakhir:" />
+            {exportConfig
+              ? <ExportHtmlButton config={exportConfig} moduleName="SCM_Control_Tower" processedAt={results?.processed_at} />
+              : <ExportHtmlButton elementId="export-container" moduleName="SCM_Control_Tower" processedAt={results?.processed_at} />}
             <button
               onClick={() => setShowHowTo(!showHowTo)}
-              className="w-full sm:w-auto px-4 py-2 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2"
+              className="no-export w-full sm:w-auto px-4 py-2 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2"
             >
               <Info className="w-4 h-4" />
               {showHowTo ? 'Tutup Panduan' : 'Panduan & Template'}
@@ -393,7 +460,7 @@ export default function ControlTowerPage() {
       )}
 
       {/* ─── TAB SWITCHER 3 JALUR SKENARIO ANALISIS ─── */}
-      <div className="space-y-3">
+      <div className="no-export space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-2">
             <Zap className="w-4 h-4" /> Pilih 3 Jalur Simulasi Ketahanan Suplai Nasional:
@@ -471,7 +538,7 @@ export default function ControlTowerPage() {
         <div className="space-y-8 animate-in fade-in duration-700">
           {/* ─── FILTER & EXPORT ACTION BAR ─── */}
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-white p-6 rounded-2xl border border-slate-200 shadow-xl relative z-30 overflow-visible mb-10">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-4 flex-1">
+            <div className="no-export flex flex-col sm:flex-row sm:items-center gap-4 flex-1">
               <span className="text-xs font-bold text-indigo-300 uppercase tracking-wider whitespace-nowrap">🏢 Filter Cabang & Zona:</span>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-lg">
                 <MultiSelect options={regionOptions} selected={selectedRegion} onChange={setSelectedRegion} selectAllLabel="Semua Region" placeholder="Pilih Region..." />
@@ -480,7 +547,7 @@ export default function ControlTowerPage() {
             </div>
             <div className="flex flex-wrap items-center justify-end gap-3 pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-200">
               <TimestampBadge timestamp={results.processed_at} />
-              <button onClick={handleExport} className="px-5 py-2.5 bg-indigo-600 text-slate-900 rounded-xl hover:bg-indigo-500 transition text-xs sm:text-sm font-bold flex items-center gap-2 uppercase tracking-wide shadow-lg">
+              <button onClick={handleExport} className="no-export px-5 py-2.5 bg-indigo-600 text-slate-900 rounded-xl hover:bg-indigo-500 transition text-xs sm:text-sm font-bold flex items-center gap-2 uppercase tracking-wide shadow-lg">
                 <Download className="w-4 h-4" /> Export Report (CSV)
               </button>
             </div>
@@ -491,8 +558,8 @@ export default function ControlTowerPage() {
               📡 Hasil Monitoring Control Tower 28 Cabang
             </h2>
           </div>
-          {/* KPI Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          {/* KPI Cards (frozen snapshot — a live, filterable copy is generated in the offline export section below) */}
+          <div className="no-export grid grid-cols-2 md:grid-cols-5 gap-4">
             <KPICard title="Avg Health Score" value={`${results.kpi.avg_health}%`} icon={<Shield />} />
             <KPICard title="Avg In-Stock" value={`${results.kpi.avg_in_stock}%`} icon={<Activity />} />
             <KPICard title="Avg DoS" value={`${results.kpi.avg_dos} hr`} icon={<Package />} />
@@ -599,9 +666,9 @@ export default function ControlTowerPage() {
             </div>
           </GlassCard>
 
-          {/* Alerts */}
+          {/* Alerts (frozen snapshot — replaced by the filterable Exception Alerts table in the offline export section) */}
           {(results.alerts || []).length > 0 && (
-            <GlassCard className="border-destructive/30 bg-destructive/5">
+            <GlassCard className="no-export border-destructive/30 bg-destructive/5">
               <h3 className="text-sm font-bold text-destructive mb-4 uppercase tracking-wide flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4" /> Exception Alerts ({(results.alerts || []).length})
               </h3>
@@ -620,8 +687,8 @@ export default function ControlTowerPage() {
             </GlassCard>
           )}
 
-          {/* Branch Detail Table */}
-          <GlassCard>
+          {/* Branch Detail Table (frozen snapshot — replaced by the filterable Detail Health per Cabang table in the offline export section) */}
+          <GlassCard className="no-export">
             <h3 className="text-sm font-bold text-foreground mb-4 uppercase tracking-wide">
               Detail Health per Cabang ({filtered.length} cabang)
             </h3>

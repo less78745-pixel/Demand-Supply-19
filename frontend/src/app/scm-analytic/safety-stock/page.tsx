@@ -13,6 +13,8 @@ import {
 import { uploadSafetyStockFile } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { getStandardFilename } from '@/utils/export';
+import { ExportHtmlButton } from '@/components/ui/ExportHtmlButton';
+import { ModuleExportConfig } from '@/utils/offlineExport';
 import { supabase } from '@/lib/supabase';
 
 import {
@@ -329,8 +331,86 @@ export default function SafetyStockPage() {
     toast.success('Safety Stock report exported!');
   };
 
+  // ── Offline HTML export config: full raw results/alerts dataset (not the
+  // live-narrowed `filtered`) so the exported file's own filters can range
+  // over everything, not just whatever cabang/status/scenario was selected at
+  // export time. Critical items are pre-filtered into their own small table so
+  // a count-agg KPI can point at them without needing conditional logic in
+  // the generic engine. ──
+  const criticalItems = useMemo(
+    () => (Array.isArray(results?.results) ? results.results.filter((r: any) => r.status === 'CRITICAL') : []),
+    [results]
+  );
+
+  const exportConfig: ModuleExportConfig | undefined = results ? {
+    moduleName: 'Safety_Stock_ROP',
+    processedAt: results.processed_at,
+    domElementId: 'export-container',
+    filters: [
+      { field: 'cabang', label: 'Filter Cabang', options: allCabangs.filter((c) => c !== 'All') },
+      { field: 'status', label: 'Filter Status', options: statusOptions.filter((s) => s !== 'All') },
+    ],
+    tables: [
+      {
+        id: 'results',
+        title: 'Detail Hasil Kalkulasi Safety Stock & ROP',
+        filterFields: ['cabang', 'status'],
+        data: results.results || [],
+        columns: [
+          { key: 'cabang', label: 'Cabang' },
+          { key: 'sku', label: 'SKU' },
+          { key: 'adu', label: 'ADU', align: 'right', format: 'number' },
+          { key: 'lead_time', label: 'LT (hari)', align: 'right', format: 'number' },
+          { key: 'safety_stock', label: 'Safety Stock', align: 'right', format: 'number' },
+          { key: 'rop', label: 'ROP', align: 'right', format: 'number' },
+          { key: 'current_stock', label: 'Stock', align: 'right', format: 'number' },
+          { key: 'net_flow', label: 'Net Flow', align: 'right', format: 'number' },
+          { key: 'dos', label: 'DoS', align: 'right', format: 'number', decimals: 1, highlight: { below: 7 } },
+          { key: 'status', label: 'Status' },
+        ],
+      },
+      {
+        id: 'critical_items',
+        title: 'Kandidat Critical (Segera Reorder)',
+        filterFields: ['cabang', 'status'],
+        data: criticalItems,
+        emptyLabel: 'Tidak ada SKU critical untuk filter yang dipilih.',
+        columns: [
+          { key: 'cabang', label: 'Cabang' },
+          { key: 'sku', label: 'SKU' },
+          { key: 'current_stock', label: 'Stock', align: 'right', format: 'number' },
+          { key: 'rop', label: 'ROP', align: 'right', format: 'number' },
+          { key: 'dos', label: 'DoS', align: 'right', format: 'number', decimals: 1 },
+        ],
+      },
+      {
+        id: 'alerts',
+        title: 'Reorder Alerts — Cabang Butuh Pengisian Segera',
+        filterFields: ['cabang'],
+        data: results.alerts || [],
+        emptyLabel: 'Tidak ada reorder alert untuk filter yang dipilih.',
+        columns: [
+          { key: 'cabang', label: 'Cabang' },
+          { key: 'sku', label: 'SKU' },
+          { key: 'current_stock', label: 'Stock', align: 'right', format: 'number' },
+          { key: 'rop', label: 'ROP', align: 'right', format: 'number' },
+          { key: 'deficit', label: 'Defisit', align: 'right', format: 'number' },
+          { key: 'suggested_order_qty', label: 'Order Qty', align: 'right', format: 'number' },
+          { key: 'days_of_supply', label: 'DoS', align: 'right', format: 'number' },
+          { key: 'urgency', label: 'Urgency' },
+        ],
+      },
+    ],
+    kpis: [
+      { id: 'total_skus', label: 'Total SKU', sourceTableId: 'results', field: 'sku', agg: 'count', decimals: 0 },
+      { id: 'avg_safety_stock', label: 'Avg Safety Stock', sourceTableId: 'results', field: 'safety_stock', agg: 'avg', decimals: 0 },
+      { id: 'critical_count', label: 'Critical', sourceTableId: 'critical_items', field: 'sku', agg: 'count', decimals: 0 },
+      { id: 'reorder_alerts_count', label: 'Reorder Alerts', sourceTableId: 'alerts', field: 'sku', agg: 'count', decimals: 0 },
+    ],
+  } : undefined;
+
   return (
-    <div className="space-y-8 max-w-[1550px] mx-auto pb-16 animate-in fade-in duration-500 text-foreground">
+    <div id="export-container" className="space-y-8 max-w-[1550px] mx-auto pb-16 animate-in fade-in duration-500 text-foreground">
 
       {/* ─── COMMAND TOWER HERO BANNER ─── */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-6 sm:p-8 border border-indigo-500/20 shadow-2xl">
@@ -350,9 +430,12 @@ export default function SafetyStockPage() {
 
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 shrink-0">
             <TimestampBadge timestamp={results?.processed_at || new Date().toISOString()} label="Olah Terakhir:" />
+            {exportConfig
+              ? <ExportHtmlButton config={exportConfig} moduleName="Safety_Stock_ROP" processedAt={results?.processed_at} />
+              : <ExportHtmlButton elementId="export-container" moduleName="Safety_Stock_ROP" processedAt={results?.processed_at} />}
             <button
               onClick={() => setShowHowTo(!showHowTo)}
-              className="w-full sm:w-auto px-4 py-2 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2"
+              className="no-export w-full sm:w-auto px-4 py-2 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2"
             >
               <Info className="w-4 h-4" />
               {showHowTo ? 'Tutup Panduan' : 'Panduan & Template'}
@@ -363,7 +446,7 @@ export default function SafetyStockPage() {
 
       {/* ─── PANDUAN & DEMO DATA SECTION ─── */}
       {showHowTo && (
-        <GlassCard className="p-6 border-indigo-500/30 bg-white backdrop-blur-xl animate-fade-in">
+        <GlassCard className="no-export p-6 border-indigo-500/30 bg-white backdrop-blur-xl animate-fade-in">
           <div className="flex items-center justify-between border-b border-slate-200 pb-4 mb-6">
             <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
               <FileSpreadsheet className="w-5 h-5 text-indigo-400" /> Panduan Upload & Parameter Safety Stock
@@ -411,7 +494,7 @@ export default function SafetyStockPage() {
       )}
 
       {/* ─── TAB SWITCHER 3 JALUR SKENARIO ANALISIS ─── */}
-      <div className="space-y-3">
+      <div className="no-export space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-2">
             <Zap className="w-4 h-4" /> Pilih 3 Jalur Simulasi Variabilitas Demand & Lead Time:
@@ -457,7 +540,7 @@ export default function SafetyStockPage() {
       </div>
 
       {/* ─── UPLOAD BOX WHEN RESULTS PRESENT OR HIDDEN ─── */}
-      <GlassCard className="p-4 bg-white border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <GlassCard className="no-export p-4 bg-white border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="flex-1 w-full">
           <FileUploader
             onFileUpload={handleFileUpload}
@@ -495,8 +578,8 @@ export default function SafetyStockPage() {
             <TimestampBadge timestamp={results.processed_at} />
           </div>
 
-          {/* KPI Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+          {/* KPI Cards (frozen snapshot — a live, filterable copy is generated in the offline export section below) */}
+          <div className="no-export grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
             <KPICard title="Total SKU" value={results.kpi.total_skus} icon={<Package />} />
             <KPICard title="Critical" value={results.kpi.critical_count} icon={<XCircle />} isAlert={results.kpi.critical_count > 0} />
             <KPICard title="Warning" value={results.kpi.warning_count} icon={<AlertTriangle />} />
@@ -577,9 +660,9 @@ export default function SafetyStockPage() {
             </GlassCard>
           )}
 
-          {/* Alerts Table */}
+          {/* Alerts Table (frozen snapshot — replaced by the filterable table in the offline export section) */}
           {(results.alerts || []).length > 0 && (
-            <GlassCard className="border-destructive/30 bg-destructive/5">
+            <GlassCard className="no-export border-destructive/30 bg-destructive/5">
               <h3 className="text-sm font-bold text-destructive mb-4 uppercase tracking-wide flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4" /> Reorder Alerts — Cabang Butuh Pengisian Segera
               </h3>
@@ -624,8 +707,8 @@ export default function SafetyStockPage() {
             </GlassCard>
           )}
 
-          {/* Detail Results Table */}
-          <GlassCard>
+          {/* Detail Results Table (frozen snapshot — replaced by the filterable table in the offline export section) */}
+          <GlassCard className="no-export">
             <h3 className="text-sm font-bold text-foreground mb-4 uppercase tracking-wide">
               Detail Hasil Kalkulasi ({filtered.length} items)
             </h3>
@@ -673,7 +756,7 @@ export default function SafetyStockPage() {
           </GlassCard>
 
           {/* Re-upload */}
-          <div className="flex justify-end pt-4">
+          <div className="no-export flex justify-end pt-4">
             <div className="w-full max-w-sm ml-auto">
               <GlassCard className="p-3">
                 <FileUploader

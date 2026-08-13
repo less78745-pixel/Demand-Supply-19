@@ -23,6 +23,7 @@ import { supabase } from '@/lib/supabase';
 import { parseDynamicCSV, findColumn, ParsedData } from '@/lib/csvParser';
 import { getStandardFilename } from '@/utils/export';
 import { ExportHtmlButton } from '@/components/ui/ExportHtmlButton';
+import { ModuleExportConfig } from '@/utils/offlineExport';
 import * as XLSX from 'xlsx';
 
 const COLORS = ['#a855f7', '#3b82f6', '#f97316', '#eab308', '#22c55e', '#ef4444', '#06b6d4', '#ec4899', '#8b5cf6', '#10b981'];
@@ -987,10 +988,126 @@ export default function PRUpdatePage() {
     toast.success('📊 Hasil Analisis PR Update Berhasil Diekspor!');
   };
 
+  // ── Offline HTML export config: normalize dynamic-column data to fixed
+  // field names so the export's filters/tables have a stable schema regardless
+  // of what headers the uploaded file happened to use. ──
+  const normalizedFiltered = useMemo(() => filtered.map((row: any) => ({
+    cabang: colCabang ? row[colCabang] : '-',
+    po: colPo ? row[colPo] : '-',
+    nopr: colPr ? row[colPr] : '-',
+    grup: colGrup ? row[colGrup] : '-',
+    category: (colCategory || colGrup) ? row[(colCategory || colGrup) as string] : '-',
+    description: colDesc ? row[colDesc] : '-',
+    status: colStatus ? row[colStatus] : '-',
+    eta: colEta ? row[colEta] : '-',
+    tanggal_eta: colTanggalEta ? row[colTanggalEta] : '-',
+    qty: colQty ? row[colQty] : 0,
+    container: colContainer ? row[colContainer] : '-',
+    carrier: colCarrier ? row[colCarrier] : '-',
+  })), [filtered, colCabang, colPo, colPr, colGrup, colCategory, colDesc, colStatus, colEta, colTanggalEta, colQty, colContainer, colCarrier]);
+
+  const holdItemsNormalized = useMemo(
+    () => normalizedFiltered.filter((r) => /HOLD|DELAY|TUNDA/.test(String(r.status || '').toUpperCase())),
+    [normalizedFiltered]
+  );
+
+  const leadTimeRawNormalized = useMemo(() => {
+    if (!leadTimeData?.raw) return [];
+    return leadTimeData.raw.map((r: any) => ({
+      branch: r['BRANCH RCPT BRANCH'] || '-',
+      container: r['CONTAINER'] || '-',
+      month_eta: r['MONTH ETA'] || '-',
+      tgl_sppb: r['TGL SPPB'] || '-',
+      tgl_eta_pib: r['TGL ETA BY PIB'] || '-',
+      days_sppb_eta: r['DAYS SPPB - ETA'],
+      days_bongkar: r['DAYS BONGKAR - SPPB - 1'],
+      total_days: r['TOTAL DAYS'],
+    }));
+  }, [leadTimeData]);
+
+  const leadTimeBranches = useMemo(
+    () => Array.from(new Set(leadTimeRawNormalized.map((r) => r.branch).filter(Boolean))) as string[],
+    [leadTimeRawNormalized]
+  );
+
+  const exportConfig: ModuleExportConfig | undefined = parsed ? {
+    moduleName: 'PR_Update_Lead_Time',
+    processedAt: parsed.processed_at,
+    domElementId: 'export-container',
+    filters: activeTab === 'lead_time'
+      ? [{ field: 'branch', label: 'Filter Cabang', options: leadTimeBranches }]
+      : [
+          { field: 'cabang', label: 'Filter Cabang', options: cabangs.filter((c) => c !== 'All') },
+          { field: 'category', label: 'Filter Kategori/Grup', options: categories.filter((c) => c !== 'All') },
+          { field: 'eta', label: 'Filter Week ETA', options: etas.filter((e) => e !== 'All') },
+          { field: 'status', label: 'Filter Status Compile', options: statusCompiles.filter((s) => s !== 'All') },
+        ],
+    tables: activeTab === 'lead_time'
+      ? [{
+          id: 'lead_time_raw',
+          title: 'Data Lead Time (Detail)',
+          filterFields: ['branch'],
+          data: leadTimeRawNormalized,
+          columns: [
+            { key: 'branch', label: 'Cabang' },
+            { key: 'container', label: 'Container' },
+            { key: 'month_eta', label: 'Bulan ETA' },
+            { key: 'tgl_sppb', label: 'Tgl SPPB' },
+            { key: 'tgl_eta_pib', label: 'Tgl ETA (PIB)' },
+            { key: 'days_sppb_eta', label: 'Hari SPPB-ETA', align: 'right', format: 'number' },
+            { key: 'days_bongkar', label: 'Hari Bongkar', align: 'right', format: 'number' },
+            { key: 'total_days', label: 'Total Hari', align: 'right', format: 'number', highlight: { above: 14 } },
+          ],
+        }]
+      : [
+          {
+            id: 'pr_detail',
+            title: 'Detail PR Update & Tracking Container',
+            filterFields: ['cabang', 'category', 'eta', 'status'],
+            data: normalizedFiltered,
+            columns: [
+              { key: 'cabang', label: 'Cabang' },
+              { key: 'po', label: 'No. PO' },
+              { key: 'nopr', label: 'No. PR' },
+              { key: 'grup', label: 'Grup' },
+              { key: 'category', label: 'Category' },
+              { key: 'description', label: 'Deskripsi' },
+              { key: 'status', label: 'Status Compile' },
+              { key: 'eta', label: 'Week ETA' },
+              { key: 'tanggal_eta', label: 'Tanggal ETA' },
+              { key: 'qty', label: 'Qty', align: 'right', format: 'number' },
+              { key: 'container', label: 'No. Container' },
+              { key: 'carrier', label: 'Shipping Line' },
+            ],
+          },
+          {
+            id: 'hold_items',
+            title: 'Item Hold Delivery / SPJM / Delay',
+            filterFields: ['cabang', 'category', 'eta', 'status'],
+            data: holdItemsNormalized,
+            emptyLabel: 'Tidak ada item Hold/SPJM/Delay untuk filter yang dipilih.',
+            columns: [
+              { key: 'cabang', label: 'Cabang' },
+              { key: 'po', label: 'No. PO' },
+              { key: 'status', label: 'Status Compile' },
+              { key: 'eta', label: 'Week ETA' },
+              { key: 'qty', label: 'Qty', align: 'right', format: 'number' },
+            ],
+          },
+        ],
+    kpis: activeTab === 'lead_time'
+      ? [{ id: 'avg_total_days', label: 'Avg Total Days', sourceTableId: 'lead_time_raw', field: 'total_days', agg: 'avg', decimals: 1, suffix: ' hari' }]
+      : [
+          { id: 'total_qty', label: 'Total Qty Pesanan PR', sourceTableId: 'pr_detail', field: 'qty', agg: 'sum', decimals: 0, suffix: ' Qty' },
+          { id: 'total_dokumen', label: 'Total Dokumen PO/PR', sourceTableId: 'pr_detail', field: 'qty', agg: 'count', decimals: 0, suffix: ' Dokumen' },
+          { id: 'hold_count', label: 'Item Hold/SPJM/Delay', sourceTableId: 'hold_items', field: 'qty', agg: 'count', decimals: 0, suffix: ' Dokumen' },
+        ],
+  } : undefined;
+
   return (
     <div id="export-container" className="space-y-8 pb-16 min-h-screen animate-fade-in text-foreground">
       {/* ─── HERO BANNER HEADER ─── */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-purple-950 to-slate-900 p-6 sm:p-8 border border-purple-500/20 shadow-2xl no-export">
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-purple-950 to-slate-900 p-6 sm:p-8 border border-purple-500/20 shadow-2xl">
         <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#a855f7_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2">
@@ -1009,14 +1126,12 @@ export default function PRUpdatePage() {
 
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
             <TimestampBadge timestamp={parsed?.processed_at || new Date().toISOString()} label="Olah Terakhir:" />
-            <ExportHtmlButton 
-              elementId="export-container" 
-              moduleName="PR_Update_Lead_Time" 
-              processedAt={parsed?.processed_at} 
-            />
+            {exportConfig
+              ? <ExportHtmlButton config={exportConfig} moduleName="PR_Update_Lead_Time" processedAt={parsed?.processed_at} />
+              : <ExportHtmlButton elementId="export-container" moduleName="PR_Update_Lead_Time" processedAt={parsed?.processed_at} />}
             <button
               onClick={() => setShowHowTo(!showHowTo)}
-              className="w-full sm:w-auto px-4 py-2 bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2"
+              className="no-export w-full sm:w-auto px-4 py-2 bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2"
             >
               <HelpCircle className="w-4 h-4" />
               {showHowTo ? 'Tutup Panduan' : 'Panduan & Template'}
@@ -1146,8 +1261,8 @@ export default function PRUpdatePage() {
         </div>
       </div>
 
-      {/* ─── EXECUTIVE KPI SUMMARY CHIPS ─── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      {/* ─── EXECUTIVE KPI SUMMARY CHIPS (frozen snapshot — a live, filterable copy is generated in the offline export section below) ─── */}
+      <div className="no-export grid grid-cols-2 sm:grid-cols-4 gap-4">
         <KPICard
           title="Total Qty Pesanan PR"
           value={`${totalQty.toLocaleString('id-ID')} Qty`}
@@ -1179,8 +1294,8 @@ export default function PRUpdatePage() {
         />
       </div>
 
-      {/* ─── FILTER CONTROLS & SELECTION (EXPANDED & OVERFLOW-VISIBLE) ─── */}
-      <GlassCard allowOverflow={true} className="p-6 border-slate-200 bg-white backdrop-blur-xl mb-10 shadow-xl">
+      {/* ─── FILTER CONTROLS & SELECTION (live-only — dead after clone; real offline filters are generated below) ─── */}
+      <GlassCard allowOverflow={true} className="no-export p-6 border-slate-200 bg-white backdrop-blur-xl mb-10 shadow-xl">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
           <div className="space-y-2">
             <label className="text-xs font-bold text-slate-700 mb-1 block uppercase tracking-wider">🏢 Filter Cabang:</label>
@@ -1510,7 +1625,7 @@ export default function PRUpdatePage() {
               </h3>
               <button
                 onClick={() => setOnlyCrucialStatus(!onlyCrucialStatus)}
-                className={`px-3 py-1 rounded-xl text-xs font-extrabold transition flex items-center gap-1.5 border shadow-md ${
+                className={`no-export px-3 py-1 rounded-xl text-xs font-extrabold transition flex items-center gap-1.5 border shadow-md ${
                   onlyCrucialStatus
                     ? 'bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-300 border-amber-500/50'
                     : 'bg-slate-100 text-slate-700 border-slate-600 hover:bg-slate-700'
@@ -1528,7 +1643,7 @@ export default function PRUpdatePage() {
 
           <button
             onClick={handleExport}
-            className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-slate-900 font-semibold text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-purple-600/20 shrink-0"
+            className="no-export px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-slate-900 font-semibold text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-purple-600/20 shrink-0"
           >
             <Download className="w-4 h-4" /> Ekspor Hasil ke Excel / CSV
           </button>
@@ -1624,9 +1739,9 @@ export default function PRUpdatePage() {
         )}
       </GlassCard>
 
-      {/* ─── TABEL DETAIL PR UPDATE & LIVE TRACKING CONTAINER (DENGAN EXCEL-STYLE COLUMN FILTER) ─── */}
+      {/* ─── TABEL DETAIL PR UPDATE & LIVE TRACKING CONTAINER (DENGAN EXCEL-STYLE COLUMN FILTER) — replaced by the filterable "Detail PR Update" table in the offline export section ─── */}
       {parsed && parsed.headers && (
-        <GlassCard className="p-6 border-slate-200 bg-white shadow-2xl overflow-hidden">
+        <GlassCard className="no-export p-6 border-slate-200 bg-white shadow-2xl overflow-hidden">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-slate-200 pb-4 mb-6 gap-4">
             <div>
               <div className="flex items-center gap-3">

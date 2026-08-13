@@ -14,6 +14,8 @@ import { supabase } from '@/lib/supabase';
 import toast from 'react-hot-toast';
 import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import { getStandardFilename } from '@/utils/export';
+import { ExportHtmlButton } from '@/components/ui/ExportHtmlButton';
+import { ModuleExportConfig } from '@/utils/offlineExport';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   Legend, ResponsiveContainer, Cell,
@@ -324,8 +326,60 @@ export default function RebalancingPage() {
     toast.success('Draft STO exported!');
   };
 
+  // ── Offline HTML export config: full raw recommendations/infeasible dataset
+  // (not the live-narrowed `filtered`) so the exported file's own filters can
+  // range over everything, not just whatever entity/scenario was selected at
+  // export time. ──
+  const exportConfig: ModuleExportConfig | undefined = results ? {
+    moduleName: 'Stock_Rebalancing_Optimizer',
+    processedAt: results.processed_at,
+    domElementId: 'export-container',
+    filters: [
+      { field: 'entity', label: 'Filter Entity', options: entityOptions.filter((e) => e !== 'All') },
+    ],
+    tables: [
+      {
+        id: 'recommendations',
+        title: 'Rekomendasi Transfer Antar-Cabang',
+        filterFields: ['entity'],
+        data: results.recommendations || [],
+        columns: [
+          { key: 'entity', label: 'Entity' },
+          { key: 'origin', label: 'Origin' },
+          { key: 'destination', label: 'Destination' },
+          { key: 'sku', label: 'SKU' },
+          { key: 'qty', label: 'Qty', align: 'right', format: 'number' },
+          { key: 'mode', label: 'Mode' },
+          { key: 'cost_per_ton', label: 'Rp/Ton', align: 'right', format: 'number' },
+          { key: 'total_cost', label: 'Total Cost', align: 'right', format: 'currency-idr' },
+          { key: 'lead_time', label: 'LT (hari)', align: 'right', format: 'number' },
+        ],
+      },
+      {
+        id: 'infeasible',
+        title: 'Infeasible — Tidak Dapat Dipenuhi',
+        filterFields: ['entity'],
+        data: results.infeasible || [],
+        emptyLabel: 'Tidak ada demand infeasible untuk filter yang dipilih.',
+        columns: [
+          { key: 'entity', label: 'Entity' },
+          { key: 'destination', label: 'Destination' },
+          { key: 'sku', label: 'SKU' },
+          { key: 'qty_unfulfilled', label: 'Unfulfilled', align: 'right', format: 'number' },
+          { key: 'reason', label: 'Reason' },
+        ],
+      },
+    ],
+    kpis: [
+      { id: 'total_transfers', label: 'Total Transfer', sourceTableId: 'recommendations', field: 'total_cost', agg: 'count', decimals: 0 },
+      { id: 'total_cost', label: 'Total Biaya (Rp)', sourceTableId: 'recommendations', field: 'total_cost', agg: 'sum', decimals: 0 },
+      { id: 'total_savings', label: 'Hemat vs Central (Rp)', sourceTableId: 'recommendations', field: 'savings', agg: 'sum', decimals: 0, emptyValue: '-' },
+      { id: 'infeasible_count', label: 'Infeasible', sourceTableId: 'infeasible', field: 'qty_unfulfilled', agg: 'count', decimals: 0 },
+    ],
+  } : undefined;
+
   return (
-    <div className="space-y-8 max-w-[1550px] mx-auto pb-16 animate-in fade-in duration-500 text-foreground">
+    <div id="export-container" className="space-y-8 max-w-[1550px] mx-auto pb-16 animate-in fade-in duration-500 text-foreground">
 
       {/* ─── COMMAND TOWER HERO BANNER ─── */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-emerald-950 to-slate-900 p-6 sm:p-8 border border-emerald-500/20 shadow-2xl">
@@ -345,9 +399,12 @@ export default function RebalancingPage() {
 
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 shrink-0">
             <TimestampBadge timestamp={results?.processed_at || new Date().toISOString()} label="Olah Terakhir:" />
+            {exportConfig
+              ? <ExportHtmlButton config={exportConfig} moduleName="Stock_Rebalancing_Optimizer" processedAt={results?.processed_at} />
+              : <ExportHtmlButton elementId="export-container" moduleName="Stock_Rebalancing_Optimizer" processedAt={results?.processed_at} />}
             <button
               onClick={() => setShowHowTo(!showHowTo)}
-              className="w-full sm:w-auto px-4 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2"
+              className="no-export w-full sm:w-auto px-4 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2"
             >
               <Info className="w-4 h-4" />
               {showHowTo ? 'Tutup Panduan & File' : 'Panduan & Upload File'}
@@ -358,7 +415,7 @@ export default function RebalancingPage() {
 
       {/* ─── PANDUAN & UPLOAD SECTION ─── */}
       {showHowTo && (
-        <GlassCard className="p-6 border-emerald-500/30 bg-white backdrop-blur-xl animate-fade-in">
+        <GlassCard className="no-export p-6 border-emerald-500/30 bg-white backdrop-blur-xl animate-fade-in">
           <div className="flex items-center justify-between border-b border-slate-200 pb-4 mb-6">
             <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
               <FileSpreadsheet className="w-5 h-5 text-emerald-400" /> Upload 3 File Matriks & Panduan Rebalancing
@@ -404,7 +461,7 @@ export default function RebalancingPage() {
       )}
 
       {/* ─── TAB SWITCHER 3 JALUR SKENARIO ANALISIS ─── */}
-      <div className="space-y-3">
+      <div className="no-export space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-2">
             <Zap className="w-4 h-4" /> Pilih 3 Jalur Simulasi Alokasi & Mode Logistik:
@@ -450,7 +507,7 @@ export default function RebalancingPage() {
       </div>
 
       {/* ─── ACTION BAR KETIKA RESULTS ADA ─── */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-white p-6 rounded-2xl border border-slate-200 shadow-xl relative z-30 overflow-visible mb-10">
+      <div className="no-export flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-white p-6 rounded-2xl border border-slate-200 shadow-xl relative z-30 overflow-visible mb-10">
         <div className="flex flex-col sm:flex-row sm:items-center gap-4 flex-1">
           <span className="text-xs font-bold text-emerald-300 uppercase tracking-wider whitespace-nowrap">🏢 Filter Entity / Cabang:</span>
           <div className="w-full max-w-xs">
@@ -484,8 +541,8 @@ export default function RebalancingPage() {
             </h2>
             <TimestampBadge timestamp={results.processed_at} />
           </div>
-          {/* KPI Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {/* KPI Cards (frozen snapshot — a live, filterable copy is generated in the offline export section below) */}
+          <div className="no-export grid grid-cols-2 md:grid-cols-4 gap-4">
             <KPICard title="Total Transfer" value={results.kpi.total_transfers} icon={<Truck />} />
             <KPICard title="Total Biaya" value={`Rp ${Number(results.kpi.total_cost).toLocaleString('id-ID')}`} icon={<DollarSign />} />
             <KPICard title="Hemat vs Central" value={`Rp ${Number(results.kpi.savings).toLocaleString('id-ID')}`} icon={<CheckCircle />} />
@@ -530,8 +587,8 @@ export default function RebalancingPage() {
             </GlassCard>
           )}
 
-          {/* Recommendations Table */}
-          <GlassCard>
+          {/* Recommendations Table (frozen snapshot — replaced by the filterable table in the offline export section) */}
+          <GlassCard className="no-export">
             <h3 className="text-sm font-bold text-foreground mb-4 uppercase tracking-wide">
               Rekomendasi Transfer ({filtered.length} items)
             </h3>
@@ -576,9 +633,9 @@ export default function RebalancingPage() {
             </div>
           </GlassCard>
 
-          {/* Infeasible */}
+          {/* Infeasible (frozen snapshot — replaced by the filterable table in the offline export section) */}
           {(results.infeasible || []).length > 0 && (
-            <GlassCard className="border-destructive/30 bg-destructive/5">
+            <GlassCard className="no-export border-destructive/30 bg-destructive/5">
               <h3 className="text-sm font-bold text-destructive mb-4 uppercase tracking-wide flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4" /> Infeasible — Tidak Dapat Dipenuhi
               </h3>
@@ -610,7 +667,7 @@ export default function RebalancingPage() {
           )}
 
           {/* Re-upload */}
-          <GlassCard>
+          <GlassCard className="no-export">
             <h3 className="text-sm font-bold text-foreground mb-4 uppercase tracking-wide">Upload Ulang</h3>
             <div className="grid md:grid-cols-3 gap-4 mb-4">
               <FileDropZone label="1. Stock Saat Ini" file={stockFile} onFile={setStockFile} onClear={() => setStockFile(null)}

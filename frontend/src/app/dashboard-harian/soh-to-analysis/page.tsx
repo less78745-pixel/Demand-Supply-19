@@ -8,6 +8,8 @@ import { FileUploader } from '@/components/ui/FileUploader';
 import { KPICard } from '@/components/ui/KPICard';
 import { MultiSelect } from '@/components/ui/MultiSelect';
 import { TimestampBadge } from '@/components/ui/TimestampBadge';
+import { ExportHtmlButton } from '@/components/ui/ExportHtmlButton';
+import { ModuleExportConfig } from '@/utils/offlineExport';
 import {
   ClipboardList, Download, Info, Package, BarChart3,
   Layers, HelpCircle, Sparkles, FileSpreadsheet, Zap, AlertTriangle, CheckCircle2, TrendingUp,
@@ -994,8 +996,163 @@ export default function SOHAnalysisPage() {
   const isValueMode = Boolean(currentData?.sheetNames && selectedSheetName && (selectedSheetName.toLowerCase().includes('val') || selectedSheetName.toLowerCase().includes('rp')));
   const unitLabel = isValueMode ? 'Rp / Value' : 'Qty';
 
+  // ── Offline HTML export config: mirrors the detailedTableData aggregation but
+  // sources from the current sheet's FULL raw rows (no selectedCabang/Category/
+  // Insentif/Doi narrowing, no scenario multiplier) so the exported file's own
+  // filters can range over everything, not just whatever was selected live. ──
+  const fullDetailedTableData = useMemo(() => {
+    if (!currentData || !currentData.data || currentData.data.length === 0) return [];
+    const map: Record<string, any> = {};
+
+    for (const row of currentData.data) {
+      const cbg = colCabang ? (row[colCabang] || 'Unknown') : 'Unknown';
+      const grp = colGrup ? (row[colGrup] || 'Umum') : 'Umum';
+      const cat = colCategory ? (row[colCategory] || 'Umum') : 'Umum';
+      const desc = colDescription ? (row[colDescription] || '-') : '-';
+      const ins = colInsentif ? (row[colInsentif] || 'Non-Insentif') : 'Non-Insentif';
+      const doi = colDoi ? (row[colDoi] || 'ACTIVE') : 'ACTIVE';
+      const key = `${cbg}___${grp}___${cat}___${ins}___${doi}`;
+
+      if (!map[key]) {
+        map[key] = {
+          key,
+          cabang: cbg,
+          grup: grp,
+          category: cat,
+          description: desc,
+          statusInsentif: ins,
+          statusDoi: doi,
+          'On Hand': 0,
+          'VESSEL': 0,
+          'TO': 0,
+          'PLAN LOADING': 0,
+          'Target Sales': 0,
+          'Outstanding Target': 0,
+          'Sales Berjalan': 0
+        };
+      }
+
+      currentData.targetColumns.forEach(tc => {
+        const val = Math.round(Number(row[tc.name]) || 0);
+        const pillar = getPillarCategory(tc.name);
+        if (colTargetSales && tc.name === colTargetSales) {
+          map[key]['Target Sales'] += val;
+        } else if (colOutstandingTarget && tc.name === colOutstandingTarget) {
+          map[key]['Outstanding Target'] += val;
+        } else if (colSalesBerjalan && tc.name === colSalesBerjalan) {
+          map[key]['Sales Berjalan'] += val;
+        } else if (pillar === 'OUTSTANDING TARGET') {
+          map[key]['Outstanding Target'] += val;
+        } else if (pillar === 'SALES BERJALAN') {
+          map[key]['Sales Berjalan'] += val;
+        } else if (pillar === 'TARGET SALES') {
+          map[key]['Target Sales'] += val;
+        } else if (map[key][pillar] !== undefined && pillar !== 'Lainnya') {
+          map[key][pillar] += val;
+        }
+      });
+    }
+
+    return Object.values(map).map((item: any) => {
+      const totalInbound = (item['VESSEL'] || 0) + (item['TO'] || 0) + (item['PLAN LOADING'] || 0);
+      const totalSupply = (item['On Hand'] || 0) + (item['TO'] || 0) + (item['VESSEL'] || 0);
+      const effectiveTarget = Math.max(0, (item['Outstanding Target'] || 0) - (item['Sales Berjalan'] || 0));
+      const cond = calculateStockCondition(item['On Hand'], item['TO'], item['VESSEL'], item['Outstanding Target'], item['Sales Berjalan']);
+      return {
+        ...item,
+        totalInbound,
+        totalSupply,
+        effectiveTarget,
+        ratio: cond.ratio,
+        status: cond.status,
+        badge: cond.badge,
+      };
+    }).sort((a: any, b: any) => {
+      if (a.cabang === b.cabang) {
+        return (b['On Hand'] + b.totalInbound) - (a['On Hand'] + a.totalInbound);
+      }
+      return a.cabang.localeCompare(b.cabang);
+    });
+  }, [currentData, colCabang, colGrup, colCategory, colDescription, colInsentif, colDoi, colTargetSales, colOutstandingTarget, colSalesBerjalan]);
+
+  // Small pre-filtered subsets so count-agg KPIs can point at a condition
+  // ("Bahaya" / "Overstock") without encoding it generically in the engine.
+  const bahayaItems = useMemo(() => fullDetailedTableData.filter((r: any) => r.status === 'Bahaya'), [fullDetailedTableData]);
+  const overstockItems = useMemo(() => fullDetailedTableData.filter((r: any) => r.status === 'Overstock'), [fullDetailedTableData]);
+
+  const exportConfig: ModuleExportConfig | undefined = currentData ? {
+    moduleName: 'SOH_TO_Analysis',
+    processedAt: parsed?.processed_at,
+    domElementId: 'export-container',
+    filters: [
+      { field: 'cabang', label: 'Filter Cabang', options: cabangs.filter((c) => c !== 'All') },
+      { field: 'category', label: 'Filter Kategori', options: categories.filter((c) => c !== 'All') },
+      { field: 'statusInsentif', label: 'Filter Status Insentif', options: insentifs.filter((i) => i !== 'All') },
+      { field: 'statusDoi', label: 'Filter Status DOI', options: dois.filter((d) => d !== 'All') },
+    ],
+    tables: [
+      {
+        id: 'soh_detail',
+        title: `Detail SOH & TO per Cabang per Kategori (${unitLabel})`,
+        filterFields: ['cabang', 'category', 'statusInsentif', 'statusDoi'],
+        data: fullDetailedTableData,
+        columns: [
+          { key: 'cabang', label: 'Cabang' },
+          { key: 'grup', label: 'Grup' },
+          { key: 'category', label: 'Kategori Item' },
+          { key: 'statusInsentif', label: 'Status Insentif' },
+          { key: 'statusDoi', label: 'Status DOI' },
+          { key: 'On Hand', label: 'On Hand', align: 'right', format: isValueMode ? 'currency-idr' : 'number' },
+          { key: 'TO', label: 'TO (W1-W4)', align: 'right', format: isValueMode ? 'currency-idr' : 'number' },
+          { key: 'VESSEL', label: 'Vessel (W1-W4)', align: 'right', format: isValueMode ? 'currency-idr' : 'number' },
+          { key: 'totalSupply', label: 'Total Pasokan (OH+TO+Vessel)', align: 'right', format: isValueMode ? 'currency-idr' : 'number' },
+          { key: 'PLAN LOADING', label: 'Plan Loading', align: 'right', format: isValueMode ? 'currency-idr' : 'number' },
+          { key: 'Outstanding Target', label: 'Outstanding Target', align: 'right', format: isValueMode ? 'currency-idr' : 'number' },
+          { key: 'Sales Berjalan', label: 'Sales Berjalan', align: 'right', format: isValueMode ? 'currency-idr' : 'number' },
+          { key: 'effectiveTarget', label: 'Target Efektif', align: 'right', format: isValueMode ? 'currency-idr' : 'number' },
+          { key: 'ratio', label: 'Hasil Hitungan (Rasio)', align: 'right', format: 'number', decimals: 2, highlight: { above: 1.5, below: 1.0, aboveClass: 'wx-cell-warn', belowClass: 'wx-cell-bad' } },
+          { key: 'badge', label: 'Kesimpulan Kondisi' },
+        ],
+      },
+      {
+        id: 'bahaya_items',
+        title: 'Item Bahaya (Rasio < 1.0x — Defisit Pasokan)',
+        filterFields: ['cabang', 'category', 'statusInsentif', 'statusDoi'],
+        data: bahayaItems,
+        emptyLabel: 'Tidak ada item Bahaya untuk filter yang dipilih.',
+        columns: [
+          { key: 'cabang', label: 'Cabang' },
+          { key: 'category', label: 'Kategori Item' },
+          { key: 'totalSupply', label: 'Total Pasokan', align: 'right', format: isValueMode ? 'currency-idr' : 'number' },
+          { key: 'effectiveTarget', label: 'Target Efektif', align: 'right', format: isValueMode ? 'currency-idr' : 'number' },
+          { key: 'ratio', label: 'Rasio', align: 'right', format: 'number', decimals: 2 },
+        ],
+      },
+      {
+        id: 'overstock_items',
+        title: 'Item Overstock (Rasio > 1.5x — Surplus Pasokan)',
+        filterFields: ['cabang', 'category', 'statusInsentif', 'statusDoi'],
+        data: overstockItems,
+        emptyLabel: 'Tidak ada item Overstock untuk filter yang dipilih.',
+        columns: [
+          { key: 'cabang', label: 'Cabang' },
+          { key: 'category', label: 'Kategori Item' },
+          { key: 'totalSupply', label: 'Total Pasokan', align: 'right', format: isValueMode ? 'currency-idr' : 'number' },
+          { key: 'effectiveTarget', label: 'Target Efektif', align: 'right', format: isValueMode ? 'currency-idr' : 'number' },
+          { key: 'ratio', label: 'Rasio', align: 'right', format: 'number', decimals: 2 },
+        ],
+      },
+    ],
+    kpis: [
+      { id: 'total_supply', label: 'Total Pasokan (OH+TO+Vessel)', sourceTableId: 'soh_detail', field: 'totalSupply', agg: 'sum', decimals: 0, suffix: isValueMode ? ' (Rp)' : ' Qty' },
+      { id: 'total_outstanding', label: 'Outstanding Target', sourceTableId: 'soh_detail', field: 'Outstanding Target', agg: 'sum', decimals: 0, suffix: isValueMode ? ' (Rp)' : ' Qty' },
+      { id: 'bahaya_count', label: 'Item Bahaya (Rasio < 1.0x)', sourceTableId: 'bahaya_items', field: 'ratio', agg: 'count', decimals: 0, suffix: ' Item' },
+      { id: 'overstock_count', label: 'Item Overstock (Rasio > 1.5x)', sourceTableId: 'overstock_items', field: 'ratio', agg: 'count', decimals: 0, suffix: ' Item' },
+    ],
+  } : undefined;
+
   return (
-    <div className="space-y-8 pb-16 min-h-screen animate-fade-in text-foreground">
+    <div id="export-container" className="space-y-8 pb-16 min-h-screen animate-fade-in text-foreground">
       {/* ─── HEADER SECTION ─── */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-emerald-950 to-slate-900 p-6 sm:p-8 border border-emerald-500/20 shadow-2xl">
         <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#10b981_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
@@ -1015,9 +1172,12 @@ export default function SOHAnalysisPage() {
 
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
             <TimestampBadge timestamp={parsed?.processed_at || new Date().toISOString()} label="Olah Terakhir:" />
+            {exportConfig
+              ? <ExportHtmlButton config={exportConfig} moduleName="SOH_TO_Analysis" processedAt={parsed?.processed_at} />
+              : <ExportHtmlButton elementId="export-container" moduleName="SOH_TO_Analysis" processedAt={parsed?.processed_at} />}
             <button
               onClick={() => setShowHowTo(!showHowTo)}
-              className="w-full sm:w-auto px-4 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2"
+              className="no-export w-full sm:w-auto px-4 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2"
             >
               <HelpCircle className="w-4 h-4" />
               {showHowTo ? 'Tutup Panduan' : 'Panduan & Template'}
@@ -1088,7 +1248,7 @@ export default function SOHAnalysisPage() {
 
       {/* ─── SHEET SWITCHER (NILAI QTY VS NILAI VALUE) ─── */}
       {parsed?.sheetNames && parsed.sheetNames.length > 0 && (
-        <div className="p-5 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-950 to-slate-900 border border-emerald-500/30 shadow-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="no-export p-5 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-950 to-slate-900 border border-emerald-500/30 shadow-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="space-y-1">
             <h3 className="text-base font-black text-white flex items-center gap-2">
               <FileSpreadsheet className="w-5 h-5 text-emerald-400" />
@@ -1127,7 +1287,7 @@ export default function SOHAnalysisPage() {
       )}
 
       {/* ─── TAB SWITCHER 3 JALUR SKENARIO ANALISIS ─── */}
-      <div className="space-y-3">
+      <div className="no-export space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-2">
             <Zap className="w-4 h-4" /> Pilih 3 Jalur Evaluasi & Simulasi SOH:
@@ -1172,8 +1332,8 @@ export default function SOHAnalysisPage() {
         </div>
       </div>
 
-      {/* ─── EXECUTIVE KPI SUMMARY CHIPS ─── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+      {/* ─── EXECUTIVE KPI SUMMARY CHIPS (frozen snapshot — replaced by the generated KPIs in the offline export section) ─── */}
+      <div className="no-export grid grid-cols-1 sm:grid-cols-2 gap-6">
         <KPICard
           title="Total On Hand Fisik"
           value={`${formatNumberCompact(totalOnHand)} ${unitLabel}`}
@@ -1191,7 +1351,7 @@ export default function SOHAnalysisPage() {
       </div>
 
       {/* ─── FILTER CONTROLS & SELECTION (EXPANDED & OVERFLOW-VISIBLE) ─── */}
-      <GlassCard allowOverflow={true} className="p-6 border-slate-200 bg-white backdrop-blur-xl mb-10 shadow-xl">
+      <GlassCard allowOverflow={true} className="no-export p-6 border-slate-200 bg-white backdrop-blur-xl mb-10 shadow-xl">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <div className="space-y-2">
             <label className="text-xs font-bold text-slate-700 mb-1 block uppercase tracking-wider">🏢 Filter Cabang:</label>
@@ -1263,7 +1423,7 @@ export default function SOHAnalysisPage() {
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-1.5 bg-slate-100 p-1.5 rounded-xl border border-slate-200 shrink-0">
+            <div className="no-export flex flex-wrap gap-1.5 bg-slate-100 p-1.5 rounded-xl border border-slate-200 shrink-0">
               <button
                 onClick={() => setChartMode('weekly')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 ${
@@ -1619,7 +1779,7 @@ export default function SOHAnalysisPage() {
               {Object.keys(sohColFilters).some(k => sohColFilters[k]?.search || (sohColFilters[k]?.selected && sohColFilters[k]?.selected.length > 0)) && (
                 <button
                   onClick={() => { setSohColFilters({}); toast.success('Semua filter kolom dibersihkan!'); }}
-                  className="px-3 py-1 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm"
+                  className="no-export px-3 py-1 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm"
                 >
                   <RefreshCw className="w-3.5 h-3.5" /> Reset Filter Kolom
                 </button>
@@ -1632,7 +1792,7 @@ export default function SOHAnalysisPage() {
 
           <button
             onClick={handleExport}
-            className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-slate-900 font-semibold text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-emerald-600/20 shrink-0"
+            className="no-export px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-slate-900 font-semibold text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-emerald-600/20 shrink-0"
           >
             <Download className="w-4 h-4" /> Ekspor Hasil ke Excel / CSV ({displayedSohTableData.length} baris)
           </button>
@@ -1640,7 +1800,7 @@ export default function SOHAnalysisPage() {
 
         {/* Excel Filter Modal Popover */}
         {activeSohColModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="no-export fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
             <div className="bg-white border border-slate-200 rounded-2xl p-5 max-w-sm w-full shadow-2xl text-slate-800">
               <div className="flex items-center justify-between border-b border-slate-200 pb-3 mb-4">
                 <h4 className="font-bold text-sm text-slate-900 flex items-center gap-2">
@@ -1852,7 +2012,7 @@ export default function SOHAnalysisPage() {
           </div>
         )}
 
-        <div className="overflow-x-auto rounded-xl border border-slate-200 max-h-[650px] overflow-y-auto">
+        <div className="no-export overflow-x-auto rounded-xl border border-slate-200 max-h-[650px] overflow-y-auto">
           <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[1650px]">
             <thead className="bg-slate-50 text-slate-700 uppercase font-bold sticky top-0 z-20 shadow-md text-[11px] tracking-wider text-center">
               <tr className="border-b border-slate-200">

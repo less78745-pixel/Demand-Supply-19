@@ -21,6 +21,7 @@ import { supabase } from '@/lib/supabase';
 import { parseDynamicCSV, ParsedData } from '@/lib/csvParser';
 import { getStandardFilename } from '@/utils/export';
 import { ExportHtmlButton } from '@/components/ui/ExportHtmlButton';
+import { ModuleExportConfig } from '@/utils/offlineExport';
 import { formatNumberCompact } from '@/lib/utils';
 import * as XLSX from 'xlsx';
 
@@ -832,13 +833,86 @@ export default function SKUVelocityPage() {
 
 
 
+  // ── Offline HTML export config: full analyzedData (already carries stable
+  // field names regardless of upload) split into derived tables so KPI counts
+  // can be recomputed live from whichever rows currently match the filters. ──
+  const deadStockItems = useMemo(() => analyzedData.filter((r) => r.analysisStatus.includes('Discontinue')), [analyzedData]);
+  const risingStarItems = useMemo(() => analyzedData.filter((r) => r.analysisStatus.includes('Fast')), [analyzedData]);
+
+  const exportConfig: ModuleExportConfig | undefined = parsed ? {
+    moduleName: 'SKU_Velocity_Insights',
+    processedAt: parsed.processed_at,
+    domElementId: 'export-container',
+    filters: [
+      { field: 'BULAN', label: 'Filter Bulan', options: bulans.filter((b) => b !== 'All') },
+      { field: 'Branch Name', label: 'Filter Cabang', options: cabangs.filter((c) => c !== 'All') },
+      { field: 'Category', label: 'Filter Kategori', options: categories.filter((c) => c !== 'All') },
+      { field: 'Status Product', label: 'Filter Status Product', options: statuses.filter((s) => s !== 'All') },
+    ],
+    tables: [
+      {
+        id: 'action_plan',
+        title: 'Tabel Action Plan & Drill-Down',
+        filterFields: ['BULAN', 'Branch Name', 'Category', 'Status Product'],
+        data: analyzedData,
+        columns: [
+          { key: 'ItemCode', label: 'Kode' },
+          { key: 'NAMA BARANG', label: 'Nama Barang' },
+          { key: 'Category', label: 'Kategori' },
+          { key: 'Branch Name', label: 'Cabang' },
+          { key: 'BULAN', label: 'Bulan' },
+          { key: 'trendStr', label: 'Tren 4th→0th' },
+          { key: 'DOI', label: 'DOI (Hari)', align: 'right', format: 'number' },
+          { key: 'Value', label: 'Value Tertahan', align: 'right', format: 'number' },
+          { key: 'CBM', label: 'CBM', align: 'right', format: 'number', decimals: 2 },
+          { key: 'analysisStatus', label: 'Status Analisis' },
+          { key: 'action', label: 'Rekomendasi Action' },
+        ],
+      },
+      {
+        id: 'dead_stock_items',
+        title: 'Kandidat Discontinue (Dead Stock)',
+        filterFields: ['BULAN', 'Branch Name', 'Category', 'Status Product'],
+        data: deadStockItems,
+        emptyLabel: 'Tidak ada kandidat discontinue untuk filter yang dipilih.',
+        columns: [
+          { key: 'ItemCode', label: 'Kode' },
+          { key: 'NAMA BARANG', label: 'Nama Barang' },
+          { key: 'Branch Name', label: 'Cabang' },
+          { key: 'DOI', label: 'DOI (Hari)', align: 'right', format: 'number' },
+          { key: 'Value', label: 'Value Tertahan', align: 'right', format: 'number' },
+        ],
+      },
+      {
+        id: 'rising_star_items',
+        title: 'Fast Moving / Rising Star',
+        filterFields: ['BULAN', 'Branch Name', 'Category', 'Status Product'],
+        data: risingStarItems,
+        emptyLabel: 'Tidak ada item fast moving untuk filter yang dipilih.',
+        columns: [
+          { key: 'ItemCode', label: 'Kode' },
+          { key: 'NAMA BARANG', label: 'Nama Barang' },
+          { key: 'Branch Name', label: 'Cabang' },
+          { key: 'DOI', label: 'DOI (Hari)', align: 'right', format: 'number' },
+          { key: 'Value', label: 'Value Tertahan', align: 'right', format: 'number' },
+        ],
+      },
+    ],
+    kpis: [
+      { id: 'dead_stock_value', label: 'Dead Stock Trapped Value', sourceTableId: 'dead_stock_items', field: 'Value', agg: 'sum', decimals: 0 },
+      { id: 'dead_stock_count', label: 'Dead Stock SKU', sourceTableId: 'dead_stock_items', field: 'Value', agg: 'count', decimals: 0, suffix: ' SKU' },
+      { id: 'rising_star_count', label: 'Fast Moving Opportunities', sourceTableId: 'rising_star_items', field: 'Value', agg: 'count', decimals: 0, suffix: ' SKU' },
+      { id: 'total_evaluated', label: 'Total Evaluated SKU', sourceTableId: 'action_plan', field: 'Value', agg: 'count', decimals: 0, suffix: ' SKU' },
+    ],
+  } : undefined;
+
   return (
 
     <div id="export-container" className="space-y-8 pb-16 min-h-screen animate-fade-in text-foreground">
 
       {/* HEADER SECTION */}
 
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-6 sm:p-8 border border-indigo-500/20 shadow-2xl no-export">
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-6 sm:p-8 border border-indigo-500/20 shadow-2xl">
 
         <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#6366f1_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
 
@@ -870,12 +944,14 @@ export default function SKUVelocityPage() {
 
             <TimestampBadge timestamp={parsed?.processed_at || new Date().toISOString()} label="Olah Terakhir:" />
 
-            <ExportHtmlButton elementId="export-container" moduleName="SKU_Velocity_Insights" processedAt={parsed?.processed_at} />
+            {exportConfig
+              ? <ExportHtmlButton config={exportConfig} moduleName="SKU_Velocity_Insights" processedAt={parsed?.processed_at} />
+              : <ExportHtmlButton elementId="export-container" moduleName="SKU_Velocity_Insights" processedAt={parsed?.processed_at} />}
             <button
 
               onClick={() => setShowHowTo(!showHowTo)}
 
-              className="w-full sm:w-auto px-4 py-2 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2"
+              className="no-export w-full sm:w-auto px-4 py-2 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2"
 
             >
 
@@ -960,9 +1036,9 @@ export default function SKUVelocityPage() {
 
 
 
-      {/* EXECUTIVE SUMMARY KPI */}
+      {/* EXECUTIVE SUMMARY KPI (frozen snapshot — a live, filterable copy is generated in the offline export section below) */}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="no-export grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
 
         <div className="p-6 rounded-2xl bg-gradient-to-br from-rose-950/80 to-slate-900 border border-rose-500/50 shadow-[0_0_20px_rgba(244,63,94,0.15)] relative overflow-hidden transition-all hover:scale-[1.02]">
 
@@ -1565,8 +1641,8 @@ export default function SKUVelocityPage() {
         </div>
       </GlassCard>
 
-      {/* ACTION PLAN TABLE */}
-      <GlassCard className="p-6 border-slate-200 bg-white shadow-2xl overflow-hidden">
+      {/* ACTION PLAN TABLE (replaced by the filterable "Action Plan" table in the offline export section) */}
+      <GlassCard className="no-export p-6 border-slate-200 bg-white shadow-2xl overflow-hidden">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 pb-4 mb-6 gap-4">
           <h3 className="text-lg sm:text-xl font-black text-slate-900 flex items-center gap-2">
             <ClipboardList className="w-6 h-6 text-indigo-500" />

@@ -2,7 +2,7 @@
 "use client";
 import LZString from 'lz-string';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { KPICard } from '@/components/ui/KPICard';
 import { DDMRPBufferChart } from '@/components/charts/DDMRPBufferChart';
@@ -18,6 +18,8 @@ import { MultiSelect } from '@/components/ui/MultiSelect';
 import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import { exportToExcel } from '@/utils/export';
 import { supabase } from '@/lib/supabase';
+import { ExportHtmlButton } from '@/components/ui/ExportHtmlButton';
+import { ModuleExportConfig } from '@/utils/offlineExport';
 
 // ═══════════════════════════════════════════════
 //  LITERATURE REFERENCE DATA
@@ -265,8 +267,100 @@ export default function DDMRPPage() {
     }
   };
 
+  // ── Offline HTML export config: full SKU result set (not the live-narrowed
+  // filterCabang/filterKategori/filterSku selection) flattened into a stable
+  // row shape so the exported file's own filters can range over every SKU. ──
+  const skuRowsAll = useMemo(() => {
+    const dataArray: any[] = results?.results || (results ? [results] : []);
+    return dataArray.map((res: any) => ({
+      label: res.label || 'N/A',
+      cabang: res.cabang || 'N/A',
+      kategori: res.kategori || 'N/A',
+      adu: Number(res.adu || 0),
+      lead_time_days: Number(res.lead_time?.value || 0),
+      on_hand: Number(res.on_hand || 0),
+      on_order: Number(res.on_order || 0),
+      qualified_demand: Number(res.qualified_demand || 0),
+      net_flow_position: Number(res.net_flow_position || 0),
+      red_zone: Number(res.buffer_zones?.red_zone ?? res.zones?.red_zone ?? 0),
+      yellow_zone: Number(res.buffer_zones?.yellow_zone ?? res.zones?.yellow_zone ?? 0),
+      green_zone: Number(res.buffer_zones?.green_zone ?? res.zones?.green_zone ?? 0),
+      replenishment_status: res.replenishment?.status || '-',
+      urgency: res.replenishment?.urgency || 'normal',
+      suggested_order_qty: Number(res.replenishment?.suggested_order_qty || 0),
+    }));
+  }, [results]);
+
+  const orderNeededSkus = useMemo(() => skuRowsAll.filter((r) => r.urgency !== 'low'), [skuRowsAll]);
+  const overstockSkus = useMemo(() => skuRowsAll.filter((r) => r.urgency === 'low'), [skuRowsAll]);
+
+  const exportConfig: ModuleExportConfig | undefined = results ? {
+    moduleName: 'DDMRP_Buffer',
+    processedAt: results.processed_at,
+    domElementId: 'export-container',
+    filters: [
+      { field: 'cabang', label: 'Filter Cabang', options: Array.from(new Set(skuRowsAll.map((r) => r.cabang))).filter((c) => c && c !== 'N/A') },
+      { field: 'kategori', label: 'Filter Kategori', options: Array.from(new Set(skuRowsAll.map((r) => r.kategori))).filter((c) => c && c !== 'N/A') },
+      { field: 'label', label: 'Filter SKU', options: Array.from(new Set(skuRowsAll.map((r) => r.label))) },
+    ],
+    tables: [
+      {
+        id: 'sku_buffer',
+        title: 'Buffer DDMRP per SKU (Semua Cabang & Kategori)',
+        filterFields: ['cabang', 'kategori', 'label'],
+        data: skuRowsAll,
+        columns: [
+          { key: 'label', label: 'SKU' },
+          { key: 'cabang', label: 'Cabang' },
+          { key: 'kategori', label: 'Kategori' },
+          { key: 'adu', label: 'ADU', align: 'right', format: 'number', decimals: 2 },
+          { key: 'lead_time_days', label: 'Lead Time (Hari)', align: 'right', format: 'number' },
+          { key: 'on_hand', label: 'On-Hand', align: 'right', format: 'number' },
+          { key: 'on_order', label: 'On-Order', align: 'right', format: 'number' },
+          { key: 'net_flow_position', label: 'Net Flow Position', align: 'right', format: 'number' },
+          { key: 'red_zone', label: 'Red Zone', align: 'right', format: 'number' },
+          { key: 'yellow_zone', label: 'Yellow Zone', align: 'right', format: 'number' },
+          { key: 'green_zone', label: 'Green Zone', align: 'right', format: 'number' },
+          { key: 'replenishment_status', label: 'Status' },
+          { key: 'suggested_order_qty', label: 'Order Qty', align: 'right', format: 'number' },
+        ],
+      },
+      {
+        id: 'order_needed',
+        title: 'SKU Butuh Order (Red/Yellow Zone)',
+        filterFields: ['cabang', 'kategori', 'label'],
+        data: orderNeededSkus,
+        emptyLabel: 'Tidak ada SKU yang butuh order untuk filter yang dipilih.',
+        columns: [
+          { key: 'label', label: 'SKU' },
+          { key: 'cabang', label: 'Cabang' },
+          { key: 'replenishment_status', label: 'Status' },
+          { key: 'suggested_order_qty', label: 'Order Qty', align: 'right', format: 'number' },
+        ],
+      },
+      {
+        id: 'overstock_skus',
+        title: 'SKU Overstock / Aman (Green Zone)',
+        filterFields: ['cabang', 'kategori', 'label'],
+        data: overstockSkus,
+        emptyLabel: 'Tidak ada SKU overstock/aman untuk filter yang dipilih.',
+        columns: [
+          { key: 'label', label: 'SKU' },
+          { key: 'cabang', label: 'Cabang' },
+          { key: 'net_flow_position', label: 'Net Flow Position', align: 'right', format: 'number' },
+        ],
+      },
+    ],
+    kpis: [
+      { id: 'total_sku', label: 'Total SKU', sourceTableId: 'sku_buffer', field: 'label', agg: 'count', decimals: 0 },
+      { id: 'butuh_order', label: 'Butuh Order', sourceTableId: 'order_needed', field: 'label', agg: 'count', decimals: 0 },
+      { id: 'total_order_qty', label: 'Total Qty Pesan', sourceTableId: 'sku_buffer', field: 'suggested_order_qty', agg: 'sum', decimals: 0 },
+      { id: 'overstock_count', label: 'Overstock / Aman', sourceTableId: 'overstock_skus', field: 'label', agg: 'count', decimals: 0 },
+    ],
+  } : undefined;
+
   return (
-    <div className="space-y-8 max-w-[1550px] mx-auto pb-16 animate-in fade-in duration-500 text-foreground">
+    <div id="export-container" className="space-y-8 max-w-[1550px] mx-auto pb-16 animate-in fade-in duration-500 text-foreground">
 
       {/* ─── COMMAND TOWER HERO BANNER ─── */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 p-6 sm:p-8 border border-blue-500/20 shadow-2xl">
@@ -286,9 +380,12 @@ export default function DDMRPPage() {
 
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 shrink-0">
             <TimestampBadge timestamp={results?.processed_at || new Date().toISOString()} label="Olah Terakhir:" />
+            {exportConfig
+              ? <ExportHtmlButton config={exportConfig} moduleName="DDMRP_Buffer" processedAt={results?.processed_at} />
+              : <ExportHtmlButton elementId="export-container" moduleName="DDMRP_Buffer" processedAt={results?.processed_at} />}
             <button
               onClick={() => setShowHowTo(!showHowTo)}
-              className="w-full sm:w-auto px-4 py-2 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2"
+              className="no-export w-full sm:w-auto px-4 py-2 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2"
             >
               <Info className="w-4 h-4" />
               {showHowTo ? 'Tutup Panduan' : 'Panduan & Template'}
@@ -347,7 +444,7 @@ export default function DDMRPPage() {
       )}
 
       {/* ─── TAB SWITCHER 3 JALUR SKENARIO ANALISIS ─── */}
-      <div className="space-y-3">
+      <div className="no-export space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-bold uppercase tracking-wider text-blue-400 flex items-center gap-2">
             <Cpu className="w-4 h-4" /> Pilih 3 Jalur Evaluasi & Simulasi Stress-Test Buffer:
@@ -548,7 +645,7 @@ export default function DDMRPPage() {
                 </h2>
                 <TimestampBadge timestamp={results.processed_at || new Date().toISOString()} />
               </div>
-              <button 
+              <button
                 onClick={() => {
                   const dataArray = results.results || [results];
                   const exportData = dataArray.map((res: any) => ({
@@ -566,14 +663,14 @@ export default function DDMRPPage() {
                   }));
                   exportToExcel(exportData, 'DDMRP_Buffer', 'Buffer', results?.processed_at || new Date().toISOString());
                 }}
-                className="bg-emerald-600 hover:bg-emerald-500 text-slate-900 px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-md"
+                className="no-export bg-emerald-600 hover:bg-emerald-500 text-slate-900 px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-md"
               >
                 <FileSpreadsheet className="w-4 h-4" /> Export to Excel
               </button>
             </div>
-            
+
             {results.results && (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 pt-2">
+              <div className="no-export grid grid-cols-1 sm:grid-cols-3 gap-6 pt-2">
                 <div className="space-y-2">
                   <label className="text-xs font-bold text-slate-700 mb-1 block uppercase tracking-wider">🏢 Filter Cabang:</label>
                   <MultiSelect
@@ -616,7 +713,7 @@ export default function DDMRPPage() {
               </div>
             )}
             
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 rounded-lg bg-card border border-border">
+            <div className="no-export grid grid-cols-2 md:grid-cols-4 gap-4 p-4 rounded-lg bg-card border border-border">
               {(() => {
                 const dataArray = results.results || [results];
                 const filteredData = dataArray.filter((res: any) => {
@@ -734,8 +831,8 @@ export default function DDMRPPage() {
                   </div>
                 </div>
 
-                {/* Buffer Detail Table */}
-                <div className="mt-6 overflow-x-auto">
+                {/* Buffer Detail Table (frozen snapshot — replaced by the filterable Buffer DDMRP per SKU table in the offline export section) */}
+                <div className="no-export mt-6 overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-border text-xs text-muted-foreground uppercase tracking-wider">

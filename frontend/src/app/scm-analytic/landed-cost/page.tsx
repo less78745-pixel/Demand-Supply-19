@@ -11,6 +11,8 @@ import {
 import { uploadLandedCostFiles } from '@/lib/api';
 import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import { getStandardFilename } from '@/utils/export';
+import { ExportHtmlButton } from '@/components/ui/ExportHtmlButton';
+import { ModuleExportConfig } from '@/utils/offlineExport';
 import toast from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
 import {
@@ -329,8 +331,71 @@ export default function LandedCostPage() {
     toast.success('Landed Cost report exported!');
   };
 
+  // ── Offline HTML export config: full raw dataset (not the scenario/kurs
+  // simulated `modifiedResults`) so the exported file reflects actual
+  // processed figures, not a what-if simulation frozen at export time. ──
+  const exportConfig: ModuleExportConfig | undefined = results ? {
+    moduleName: 'Landed_Cost_Intelligence',
+    processedAt: results.processed_at,
+    domElementId: 'export-container',
+    filters: [],
+    tables: [
+      {
+        id: 'containers',
+        title: 'Status Kontainer Impor',
+        data: results.containers || [],
+        columns: [
+          { key: 'no_bl', label: 'No BL' },
+          { key: 'no_container', label: 'Container' },
+          { key: 'status', label: 'Status' },
+          { key: 'eta_port', label: 'ETA' },
+          { key: 'cabang_tujuan', label: 'Tujuan' },
+          { key: 'free_time_end', label: 'Free Time End' },
+          { key: 'days_to_free_time', label: 'Sisa Free Time', align: 'right', format: 'number', highlight: { below: 3, belowClass: 'wx-cell-bad' } },
+          { key: 'total_usd', label: 'Total USD', align: 'right', format: 'number' },
+          { key: 'total_idr', label: 'Total IDR', align: 'right', format: 'currency-idr' },
+        ],
+      },
+      {
+        id: 'sku_costs',
+        title: 'Landed Cost Breakdown per SKU',
+        data: results.sku_costs || [],
+        columns: [
+          { key: 'no_bl', label: 'No BL' },
+          { key: 'sku', label: 'SKU' },
+          { key: 'qty', label: 'Qty', align: 'right', format: 'number' },
+          { key: 'weight_kg', label: 'Weight (Kg)', align: 'right', format: 'number' },
+          { key: 'weight_ratio', label: 'Ratio', align: 'right', format: 'percent', decimals: 1 },
+          { key: 'total_landed_usd', label: 'Landed USD', align: 'right', format: 'number' },
+          { key: 'total_landed_idr', label: 'Landed IDR', align: 'right', format: 'currency-idr' },
+          { key: 'cost_per_unit_idr', label: 'HPP/Unit', align: 'right', format: 'currency-idr' },
+        ],
+      },
+      {
+        id: 'demurrage_alerts',
+        title: 'Demurrage Risk Alert',
+        data: results.demurrage_alerts || [],
+        emptyLabel: 'Tidak ada demurrage alert.',
+        columns: [
+          { key: 'urgency', label: 'Urgency' },
+          { key: 'no_container', label: 'Container' },
+          { key: 'no_bl', label: 'No BL' },
+          { key: 'days_remaining', label: 'Sisa Hari', align: 'right', format: 'number' },
+          { key: 'free_time_end', label: 'Free Time End' },
+          { key: 'cabang', label: 'Cabang' },
+        ],
+      },
+    ],
+    kpis: [
+      { id: 'total_containers', label: 'Total Container', sourceTableId: 'containers', field: 'no_container', agg: 'count', decimals: 0, suffix: ' Kontainer' },
+      { id: 'total_cost_usd', label: 'Total Cost (USD)', sourceTableId: 'containers', field: 'total_usd', agg: 'sum', decimals: 0, suffix: ' USD' },
+      { id: 'demurrage_risk_count', label: 'Demurrage Risk', sourceTableId: 'demurrage_alerts', field: 'no_container', agg: 'count', decimals: 0, suffix: ' Kontainer' },
+      { id: 'avg_hpp_per_unit', label: 'Avg HPP/Unit (IDR)', sourceTableId: 'sku_costs', field: 'cost_per_unit_idr', agg: 'avg', decimals: 0 },
+    ],
+  } : undefined;
+
   return (
-    <div className="space-y-8 max-w-[1550px] mx-auto pb-16 animate-in fade-in duration-500 text-foreground">
+    <div id="export-container" className="space-y-8 max-w-[1550px] mx-auto pb-16 animate-in fade-in duration-500 text-foreground">
 
       {/* ─── COMMAND TOWER HERO BANNER ─── */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-cyan-950 to-slate-900 p-6 sm:p-8 border border-cyan-500/20 shadow-2xl">
@@ -350,9 +415,12 @@ export default function LandedCostPage() {
 
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 shrink-0">
             <TimestampBadge timestamp={results?.processed_at || new Date().toISOString()} label="Olah Terakhir:" />
+            {exportConfig
+              ? <ExportHtmlButton config={exportConfig} moduleName="Landed_Cost_Intelligence" processedAt={results?.processed_at} />
+              : <ExportHtmlButton elementId="export-container" moduleName="Landed_Cost_Intelligence" processedAt={results?.processed_at} />}
             <button
               onClick={() => setShowHowTo(!showHowTo)}
-              className="w-full sm:w-auto px-4 py-2 bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/30 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2"
+              className="no-export w-full sm:w-auto px-4 py-2 bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/30 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2"
             >
               <Info className="w-4 h-4" />
               {showHowTo ? 'Tutup Panduan & File' : 'Panduan & Upload File'}
@@ -405,7 +473,7 @@ export default function LandedCostPage() {
       )}
 
       {/* ─── TAB SWITCHER 3 JALUR SKENARIO ANALISIS ─── */}
-      <div className="space-y-3">
+      <div className="no-export space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-2">
             <Zap className="w-4 h-4" /> Pilih 3 Jalur Simulasi Kurs & Risiko Demurrage:
@@ -453,7 +521,7 @@ export default function LandedCostPage() {
       </div>
 
       {/* ─── ACTION BAR KETIKA RESULTS ADA ─── */}
-      <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-200">
+      <div className="no-export flex flex-wrap items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-200">
         <div className="flex items-center gap-3">
           <label className="text-xs text-slate-600 font-medium uppercase">Kurs Aktif:</label>
           <input
@@ -494,17 +562,17 @@ export default function LandedCostPage() {
             </h2>
             <TimestampBadge timestamp={modifiedResults.processed_at} />
           </div>
-          {/* KPI Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {/* KPI Cards (frozen snapshot — a live, filterable copy is generated in the offline export section below) */}
+          <div className="no-export grid grid-cols-2 md:grid-cols-4 gap-4">
             <KPICard title="Total Container" value={modifiedResults.kpi.total_containers} icon={<Package />} />
             <KPICard title="Total Cost" value={`$${Number(modifiedResults.kpi.total_cost_usd).toLocaleString('en-US')}`} icon={<DollarSign />} />
             <KPICard title="Demurrage Risk" value={modifiedResults.kpi.demurrage_risk_count} icon={<AlertTriangle />} isAlert={modifiedResults.kpi.demurrage_risk_count > 0} />
             <KPICard title="Avg HPP/Unit" value={`Rp ${Number(modifiedResults.kpi.avg_cost_per_unit).toLocaleString('id-ID')}`} icon={<DollarSign />} />
           </div>
 
-          {/* Demurrage Alerts */}
+          {/* Demurrage Alerts (frozen snapshot — replaced by the filterable Demurrage Risk Alert table in the offline export section) */}
           {(modifiedResults.demurrage_alerts || []).length > 0 && (
-            <GlassCard className="border-destructive/30 bg-destructive/5">
+            <GlassCard className="no-export border-destructive/30 bg-destructive/5">
               <h3 className="text-sm font-bold text-destructive mb-4 uppercase tracking-wide flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4" /> Demurrage Risk Alert
               </h3>
@@ -526,8 +594,8 @@ export default function LandedCostPage() {
             </GlassCard>
           )}
 
-          {/* Container Status */}
-          <GlassCard>
+          {/* Container Status (frozen snapshot — replaced by the filterable Status Kontainer Impor table in the offline export section) */}
+          <GlassCard className="no-export">
             <h3 className="text-sm font-bold text-foreground mb-4 uppercase tracking-wide">Status Kontainer Impor</h3>
             <div className="overflow-x-auto">
               <table className="w-full text-sm text-left text-slate-700 dark:text-slate-300">
@@ -572,8 +640,8 @@ export default function LandedCostPage() {
             </div>
           </GlassCard>
 
-          {/* Landed Cost per SKU */}
-          <GlassCard>
+          {/* Landed Cost per SKU (frozen snapshot — replaced by the filterable Landed Cost Breakdown per SKU table in the offline export section) */}
+          <GlassCard className="no-export">
             <h3 className="text-sm font-bold text-foreground mb-4 uppercase tracking-wide">
               Landed Cost Breakdown per SKU ({(modifiedResults.sku_costs || []).length} items)
             </h3>

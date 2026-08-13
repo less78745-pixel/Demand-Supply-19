@@ -15,6 +15,8 @@ import toast from 'react-hot-toast';
 import { getStandardFilename } from '@/utils/export';
 import * as XLSX from 'xlsx';
 import { supabase } from '@/lib/supabase';
+import { ExportHtmlButton } from '@/components/ui/ExportHtmlButton';
+import { ModuleExportConfig } from '@/utils/offlineExport';
 
 type ScenarioType = 'actual' | 'promo' | 'recession';
 
@@ -440,8 +442,79 @@ export default function ForecastPage() {
     });
   }, [results, selectedCabang, selectedCategory, activeScenario]);
 
+  // ── Offline HTML export config: full forecast_data (not the live-narrowed
+  // filteredData) flattened into a stable row shape so the exported file's
+  // own filters can range over every cabang/category, not just the active
+  // scenario/method selected at export time. ──
+  const forecastRowsAll = useMemo(() => {
+    if (!results?.forecast_data) return [];
+    const methods: string[] = results.available_methods || [];
+    return results.forecast_data.map((r: any) => {
+      const bestModel = String(r.best_model || results.best_model || '').trim();
+      let bestModelValue: number | null = null;
+      if (bestModel && r.forecasts) {
+        const found = Object.entries(r.forecasts).find(
+          ([key]) => key.trim().toLowerCase() === bestModel.toLowerCase()
+        );
+        if (found && found[1] !== undefined && found[1] !== null) {
+          const num = Number(found[1]);
+          bestModelValue = Number.isNaN(num) ? null : num;
+        }
+      }
+      return {
+        cabang: r.cabang || 'N/A',
+        category: r.category || 'N/A',
+        date: r.date || '-',
+        actual: r.actual ?? null,
+        best_model: bestModel || '-',
+        best_model_value: bestModelValue,
+        mape: r.mape ?? null,
+        bias: r.bias ?? null,
+        rmse: r.rmse ?? null,
+        rop: r.rop ?? null,
+        safety_stock: r.safety_stock ?? null,
+        is_future: r.is_future ? 'Ya' : 'Tidak',
+      };
+    });
+  }, [results]);
+
+  const exportConfig: ModuleExportConfig | undefined = results ? {
+    moduleName: 'Demand_Forecast_ML',
+    processedAt: results.processed_at,
+    domElementId: 'export-container',
+    filters: [
+      { field: 'cabang', label: 'Filter Cabang', options: cabangs.filter((c) => c !== 'All') },
+      { field: 'category', label: 'Filter Kategori', options: categories.filter((c) => c !== 'All') },
+    ],
+    tables: [
+      {
+        id: 'forecast_detail',
+        title: 'Hasil Forecast per Cabang & Kategori (Semua Periode)',
+        filterFields: ['cabang', 'category'],
+        data: forecastRowsAll,
+        columns: [
+          { key: 'cabang', label: 'Cabang' },
+          { key: 'category', label: 'Kategori' },
+          { key: 'date', label: 'Periode' },
+          { key: 'actual', label: 'Actual', align: 'right', format: 'number' },
+          { key: 'best_model', label: 'Best Model' },
+          { key: 'best_model_value', label: 'Forecast (Best Model)', align: 'right', format: 'number' },
+          { key: 'mape', label: 'MAPE', align: 'right', format: 'number', decimals: 2 },
+          { key: 'rop', label: 'ROP', align: 'right', format: 'number' },
+          { key: 'safety_stock', label: 'Safety Stock', align: 'right', format: 'number' },
+          { key: 'is_future', label: 'Periode Future' },
+        ],
+      },
+    ],
+    kpis: [
+      { id: 'avg_rop', label: 'Avg Reorder Point', sourceTableId: 'forecast_detail', field: 'rop', agg: 'avg', decimals: 0 },
+      { id: 'avg_safety_stock', label: 'Avg Safety Stock', sourceTableId: 'forecast_detail', field: 'safety_stock', agg: 'avg', decimals: 0 },
+      { id: 'total_datapoints', label: 'Total Datapoints', sourceTableId: 'forecast_detail', field: 'date', agg: 'count', decimals: 0 },
+    ],
+  } : undefined;
+
   return (
-    <div className="space-y-8 max-w-[1550px] mx-auto pb-16 animate-in fade-in duration-500 text-foreground">
+    <div id="export-container" className="space-y-8 max-w-[1550px] mx-auto pb-16 animate-in fade-in duration-500 text-foreground">
 
       {/* ─── COMMAND TOWER HERO BANNER ─── */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-purple-950 to-slate-900 p-6 sm:p-8 border border-purple-500/20 shadow-2xl">
@@ -461,9 +534,12 @@ export default function ForecastPage() {
 
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 shrink-0">
             <TimestampBadge timestamp={results?.processed_at || new Date().toISOString()} label="Olah Terakhir:" />
+            {exportConfig
+              ? <ExportHtmlButton config={exportConfig} moduleName="Demand_Forecast_ML" processedAt={results?.processed_at} />
+              : <ExportHtmlButton elementId="export-container" moduleName="Demand_Forecast_ML" processedAt={results?.processed_at} />}
             <button
               onClick={() => setShowHowTo(!showHowTo)}
-              className="w-full sm:w-auto px-4 py-2 bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2"
+              className="no-export w-full sm:w-auto px-4 py-2 bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2"
             >
               <HelpCircle className="w-4 h-4" />
               {showHowTo ? 'Tutup Panduan' : 'Panduan & Template'}
@@ -522,7 +598,7 @@ export default function ForecastPage() {
       )}
 
       {/* ─── TAB SWITCHER 3 JALUR SKENARIO ANALISIS ─── */}
-      <div className="space-y-3">
+      <div className="no-export space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-bold uppercase tracking-wider text-purple-400 flex items-center gap-2">
             <Zap className="w-4 h-4" /> Pilih 3 Jalur Simulasi & Uji Sensitivitas Permintaan:
@@ -608,7 +684,8 @@ export default function ForecastPage() {
             </h2>
             <TimestampBadge timestamp={results.processed_at || new Date().toISOString()} />
           </div>
-          <div className="grid md:grid-cols-4 gap-6">
+          {/* KPI Row (frozen snapshot — a live, filterable copy is generated in the offline export section below) */}
+          <div className="no-export grid md:grid-cols-4 gap-6">
             <KPICard title="Majority Best Model" value={results.best_model} icon={<Cpu />} />
             <KPICard title="Reorder Point (ROP)" value={results.inventory_kpis?.avg_reorder_point || 0} icon={<BrainCircuit />} />
             <KPICard title="Avg Safety Stock" value={results.inventory_kpis?.avg_safety_stock || 0} icon={<AlertTriangle />} />
@@ -619,7 +696,7 @@ export default function ForecastPage() {
             <div className="flex flex-col lg:flex-row justify-between lg:items-center mb-6 gap-6 border-b border-slate-200 pb-6">
               <div className="flex-1">
                 <h3 className="text-lg font-bold text-foreground uppercase tracking-wide">Actual vs Forecast</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4 max-w-3xl">
+                <div className="no-export grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4 max-w-3xl">
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">🏢 Filter Cabang:</label>
                     <MultiSelect
@@ -652,7 +729,7 @@ export default function ForecastPage() {
                   </div>
                 </div>
               </div>
-              <div className="flex gap-3 shrink-0 mt-4 lg:mt-0">
+              <div className="no-export flex gap-3 shrink-0 mt-4 lg:mt-0">
                 <button onClick={handleExport}
                   className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-slate-900 border border-emerald-500 rounded-xl hover:from-emerald-500 hover:to-teal-500 transition text-sm flex items-center gap-2 font-extrabold shadow-lg shadow-emerald-500/20">
                   <FileSpreadsheet className="w-4 h-4 text-emerald-200" /> Export Excel (3 Sheet)

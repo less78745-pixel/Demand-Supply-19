@@ -2,7 +2,7 @@
 "use client";
 import LZString from 'lz-string';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { KPICard } from '@/components/ui/KPICard';
 import { TimestampBadge } from '@/components/ui/TimestampBadge';
@@ -20,6 +20,8 @@ import { FileUploader } from '@/components/ui/FileUploader';
 import { MultiSelect } from '@/components/ui/MultiSelect';
 import { exportToExcel } from '@/utils/export';
 import { supabase } from '@/lib/supabase';
+import { ExportHtmlButton } from '@/components/ui/ExportHtmlButton';
+import { ModuleExportConfig } from '@/utils/offlineExport';
 
 // ═══════════════════════════════════════════════
 //  LITERATURE REFERENCE DATA
@@ -380,8 +382,130 @@ export default function RouteOptimizationPage() {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(num);
   };
 
+  // ── Offline HTML export: flatten ALL groups × ALL methods × ALL routes so the
+  // exported file's own filters can range over everything, not just the group/
+  // method currently selected on screen. ──
+  const allRoutesFlat = useMemo(() => {
+    if (!results) return [];
+    const rows: Record<string, unknown>[] = [];
+    results.forEach((g: any) => {
+      const label = g.label || 'Cabang';
+      (g.methods || []).forEach((m: any) => {
+        (Array.isArray(m.routes) ? m.routes : []).forEach((r: any) => {
+          rows.push({
+            cabang: label,
+            metode: m.method,
+            armada: r.vehicle_name || `Kendaraan #${r.route_id || ''}`,
+            tipe: r.is_dedicated ? 'Dedicated' : 'Optimasi',
+            stops: getRouteStopsCount(r),
+            load: r.load ?? 0,
+            capacity_pct: Number(r.capacity_pct) || 0,
+            distance_km: Number(r.distance_km) || 0,
+            rute: getRouteStopNames(r).join(' -> '),
+          });
+        });
+      });
+    });
+    return rows;
+  }, [results]);
+
+  const methodSummaryFlat = useMemo(() => {
+    if (!results) return [];
+    const rows: Record<string, unknown>[] = [];
+    results.forEach((g: any) => {
+      const label = g.label || 'Cabang';
+      const bestMethodName = g.best_method || g.summary?.best_method;
+      (g.methods || []).forEach((m: any) => {
+        rows.push({
+          cabang: label,
+          metode: m.method,
+          is_best: m.method === bestMethodName ? 'Ya' : 'Tidak',
+          jarak_km: Number(m.total_distance_km) || 0,
+          kendaraan: m.n_vehicles || 0,
+          total_cost: Number(m.cost?.total_cost) || 0,
+          waktu_jam: Number(m.cost?.estimated_time_hours) || 0,
+        });
+      });
+    });
+    return rows;
+  }, [results]);
+
+  const dedicatedRoutesFlat = useMemo(
+    () => allRoutesFlat.filter((r) => r.tipe === 'Dedicated'),
+    [allRoutesFlat]
+  );
+
+  const groupLabels = useMemo(() => (results ? results.map((g: any) => g.label || 'Cabang') : []), [results]);
+  const methodNames = useMemo(
+    () => Array.from(new Set(allRoutesFlat.map((r: any) => r.metode as string))),
+    [allRoutesFlat]
+  );
+
+  const exportConfig: ModuleExportConfig | undefined = results && results.length > 0 ? {
+    moduleName: 'Route_Optimization',
+    processedAt: results[0]?.processed_at,
+    domElementId: 'export-container',
+    filters: [
+      { field: 'cabang', label: 'Filter Cabang / Grup', options: groupLabels },
+      { field: 'metode', label: 'Filter Metode', options: methodNames },
+      { field: 'tipe', label: 'Filter Tipe Rute', options: ['Dedicated', 'Optimasi'] },
+    ],
+    tables: [
+      {
+        id: 'all_routes',
+        title: 'Semua Rute Optimasi (Seluruh Cabang & Metode)',
+        filterFields: ['cabang', 'metode', 'tipe'],
+        data: allRoutesFlat,
+        columns: [
+          { key: 'cabang', label: 'Cabang' },
+          { key: 'metode', label: 'Metode' },
+          { key: 'armada', label: 'Armada' },
+          { key: 'tipe', label: 'Tipe' },
+          { key: 'stops', label: 'Stop', align: 'right', format: 'number' },
+          { key: 'load', label: 'Muatan', align: 'right', format: 'number' },
+          { key: 'capacity_pct', label: 'Utilisasi', align: 'right', format: 'percent', highlight: { above: 90 } },
+          { key: 'distance_km', label: 'Jarak (KM)', align: 'right', format: 'number', decimals: 1 },
+          { key: 'rute', label: 'Urutan Stop' },
+        ],
+      },
+      {
+        id: 'method_summary',
+        title: 'Perbandingan Metode (Seluruh Cabang)',
+        filterFields: ['cabang', 'metode'],
+        data: methodSummaryFlat,
+        columns: [
+          { key: 'cabang', label: 'Cabang' },
+          { key: 'metode', label: 'Metode' },
+          { key: 'is_best', label: 'Terbaik?' },
+          { key: 'jarak_km', label: 'Jarak (KM)', align: 'right', format: 'number', decimals: 1 },
+          { key: 'kendaraan', label: 'Kendaraan', align: 'right', format: 'number' },
+          { key: 'total_cost', label: 'Total Cost', align: 'right', format: 'currency-idr' },
+          { key: 'waktu_jam', label: 'Waktu (Jam)', align: 'right', format: 'number', decimals: 1 },
+        ],
+      },
+      {
+        id: 'dedicated_routes',
+        title: 'Rute Dedicated (Armada Tetap)',
+        data: dedicatedRoutesFlat,
+        emptyLabel: 'Tidak ada rute dedicated.',
+        columns: [
+          { key: 'cabang', label: 'Cabang' },
+          { key: 'metode', label: 'Metode' },
+          { key: 'armada', label: 'Armada' },
+          { key: 'distance_km', label: 'Jarak (KM)', align: 'right', format: 'number', decimals: 1 },
+        ],
+      },
+    ],
+    kpis: [
+      { id: 'total_rute', label: 'Total Rute', sourceTableId: 'all_routes', field: 'distance_km', agg: 'count', decimals: 0 },
+      { id: 'total_jarak', label: 'Total Jarak', sourceTableId: 'all_routes', field: 'distance_km', agg: 'sum', decimals: 1, suffix: ' km' },
+      { id: 'avg_utilisasi', label: 'Avg Utilisasi Kapasitas', sourceTableId: 'all_routes', field: 'capacity_pct', agg: 'avg', decimals: 1, suffix: '%' },
+      { id: 'rute_dedicated_count', label: 'Rute Dedicated', sourceTableId: 'dedicated_routes', field: 'distance_km', agg: 'count', decimals: 0 },
+    ],
+  } : undefined;
+
   return (
-    <div className="space-y-8 max-w-[1550px] mx-auto pb-16 animate-in fade-in duration-500 text-foreground">
+    <div id="export-container" className="space-y-8 max-w-[1550px] mx-auto pb-16 animate-in fade-in duration-500 text-foreground">
       {/* ─── COMMAND TOWER HERO BANNER ─── */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-teal-950 to-slate-900 p-6 sm:p-8 border border-teal-500/20 shadow-2xl">
         <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#14b8a6_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
@@ -400,6 +524,9 @@ export default function RouteOptimizationPage() {
 
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 shrink-0">
             <TimestampBadge timestamp={results?.[0]?.processed_at || new Date().toISOString()} label="Olah Terakhir:" />
+            {exportConfig
+              ? <ExportHtmlButton config={exportConfig} moduleName="Route_Optimization" processedAt={results?.[0]?.processed_at} />
+              : <ExportHtmlButton elementId="export-container" moduleName="Route_Optimization" processedAt={results?.[0]?.processed_at} />}
             <button
               onClick={() => setShowHowTo(!showHowTo)}
               className="w-full sm:w-auto px-4 py-2 bg-teal-600/20 hover:bg-teal-600/30 text-teal-300 border border-teal-500/30 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2"
@@ -461,7 +588,7 @@ export default function RouteOptimizationPage() {
       )}
 
       {/* ─── TAB SWITCHER 3 JALUR SKENARIO ANALISIS ─── */}
-      <div className="space-y-3">
+      <div className="no-export space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-bold uppercase tracking-wider text-teal-400 flex items-center gap-2">
             <Zap className="w-4 h-4" /> Pilih 3 Jalur Simulasi Kondisi Rute & Lalu Lintas:
@@ -671,14 +798,14 @@ Pelanggan,Toko A,-6.210000,106.820000,15,08:00-12:00,30`}
                   toast.error('Tidak ada data rute untuk diexport');
                 }
               }}
-              className="bg-emerald-600 hover:bg-emerald-500 text-slate-900 px-4 py-2 rounded-md text-sm font-semibold flex items-center gap-2 transition-colors shadow-sm"
+              className="no-export bg-emerald-600 hover:bg-emerald-500 text-slate-900 px-4 py-2 rounded-md text-sm font-semibold flex items-center gap-2 transition-colors shadow-sm"
             >
               <FileSpreadsheet className="w-4 h-4" /> Download Excel
             </button>
           </div>
-          
+
           {/* Interactive Filters (Expanded & Overflow Visible) */}
-          <GlassCard allowOverflow={true} className="p-6 mb-10 border-slate-200 bg-white shadow-xl relative z-30">
+          <GlassCard allowOverflow={true} className="no-export p-6 mb-10 border-slate-200 bg-white shadow-xl relative z-30">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
               <div className="space-y-2">
                 <label className="text-xs font-bold text-slate-700 mb-1 block uppercase tracking-wider">🏢 Filter Cabang / Grup:</label>
@@ -727,7 +854,7 @@ Pelanggan,Toko A,-6.210000,106.820000,15,08:00-12:00,30`}
             const bestObj = currentGroup.methods?.find((m: any) => m.method === bestMethodName) || currentGroup.methods?.[0];
 
             return (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="no-export grid grid-cols-2 md:grid-cols-4 gap-4">
                 <KPICard
                   title="Metode Terbaik"
                   value={bestMethodName?.split('+')[0]?.trim() || '—'}
@@ -799,7 +926,7 @@ Pelanggan,Toko A,-6.210000,106.820000,15,08:00-12:00,30`}
                           toast.success(`Menyoroti rute dari metode terbaik: ${bestMethodName}`);
                         }
                       }}
-                      className="px-5 py-3 rounded-xl bg-gradient-to-r from-emerald-400 to-teal-400 hover:from-emerald-500 hover:to-teal-500 text-slate-950 font-black text-xs sm:text-sm transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 active:scale-95"
+                      className="no-export px-5 py-3 rounded-xl bg-gradient-to-r from-emerald-400 to-teal-400 hover:from-emerald-500 hover:to-teal-500 text-slate-950 font-black text-xs sm:text-sm transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 active:scale-95"
                     >
                       <CheckCircle2 className="w-5 h-5 stroke-[2.5]" />
                       Sorot Peta Rute Terbaik Ini
@@ -811,7 +938,7 @@ Pelanggan,Toko A,-6.210000,106.820000,15,08:00-12:00,30`}
           })()}
 
           {/* Method Comparison Table */}
-          <GlassCard>
+          <GlassCard className="no-export">
             <h3 className="text-lg font-bold mb-4 flex items-center gap-2 uppercase tracking-wide">
               <BarChart3 className="w-5 h-5 text-primary" />
               Perbandingan Metode
@@ -873,7 +1000,7 @@ Pelanggan,Toko A,-6.210000,106.820000,15,08:00-12:00,30`}
               </GlassCard>
 
               {/* Dedicated vs Optimized Routes Breakdown Table */}
-              <GlassCard>
+              <GlassCard className="no-export">
                 <h3 className="text-lg font-bold mb-4 flex items-center gap-2 uppercase tracking-wide">
                   <Truck className="w-5 h-5 text-primary" />
                   Daftar Armada & Pembagian Rute — {results[selectedGroup].methods[selectedMethod].method}
@@ -944,7 +1071,7 @@ Pelanggan,Toko A,-6.210000,106.820000,15,08:00-12:00,30`}
               </GlassCard>
 
               {/* MASTER CATALOG: ALL ROUTES FROM ALL METHODS WITH BEST BADGE */}
-              <GlassCard className="p-6 border-slate-200 bg-white shadow-2xl my-6">
+              <GlassCard className="no-export p-6 border-slate-200 bg-white shadow-2xl my-6">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 pb-4 mb-6 gap-3">
                   <div>
                     <h3 className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2.5 uppercase tracking-wide">
