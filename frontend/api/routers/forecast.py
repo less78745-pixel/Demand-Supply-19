@@ -41,10 +41,29 @@ async def analyze_forecast(file: UploadFile = File(...), db: Session = Depends(g
         
         # Validate and clean
         validate_forecast_schema(df)
-        df_clean = clean_forecast_data(df)
-        
+        df_clean, date_parse_failures = clean_forecast_data(df)
+
+        if df_clean.empty:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"Semua {len(df)} baris gagal diproses karena kolom 'Bulan' tidak terbaca sebagai "
+                    "tanggal yang valid. Periksa format tanggalnya (contoh yang didukung: '2026-01-01', "
+                    "'Januari 2026', 'Jan-2026')."
+                ),
+            )
+
         # Run heavy ML computation in a separate thread to avoid blocking the event loop
         results = await asyncio.to_thread(run_forecast_pipeline, df_clean)
+
+        if date_parse_failures:
+            total_failures = date_parse_failures + results.get('date_parse_failures', 0)
+            results['date_parse_failures'] = total_failures
+            results.setdefault('ai_insights', []).insert(
+                0,
+                f"⚠️ {total_failures} dari {len(df)} baris dibuang karena kolom 'Bulan' tidak terbaca sebagai "
+                "tanggal valid — baris lainnya tetap diproses normal.",
+            )
         
         # Save to DB for global visibility
         try:

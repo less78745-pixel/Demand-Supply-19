@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import math
 from datetime import datetime, timedelta
+from utils.imputation import parse_flexible_date_series
 
 
 def _safe_float(v):
@@ -103,29 +104,41 @@ def analyze_landed_cost(tracking_df: pd.DataFrame, allocation_df: pd.DataFrame, 
     allocation_df['Volume_CBM'] = pd.to_numeric(allocation_df['Volume_CBM'], errors='coerce').fillna(0.01)
     
     today = datetime.now()
-    
+
+    # Parse once, up front, with the same flexible/robust parser used elsewhere
+    # (handles Indonesian month names, 'Mon-YY' short forms, Excel serial dates).
+    eta_col, _ = parse_flexible_date_series(tracking_df['ETA_Port'])
+    free_end_col, _ = parse_flexible_date_series(tracking_df['Free_Time_End'])
+    tracking_df = tracking_df.copy()
+    tracking_df['_ETA_Parsed'] = eta_col
+    tracking_df['_FreeEnd_Parsed'] = free_end_col
+
     # ── Process each container ──
     containers = []
     sku_costs = []
     demurrage_alerts = []
-    
+    date_quality_issues = []
+
     for _, t_row in tracking_df.iterrows():
         bl = str(t_row['No_BL'])
         container = str(t_row.get('No_Container', '-'))
         status = str(t_row.get('Status', 'On Water'))
         cabang = str(t_row.get('Cabang_Tujuan', 'Jakarta'))
-        
-        # Parse dates
-        try:
-            eta = pd.to_datetime(t_row['ETA_Port'])
-        except Exception:
+
+        eta = t_row['_ETA_Parsed']
+        free_end = t_row['_FreeEnd_Parsed']
+        # An ETA/Free Time we can't parse is a data-quality problem, not a safe
+        # container — silently substituting "today + 14 days" here used to make
+        # containers that were actually critically overdue (or whose real date
+        # just used a format the parser didn't expect) look perfectly on schedule.
+        has_bad_date = pd.isna(eta) or pd.isna(free_end)
+        if has_bad_date:
+            date_quality_issues.append({"no_bl": bl, "no_container": container})
+        if pd.isna(eta):
             eta = today + timedelta(days=14)
-        
-        try:
-            free_end = pd.to_datetime(t_row['Free_Time_End'])
-        except Exception:
+        if pd.isna(free_end):
             free_end = eta + timedelta(days=7)
-        
+
         # Total costs in USD
         freight = float(t_row['Freight_Cost_USD'])
         duty = float(t_row['Duty_USD'])
@@ -136,8 +149,11 @@ def analyze_landed_cost(tracking_df: pd.DataFrame, allocation_df: pd.DataFrame, 
         
         # Demurrage countdown
         days_remaining = (free_end - today).days
-        is_demurrage_risk = days_remaining <= 3
-        
+        # A container whose real dates we couldn't parse is treated as a risk
+        # by default (needs a human to check it) instead of silently reporting
+        # whatever the fabricated placeholder date happens to compute to.
+        is_demurrage_risk = has_bad_date or days_remaining <= 3
+
         if is_demurrage_risk:
             demurrage_alerts.append({
                 'no_bl': bl,
@@ -146,9 +162,10 @@ def analyze_landed_cost(tracking_df: pd.DataFrame, allocation_df: pd.DataFrame, 
                 'free_time_end': free_end.strftime('%Y-%m-%d'),
                 'days_remaining': max(days_remaining, 0),
                 'cabang': cabang,
-                'urgency': 'CRITICAL' if days_remaining <= 0 else 'WARNING',
+                'urgency': 'DATA_ERROR' if has_bad_date else ('CRITICAL' if days_remaining <= 0 else 'WARNING'),
+                'date_quality_issue': has_bad_date,
             })
-        
+
         containers.append({
             'no_bl': bl,
             'no_container': container,
@@ -157,6 +174,7 @@ def analyze_landed_cost(tracking_df: pd.DataFrame, allocation_df: pd.DataFrame, 
             'free_time_end': free_end.strftime('%Y-%m-%d'),
             'days_to_free_time': max(days_remaining, 0),
             'is_demurrage_risk': is_demurrage_risk,
+            'date_quality_issue': has_bad_date,
             'cabang_tujuan': cabang,
             'freight_usd': _safe_float(freight),
             'duty_usd': _safe_float(duty),
@@ -256,7 +274,7 @@ def analyze_landed_cost(tracking_df: pd.DataFrame, allocation_df: pd.DataFrame, 
         })
     
     # ── KPI ──
-    return {
+    result = {
         'containers': containers,
         'sku_costs': sku_costs,
         'demurrage_alerts': sorted(demurrage_alerts, key=lambda x: x['days_remaining']),
@@ -275,3 +293,13 @@ def analyze_landed_cost(tracking_df: pd.DataFrame, allocation_df: pd.DataFrame, 
         },
         'analysis_date': datetime.now().strftime("%Y-%m-%d %H:%M"),
     }
+
+    if date_quality_issues:
+        bls = ", ".join(d["no_bl"] for d in date_quality_issues[:15])
+        more = f", dan {len(date_quality_issues) - 15} lainnya" if len(date_quality_issues) > 15 else ""
+        result['warning'] = (
+            f"⚠️ {len(date_quality_issues)} kontainer memiliki ETA_Port/Free_Time_End yang tidak terbaca "
+            f"sebagai tanggal valid dan ditandai DATA_ERROR (dianggap berisiko sampai diperiksa manual): {bls}{more}."
+        )
+
+    return result

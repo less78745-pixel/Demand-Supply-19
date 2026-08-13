@@ -616,26 +616,22 @@ def _empty_response(reason: str) -> dict:
     }
 
 def run_forecast_pipeline(df: pd.DataFrame) -> dict:
+    date_parse_failures = 0
     try:
-        indonesian_months = {
-            'januari': 'january', 'februari': 'february', 'maret': 'march',
-            'april': 'april', 'mei': 'may', 'juni': 'june', 'juli': 'july',
-            'agustus': 'august', 'september': 'september', 'oktober': 'october',
-            'november': 'november', 'desember': 'december',
-            'jan': 'jan', 'feb': 'feb', 'mar': 'mar', 'apr': 'apr',
-            'jun': 'jun', 'jul': 'jul', 'agu': 'aug', 'agt': 'aug',
-            'sep': 'sep', 'okt': 'oct', 'nov': 'nov', 'des': 'dec',
-        }
-        bulletin_str = df['Bulan'].astype(str).str.lower().str.strip()
-        for ind, eng in indonesian_months.items():
-            bulletin_str = bulletin_str.str.replace(ind, eng, regex=False)
-        df['Bulan'] = pd.to_datetime(bulletin_str, errors='coerce')
+        # `clean_forecast_data` (called by the router before this) already
+        # parses 'Bulan' with the same flexible parser, so this is normally a
+        # no-op; it's kept as a safety net for any caller that skips that step.
+        from utils.imputation import parse_flexible_date_series
+        df['Bulan'], date_parse_failures = parse_flexible_date_series(df['Bulan'])
         df = df.dropna(subset=['Bulan'])
     except Exception:
         pass
 
     if df.empty:
-        return _empty_response("Empty dataframe after date parsing.")
+        return _empty_response(
+            "Semua baris gagal diproses: kolom 'Bulan' tidak dapat dibaca sebagai tanggal yang valid. "
+            "Periksa format tanggal di file Anda (mis. '2026-01-01', 'Januari 2026', atau 'Jan-2026')."
+        )
 
     if 'Cabang' not in df.columns:
         df['Cabang'] = 'Unknown'
@@ -740,6 +736,12 @@ def run_forecast_pipeline(df: pd.DataFrame) -> dict:
         f"Safety Stock rata-rata nasional: {avg_ss:,.0f} unit.",
     ]
 
+    if date_parse_failures:
+        insights.append(
+            f"⚠️ {date_parse_failures} baris dibuang karena kolom 'Bulan' tidak terbaca sebagai tanggal valid "
+            "— cek format tanggalnya (baris lain tetap diproses normal)."
+        )
+
     if skipped_groups:
         detail = "; ".join(f"{s['cabang']}/{s['category']} ({s['rows']} baris)" for s in skipped_groups[:15])
         more = f", dan {len(skipped_groups) - 15} lainnya" if len(skipped_groups) > 15 else ""
@@ -751,8 +753,9 @@ def run_forecast_pipeline(df: pd.DataFrame) -> dict:
     all_methods = ["SMA-3", "SES", "Trend", "SARIMA", "SARIMAX", "XGBoost", "SAMAI", "BiLSTM", "Hybrid Ensemble", "Fb Prophet", "ARIMAX", "GNN", "LightGBM", "GARCH", "Wavelet", "LSTM-GRU"]
 
     return {
-        "forecast_data":     all_combined,
-        "skipped_groups":    skipped_groups,
+        "forecast_data":         all_combined,
+        "skipped_groups":        skipped_groups,
+        "date_parse_failures":   date_parse_failures,
         "best_model":        best_global,
         "model_tally":       model_tally,
         "ai_insights":       insights,
