@@ -395,7 +395,7 @@ export default function ControlTowerPage() {
           </div>
 
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 shrink-0">
-            <TimestampBadge timestamp={results?.processed_at || new Date().toISOString()} label="Olah Terakhir:" />
+            <TimestampBadge timestamp={results?.processed_at} label="Olah Terakhir:" />
             {exportConfig
               ? <ExportHtmlButton config={exportConfig} moduleName="SCM_Control_Tower" processedAt={results?.processed_at} />
               : <ExportHtmlButton elementId="export-container" moduleName="SCM_Control_Tower" processedAt={results?.processed_at} />}

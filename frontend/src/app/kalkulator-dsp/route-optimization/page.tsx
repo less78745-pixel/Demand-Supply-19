@@ -531,7 +531,7 @@ export default function RouteOptimizationPage() {
           </div>
 
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 shrink-0">
-            <TimestampBadge timestamp={results?.[0]?.processed_at || new Date().toISOString()} label="Olah Terakhir:" />
+            <TimestampBadge timestamp={results?.[0]?.processed_at} label="Olah Terakhir:" />
             {exportConfig
               ? <ExportHtmlButton config={exportConfig} moduleName="Route_Optimization" processedAt={results?.[0]?.processed_at} />
               : <ExportHtmlButton elementId="export-container" moduleName="Route_Optimization" processedAt={results?.[0]?.processed_at} />}
@@ -771,7 +771,7 @@ Pelanggan,Toko A,-6.210000,106.820000,15,08:00-12:00,30`}
             <div>
               <h2 className="text-2xl font-bold tracking-tight">Hasil Optimasi Rute</h2>
               <div className="mt-1">
-                <TimestampBadge timestamp={results[selectedGroup]?.processed_at || new Date().toISOString()} />
+                <TimestampBadge timestamp={results[selectedGroup]?.processed_at} />
               </div>
             </div>
             <button

@@ -604,7 +604,7 @@ export default function OccupancyPage() {
           </div>
 
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 shrink-0">
-            <TimestampBadge timestamp={results?.processed_at || new Date().toISOString()} label="Olah Terakhir:" />
+            <TimestampBadge timestamp={results?.processed_at} label="Olah Terakhir:" />
             <label className="no-export w-full sm:w-auto px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2 cursor-pointer shadow-sm">
               <Download className="w-4 h-4 rotate-180" /> Buka Sesi (.dsp)
               <input type="file" accept=".dsp,.json" className="hidden" onChange={handleImportWorkspace} />
@@ -784,7 +784,7 @@ export default function OccupancyPage() {
             <h2 className="text-xl font-bold uppercase tracking-wide text-foreground flex items-center gap-2">
               📈 Hasil Analisa Occupancy & Shortage
             </h2>
-            <TimestampBadge timestamp={results.processed_at || new Date().toISOString()} />
+            <TimestampBadge timestamp={results.processed_at} />
           </div>
 
           {/* ═══ OCCUPANCY SECTION ═══ */}

@@ -1559,7 +1559,7 @@ export default function HistorySalesPage() {
           </div>
 
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-            <TimestampBadge timestamp={parsed?.processed_at || new Date().toISOString()} label="Olah Terakhir:" />
+            <TimestampBadge timestamp={parsed?.processed_at} label="Olah Terakhir:" />
             {exportConfig
               ? <ExportHtmlButton config={exportConfig} moduleName="History_Sales_Analytics" processedAt={parsed?.processed_at} />
               : <ExportHtmlButton elementId="export-container" moduleName="History_Sales_Analytics" processedAt={parsed?.processed_at} />}

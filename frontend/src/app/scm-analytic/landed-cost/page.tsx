@@ -414,7 +414,7 @@ export default function LandedCostPage() {
           </div>
 
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 shrink-0">
-            <TimestampBadge timestamp={results?.processed_at || new Date().toISOString()} label="Olah Terakhir:" />
+            <TimestampBadge timestamp={results?.processed_at} label="Olah Terakhir:" />
             {exportConfig
               ? <ExportHtmlButton config={exportConfig} moduleName="Landed_Cost_Intelligence" processedAt={results?.processed_at} />
               : <ExportHtmlButton elementId="export-container" moduleName="Landed_Cost_Intelligence" processedAt={results?.processed_at} />}

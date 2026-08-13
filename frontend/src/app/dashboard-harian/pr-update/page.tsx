@@ -1125,7 +1125,7 @@ export default function PRUpdatePage() {
           </div>
 
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-            <TimestampBadge timestamp={parsed?.processed_at || new Date().toISOString()} label="Olah Terakhir:" />
+            <TimestampBadge timestamp={parsed?.processed_at} label="Olah Terakhir:" />
             {exportConfig
               ? <ExportHtmlButton config={exportConfig} moduleName="PR_Update_Lead_Time" processedAt={parsed?.processed_at} />
               : <ExportHtmlButton elementId="export-container" moduleName="PR_Update_Lead_Time" processedAt={parsed?.processed_at} />}

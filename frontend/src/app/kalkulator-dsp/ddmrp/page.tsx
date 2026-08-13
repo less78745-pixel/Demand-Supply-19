@@ -384,7 +384,7 @@ export default function DDMRPPage() {
           </div>
 
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 shrink-0">
-            <TimestampBadge timestamp={results?.processed_at || new Date().toISOString()} label="Olah Terakhir:" />
+            <TimestampBadge timestamp={results?.processed_at} label="Olah Terakhir:" />
             {exportConfig
               ? <ExportHtmlButton config={exportConfig} moduleName="DDMRP_Buffer" processedAt={results?.processed_at} />
               : <ExportHtmlButton elementId="export-container" moduleName="DDMRP_Buffer" processedAt={results?.processed_at} />}
@@ -648,7 +648,7 @@ export default function DDMRPPage() {
                   <BarChart3 className="w-6 h-6 text-sky-400" />
                   Ringkasan Analisis DDMRP
                 </h2>
-                <TimestampBadge timestamp={results.processed_at || new Date().toISOString()} />
+                <TimestampBadge timestamp={results.processed_at} />
               </div>
               <button
                 onClick={() => {

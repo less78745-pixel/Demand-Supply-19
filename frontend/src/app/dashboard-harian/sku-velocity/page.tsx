@@ -943,7 +943,7 @@ export default function SKUVelocityPage() {
 
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
 
-            <TimestampBadge timestamp={parsed?.processed_at || new Date().toISOString()} label="Olah Terakhir:" />
+            <TimestampBadge timestamp={parsed?.processed_at} label="Olah Terakhir:" />
 
             {exportConfig
               ? <ExportHtmlButton config={exportConfig} moduleName="SKU_Velocity_Insights" processedAt={parsed?.processed_at} />

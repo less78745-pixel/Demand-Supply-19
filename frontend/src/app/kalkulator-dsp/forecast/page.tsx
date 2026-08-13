@@ -558,7 +558,7 @@ export default function ForecastPage() {
           </div>
 
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 shrink-0">
-            <TimestampBadge timestamp={results?.processed_at || new Date().toISOString()} label="Olah Terakhir:" />
+            <TimestampBadge timestamp={results?.processed_at} label="Olah Terakhir:" />
             {exportConfig
               ? <ExportHtmlButton config={exportConfig} moduleName="Demand_Forecast_ML" processedAt={results?.processed_at} />
               : <ExportHtmlButton elementId="export-container" moduleName="Demand_Forecast_ML" processedAt={results?.processed_at} />}
@@ -707,7 +707,7 @@ export default function ForecastPage() {
             <h2 className="text-xl font-bold uppercase tracking-wide text-foreground flex items-center gap-2">
               📊 Hasil Analisa Causal Forecasting ML
             </h2>
-            <TimestampBadge timestamp={results.processed_at || new Date().toISOString()} />
+            <TimestampBadge timestamp={results.processed_at} />
           </div>
 
           {results.skipped_groups && results.skipped_groups.length > 0 && (
