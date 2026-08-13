@@ -645,17 +645,36 @@ def run_forecast_pipeline(df: pd.DataFrame) -> dict:
     df['Cabang']   = df['Cabang'].astype(str).str.strip()
     df['Kategori'] = df['Kategori'].astype(str).str.strip()
 
-    test_size = 6
+    # Validation holdout adapts to how much history each Cabang+Kategori group
+    # actually has, instead of a single fixed test_size=6 (>= 9 rows minimum).
+    # A fixed threshold silently dropped every group below it with zero warning
+    # to the user — with e.g. 28 branches uploaded but only one branch having
+    # >= 9 months of history, the response would come back containing that one
+    # branch and nothing would say why the other 27 vanished.
+    MAX_TEST_SIZE = 6
+    MIN_TEST_SIZE = 2
+    MIN_TRAIN_ROWS = 3
+
     tasks = []
+    skipped_groups = []
     for cabang in df['Cabang'].unique():
         c_df = df[df['Cabang'] == cabang]
         for cat in c_df['Kategori'].unique():
             cat_df = c_df[c_df['Kategori'] == cat].copy()
-            if len(cat_df) >= test_size + 3:
-                tasks.append((cabang, cat, cat_df, test_size))
+            n_rows = len(cat_df)
+            group_test_size = min(MAX_TEST_SIZE, n_rows - MIN_TRAIN_ROWS)
+            if group_test_size >= MIN_TEST_SIZE:
+                tasks.append((cabang, cat, cat_df, group_test_size))
+            else:
+                skipped_groups.append({"cabang": cabang, "category": cat, "rows": n_rows})
 
+    min_required = MIN_TEST_SIZE + MIN_TRAIN_ROWS
     if not tasks:
-        return _empty_response("Insufficient data — each Cabang+Category needs at least 9 rows.")
+        detail = "; ".join(f"{s['cabang']}/{s['category']}: {s['rows']} baris" for s in skipped_groups[:15])
+        return _empty_response(
+            f"Semua {len(skipped_groups)} kombinasi Cabang x Kategori memiliki data historis kurang dari "
+            f"{min_required} baris (minimum untuk melatih & memvalidasi model). Detail: {detail}."
+        )
 
     all_combined = []
     overall_kpis = []
@@ -663,6 +682,7 @@ def run_forecast_pipeline(df: pd.DataFrame) -> dict:
     global_model_metrics = {}
 
     for task in tasks:
+        cabang_t, cat_t = task[0], task[1]
         try:
             res = _process_group(*task)
             if res['combined_data']:
@@ -670,7 +690,7 @@ def run_forecast_pipeline(df: pd.DataFrame) -> dict:
                 overall_kpis.append(res)
                 bm = res['best_model']
                 model_tally[bm] = model_tally.get(bm, 0) + 1
-                
+
                 # Aggregate metrics for model_comparison
                 for eval_data in res.get('model_comparison', []):
                     m_name = eval_data['model']
@@ -680,8 +700,10 @@ def run_forecast_pipeline(df: pd.DataFrame) -> dict:
                     global_model_metrics[m_name]['bias'].append(eval_data.get('bias', 0))
                     global_model_metrics[m_name]['mad'].append(eval_data.get('mad', 0))
                     global_model_metrics[m_name]['rmse'].append(eval_data.get('rmse', 0))
-        except Exception:
-            pass
+            else:
+                skipped_groups.append({"cabang": cabang_t, "category": cat_t, "rows": len(task[2]), "reason": "model produced no output"})
+        except Exception as e:
+            skipped_groups.append({"cabang": cabang_t, "category": cat_t, "rows": len(task[2]), "reason": str(e)})
 
     gc.collect()
 
@@ -708,16 +730,29 @@ def run_forecast_pipeline(df: pd.DataFrame) -> dict:
     avg_ss  = sum(x['safety_stock'] for x in overall_kpis) / len(overall_kpis) if overall_kpis else 0
     avg_rop = sum(x['rop'] for x in overall_kpis) / len(overall_kpis) if overall_kpis else 0
 
+    n_cabang_in = df['Cabang'].nunique()
+    n_cabang_out = len(set(k['cabang'] for k in overall_kpis))
+
     insights = [
         f"Model terbaik: {best_global} untuk mayoritas cabang.",
-        f"Total {len(overall_kpis)} kombinasi Cabang × Kategori berhasil diprediksi.",
+        f"Total {len(overall_kpis)} kombinasi Cabang × Kategori berhasil diprediksi "
+        f"({n_cabang_out} dari {n_cabang_in} cabang yang diupload).",
         f"Safety Stock rata-rata nasional: {avg_ss:,.0f} unit.",
     ]
+
+    if skipped_groups:
+        detail = "; ".join(f"{s['cabang']}/{s['category']} ({s['rows']} baris)" for s in skipped_groups[:15])
+        more = f", dan {len(skipped_groups) - 15} lainnya" if len(skipped_groups) > 15 else ""
+        insights.append(
+            f"⚠️ {len(skipped_groups)} kombinasi Cabang × Kategori DILEWATI karena data historis tidak cukup "
+            f"untuk melatih & memvalidasi model: {detail}{more}."
+        )
 
     all_methods = ["SMA-3", "SES", "Trend", "SARIMA", "SARIMAX", "XGBoost", "SAMAI", "BiLSTM", "Hybrid Ensemble", "Fb Prophet", "ARIMAX", "GNN", "LightGBM", "GARCH", "Wavelet", "LSTM-GRU"]
 
     return {
         "forecast_data":     all_combined,
+        "skipped_groups":    skipped_groups,
         "best_model":        best_global,
         "model_tally":       model_tally,
         "ai_insights":       insights,

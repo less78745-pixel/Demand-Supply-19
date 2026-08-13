@@ -224,9 +224,25 @@ export default function ForecastPage() {
         const XLSX = await import('xlsx');
         const buffer = await file.arrayBuffer();
         const wb = XLSX.read(buffer, { type: 'array' });
-        const ws = wb.Sheets[wb.SheetNames[0]];
-        const csvStr = XLSX.utils.sheet_to_csv(ws);
-        payloadFile = new File([csvStr], file.name.replace(/\.xlsx?$/i, '.csv'), { type: 'text/csv' });
+
+        // A workbook can split branches/cities across multiple sheets (e.g. one
+        // per region). Reading only the first sheet silently dropped every
+        // other sheet's rows - concatenate all non-empty sheets under the
+        // first sheet's header instead.
+        let header: unknown[] | null = null;
+        const allRows: unknown[][] = [];
+        for (const sheetName of wb.SheetNames) {
+          const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1 }) as unknown[][];
+          if (!rows || rows.length === 0) continue;
+          if (!header) header = rows[0];
+          allRows.push(...rows.slice(1));
+        }
+
+        if (header) {
+          const combinedSheet = XLSX.utils.aoa_to_sheet([header, ...allRows]);
+          const csvStr = XLSX.utils.sheet_to_csv(combinedSheet);
+          payloadFile = new File([csvStr], file.name.replace(/\.xlsx?$/i, '.csv'), { type: 'text/csv' });
+        }
       }
 
       toast.loading('Training ML Models (SMA, SES, SARIMAX, XGBoost) per Cabang & Kategori...', { id: 'forecast-upload' });
@@ -693,6 +709,23 @@ export default function ForecastPage() {
             </h2>
             <TimestampBadge timestamp={results.processed_at || new Date().toISOString()} />
           </div>
+
+          {results.skipped_groups && results.skipped_groups.length > 0 && (
+            <div className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
+              <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div className="text-sm text-amber-900">
+                <p className="font-semibold">
+                  {results.skipped_groups.length} kombinasi Cabang × Kategori dilewati (data historis terlalu pendek untuk dilatih & divalidasi)
+                </p>
+                <p className="mt-1 text-amber-800">
+                  {results.skipped_groups.slice(0, 8).map((s: any) => `${s.cabang}/${s.category} (${s.rows} baris)`).join(', ')}
+                  {results.skipped_groups.length > 8 ? `, dan ${results.skipped_groups.length - 8} lainnya` : ''}.
+                  {' '}Tambahkan lebih banyak riwayat bulan untuk cabang ini agar ikut terprediksi.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* KPI Row (frozen snapshot — a live, filterable copy is generated in the offline export section below) */}
           <div className="no-export grid md:grid-cols-4 gap-6">
             <KPICard title="Majority Best Model" value={results.best_model} icon={<Cpu />} />
