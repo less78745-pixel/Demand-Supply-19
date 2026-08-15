@@ -56,9 +56,9 @@ async def analyze_landed_cost_endpoint(
         try:
             result_str = json.dumps(result)
             db_result = ProcessedResult(module="landed_cost", result_json=result_str)
-            # db.add(db_result)
-            # db.commit()
-            # db.refresh(db_result)
+            db.add(db_result)
+            db.commit()
+            db.refresh(db_result)
             result["processed_at"] = (db_result.created_at or datetime.now()).isoformat()
         except Exception as e:
             print("Failed to save to DB:", e)

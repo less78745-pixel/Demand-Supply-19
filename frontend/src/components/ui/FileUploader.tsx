@@ -15,9 +15,13 @@ interface FileUploaderProps {
   description?: string;
   templateCsv?: string;
   templateName?: string;
-  /** Vercel Serverless Functions hard-cap request/response bodies at 4.5MB.
-   *  Reject oversized files client-side with a clear message instead of
-   *  letting the upload fail server-side with a cryptic 413. */
+  /** Raw file size accepted at the dropzone. Excel workbooks carry heavy XML/
+   *  styling overhead vs. their actual data, so this is intentionally well
+   *  above the server's payload cap - `prepareUploadFile()` (lib/api.ts)
+   *  converts Excel to CSV and enforces the real ~4MB post-conversion limit
+   *  right before the network request, with an actionable error if a file is
+   *  still too large after conversion. This dropzone cap only exists to reject
+   *  obviously-wrong files (e.g. a 200MB dump) early. */
   maxSizeMB?: number;
 }
 
@@ -33,7 +37,7 @@ export function FileUploader({
   description = "Drag & drop an Excel file here, or click to select",
   templateCsv,
   templateName = "template.csv",
-  maxSizeMB = 4,
+  maxSizeMB = 30,
 }: FileUploaderProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [rejectionError, setRejectionError] = useState<string | null>(null);
@@ -43,7 +47,7 @@ export function FileUploader({
   const onDrop = useCallback((acceptedFiles: File[], fileRejections: any[]) => {
     if (fileRejections.length > 0) {
       const reason = fileRejections[0]?.errors?.[0]?.code === 'file-too-large'
-        ? `File terlalu besar (maks ${maxSizeMB}MB). Kurangi jumlah baris/minggu lalu coba lagi.`
+        ? `File terlalu besar (maks ${maxSizeMB}MB). Pecah file menjadi beberapa bagian (mis. per cabang/periode) lalu coba lagi.`
         : 'File tidak didukung. Gunakan format Excel (.xlsx/.xls) atau CSV.';
       setRejectionError(reason);
       setSelectedFile(null);

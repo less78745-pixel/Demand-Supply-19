@@ -7,7 +7,7 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { FileUploader } from '@/components/ui/FileUploader';
 import { KPICard } from '@/components/ui/KPICard';
 import { LineChart, Info, AlertTriangle, Cpu, Target, BrainCircuit, Download, BookOpen, ChevronDown, ChevronUp, Sparkles, HelpCircle, FileSpreadsheet, Zap, TrendingUp, TrendingDown, Cloud } from 'lucide-react';
-import { uploadForecastFile } from '@/lib/api';
+import { uploadForecastFile, fetchForecastPage } from '@/lib/api';
 import { MultiSelect } from '@/components/ui/MultiSelect';
 import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import toast from 'react-hot-toast';
@@ -104,6 +104,56 @@ function generateDemoForecast() {
     ],
     model_tally: { 'Hybrid Ensemble': 14, 'XGBoost': 8, 'Fb Prophet': 5 }
   };
+}
+
+/**
+ * `/analyze/forecast` only returns the first `forecast_data_page_size` rows
+ * for large uploads (Vercel's 4.5MB response cap) plus a `result_id` for the
+ * full, untruncated result stored server-side. This assembles the complete
+ * `forecast_data` array so every downstream consumer (table, charts, Excel
+ * export) sees the same shape it always has - just filled in over a few
+ * extra requests instead of one giant one.
+ *
+ * Prefers a single direct Supabase row read (not subject to Vercel's cap)
+ * and only falls back to paging through the FastAPI endpoint if that fails.
+ */
+async function fetchFullForecastData(initialData: any, onProgress?: (loaded: number, total: number) => void): Promise<any> {
+  if (!initialData?.result_id || !initialData?.forecast_data_has_more) {
+    return initialData;
+  }
+
+  try {
+    const { data: row, error } = await supabase
+      .from('processed_results')
+      .select('result_json, created_at')
+      .eq('id', initialData.result_id)
+      .single();
+
+    if (!error && row?.result_json) {
+      const full = JSON.parse(row.result_json);
+      full.processed_at = row.created_at || initialData.processed_at;
+      full.result_id = initialData.result_id;
+      return full;
+    }
+  } catch (e) {
+    console.warn('Direct Supabase fetch of full forecast result failed, paging via API instead', e);
+  }
+
+  const merged = { ...initialData, forecast_data: [...(initialData.forecast_data || [])] };
+  const total = initialData.forecast_data_total_rows ?? merged.forecast_data.length;
+  const pageSize = initialData.forecast_data_page_size || 8000;
+  let offset = merged.forecast_data.length;
+
+  while (offset < total) {
+    const page = await fetchForecastPage(initialData.result_id, offset, pageSize);
+    merged.forecast_data.push(...(page.data || []));
+    offset += page.data?.length || pageSize;
+    onProgress?.(merged.forecast_data.length, total);
+    if (!page.data || page.data.length === 0) break; // safety net against an infinite loop
+  }
+
+  merged.forecast_data_has_more = false;
+  return merged;
 }
 
 export default function ForecastPage() {
@@ -217,40 +267,24 @@ export default function ForecastPage() {
     toast.loading('Mempersiapkan data (Optimasi Payload)...', { id: 'forecast-upload' });
 
     try {
-      let payloadFile = file;
-      
-      // Mengubah file Excel menjadi CSV di frontend agar terhindar dari limit 4.5MB Vercel (413 Payload Too Large)
-      if (file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls')) {
-        const XLSX = await import('xlsx');
-        const buffer = await file.arrayBuffer();
-        const wb = XLSX.read(buffer, { type: 'array' });
-
-        // A workbook can split branches/cities across multiple sheets (e.g. one
-        // per region). Reading only the first sheet silently dropped every
-        // other sheet's rows - concatenate all non-empty sheets under the
-        // first sheet's header instead.
-        let header: unknown[] | null = null;
-        const allRows: unknown[][] = [];
-        for (const sheetName of wb.SheetNames) {
-          const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1 }) as unknown[][];
-          if (!rows || rows.length === 0) continue;
-          if (!header) header = rows[0];
-          allRows.push(...rows.slice(1));
-        }
-
-        if (header) {
-          const combinedSheet = XLSX.utils.aoa_to_sheet([header, ...allRows]);
-          const csvStr = XLSX.utils.sheet_to_csv(combinedSheet);
-          payloadFile = new File([csvStr], file.name.replace(/\.xlsx?$/i, '.csv'), { type: 'text/csv' });
-        }
-      }
-
+      // uploadForecastFile (lib/api.ts) converts Excel -> CSV and merges all
+      // sheets under the first sheet's header before upload, so large/multi-
+      // sheet workbooks stay under the server's payload cap.
       toast.loading('Training ML Models (SMA, SES, SARIMAX, XGBoost) per Cabang & Kategori...', { id: 'forecast-upload' });
 
-      const data = await uploadForecastFile(payloadFile);
+      let data = await uploadForecastFile(file);
       if (data.error) {
         toast.error(data.error, { id: 'forecast-upload' });
       } else {
+        if (data.forecast_data_has_more) {
+          toast.loading(
+            `Memuat sisa data (${data.forecast_data.length}/${data.forecast_data_total_rows} baris)...`,
+            { id: 'forecast-upload' }
+          );
+          data = await fetchFullForecastData(data, (loaded, total) => {
+            toast.loading(`Memuat sisa data (${loaded}/${total} baris)...`, { id: 'forecast-upload' });
+          });
+        }
         data.processed_at = data.processed_at || new Date().toISOString();
         setResults(data);
         setSelectedMethod(data.best_model);
@@ -710,17 +744,37 @@ export default function ForecastPage() {
             <TimestampBadge timestamp={results.processed_at} />
           </div>
 
+          {/* Every uploaded Cabang x Kategori combination is forecasted now, no matter how
+              little history it has - this only shows for genuine processing failures. */}
           {results.skipped_groups && results.skipped_groups.length > 0 && (
             <div className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
               <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
               <div className="text-sm text-amber-900">
                 <p className="font-semibold">
-                  {results.skipped_groups.length} kombinasi Cabang × Kategori dilewati (data historis terlalu pendek untuk dilatih & divalidasi)
+                  {results.skipped_groups.length} kombinasi Cabang × Kategori gagal diproses karena error teknis
                 </p>
                 <p className="mt-1 text-amber-800">
-                  {results.skipped_groups.slice(0, 8).map((s: any) => `${s.cabang}/${s.category} (${s.rows} baris)`).join(', ')}
+                  {results.skipped_groups.slice(0, 8).map((s: any) => `${s.cabang}/${s.category} (${s.rows} baris)${s.reason ? `: ${s.reason}` : ''}`).join(', ')}
                   {results.skipped_groups.length > 8 ? `, dan ${results.skipped_groups.length - 8} lainnya` : ''}.
-                  {' '}Tambahkan lebih banyak riwayat bulan untuk cabang ini agar ikut terprediksi.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Groups with too little history to hold out a real backtest are still
+              forecasted (see the `validated` flag on each row) - this is informational,
+              not a failure, so it's styled as an info banner rather than a warning. */}
+          {results.low_confidence_groups && results.low_confidence_groups.length > 0 && (
+            <div className="flex items-start gap-3 rounded-xl border border-sky-300 bg-sky-50 px-4 py-3">
+              <Info className="w-5 h-5 text-sky-600 shrink-0 mt-0.5" />
+              <div className="text-sm text-sky-900">
+                <p className="font-semibold">
+                  {results.low_confidence_groups.length} kombinasi Cabang × Kategori tetap diprediksi walau riwayat pendek (&lt; 5 bulan)
+                </p>
+                <p className="mt-1 text-sky-800">
+                  {results.low_confidence_groups.slice(0, 8).map((s: any) => `${s.cabang}/${s.category} (${s.rows} baris)`).join(', ')}
+                  {results.low_confidence_groups.length > 8 ? `, dan ${results.low_confidence_groups.length - 8} lainnya` : ''}.
+                  {' '}MAPE/RMSE untuk kombinasi ini belum melalui validasi backtest penuh, jadi kurang bisa diandalkan — tambahkan lebih banyak riwayat bulan untuk hasil yang lebih akurat.
                 </p>
               </div>
             </div>

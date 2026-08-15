@@ -21,6 +21,25 @@ def haversine(lat1, lon1, lat2, lon2):
     
     return R * c
 
+# Vectorized haversine (same formula as `haversine` above, but over whole
+# numpy arrays at once) - `simulate_network` used to call the scalar version
+# through `df.apply(..., axis=1)`, which is still a per-row Python-level loop
+# under the hood and doesn't scale to large customer uploads.
+def haversine_vec(lat1, lon1, lat2, lon2):
+    R = 6371.0
+    lat1_rad = np.radians(lat1)
+    lon1_rad = np.radians(lon1)
+    lat2_rad = np.radians(lat2)
+    lon2_rad = np.radians(lon2)
+
+    dlon = lon2_rad - lon1_rad
+    dlat = lat2_rad - lat1_rad
+
+    a = np.sin(dlat / 2) ** 2 + np.cos(lat1_rad) * np.cos(lat2_rad) * np.sin(dlon / 2) ** 2
+    c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
+
+    return R * c
+
 # Function to calculate new coordinate given starting point, distance, and bearing
 def get_destination_point(lat, lon, distance, bearing_degrees):
     R = 6371.0
@@ -126,15 +145,15 @@ def simulate_network(data, num_hubs=3):
     # 3. Calculate Distances and Costs
     # Scenario A: 1 Central Hub
     central = data['central_hub']
-    df['dist_central'] = df.apply(lambda r: haversine(r['lat'], r['lon'], central['lat'], central['lon']), axis=1)
+    df['dist_central'] = haversine_vec(df['lat'].values, df['lon'].values, central['lat'], central['lon'])
     df['cost_central'] = df['dist_central'] * df['volume'] * data['cost_per_cbm_km']
-    
+
     # Scenario B: N Decentralized Hubs
-    def dist_to_assigned_hub(row):
-        hub = hubs[int(row['cluster'])]
-        return haversine(row['lat'], row['lon'], hub['lat'], hub['lon'])
-        
-    df['dist_decentral'] = df.apply(dist_to_assigned_hub, axis=1)
+    hub_lats = np.array([h['lat'] for h in hubs])
+    hub_lons = np.array([h['lon'] for h in hubs])
+    assigned_lat = hub_lats[df['cluster'].values]
+    assigned_lon = hub_lons[df['cluster'].values]
+    df['dist_decentral'] = haversine_vec(df['lat'].values, df['lon'].values, assigned_lat, assigned_lon)
     df['cost_decentral'] = df['dist_decentral'] * df['volume'] * data['cost_per_cbm_km']
     
     total_cost_central = df['cost_central'].sum()
@@ -242,28 +261,34 @@ def parse_wh_trans_file(file_bytes, cost_per_cbm, max_capacity=None):
         raise ValueError("Sheet 'Demand' not found")
     df_demand = pd.read_excel(xls, 'Demand')
     # Expected columns: ID_Customer, Latitude, Longitude, Volume_Demand_Bulanan
-    customers = []
-    for _, row in df_demand.iterrows():
-        customers.append({
-            'id': str(row.get('ID_Customer', '')),
-            'lat': float(row['Latitude']),
-            'lon': float(row['Longitude']),
-            'volume': float(row['Volume_Demand_Bulanan'])
-        })
-        
+    # Vectorized instead of a per-row iterrows() loop building dicts one at a
+    # time - a large customer upload (thousands of rows) shouldn't pay for a
+    # Python-level loop just to reshape columns into records.
+    # `.map(str)` (not `.astype(str)`) to match the original per-row `str(value)`
+    # exactly, including turning an actual NaN cell into the string 'nan' -
+    # `.astype(str)` has special NA-preserving behavior that leaves NaN as NaN.
+    id_col = df_demand['ID_Customer'].map(str) if 'ID_Customer' in df_demand.columns else pd.Series([''] * len(df_demand))
+    customers = pd.DataFrame({
+        'id': id_col.values,
+        'lat': df_demand['Latitude'].astype(float).values,
+        'lon': df_demand['Longitude'].astype(float).values,
+        'volume': df_demand['Volume_Demand_Bulanan'].astype(float).values,
+    }).to_dict('records')
+
     # 2. RedZones
     red_zones = []
     if 'RedZone' in xls.sheet_names:
         df_rz = pd.read_excel(xls, 'RedZone')
         # Expected: ID_Zone, Latitude, Longitude, Radius
-        for _, row in df_rz.iterrows():
-            red_zones.append({
-                'id': str(row.get('ID_Zone', '')),
-                'name': str(row.get('ID_Zone', 'RedZone')),
-                'lat': float(row['Latitude']),
-                'lon': float(row['Longitude']),
-                'radius': float(row['Radius'])
-            })
+        rz_id_col = df_rz['ID_Zone'].map(str) if 'ID_Zone' in df_rz.columns else pd.Series([''] * len(df_rz))
+        rz_name_col = df_rz['ID_Zone'].map(str) if 'ID_Zone' in df_rz.columns else pd.Series(['RedZone'] * len(df_rz))
+        red_zones = pd.DataFrame({
+            'id': rz_id_col.values,
+            'name': rz_name_col.values,
+            'lat': df_rz['Latitude'].astype(float).values,
+            'lon': df_rz['Longitude'].astype(float).values,
+            'radius': df_rz['Radius'].astype(float).values,
+        }).to_dict('records')
             
     # 3. Supply (Optional for calculating central hub)
     # For Central Hub, we can either use the first supply point or the average of demand

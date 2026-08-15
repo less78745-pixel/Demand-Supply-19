@@ -127,109 +127,112 @@ def analyze_safety_stock(df: pd.DataFrame, service_level: float = 0.95) -> dict:
     # Fill NaN std with 0 (single data point)
     grouped['Std_Usage'] = grouped['Std_Usage'].fillna(0)
     
+    # ── Vectorized per-(Cabang, SKU) calculations ──
+    # This used to loop row-by-row with `grouped.iterrows()`. That loop is
+    # bounded by distinct (Cabang, SKU) pairs rather than raw uploaded rows,
+    # but a full SKU-level catalog across many branches can still reach the
+    # tens/hundreds of thousands of pairs, where the per-row Series
+    # construction overhead of iterrows() adds up. Every calculation below is
+    # pure elementwise arithmetic, so it vectorizes directly with identical
+    # output.
+    adu           = grouped['ADU'].astype(float).clip(lower=0)
+    std_usage     = grouped['Std_Usage'].astype(float).clip(lower=0)
+    lt            = grouped['Lead_Time'].astype(float).clip(lower=1)
+    current_stock = grouped['Current_Stock'].astype(float).clip(lower=0)
+    in_transit    = grouped['In_Transit'].astype(float).clip(lower=0)
+    backorder     = grouped['Backorder'].astype(float).clip(lower=0)
+    moq           = grouped['MOQ'].astype(float).clip(lower=0)
+    order_cycle   = grouped['Order_Cycle'].astype(float).clip(lower=7)  # default 7 days
+
+    # SS = Z × σ_demand × √Lead_Time
+    safety_stock_v = z_score * std_usage * np.sqrt(lt)
+    # ROP = (ADU × LT) + SS
+    rop_v = (adu * lt) + safety_stock_v
+    # Lead Time Factor: based on variability (higher = more buffer)
+    lt_variability_factor = (std_usage / (adu + 0.001)).clip(lower=0.1, upper=0.8)
+    # Yellow Zone = ADU × Lead_Time (primary coverage)
+    yellow_zone_v = adu * lt
+    # Red Zone = Yellow × LT_Factor × Variability_Factor (safety buffer),
+    # at minimum equal to safety stock
+    red_zone_v = np.maximum(yellow_zone_v * lt_variability_factor, safety_stock_v)
+    # Green Zone = max(ADU × Order_Cycle, MOQ) (order generation)
+    green_zone_v = np.maximum(adu * order_cycle, moq)
+    top_of_buffer_v = red_zone_v + yellow_zone_v + green_zone_v
+    net_flow_v = current_stock + in_transit - backorder
+
+    status_v = pd.Series(np.select(
+        [net_flow_v <= red_zone_v, net_flow_v <= (red_zone_v + yellow_zone_v), net_flow_v <= top_of_buffer_v],
+        ["CRITICAL", "WARNING", "SAFE"], default="OVERSTOCK"
+    ), index=grouped.index)
+    status_color_v = pd.Series(np.select(
+        [status_v == "CRITICAL", status_v == "WARNING", status_v == "SAFE"],
+        ["red", "yellow", "green"], default="blue"
+    ), index=grouped.index)
+
+    safe_adu = adu.where(adu > 0, 1.0)
+    dos_v = np.where(adu.values > 0, current_stock / safe_adu, 999.0)
+    dos_capped_v = np.minimum(dos_v, 999)
+    needs_reorder_v = net_flow_v <= rop_v
+    qty_to_order_v = np.maximum(top_of_buffer_v - net_flow_v, moq)
+
+    cabang_v = grouped['Cabang'].astype(str)
+    sku_v = grouped['SKU'].astype(str)
+
     results = []
     alerts = []
     zone_data = []
     lead_time_matrix = []
-    
-    for _, row in grouped.iterrows():
-        cabang = str(row['Cabang'])
-        sku = str(row['SKU'])
-        adu = max(float(row['ADU']), 0)
-        std_usage = max(float(row['Std_Usage']), 0)
-        lt = max(float(row['Lead_Time']), 1)
-        current_stock = max(float(row['Current_Stock']), 0)
-        in_transit = max(float(row['In_Transit']), 0)
-        backorder = max(float(row['Backorder']), 0)
-        moq = max(float(row['MOQ']), 0)
-        order_cycle = max(float(row['Order_Cycle']), 7)  # default 7 days
-        
-        # ── Safety Stock Calculation ──
-        # SS = Z × σ_demand × √Lead_Time
-        safety_stock = z_score * std_usage * math.sqrt(lt)
-        
-        # ── Reorder Point ──
-        # ROP = (ADU × LT) + SS
-        rop = (adu * lt) + safety_stock
-        
-        # ── DDMRP Zones ──
-        # Lead Time Factor: based on variability (higher = more buffer)
-        lt_variability_factor = min(max(std_usage / (adu + 0.001), 0.1), 0.8)
-        
-        # Yellow Zone = ADU × Lead_Time (primary coverage)
-        yellow_zone = adu * lt
-        
-        # Red Zone = Yellow × LT_Factor × Variability_Factor (safety buffer)
-        red_zone = yellow_zone * lt_variability_factor
-        red_zone = max(red_zone, safety_stock)  # At minimum, equal to safety stock
-        
-        # Green Zone = max(ADU × Order_Cycle, MOQ) (order generation)
-        green_zone = max(adu * order_cycle, moq)
-        
-        # Top of Buffer
-        top_of_buffer = red_zone + yellow_zone + green_zone
-        
-        # ── Net Flow Position ──
-        net_flow = current_stock + in_transit - backorder
-        
-        # ── Status determination ──
-        if net_flow <= red_zone:
-            status = "CRITICAL"
-            status_color = "red"
-        elif net_flow <= (red_zone + yellow_zone):
-            status = "WARNING"
-            status_color = "yellow"
-        elif net_flow <= top_of_buffer:
-            status = "SAFE"
-            status_color = "green"
-        else:
-            status = "OVERSTOCK"
-            status_color = "blue"
-        
-        # ── Days of Supply ──
-        dos = (current_stock / adu) if adu > 0 else 999
-        
+
+    for i in range(len(grouped)):
+        cabang = cabang_v.iat[i]
+        sku = sku_v.iat[i]
+        status = status_v.iat[i]
+        status_color = status_color_v.iat[i]
+        needs_reorder = bool(needs_reorder_v.iat[i])
+        dos_capped = float(dos_capped_v[i])
+        rop = float(rop_v.iat[i])
+        net_flow = float(net_flow_v.iat[i])
+        adu_i = float(adu.iat[i])
+
         # ── Alert if below ROP ──
-        needs_reorder = net_flow <= rop
-        if needs_reorder and adu > 0:
-            qty_to_order = max(top_of_buffer - net_flow, moq)
+        if needs_reorder and adu_i > 0:
             alerts.append({
                 "cabang": cabang,
                 "sku": sku,
-                "current_stock": _safe_float(current_stock),
+                "current_stock": _safe_float(current_stock.iat[i]),
                 "rop": _safe_float(rop),
                 "deficit": _safe_float(rop - net_flow),
-                "suggested_order_qty": _safe_float(qty_to_order),
-                "days_of_supply": _safe_float(min(dos, 999)),
+                "suggested_order_qty": _safe_float(qty_to_order_v.iat[i]),
+                "days_of_supply": _safe_float(dos_capped),
                 "urgency": "URGENT" if status == "CRITICAL" else "MONITOR",
             })
-        
+
         results.append({
             "cabang": cabang,
             "sku": sku,
-            "adu": _safe_float(adu),
-            "std_usage": _safe_float(std_usage),
-            "lead_time": _safe_float(lt),
+            "adu": _safe_float(adu_i),
+            "std_usage": _safe_float(std_usage.iat[i]),
+            "lead_time": _safe_float(lt.iat[i]),
             "z_score": _safe_float(z_score),
-            "safety_stock": _safe_float(safety_stock),
+            "safety_stock": _safe_float(safety_stock_v.iat[i]),
             "rop": _safe_float(rop),
-            "current_stock": _safe_float(current_stock),
-            "in_transit": _safe_float(in_transit),
-            "backorder": _safe_float(backorder),
+            "current_stock": _safe_float(current_stock.iat[i]),
+            "in_transit": _safe_float(in_transit.iat[i]),
+            "backorder": _safe_float(backorder.iat[i]),
             "net_flow": _safe_float(net_flow),
-            "dos": _safe_float(min(dos, 999)),
+            "dos": _safe_float(dos_capped),
             "status": status,
             "status_color": status_color,
             "needs_reorder": needs_reorder,
         })
-        
+
         zone_data.append({
             "cabang": cabang,
             "sku": sku,
-            "red_zone": _safe_float(red_zone),
-            "yellow_zone": _safe_float(yellow_zone),
-            "green_zone": _safe_float(green_zone),
-            "top_of_buffer": _safe_float(top_of_buffer),
+            "red_zone": _safe_float(red_zone_v.iat[i]),
+            "yellow_zone": _safe_float(yellow_zone_v.iat[i]),
+            "green_zone": _safe_float(green_zone_v.iat[i]),
+            "top_of_buffer": _safe_float(top_of_buffer_v.iat[i]),
             "net_flow": _safe_float(net_flow),
             "status": status,
         })
@@ -262,13 +265,14 @@ def analyze_safety_stock(df: pd.DataFrame, service_level: float = 0.95) -> dict:
     reorder_count = sum(1 for r in results if r['needs_reorder'])
     
     # ── Service Level Simulation ──
+    # Was recomputing `grouped.iterrows()` from scratch for each of the 6
+    # service levels; `std_usage`/`lt` above are the same (non-negative,
+    # >=1-clamped) values `row['Std_Usage']`/`max(row['Lead_Time'], 1)` used
+    # per-row, so the per-service-level total is just their vectorized sum.
     simulations = []
     for sl in [0.90, 0.93, 0.95, 0.97, 0.98, 0.99]:
         z = _get_z_score(sl)
-        total_ss = sum(
-            z * float(row['Std_Usage']) * math.sqrt(max(float(row['Lead_Time']), 1))
-            for _, row in grouped.iterrows()
-        )
+        total_ss = float((z * std_usage * np.sqrt(lt)).sum())
         simulations.append({
             "service_level": f"{int(sl*100)}%",
             "z_score": round(z, 3),

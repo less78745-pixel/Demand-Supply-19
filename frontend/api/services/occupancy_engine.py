@@ -3,8 +3,6 @@ import io
 import math
 import base64
 from datetime import datetime, timedelta
-import pandas as pd
-import numpy as np
 
 from openpyxl import load_workbook, Workbook
 from openpyxl.utils import get_column_letter
@@ -101,7 +99,7 @@ def get_wh_rows(ws_wh: Worksheet):
     for idx, row in enumerate(ws_wh.iter_rows(min_row=2, max_col=2, values_only=True), start=2):
         val1 = row[0] if len(row) > 0 else None
         cabang = row[1] if len(row) > 1 else None
-        if val1 in (None, "") or cabang in (None, ""):
+        if cabang in (None, ""):
             continue
         rows.append(idx)
     return rows
@@ -159,7 +157,7 @@ def read_wh_capacity(ws_wh: Worksheet):
     for row in ws_wh.iter_rows(min_row=2, max_col=4, values_only=True):
         val = row[0] if len(row) > 0 else None
         cabang = row[1] if len(row) > 1 else None
-        if val in (None, "") or cabang in (None, ""):
+        if cabang in (None, ""):
             continue
         existing = row[2] if len(row) > 2 and row[2] is not None else 0
         tambahan = row[3] if len(row) > 3 and row[3] is not None else 0
@@ -234,28 +232,24 @@ def style_header_cell(ws, row, col, text, fill=None):
         c.fill = fill
     return c
 
-def build_hasil_sheet(wb, sheet_name, ws_raw, raw_rows, n_weeks, period_labels):
+def build_step1_sheet(wb, ws_raw, raw_rows, n_weeks, period_labels):
+    sheet_name = "1. Running Balance"
     if sheet_name in wb.sheetnames:
         del wb[sheet_name]
     ws = wb.create_sheet(sheet_name)
     col_perhitungan_start = FIXED_RAW_COLS + 1
-    col_ratio_start = col_perhitungan_start + n_weeks
-    total_cols = col_ratio_start + n_weeks - 1
+    total_cols = col_perhitungan_start + n_weeks - 1
 
     for c in range(1, FIXED_RAW_COLS + 1):
         style_header_cell(ws, 1, c, "Judul", FILL_JUDUL)
     for w in range(n_weeks):
-        style_header_cell(ws, 1, col_perhitungan_start + w, "Perhitungan", FILL_PERHITUNGAN)
-    for w in range(n_weeks):
-        style_header_cell(ws, 1, col_ratio_start + w, "Ratio", FILL_RATIO)
+        style_header_cell(ws, 1, col_perhitungan_start + w, "Perhitungan (Running Balance)", FILL_PERHITUNGAN)
 
     fixed_titles = ["No", "Cabang", "Grup", "Category"]
     for i, t in enumerate(fixed_titles, start=1):
         style_header_cell(ws, 2, i, t, FILL_HEADER2)
     for w in range(n_weeks):
         style_header_cell(ws, 2, col_perhitungan_start + w, period_labels[w], FILL_HEADER2)
-    for w in range(n_weeks):
-        style_header_cell(ws, 2, col_ratio_start + w, period_labels[w], FILL_HEADER2)
 
     perhitungan_col_letters = [get_column_letter(col_perhitungan_start + w) for w in range(n_weeks)]
     raw_col_letters = []
@@ -281,19 +275,7 @@ def build_hasil_sheet(wb, sheet_name, ws_raw, raw_rows, n_weeks, period_labels):
                 formula = f"=SUM({prev_letter}{out_row},Raw!{L_to}{raw_row},Raw!{L_vessel}{raw_row})-Raw!{L_demand}{raw_row}"
             row_vals.append(formula)
 
-        for w in range(n_weeks):
-            if w + 1 < n_weeks:
-                perhitungan_letter = perhitungan_col_letters[w]
-                L_demand_next = raw_col_letters[w + 1]["demand"]
-                formula = f'=IFERROR(IF(OR(Raw!{L_demand_next}{raw_row}="",Raw!{L_demand_next}{raw_row}=0),"",{perhitungan_letter}{out_row}/Raw!{L_demand_next}{raw_row}),"")'
-                row_vals.append(formula)
-            else:
-                row_vals.append(None)
         ws.append(row_vals)
-        for w in range(n_weeks):
-            if w + 1 < n_weeks:
-                if out_row <= 100:
-                    ws.cell(row=out_row, column=col_ratio_start + w).number_format = "0.0%"
         out_row += 1
 
     ws.column_dimensions["A"].width = 6
@@ -307,8 +289,8 @@ def build_hasil_sheet(wb, sheet_name, ws_raw, raw_rows, n_weeks, period_labels):
     ws.views.sheetView[0].showGridLines = True
     return ws, col_perhitungan_start, out_row - 1
 
-def build_occupancy_sheet(wb, sheet_name, ws_wh, wh_rows, hasil_sheet_name,
-                            perhitungan_col_start, n_weeks, hasil_last_row, period_labels):
+def build_step2_sheet(wb, ws_wh, wh_rows, n_weeks, period_labels, perhitungan_col_start, hasil_last_row):
+    sheet_name = "2. Occupancy"
     if sheet_name in wb.sheetnames:
         del wb[sheet_name]
     ws = wb.create_sheet(sheet_name)
@@ -321,7 +303,7 @@ def build_occupancy_sheet(wb, sheet_name, ws_wh, wh_rows, hasil_sheet_name,
         row_vals = [f"=WH!A{wh_row}", f"=WH!B{wh_row}"]
         for w in range(n_weeks):
             col_letter = perhitungan_col_letters[w]
-            formula = f"=IFERROR(IF(WH!$E{wh_row}=0,0,SUMIF('{hasil_sheet_name}'!$B$3:$B${hasil_last_row},$B{out_row},'{hasil_sheet_name}'!${col_letter}$3:${col_letter}${hasil_last_row})/WH!$E{wh_row}),0)"
+            formula = f"=IFERROR(IF(WH!$E{wh_row}=0,0,SUMIF('1. Running Balance'!$B$3:$B${hasil_last_row},$B{out_row},'1. Running Balance'!${col_letter}$3:${col_letter}${hasil_last_row})/WH!$E{wh_row}),0)"
             row_vals.append(formula)
         ws.append(row_vals)
         for w in range(n_weeks):
@@ -337,6 +319,58 @@ def build_occupancy_sheet(wb, sheet_name, ws_wh, wh_rows, hasil_sheet_name,
     ws.views.sheetView[0].showGridLines = True
     return ws
 
+def build_step3_sheet(wb, ws_raw, raw_rows, n_weeks, period_labels, perhitungan_col_start):
+    sheet_name = "3. Harga & MOS"
+    if sheet_name in wb.sheetnames:
+        del wb[sheet_name]
+    ws = wb.create_sheet(sheet_name)
+    headers = ["No", "Cabang", "Grup", "Week", "Balance", "Target", "Harga", "Value_per_Week", "MOS"]
+    for i, h in enumerate(headers, start=1):
+        style_header_cell(ws, 1, i, h, FILL_HEADER2)
+        
+    unique_groups = []
+    seen = set()
+    for r in raw_rows:
+        cab = ws_raw.cell(row=r, column=2).value
+        grp = ws_raw.cell(row=r, column=3).value
+        key = (str(cab).strip() if cab else "", str(grp).strip() if grp else "")
+        if key not in seen and key[0]:
+            seen.add(key)
+            unique_groups.append(key)
+            
+    out_row = 2
+    perhitungan_col_letters = [get_column_letter(perhitungan_col_start + w) for w in range(n_weeks)]
+    raw_col_letters = []
+    for w in range(n_weeks):
+        _, _, _, col_target = raw_week_cols(w)
+        raw_col_letters.append(get_column_letter(col_target))
+
+    idx = 1
+    for cab, grp in unique_groups:
+        for w in range(n_weeks):
+            week_label = period_labels[w]
+            ht_col = perhitungan_col_letters[w]
+            raw_col = raw_col_letters[w]
+            
+            f_balance = f"=SUMIFS('1. Running Balance'!${ht_col}:${ht_col}, '1. Running Balance'!$B:$B, B{out_row}, '1. Running Balance'!$C:$C, C{out_row})"
+            f_target = f"=SUMIFS('Raw'!${raw_col}:${raw_col}, 'Raw'!$B:$B, B{out_row}, 'Raw'!$C:$C, C{out_row})"
+            f_harga = f"=SUMIFS('Harga Container'!$D:$D, 'Harga Container'!$B:$B, B{out_row}, 'Harga Container'!$C:$C, C{out_row})"
+            f_val = f"=E{out_row} * G{out_row}"
+            # MOS = Value_per_Week / (Target * Harga). Target * Harga is F{out_row} * G{out_row}
+            # Or MOS = Balance / Target => E{out_row} / F{out_row}
+            f_mos = f'=IFERROR(E{out_row} / F{out_row}, 0)'
+            
+            ws.append([idx, cab, grp, week_label, f_balance, f_target, f_harga, f_val, f_mos])
+            
+            idx += 1
+            out_row += 1
+
+    for c in range(1, 10):
+        ws.column_dimensions[get_column_letter(c)].width = 15
+    ws.freeze_panes = "A2"
+    ws.views.sheetView[0].showGridLines = True
+    return ws
+
 def generate_excel_workbook(wb: Workbook):
     ws_raw, ws_wh = wb["Raw"], wb["WH"]
     n_weeks = detect_week_count(ws_raw)
@@ -347,10 +381,11 @@ def generate_excel_workbook(wb: Workbook):
     for r in wh_rows:
         ws_wh.cell(row=r, column=5, value=f"=C{r}+D{r}")
 
-        _, ht_start, ht_last = build_hasil_sheet(wb, "Hasil Target", ws_raw, raw_rows, n_weeks, period_labels)
-        build_occupancy_sheet(wb, "Occupancy Target", ws_wh, wh_rows, "Hasil Target", ht_start, n_weeks, ht_last, period_labels)
+    _, ht_start, ht_last = build_step1_sheet(wb, ws_raw, raw_rows, n_weeks, period_labels)
+    build_step2_sheet(wb, ws_wh, wh_rows, n_weeks, period_labels, ht_start, ht_last)
+    build_step3_sheet(wb, ws_raw, raw_rows, n_weeks, period_labels, ht_start)
 
-    order = ["Raw", "WH", "Harga Container", "Hasil Target", "Occupancy Target", "Sheet Hasil"]
+    order = ["Raw", "WH", "Harga Container", "1. Running Balance", "2. Occupancy", "3. Harga & MOS"]
     wb._sheets.sort(key=lambda s: order.index(s.title) if s.title in order else 999)
     return wb, period_labels, week_awal, n_weeks
 
@@ -554,19 +589,6 @@ def calculate_mrp_occupancy_from_bytes(file_bytes: bytes) -> dict:
 
     wb_form = load_workbook(io.BytesIO(file_bytes), data_only=False)
     wb_form, _, _, _ = generate_excel_workbook(wb_form)
-    
-    # Write "Sheet Hasil" (MOS)
-    if not df_mos.empty:
-        if "Sheet Hasil" in wb_form.sheetnames:
-            del wb_form["Sheet Hasil"]
-        ws_mos = wb_form.create_sheet("Sheet Hasil")
-        headers = ["No", "Cabang", "Grup", "Week", "Balance", "Target", "Harga", "Value_per_Week", "MOS"]
-        for i, h in enumerate(headers, start=1):
-            style_header_cell(ws_mos, 1, i, h, FILL_HEADER2)
-        for i, row in enumerate(df_mos.to_dict('records'), start=1):
-            ws_mos.append([
-                i, row["Cabang"], row["Grup"], row["Week"], row["Balance"], row["Target"], row["Harga"], row["Value_per_Week"], row["MOS"]
-            ])
             
     out_buf = io.BytesIO()
     wb_form.save(out_buf)
@@ -615,7 +637,6 @@ def calculate_mrp_occupancy_from_bytes(file_bytes: bytes) -> dict:
     return {
         "processed_at": datetime.now().isoformat(),
         "daily_data": daily_data,
-        "branch_date_summary": daily_data,
         "shortage_alerts": shortage_alerts,
         "kpi_summary": {
             "avg_occupancy": round(avg_occ, 1),
@@ -633,65 +654,6 @@ def calculate_mrp_occupancy_from_bytes(file_bytes: bytes) -> dict:
             "insights_list": insights,
             "occupancy_series_target": {str(k): [round(v * 100, 2) if v is not None else 0 for v in val] for k, val in occ_t.items()},
         },
-    }
-
-
-def calculate_occupancy(df: pd.DataFrame) -> dict:
-    """
-    Fallback untuk format dataframe / CSV legacy reguler jika file yang diunggah bukan format multi-sheet Raw & WH.
-    """
-    if df.empty:
-        return {
-            "daily_data": [], "branch_date_summary": [], "shortage_alerts": [],
-            "kpi_summary": {"avg_occupancy": 0, "max_occupancy": 0, "categories_at_risk": 0},
-            "inventory_analysis": None
-        }
-    if 'Cabang' not in df.columns: df['Cabang'] = 'Unknown'
-    if 'Category' not in df.columns: df['Category'] = 'Unknown'
-    df = df.copy()
-    df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
-    df = df.dropna(subset=['Date']).sort_values(by=['Cabang', 'Category', 'Date'])
-    cabangs = df['Cabang'].unique()
-    
-    category_balances = []
-    for cabang in cabangs:
-        cabang_df = df[df['Cabang'] == cabang]
-        for cat in cabang_df['Category'].unique():
-            cat_df = cabang_df[cabang_df['Category'] == cat].copy()
-            cat_df = cat_df.groupby('Date').agg({'In': 'sum', 'Out': 'sum', 'On Hand': 'first'}).reset_index().sort_values('Date')
-            prev_balance = 0
-            for idx, row in cat_df.iterrows():
-                current_balance = _safe_float(row.get('On Hand', 0)) if idx == 0 else prev_balance + _safe_float(row.get('In', 0)) - _safe_float(row.get('Out', 0))
-                prev_balance = current_balance
-                category_balances.append({'Cabang': cabang, 'Category': cat, 'Date': row['Date'], 'running_balance': current_balance})
-
-    df_cat_balances = pd.DataFrame(category_balances)
-    daily_data, shortage_alerts = [], []
-    if not df_cat_balances.empty:
-        all_dates = pd.date_range(start=df_cat_balances['Date'].min(), end=df_cat_balances['Date'].max(), freq='D', name='Date')
-        pivoted = df_cat_balances.pivot(index='Date', columns=['Cabang', 'Category'], values='running_balance').reindex(all_dates).ffill().fillna(0)
-        filled_cat_balances = pivoted.unstack().reset_index(name='running_balance')
-        for cabang in cabangs:
-            cap_series = pd.to_numeric(df[df['Cabang'] == cabang].get('Capacity', pd.Series()), errors='coerce').dropna()
-            capacity_val = _safe_float(cap_series.iloc[0]) if len(cap_series) > 0 else 0.0
-            c_balances = filled_cat_balances[filled_cat_balances['Cabang'] == cabang]
-            if c_balances.empty: continue
-            b_agg = c_balances.groupby('Date')['running_balance'].sum().reset_index().sort_values('Date')
-            if capacity_val <= 0: capacity_val = float(max(b_agg['running_balance'].max(), 1.0) * 1.2)
-            for _, row in b_agg.iterrows():
-                total_balance = _safe_float(row['running_balance'])
-                daily_data.append({'cabang': str(cabang), 'date': row['Date'].strftime('%Y-%m-%d'), 'total_on_hand': total_balance, 'capacity': capacity_val, 'occupancy_pct': _safe_float(round((total_balance / capacity_val) * 100, 4)), 'is_shortage': total_balance < 0})
-        for _, row in filled_cat_balances.iterrows():
-            rb = _safe_float(row['running_balance'])
-            if rb < 0: shortage_alerts.append({'cabang': str(row['Cabang']), 'category': str(row['Category']), 'date': row['Date'].strftime('%Y-%m-%d'), 'deficit': round(rb, 2)})
-
-    avg_occ = sum(d['occupancy_pct'] for d in daily_data) / len(daily_data) if daily_data else 0
-    max_occ = max(d['occupancy_pct'] for d in daily_data) if daily_data else 0
-
-    return {
-        "daily_data": daily_data, "branch_date_summary": daily_data, "shortage_alerts": shortage_alerts,
-        "kpi_summary": {"avg_occupancy": round(avg_occ, 2), "max_occupancy": round(max_occ, 2), "categories_at_risk": len(shortage_alerts)},
-        "inventory_analysis": None
     }
 
 

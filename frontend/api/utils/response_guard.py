@@ -68,7 +68,7 @@ def enforce_payload_budget(data, limit_bytes: int = RESPONSE_SAFE_LIMIT_BYTES):
         if _size(data) <= limit_bytes:
             return data
 
-    for max_items in (2000, 500, 100):
+    for max_items in (15000, 10000, 7500, 5000, 2500, 1000, 500, 100):
         trunc_notes: list = []
         candidate = _truncate_lists(data, max_items, trunc_notes)
         if _size(candidate) <= limit_bytes:

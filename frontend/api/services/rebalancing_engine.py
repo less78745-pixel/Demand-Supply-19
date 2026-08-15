@@ -101,26 +101,35 @@ def analyze_rebalancing(stock_df: pd.DataFrame, demand_df: pd.DataFrame, freight
     freight_df['Capacity_Max'] = pd.to_numeric(freight_df['Capacity_Max'], errors='coerce').fillna(99999)
     freight_df['Lead_Time_Est'] = pd.to_numeric(freight_df['Lead_Time_Est'], errors='coerce').fillna(7)
     
-    # ── Build supply map (available stock per origin-SKU) ──
-    supply = {}
-    for _, row in stock_df.iterrows():
-        key = (str(row['Cabang']), str(row['SKU']))
-        supply[key] = supply.get(key, 0) + float(row['Qty_Available'])
-    
+    # ── Build supply map, indexed by SKU (available stock per origin-SKU) ──
+    # Indexed by SKU (not a single flat dict keyed by (origin, sku)) so the
+    # candidate search below only scans origins that actually stock this SKU,
+    # instead of scanning every origin/SKU combination in the whole file for
+    # every single demand row - on a large file with many distinct SKUs that
+    # flat-dict scan was the real O(demand_rows x total_supply_rows) blow-up.
+    # `sort=False` preserves first-appearance order so results are identical
+    # to the old row-by-row dict-building loop (matters for cost ties below).
+    supply_by_sku: dict = {}
+    for (sku, cabang), qty in stock_df.groupby(['SKU', 'Cabang'], sort=False)['Qty_Available'].sum().items():
+        supply_by_sku.setdefault(str(sku), {})[str(cabang)] = float(qty)
+
     # ── Build freight lookup ──
+    # A single itertuples() pass over the whole frame (freight_df is usually
+    # O(branches^2), not O(rows) like stock/demand) beats grouping by
+    # (Origin, Destination) first: pandas groupby has real per-group fixed
+    # overhead, and with many small groups (one per route) that overhead adds
+    # up to more than the single flat pass it would save.
     freight_lookup = {}
-    for _, row in freight_df.iterrows():
-        key = (str(row['Origin']), str(row['Destination']))
-        if key not in freight_lookup:
-            freight_lookup[key] = []
-        freight_lookup[key].append({
-            'mode': str(row['Mode']),
-            'cost': float(row['Cost_Per_Ton']),
-            'capacity': float(row['Capacity_Max']),
-            'lead_time': float(row['Lead_Time_Est']),
+    for r in freight_df.itertuples(index=False):
+        key = (str(r.Origin), str(r.Destination))
+        freight_lookup.setdefault(key, []).append({
+            'mode': str(r.Mode),
+            'cost': float(r.Cost_Per_Ton),
+            'capacity': float(r.Capacity_Max),
+            'lead_time': float(r.Lead_Time_Est),
         })
-    
-    # Sort each route by cost (cheapest first)
+    # Sort each route by cost (cheapest first) - stable sort preserves
+    # original row order among equal-cost routes.
     for key in freight_lookup:
         freight_lookup[key].sort(key=lambda x: x['cost'])
     
@@ -146,8 +155,8 @@ def analyze_rebalancing(stock_df: pd.DataFrame, demand_df: pd.DataFrame, freight
             
             # Find all possible origins with stock for this SKU
             candidates = []
-            for (origin, s_sku), avail in supply.items():
-                if s_sku != sku or avail <= 0 or origin == dest:
+            for origin, avail in supply_by_sku.get(sku, {}).items():
+                if avail <= 0 or origin == dest:
                     continue
                 routes = freight_lookup.get((origin, dest), [])
                 for route in routes:
@@ -178,8 +187,7 @@ def analyze_rebalancing(stock_df: pd.DataFrame, demand_df: pd.DataFrame, freight
                 total_cost += cost
                 
                 # Deduct from supply
-                supply_key = (cand['origin'], sku)
-                supply[supply_key] = supply.get(supply_key, 0) - send_qty
+                supply_by_sku[sku][cand['origin']] -= send_qty
                 
                 recommendations.append({
                     'entity': str(entity),

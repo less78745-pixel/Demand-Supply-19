@@ -2,6 +2,11 @@
   "version": 2,
   "framework": "nextjs",
   "outputDirectory": ".next",
+  "functions": {
+    "api/index.py": {
+      "maxDuration": 60
+    }
+  },
   "rewrites": [
     {
       "source": "/api/v1/(.*)",

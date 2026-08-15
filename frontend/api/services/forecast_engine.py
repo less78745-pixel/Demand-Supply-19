@@ -7,6 +7,32 @@ import math
 warnings.filterwarnings("ignore")
 
 
+def _ols_line(x, y):
+    """Closed-form degree-1 least squares (slope, intercept).
+
+    Replaces `np.polyfit(x, y, 1)`, which routes through LAPACK's SVD-based
+    solver (dgelsd) - on some Windows/OpenBLAS builds this crashes with
+    "On entry to DLASCL parameter number 4 had an illegal value" for
+    degenerate single-point fits (e.g. a Cabang x Kategori group with only
+    one row of history, which this pipeline forecasts deliberately - see
+    `_process_group`). A 2-parameter line fit has a direct formula, so there
+    is no need for a general-purpose solver here at all.
+    """
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+    x_mean, y_mean = x.mean(), y.mean()
+    dx = x - x_mean
+    denom = np.sum(dx ** 2)
+    slope = float(np.sum(dx * (y - y_mean)) / denom) if denom > 0 else 0.0
+    intercept = float(y_mean - slope * x_mean)
+    return slope, intercept
+
+
+def _ols_predict(x_train, y_train, x_eval):
+    slope, intercept = _ols_line(x_train, y_train)
+    return slope * np.asarray(x_eval, dtype=float) + intercept
+
+
 def _mape(y_true, y_pred):
     y_true, y_pred = np.array(y_true, dtype=float), np.array(y_pred, dtype=float)
     mask = y_true != 0
@@ -60,10 +86,8 @@ def _hw_forecast(y_train, steps, seasonality=3):
             indices[i] = _safe_float(np.mean(season_vals) / (np.mean(series) + 1e-5))
     deseasonalized = [series[i] / (indices[i % seasonality] + 1e-5) for i in range(n)]
     x_train = np.arange(n, dtype=float)
-    coeffs = np.polyfit(x_train, deseasonalized, 1)
-    
     x_steps = np.arange(n, n + steps, dtype=float)
-    trend_steps = np.polyval(coeffs, x_steps)
+    trend_steps = _ols_predict(x_train, deseasonalized, x_steps)
     preds = [_safe_float(trend_steps[i] * indices[(n + i) % seasonality]) for i in range(steps)]
     return preds
 
@@ -78,26 +102,51 @@ def _gb_forecast(y_train, steps, exog_train=None):
     F_val = float(np.mean(Y))
     trees = []
     residuals = Y - F_val
+
+    # Decision-stump split search, vectorized. The original re-scanned and
+    # re-averaged the WHOLE residual array from scratch for every unique X
+    # value - O(n x distinct values), i.e. O(n^2) for series with mostly
+    # unique values (e.g. long daily history per branch). Bucketing
+    # residuals by their unique-X group once and taking cumulative sums
+    # finds the identical best split (same strict tie-break: first/smallest
+    # split value wins, matching np.unique's ascending order + argmin's
+    # first-occurrence behavior) in one O(n log n) pass per tree instead.
+    unique_vals, bucket_idx = np.unique(X, return_inverse=True)
+    m = len(unique_vals)
     for _ in range(5):
-        best_err = float('inf')
-        best_split = X[0]
-        best_left, best_right = 0.0, 0.0
-        for split_val in np.unique(X):
-            left_mask = X <= split_val
-            right_mask = X > split_val
-            left_val = np.mean(residuals[left_mask]) if left_mask.any() else 0.0
-            right_val = np.mean(residuals[right_mask]) if right_mask.any() else 0.0
-            pred = np.where(left_mask, left_val, right_val)
-            err = float(np.sum((residuals - pred) ** 2))
-            if err < best_err:
-                best_err = err
-                best_split = split_val
-                best_left = float(left_val)
-                best_right = float(right_val)
+        bucket_sum = np.zeros(m)
+        bucket_sumsq = np.zeros(m)
+        bucket_count = np.zeros(m)
+        np.add.at(bucket_sum, bucket_idx, residuals)
+        np.add.at(bucket_sumsq, bucket_idx, residuals ** 2)
+        np.add.at(bucket_count, bucket_idx, 1.0)
+
+        cum_sum   = np.cumsum(bucket_sum)
+        cum_sumsq = np.cumsum(bucket_sumsq)
+        cum_count = np.cumsum(bucket_count)
+        total_sum, total_sumsq, total_count = cum_sum[-1], cum_sumsq[-1], cum_count[-1]
+
+        left_count  = cum_count
+        right_count = total_count - left_count
+        left_sum    = cum_sum
+        right_sum   = total_sum - cum_sum
+
+        left_mean  = np.divide(left_sum, left_count, out=np.zeros(m), where=left_count > 0)
+        right_mean = np.divide(right_sum, right_count, out=np.zeros(m), where=right_count > 0)
+
+        left_sse    = np.where(left_count > 0, cum_sumsq - (left_sum ** 2) / np.maximum(left_count, 1), 0.0)
+        right_sumsq = total_sumsq - cum_sumsq
+        right_sse   = np.where(right_count > 0, right_sumsq - (right_sum ** 2) / np.maximum(right_count, 1), 0.0)
+
+        best_k = int(np.argmin(left_sse + right_sse))
+        best_split = float(unique_vals[best_k])
+        best_left  = float(left_mean[best_k])
+        best_right = float(right_mean[best_k])
+
         trees.append((best_split, best_left, best_right))
         pred = np.where(X <= best_split, best_left, best_right)
         residuals -= pred * 0.5
-    
+
     curr_x = series[-1]
     preds = []
     
@@ -186,17 +235,17 @@ def _prophet_proxy_forecast(y_train, steps, exog_train=None):
     n = len(series)
     if n < 4: return _ses_forecast(series, steps)
     
-    x = np.arange(n)
-    coeffs = np.polyfit(x, series, 1)
-    trend = np.polyval(coeffs, x)
+    x = np.arange(n, dtype=float)
+    slope, intercept = _ols_line(x, series)
+    trend = slope * x + intercept
     detrended = series - trend
     seasonality = [np.mean(detrended[i::3]) for i in range(3)]
-    
+
     preds = []
     exog_factors = _compute_exog_factor(exog_train, steps)
     for i in range(steps):
         t = n + i
-        val = np.polyval(coeffs, t) + seasonality[t % 3]
+        val = slope * t + intercept + seasonality[t % 3]
         preds.append(_safe_float(val * exog_factors[i]))
     return preds
 
@@ -315,13 +364,26 @@ def _process_group(cabang: str, category: str, df: pd.DataFrame, test_size: int)
                 "best_model": "SMA-3", "best_mape": 999, "safety_stock": 0.0, "rop": 0.0}
 
     n = len(df)
-    if n < test_size + 3:
+    if n < 1:
         return {"cabang": cabang, "category": category, "combined_data": [],
                 "best_model": "SMA-3", "best_mape": 999, "safety_stock": 0.0, "rop": 0.0}
 
+    # test_size == 0 means there isn't enough history to hold out a test set
+    # (e.g. a group with a single row) - train on everything and skip
+    # backtest validation instead of refusing to forecast the group at all.
+    # NOTE: `df.iloc[-0:]` is NOT an empty slice (negative zero == zero in
+    # Python indexing, so it would silently select the *whole* frame) -
+    # test_size == 0 must be branched explicitly rather than relying on the
+    # `-test_size` slice below.
+    is_validated = test_size > 0
+
     df['Anomaly'] = 1
-    train = df.iloc[:-test_size]
-    test  = df.iloc[-test_size:]
+    if is_validated:
+        train = df.iloc[:-test_size]
+        test  = df.iloc[-test_size:]
+    else:
+        train = df
+        test  = df.iloc[0:0]
     y_train, y_test = train['Penjualan'], test['Penjualan']
     
     exog_cols = [c for c in ['AO', 'RO', 'Rerata Drop Size', 'NOO'] if c in df.columns]
@@ -364,9 +426,8 @@ def _process_group(cabang: str, category: str, df: pd.DataFrame, test_size: int)
         x_train = np.arange(len(y_train), dtype=float)
         x_test  = np.arange(len(y_train), len(y_train) + test_size, dtype=float)
         x_fut   = np.arange(len(df), len(df) + future_size, dtype=float)
-        coeffs = np.polyfit(x_train, y_train.values, 1)
-        trend_test   = _safe_list(np.polyval(coeffs, x_test))
-        trend_future = _safe_list(np.polyval(coeffs, x_fut))
+        trend_test   = _safe_list(_ols_predict(x_train, y_train.values, x_test))
+        trend_future = _safe_list(_ols_predict(x_train, y_train.values, x_fut))
         rmse_trend = _safe_float(np.sqrt(np.mean((y_test.values - np.array(trend_test)) ** 2)))
         forecasts_map['Trend'] = trend_test
         future_map['Trend']    = trend_future
@@ -519,21 +580,28 @@ def _process_group(cabang: str, category: str, df: pd.DataFrame, test_size: int)
     b_mad  = best_model_info['mad']
     b_rmse = best_model_info['rmse']
 
+    # Optimize payload size: only send top 3 models + baseline
+    top_models = sorted(models_eval, key=lambda x: (x['mape'], x['rmse']))[:3]
+    allowed_models = {x['model'] for x in top_models}
+    allowed_models.add('SMA-3')
+    allowed_models.add(best_model)
+
     std_dev      = _safe_float(np.std(y_train.values))
     avg_sales    = _safe_float(np.mean(y_train.values))
     safety_stock = 1.65 * std_dev
     rop          = avg_sales + safety_stock
 
-    test_index = list(df.index[-test_size:])
+    test_index = list(df.index[-test_size:]) if is_validated else []
     combined_data = []
     for date, row in df.iterrows():
         is_test  = date in test_index
         test_idx = test_index.index(date) if is_test else -1
         preds = {}
         for m_name, pred_list in forecasts_map.items():
-            if is_test and test_idx < len(pred_list):
-                preds[m_name] = round(float(pred_list[test_idx]), 2)
-        
+            if m_name in allowed_models:
+                if is_test and test_idx < len(pred_list):
+                    preds[m_name] = round(float(pred_list[test_idx]), 2)
+
         combined_data.append({
             'cabang':       cabang,
             'category':     category,
@@ -549,12 +617,13 @@ def _process_group(cabang: str, category: str, df: pd.DataFrame, test_size: int)
             'rmse':         round(b_rmse, 2),
             'safety_stock': round(safety_stock, 2),
             'rop':          round(rop, 2),
+            'validated':    is_validated,
         })
 
     last_date = df.index[-1]
     for i in range(1, future_size + 1):
         future_date = last_date + pd.DateOffset(months=i)
-        preds = {m_name: round(float(pred_list[i - 1]), 2) for m_name, pred_list in future_map.items()}
+        preds = {m_name: round(float(pred_list[i - 1]), 2) for m_name, pred_list in future_map.items() if m_name in allowed_models}
         combined_data.append({
             'cabang':       cabang,
             'category':     category,
@@ -570,6 +639,7 @@ def _process_group(cabang: str, category: str, df: pd.DataFrame, test_size: int)
             'rmse':         round(b_rmse, 2),
             'safety_stock': round(safety_stock, 2),
             'rop':          round(rop, 2),
+            'validated':    is_validated,
         })
 
     return {
@@ -581,6 +651,7 @@ def _process_group(cabang: str, category: str, df: pd.DataFrame, test_size: int)
         'best_mape':       round(best_mape, 2),
         'safety_stock':    round(safety_stock, 2),
         'rop':             round(rop, 2),
+        'validated':       is_validated,
     }
 
 def _compute_exog_factor(exog_train, steps):
@@ -638,44 +709,68 @@ def run_forecast_pipeline(df: pd.DataFrame) -> dict:
     if 'Kategori' not in df.columns:
         df['Kategori'] = 'Unknown'
 
-    df['Cabang']   = df['Cabang'].astype(str).str.strip()
-    df['Kategori'] = df['Kategori'].astype(str).str.strip()
+    df['Cabang']   = df['Cabang'].astype(str).str.strip().str.replace(r'\s+', ' ', regex=True)
+    df['Kategori'] = df['Kategori'].astype(str).str.strip().str.replace(r'\s+', ' ', regex=True)
 
-    # Validation holdout adapts to how much history each Cabang+Kategori group
-    # actually has, instead of a single fixed test_size=6 (>= 9 rows minimum).
-    # A fixed threshold silently dropped every group below it with zero warning
-    # to the user — with e.g. 28 branches uploaded but only one branch having
-    # >= 9 months of history, the response would come back containing that one
-    # branch and nothing would say why the other 27 vanished.
+    # Group case-insensitively. Real-world uploads routinely spell the same
+    # branch/category inconsistently across rows ("Surabaya" / "surabaya" /
+    # "SURABAYA"), and a case-sensitive .unique() treats each spelling as a
+    # separate Cabang x Kategori group. That fragments one branch's history
+    # into several groups that each fall under the minimum-rows threshold
+    # below and get skipped — leaving only whichever branch happened to be
+    # spelled consistently (e.g. "Bandung") with enough rows to survive.
+    df['_cabang_key']   = df['Cabang'].str.casefold()
+    df['_kategori_key'] = df['Kategori'].str.casefold()
+    cabang_labels   = df.groupby('_cabang_key')['Cabang'].agg(lambda s: s.value_counts().idxmax())
+    kategori_labels = df.groupby('_kategori_key')['Kategori'].agg(lambda s: s.value_counts().idxmax())
+
+    # Every uploaded Cabang x Kategori combination gets forecasted, no matter
+    # how little history it has - a group only needs a single row to produce
+    # a (naive, carry-forward) forecast. What adapts is how much of that
+    # history gets held out to *validate* the models: a group with >= 5 rows
+    # gets a proper adaptive backtest (as before), 2-4 rows gets a minimal
+    # 1-row holdout, and a lone data point (1 row) skips validation entirely
+    # since there's nothing left to test against - MAPE/RMSE for those groups
+    # are meaningless zeros rather than a measured error, which is why each
+    # forecast row carries a `validated` flag instead of pretending those
+    # numbers came from a real backtest. Previously anything under 5 rows was
+    # dropped from the response outright, which is why a file with e.g. 28
+    # branches could come back showing only the one branch with enough
+    # consistently-spelled history to clear that bar.
     MAX_TEST_SIZE = 6
-    MIN_TEST_SIZE = 2
     MIN_TRAIN_ROWS = 3
+    FULL_VALIDATION_MIN_ROWS = MIN_TRAIN_ROWS + 2  # 5 rows: room for a >=2-row holdout
 
     tasks = []
-    skipped_groups = []
-    for cabang in df['Cabang'].unique():
-        c_df = df[df['Cabang'] == cabang]
-        for cat in c_df['Kategori'].unique():
-            cat_df = c_df[c_df['Kategori'] == cat].copy()
+    low_confidence_groups = []  # informational only - every group here is still forecasted
+    for cabang_key in df['_cabang_key'].unique():
+        c_df = df[df['_cabang_key'] == cabang_key]
+        cabang = cabang_labels[cabang_key]
+        for cat_key in c_df['_kategori_key'].unique():
+            cat_df = c_df[c_df['_kategori_key'] == cat_key].copy()
+            cat = kategori_labels[cat_key]
             n_rows = len(cat_df)
-            group_test_size = min(MAX_TEST_SIZE, n_rows - MIN_TRAIN_ROWS)
-            if group_test_size >= MIN_TEST_SIZE:
-                tasks.append((cabang, cat, cat_df, group_test_size))
-            else:
-                skipped_groups.append({"cabang": cabang, "category": cat, "rows": n_rows})
 
-    min_required = MIN_TEST_SIZE + MIN_TRAIN_ROWS
+            if n_rows >= FULL_VALIDATION_MIN_ROWS:
+                group_test_size = min(MAX_TEST_SIZE, n_rows - MIN_TRAIN_ROWS)
+            elif n_rows >= 2:
+                group_test_size = 1
+            else:
+                group_test_size = 0  # single data point - no holdout possible
+
+            if n_rows < FULL_VALIDATION_MIN_ROWS:
+                low_confidence_groups.append({"cabang": cabang, "category": cat, "rows": n_rows})
+
+            tasks.append((cabang, cat, cat_df, group_test_size))
+
     if not tasks:
-        detail = "; ".join(f"{s['cabang']}/{s['category']}: {s['rows']} baris" for s in skipped_groups[:15])
-        return _empty_response(
-            f"Semua {len(skipped_groups)} kombinasi Cabang x Kategori memiliki data historis kurang dari "
-            f"{min_required} baris (minimum untuk melatih & memvalidasi model). Detail: {detail}."
-        )
+        return _empty_response("Tidak ada data Cabang/Kategori yang bisa diproses setelah pembersihan tanggal.")
 
     all_combined = []
     overall_kpis = []
     model_tally  = {}
     global_model_metrics = {}
+    failed_groups = []
 
     for task in tasks:
         cabang_t, cat_t = task[0], task[1]
@@ -697,9 +792,9 @@ def run_forecast_pipeline(df: pd.DataFrame) -> dict:
                     global_model_metrics[m_name]['mad'].append(eval_data.get('mad', 0))
                     global_model_metrics[m_name]['rmse'].append(eval_data.get('rmse', 0))
             else:
-                skipped_groups.append({"cabang": cabang_t, "category": cat_t, "rows": len(task[2]), "reason": "model produced no output"})
+                failed_groups.append({"cabang": cabang_t, "category": cat_t, "rows": len(task[2]), "reason": "model produced no output"})
         except Exception as e:
-            skipped_groups.append({"cabang": cabang_t, "category": cat_t, "rows": len(task[2]), "reason": str(e)})
+            failed_groups.append({"cabang": cabang_t, "category": cat_t, "rows": len(task[2]), "reason": str(e)})
 
     gc.collect()
 
@@ -726,7 +821,7 @@ def run_forecast_pipeline(df: pd.DataFrame) -> dict:
     avg_ss  = sum(x['safety_stock'] for x in overall_kpis) / len(overall_kpis) if overall_kpis else 0
     avg_rop = sum(x['rop'] for x in overall_kpis) / len(overall_kpis) if overall_kpis else 0
 
-    n_cabang_in = df['Cabang'].nunique()
+    n_cabang_in = df['_cabang_key'].nunique()
     n_cabang_out = len(set(k['cabang'] for k in overall_kpis))
 
     insights = [
@@ -742,19 +837,28 @@ def run_forecast_pipeline(df: pd.DataFrame) -> dict:
             "— cek format tanggalnya (baris lain tetap diproses normal)."
         )
 
-    if skipped_groups:
-        detail = "; ".join(f"{s['cabang']}/{s['category']} ({s['rows']} baris)" for s in skipped_groups[:15])
-        more = f", dan {len(skipped_groups) - 15} lainnya" if len(skipped_groups) > 15 else ""
+    if low_confidence_groups:
+        detail = "; ".join(f"{s['cabang']}/{s['category']} ({s['rows']} baris)" for s in low_confidence_groups[:15])
+        more = f", dan {len(low_confidence_groups) - 15} lainnya" if len(low_confidence_groups) > 15 else ""
         insights.append(
-            f"⚠️ {len(skipped_groups)} kombinasi Cabang × Kategori DILEWATI karena data historis tidak cukup "
-            f"untuk melatih & memvalidasi model: {detail}{more}."
+            f"ℹ️ {len(low_confidence_groups)} kombinasi Cabang × Kategori tetap diprediksi walau riwayat "
+            f"pendek (< {FULL_VALIDATION_MIN_ROWS} bulan) — MAPE/RMSE untuk kombinasi ini tidak melalui "
+            f"validasi backtest penuh sehingga kurang bisa diandalkan: {detail}{more}. Tambahkan lebih banyak "
+            "riwayat bulan agar akurasinya bisa divalidasi penuh."
+        )
+
+    if failed_groups:
+        detail = "; ".join(f"{s['cabang']}/{s['category']}: {s.get('reason', '')}" for s in failed_groups[:15])
+        insights.append(
+            f"⚠️ {len(failed_groups)} kombinasi Cabang × Kategori gagal diproses karena error teknis: {detail}."
         )
 
     all_methods = ["SMA-3", "SES", "Trend", "SARIMA", "SARIMAX", "XGBoost", "SAMAI", "BiLSTM", "Hybrid Ensemble", "Fb Prophet", "ARIMAX", "GNN", "LightGBM", "GARCH", "Wavelet", "LSTM-GRU"]
 
     return {
         "forecast_data":         all_combined,
-        "skipped_groups":        skipped_groups,
+        "skipped_groups":        failed_groups,
+        "low_confidence_groups": low_confidence_groups,
         "date_parse_failures":   date_parse_failures,
         "best_model":        best_global,
         "model_tally":       model_tally,

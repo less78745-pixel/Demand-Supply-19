@@ -99,9 +99,9 @@ async def analyze_ddmrp_file_endpoint(
         try:
             result_str = json.dumps(result)
             db_result = ProcessedResult(module="ddmrp", result_json=result_str)
-            # db.add(db_result)
-            # db.commit()
-            # db.refresh(db_result)
+            db.add(db_result)
+            db.commit()
+            db.refresh(db_result)
             result["processed_at"] = (db_result.created_at or datetime.now()).isoformat()
         except Exception as e:
             print("Failed to save to DB:", e)
@@ -134,9 +134,9 @@ async def analyze_ddmrp_phase2_endpoint(file: UploadFile = File(...), db: Sessio
         try:
             result_str = json.dumps(result)
             db_result = ProcessedResult(module="ddmrp_phase2", result_json=result_str)
-            # db.add(db_result)
-            # db.commit()
-            # db.refresh(db_result)
+            db.add(db_result)
+            db.commit()
+            db.refresh(db_result)
             result["processed_at"] = (db_result.created_at or datetime.now()).isoformat()
         except Exception as e:
             print("Failed to save to DB:", e)

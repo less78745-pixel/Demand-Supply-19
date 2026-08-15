@@ -49,18 +49,28 @@ def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 
 
 def build_distance_matrix(locations: list[dict]) -> list[list[float]]:
-    """Build NxN distance matrix from list of {lat, lon} dicts."""
+    """Build NxN distance matrix from list of {lat, lon} dicts.
+
+    Vectorized haversine over the full NxN grid at once instead of a Python
+    double-loop calling haversine_km() per pair - the pairwise distance
+    matrix is the one part of this module that's pure O(n^2) arithmetic (not
+    a combinatorial routing decision), so unlike the VRP heuristics below
+    (Clarke-Wright, GA, ACO - which genuinely need per-candidate looping)
+    this is safe to vectorize with identical results.
+    """
     n = len(locations)
-    matrix = [[0.0] * n for _ in range(n)]
-    for i in range(n):
-        for j in range(i + 1, n):
-            d = haversine_km(
-                locations[i]["lat"], locations[i]["lon"],
-                locations[j]["lat"], locations[j]["lon"],
-            )
-            matrix[i][j] = d
-            matrix[j][i] = d
-    return matrix
+    if n == 0:
+        return []
+    lat = np.radians(np.array([loc["lat"] for loc in locations], dtype=float))
+    lon = np.radians(np.array([loc["lon"] for loc in locations], dtype=float))
+
+    dlat = lat[:, None] - lat[None, :]
+    dlon = lon[:, None] - lon[None, :]
+    a = np.sin(dlat / 2) ** 2 + np.cos(lat)[:, None] * np.cos(lat)[None, :] * np.sin(dlon / 2) ** 2
+    c = 2 * np.arctan2(np.sqrt(a), np.sqrt(np.clip(1 - a, 0, None)))
+    matrix = 6371.0 * c
+    np.fill_diagonal(matrix, 0.0)
+    return matrix.tolist()
 
 
 # ══════════════════════════════════════════════════════════════

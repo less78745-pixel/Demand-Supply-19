@@ -110,8 +110,11 @@ def analyze_landed_cost(tracking_df: pd.DataFrame, allocation_df: pd.DataFrame, 
     eta_col, _ = parse_flexible_date_series(tracking_df['ETA_Port'])
     free_end_col, _ = parse_flexible_date_series(tracking_df['Free_Time_End'])
     tracking_df = tracking_df.copy()
-    tracking_df['_ETA_Parsed'] = eta_col
-    tracking_df['_FreeEnd_Parsed'] = free_end_col
+    # NOTE: itertuples() below renames any leading-underscore column to a
+    # positional field name (namedtuple fields can't start with '_'), so these
+    # internal columns are named without one to keep attribute access working.
+    tracking_df['ETA_Parsed_Internal'] = eta_col
+    tracking_df['FreeEnd_Parsed_Internal'] = free_end_col
 
     # ── Process each container ──
     containers = []
@@ -119,14 +122,35 @@ def analyze_landed_cost(tracking_df: pd.DataFrame, allocation_df: pd.DataFrame, 
     demurrage_alerts = []
     date_quality_issues = []
 
-    for _, t_row in tracking_df.iterrows():
-        bl = str(t_row['No_BL'])
-        container = str(t_row.get('No_Container', '-'))
-        status = str(t_row.get('Status', 'On Water'))
-        cabang = str(t_row.get('Cabang_Tujuan', 'Jakarta'))
+    # Group allocation rows by BL once instead of re-scanning the whole
+    # allocation table for every container. The old
+    # `allocation_df[allocation_df['No_BL'] == bl]` inside this loop was an
+    # O(containers x allocation_rows) full-table scan per container - the
+    # real bottleneck on a large upload (many containers x many SKU lines).
+    #
+    # Grouped into plain dicts (not a groupby-of-DataFrames) on purpose: with
+    # many containers, calling .itertuples()/.iterrows() separately on each
+    # tiny per-BL sub-DataFrame inside the loop below turned out to dominate
+    # runtime in its own right (each call rebuilds a namedtuple class via
+    # `eval` internally) - 20k containers meant 20k of those tiny per-group
+    # itertuples() calls, which profiled far more expensive than one single
+    # to_dict('records') pass up front plus plain-list iteration per row.
+    alloc_by_bl: dict = {}
+    for rec in allocation_df[['No_BL', 'SKU', 'Qty', 'Weight_Kg', 'Volume_CBM']].to_dict('records'):
+        alloc_by_bl.setdefault(str(rec['No_BL']), []).append(rec)
 
-        eta = t_row['_ETA_Parsed']
-        free_end = t_row['_FreeEnd_Parsed']
+    # itertuples() instead of iterrows(): both loops below are already O(n)
+    # thanks to the alloc_by_bl grouping above, but itertuples skips building
+    # a full pandas Series per row, which matters once "n" is tens of
+    # thousands of containers/SKU lines.
+    for t_row in tracking_df.itertuples(index=False):
+        bl = str(t_row.No_BL)
+        container = str(t_row.No_Container)
+        status = str(t_row.Status)
+        cabang = str(t_row.Cabang_Tujuan)
+
+        eta = t_row.ETA_Parsed_Internal
+        free_end = t_row.FreeEnd_Parsed_Internal
         # An ETA/Free Time we can't parse is a data-quality problem, not a safe
         # container — silently substituting "today + 14 days" here used to make
         # containers that were actually critically overdue (or whose real date
@@ -140,10 +164,10 @@ def analyze_landed_cost(tracking_df: pd.DataFrame, allocation_df: pd.DataFrame, 
             free_end = eta + timedelta(days=7)
 
         # Total costs in USD
-        freight = float(t_row['Freight_Cost_USD'])
-        duty = float(t_row['Duty_USD'])
-        thc = float(t_row['THC_USD'])
-        inland = float(t_row['Inland_Transport_USD'])
+        freight = float(t_row.Freight_Cost_USD)
+        duty = float(t_row.Duty_USD)
+        thc = float(t_row.THC_USD)
+        inland = float(t_row.Inland_Transport_USD)
         total_usd = freight + duty + thc + inland
         total_idr = total_usd * exchange_rate
         
@@ -185,15 +209,15 @@ def analyze_landed_cost(tracking_df: pd.DataFrame, allocation_df: pd.DataFrame, 
         })
         
         # ── Allocate cost to SKUs proportionally by weight ──
-        bl_skus = allocation_df[allocation_df['No_BL'] == bl]
-        if bl_skus.empty:
+        bl_skus = alloc_by_bl.get(bl)
+        if not bl_skus:
             continue
-        
-        total_weight = bl_skus['Weight_Kg'].sum()
+
+        total_weight = sum(float(r['Weight_Kg']) for r in bl_skus)
         if total_weight <= 0:
             total_weight = 1
-        
-        for _, s_row in bl_skus.iterrows():
+
+        for s_row in bl_skus:
             sku = str(s_row['SKU'])
             qty = float(s_row['Qty'])
             weight = float(s_row['Weight_Kg'])

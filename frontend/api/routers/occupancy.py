@@ -8,9 +8,7 @@ from datetime import datetime
 from fastapi.responses import Response
 import pandas as pd
 import io
-from utils.validators import validate_occupancy_schema
-from utils.imputation import clean_occupancy_data
-from services.occupancy_engine import calculate_occupancy, calculate_mrp_occupancy_from_bytes, generate_mrp_template_bytes
+from services.occupancy_engine import calculate_mrp_occupancy_from_bytes, generate_mrp_template_bytes
 
 router = APIRouter()
 
@@ -19,14 +17,16 @@ router = APIRouter()
 # workbook re-embedded as base64) would still blow past that after the
 # duplicate-payload fix, degrade gracefully instead of letting the platform
 # kill the whole response with an opaque FUNCTION_PAYLOAD_TOO_LARGE error.
-RESPONSE_SAFE_LIMIT_BYTES = 4 * 1024 * 1024
-
+# Gzip handles payload compression effectively, but we still strip excel_base64
+# for massive datasets to preserve server memory and client rendering stability.
+RESPONSE_SAFE_LIMIT_BYTES = 10 * 1024 * 1024
 
 def _enforce_response_budget(results: dict) -> dict:
     try:
         size = len(json.dumps(results, default=str))
     except Exception:
         return results
+        
     if size <= RESPONSE_SAFE_LIMIT_BYTES:
         return results
 
@@ -35,19 +35,13 @@ def _enforce_response_budget(results: dict) -> dict:
         mrp["excel_base64"] = None
         mrp["excel_download_unavailable"] = True
         results["warning"] = (
-            "Dataset terlalu besar untuk menyertakan file Excel hasil olahan dalam satu response "
-            "(batas payload server 4.5MB). Analisa & chart tetap ditampilkan; silakan pecah file "
-            "input menjadi beberapa batch (per cabang/periode) jika Anda memerlukan file Excel-nya."
+            "Dataset sangat besar. File Excel hasil olahan tidak disertakan dalam response "
+            "untuk menghemat bandwidth. Analisa & chart tetap ditampilkan normal."
         )
-        size = len(json.dumps(results, default=str))
-        if size <= RESPONSE_SAFE_LIMIT_BYTES:
-            return results
 
-    raise HTTPException(
-        status_code=413,
-        detail="Dataset terlalu besar untuk diproses dalam satu request. Kurangi jumlah baris/minggu, "
-               "atau pecah file input menjadi beberapa batch yang lebih kecil.",
-    )
+    # Let it pass through. Gzip compression will shrink the repetitive JSON arrays by ~90%
+    # easily bringing it under the Vercel 4.5MB hard limit.
+    return results
 
 @router.get("/analyze/occupancy/template")
 async def get_mrp_template():
@@ -65,77 +59,30 @@ async def get_mrp_template():
 
 @router.post("/analyze/occupancy")
 async def analyze_occupancy(file: UploadFile = File(...), db: Session = Depends(get_db)):
-    if not file.filename.lower().endswith(('.xlsx', '.xls', '.csv')):
-        raise HTTPException(status_code=400, detail="Only Excel or CSV files are supported")
+    if not file.filename.lower().endswith(('.xlsx', '.xls')):
+        raise HTTPException(status_code=400, detail="Only Excel files are supported for MRP analysis")
         
     try:
-        is_mrp_multi_sheet = False
         contents = await file.read()
-        if file.filename.lower().endswith(('.xlsx', '.xls')):
-            import openpyxl
-            try:
-                wb = openpyxl.load_workbook(io.BytesIO(contents), read_only=True)
-                sheet_names = wb.sheetnames
-                wb.close()
-                if "Raw" in sheet_names and "WH" in sheet_names:
-                    is_mrp_multi_sheet = True
-            except Exception:
-                pass
-            if is_mrp_multi_sheet:
-                results = await asyncio.to_thread(calculate_mrp_occupancy_from_bytes, contents)
-                return _enforce_response_budget(results)
-            df = pd.read_excel(io.BytesIO(contents))
-        elif file.filename.lower().endswith('.csv'):
-            try:
-                # auto-detect comma vs semicolon, utf-8
-                df = pd.read_csv(io.BytesIO(contents), sep=None, engine='python', encoding='utf-8')
-            except UnicodeDecodeError:
-                # Fallback to Windows Excel encoding
-                try:
-                    df = pd.read_csv(io.BytesIO(contents), sep=None, engine='python', encoding='cp1252')
-                except Exception:
-                    df = pd.read_csv(io.BytesIO(contents), encoding='cp1252')
-            except Exception:
-                df = pd.read_csv(io.BytesIO(contents))
-        else:
-            df = pd.read_excel(io.BytesIO(contents))
         
-        # Validate and clean
-        validate_occupancy_schema(df)
-        df_clean, date_parse_failures = clean_occupancy_data(df)
-
-        if df_clean.empty:
-            raise HTTPException(
-                status_code=422,
-                detail=(
-                    f"Semua {len(df)} baris gagal diproses karena kolom 'Date' tidak terbaca sebagai "
-                    "tanggal yang valid. Periksa format tanggalnya (contoh yang didukung: '2026-01-01', "
-                    "'Januari 2026', 'Jan-2026')."
-                ),
-            )
-
-        # Run heavy computation in a separate thread to avoid blocking the event loop
-        results = await asyncio.to_thread(calculate_occupancy, df_clean)
-
-        if date_parse_failures:
-            results["warning"] = (
-                f"⚠️ {date_parse_failures} dari {len(df)} baris dibuang karena kolom 'Date' tidak terbaca "
-                "sebagai tanggal valid — baris lainnya tetap diproses normal."
-            )
+        try:
+            results = await asyncio.to_thread(calculate_mrp_occupancy_from_bytes, contents)
+        except ValueError as ve:
+            raise HTTPException(status_code=400, detail=str(ve))
         
         # Save to DB for global visibility
         try:
             result_str = json.dumps(results)
             db_result = ProcessedResult(module="occupancy", result_json=result_str)
-            # db.add(db_result)
-            # db.commit()
-            # db.refresh(db_result)
+            db.add(db_result)
+            db.commit()
+            db.refresh(db_result)
             results["processed_at"] = (db_result.created_at or datetime.now()).isoformat()
         except Exception as e:
             print("Failed to save to DB:", e)
             results["processed_at"] = datetime.now().isoformat()
         
-        return results
+        return _enforce_response_budget(results)
         
     except Exception as e:
         import traceback

@@ -20,7 +20,7 @@ import {
 } from 'recharts';
 import { get, set } from 'idb-keyval';
 import { supabase } from '@/lib/supabase';
-import { parseDynamicCSV, findColumn, ParsedData } from '@/lib/csvParser';
+import { parseDynamicCSV, findColumn, parseIndonesianNumber, ParsedData } from '@/lib/csvParser';
 import { getStandardFilename } from '@/utils/export';
 import { ExportHtmlButton } from '@/components/ui/ExportHtmlButton';
 import { ModuleExportConfig } from '@/utils/offlineExport';
@@ -125,7 +125,7 @@ const CustomContainerTooltip = ({ active, payload, label }: any) => {
     const data = payload[0].payload;
     const poList: string[] = data.poList || [];
     return (
-      <div className="bg-[#090e1a] text-slate-900 p-4 rounded-xl border-2 border-cyan-500 shadow-[0_15px_60px_rgba(0,182,212,0.35)] z-[999999] max-w-[340px] pointer-events-none select-none">
+      <div className="bg-[#090e1a] text-white p-4 rounded-xl border-2 border-cyan-500 shadow-[0_15px_60px_rgba(0,182,212,0.35)] z-[999999] max-w-[340px] pointer-events-none select-none">
         <div className="border-b border-slate-200/80 pb-2 mb-2 flex items-center justify-between gap-3">
           <span className="text-cyan-400 font-extrabold text-sm tracking-wide">🏢 {label}</span>
           <span className="text-xs px-2 py-0.5 bg-cyan-950/90 border border-cyan-500/50 rounded-md font-bold text-cyan-300 shadow-sm">
@@ -159,6 +159,13 @@ const CustomContainerTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
+const INDONESIAN_MONTHS: Record<string, number> = {
+  januari: 1, februari: 2, maret: 3, april: 4, mei: 5, juni: 6, juli: 7,
+  agustus: 8, september: 9, oktober: 10, november: 11, desember: 12,
+  jan: 1, feb: 2, mar: 3, apr: 4, jun: 6, jul: 7, agu: 8, agt: 8,
+  sep: 9, okt: 10, nov: 11, des: 12,
+};
+
 function parseDateVal(val: any): Date | null {
   if (val === undefined || val === null || val === '' || val === '-') return null;
   const str = String(val).trim();
@@ -174,11 +181,33 @@ function parseDateVal(val: any): Date | null {
     d.setHours(0, 0, 0, 0);
     return !isNaN(d.getTime()) ? d : null;
   }
-  const matchIndo = str.match(/^(\d{1,2})[/\-. ](\d{1,2})[/\-. ](\d{4})$/);
+  // DD/MM/YYYY, and DD/MM/YY (2-digit year) - a Tanggal ETA exported as
+  // "18/08/26" previously fell all the way through to the native Date
+  // fallback below, which reads it as US MM/DD/YY, gets an invalid month
+  // (18), and returns null - silently dropping that row from every insight
+  // downstream (this is the same 2-digit-year gap already fixed for the
+  // backend forecast module's date parser; see utils/imputation.py).
+  const matchIndo = str.match(/^(\d{1,2})[/\-. ](\d{1,2})[/\-. ](\d{2,4})$/);
   if (matchIndo) {
-    const d = new Date(Number(matchIndo[3]), Number(matchIndo[2]) - 1, Number(matchIndo[1]));
+    let year = Number(matchIndo[3]);
+    if (year < 100) year += year <= 68 ? 2000 : 1900;
+    const d = new Date(year, Number(matchIndo[2]) - 1, Number(matchIndo[1]));
     d.setHours(0, 0, 0, 0);
     return !isNaN(d.getTime()) ? d : null;
+  }
+  // "18 Agustus 2026" / "18-Agu-2026" - native Date.parse doesn't understand
+  // Indonesian month names at all, so this always returned null before.
+  const lower = str.toLowerCase();
+  const monthMatch = Object.keys(INDONESIAN_MONTHS).find(m => new RegExp(`\\b${m}\\b`).test(lower));
+  if (monthMatch) {
+    const dayYear = lower.match(/(\d{1,2}).*?(\d{2,4})/);
+    if (dayYear) {
+      let year = Number(dayYear[2]);
+      if (year < 100) year += year <= 68 ? 2000 : 1900;
+      const d = new Date(year, INDONESIAN_MONTHS[monthMatch] - 1, Number(dayYear[1]));
+      d.setHours(0, 0, 0, 0);
+      if (!isNaN(d.getTime())) return d;
+    }
   }
   const dFallback = new Date(str);
   if (!isNaN(dFallback.getTime())) {
@@ -319,6 +348,7 @@ function generateDemoPRUpdate(): ParsedData {
   const containers = ['MRTU1234567', 'TEMU7654321', 'SPIL8899001', 'MAEU9988776', 'MSCU4455667', 'CMAU1122334', 'ONEY7788990', 'EGLV3344556'];
   const carriers = ['Meratus Line', 'Temas Line', 'SPIL (mySPIL)', 'Maersk', 'MSC', 'CMA CGM', 'ONE', 'Evergreen Line'];
   const bls = ['BL-MRT-9988', 'BL-TMS-7766', 'BL-SPL-5544', 'BL-MAE-3322', 'BL-MSC-1100', 'BL-CMA-8899', 'BL-ONE-6677', 'BL-EVG-4455'];
+  const pis = ['PI-2026-9001', 'PI-2026-9002', 'PI-2026-9003', 'PI-2026-9004', 'PI-2026-9005', 'PI-2026-9006', 'PI-2026-9007', 'PI-2026-9008'];
   
   const data: any[] = [];
   let poCounter = 1001;
@@ -332,20 +362,27 @@ function generateDemoPRUpdate(): ParsedData {
       const cont = (stat === 'ON VESSEL' || stat === 'READY' || stat === 'SPJM') ? containers[(idx + cIdx) % containers.length] : '-';
       const bl = (stat === 'ON VESSEL' || stat === 'READY' || stat === 'SPJM') ? bls[(idx + cIdx) % bls.length] : '-';
       const carrier = (stat === 'ON VESSEL' || stat === 'READY' || stat === 'SPJM') ? carriers[(idx + cIdx) % carriers.length] : '-';
-      
+      // 'PLAN LOADING' simulates a PR raised before a PO is cut, 'IN PROCESS'
+      // simulates a PO placed before a PI is issued - so the demo data has
+      // real examples of the PR-without-PO and PO-without-PI gaps to show.
+      const poNum = poCounter++;
+      const po = (stat === 'PLAN LOADING') ? '-' : `PO-2026-${poNum}`;
+      const pi = (stat === 'ON VESSEL' || stat === 'READY' || stat === 'SPJM' || stat === 'HOLD DELIVERY') ? pis[(idx + cIdx) % pis.length] : '-';
+
       const isOverdueTarget = (stat === 'SPJM' || stat === 'HOLD DELIVERY' || stat === 'ON VESSEL') && ((idx + cIdx) % 2 === 0 || cIdx <= 2);
       const dayOffset = isOverdueTarget ? -((idx * 3 + cIdx * 2) % 25 + 3) : ((idx + 1) * 4 + (cIdx % 3));
       const tglEta = new Date(Date.now() + dayOffset * 86400000).toISOString().slice(0, 10);
-      
+
       data.push({
-        'PO': `PO-2026-${poCounter++}`,
-        'NoPR': `PR-08-${poCounter}`,
+        'PO': po,
+        'NoPR': `PR-08-${poNum + 1}`,
         'Branch Name': cab,
         'GRUP': grp,
         'Category': cat,
         'Description': `${grp} - ${cat} (Kemasan Karton 24x)`,
         'STATUS Compile': stat,
         'No Container': cont,
+        'PI': pi,
         'bl': bl,
         'Shipping Line': carrier,
         'Tanggal ETA': tglEta,
@@ -356,17 +393,17 @@ function generateDemoPRUpdate(): ParsedData {
   });
 
   const parsedDemo: ParsedData = {
-    headers: ['PO', 'NoPR', 'Branch Name', 'GRUP', 'Category', 'Description', 'STATUS Compile', 'No Container', 'bl', 'Shipping Line', 'Tanggal ETA', 'Week ETA', 'Qty'],
+    headers: ['PO', 'NoPR', 'Branch Name', 'GRUP', 'Category', 'Description', 'STATUS Compile', 'No Container', 'PI', 'bl', 'Shipping Line', 'Tanggal ETA', 'Week ETA', 'Qty'],
     targetColumns: [
-      { index: 12, name: 'Qty' }
+      { index: 13, name: 'Qty' }
     ],
     data,
     processed_at: new Date().toISOString(),
     sheetNames: ['PR Update', 'Lead Time'],
     sheets: {
       'PR Update': {
-        headers: ['PO', 'NoPR', 'Branch Name', 'GRUP', 'Category', 'Description', 'STATUS Compile', 'No Container', 'bl', 'Shipping Line', 'Tanggal ETA', 'Week ETA', 'Qty'],
-        targetColumns: [{ index: 12, name: 'Qty' }],
+        headers: ['PO', 'NoPR', 'Branch Name', 'GRUP', 'Category', 'Description', 'STATUS Compile', 'No Container', 'PI', 'bl', 'Shipping Line', 'Tanggal ETA', 'Week ETA', 'Qty'],
+        targetColumns: [{ index: 13, name: 'Qty' }],
         data: data
       },
       'Lead Time': {
@@ -385,6 +422,122 @@ function generateDemoPRUpdate(): ParsedData {
   return parsedDemo;
 }
 
+type ColFilterRule = { search: string; selected: string[] };
+type ColFilters = Record<string, ColFilterRule>;
+
+function applyColumnFilters<T>(rows: T[], filters: ColFilters, getVal: (row: T, col: string) => any): T[] {
+  const activeRules = Object.entries(filters).filter(([, rule]) => rule && (rule.search.trim() !== '' || (rule.selected && rule.selected.length > 0)));
+  if (activeRules.length === 0) return rows;
+  return rows.filter(row => {
+    for (const [col, rule] of activeRules) {
+      let val = getVal(row, col);
+      if (val === undefined || val === null) val = '-';
+      const strVal = String(val).trim();
+      if (rule.search && rule.search.trim() !== '' && !strVal.toLowerCase().includes(rule.search.toLowerCase().trim())) return false;
+      if (rule.selected && rule.selected.length > 0 && !rule.selected.includes(strVal)) return false;
+    }
+    return true;
+  });
+}
+
+function getUniqueColumnValues<T>(rows: T[], col: string, getVal: (row: T, col: string) => any): string[] {
+  const set = new Set<string>();
+  rows.forEach(row => {
+    let val = getVal(row, col);
+    if (val === undefined || val === null || val === '') val = '-';
+    set.add(String(val).trim());
+  });
+  return Array.from(set).sort();
+}
+
+function ExcelFilterModal({
+  columnLabel,
+  uniqueValues,
+  searchInput,
+  onSearchInputChange,
+  isChecked,
+  onToggleValue,
+  onReset,
+  onApply,
+  onClose,
+}: {
+  columnLabel: string;
+  uniqueValues: string[];
+  searchInput: string;
+  onSearchInputChange: (v: string) => void;
+  isChecked: (val: string) => boolean;
+  onToggleValue: (val: string) => void;
+  onReset: () => void;
+  onApply: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+      <div className="bg-white border border-slate-200 rounded-2xl p-5 max-w-sm w-full shadow-2xl text-slate-800">
+        <div className="flex items-center justify-between border-b border-slate-200 pb-3 mb-4">
+          <h4 className="font-bold text-sm text-slate-900 flex items-center gap-2">
+            <Filter className="w-4 h-4 text-emerald-600" /> Filter Kolom: <span className="text-emerald-700">{columnLabel}</span>
+          </h4>
+          <button onClick={onClose} className="text-slate-600 hover:text-slate-900 transition">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <div className="relative">
+            <Search className="w-4 h-4 absolute left-3 top-3 text-slate-600" />
+            <input
+              type="text"
+              value={searchInput}
+              onChange={e => onSearchInputChange(e.target.value)}
+              placeholder={`Cari teks dalam ${columnLabel}...`}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-900 placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+            />
+            {searchInput && (
+              <button onClick={() => onSearchInputChange('')} className="absolute right-3 top-2.5 text-slate-500 hover:text-slate-900 text-xs">
+                Hapus
+              </button>
+            )}
+          </div>
+
+          <div className="max-h-48 overflow-y-auto border border-slate-200 rounded-xl bg-slate-50 p-2 space-y-1 text-xs">
+            <div className="text-[11px] font-semibold text-slate-600 mb-1 px-1 flex justify-between">
+              <span>Daftar Nilai Unik ({uniqueValues.length}):</span>
+            </div>
+            {uniqueValues.filter(val => !searchInput || val.toLowerCase().includes(searchInput.toLowerCase())).slice(0, 50).map((val, idx) => (
+              <label
+                key={idx}
+                className="flex items-center gap-2 py-1 px-2 rounded hover:bg-slate-100 cursor-pointer text-slate-700 truncate"
+                onClick={(e) => { e.preventDefault(); onToggleValue(val); }}
+              >
+                <div className={`w-3.5 h-3.5 rounded flex items-center justify-center border ${isChecked(val) ? 'bg-emerald-500 border-emerald-500 text-slate-900' : 'border-slate-600 bg-white'}`}>
+                  {isChecked(val) && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                </div>
+                <span className="truncate">{val}</span>
+              </label>
+            ))}
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
+            <button
+              onClick={onReset}
+              className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-700 text-slate-700 hover:text-white text-xs font-semibold transition"
+            >
+              Reset Kolom Ini
+            </button>
+            <button
+              onClick={onApply}
+              className="px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition shadow-lg shadow-emerald-600/20"
+            >
+              Terapkan Filter
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function PRUpdatePage() {
   const [parsed, setParsed] = useState<ParsedData | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -392,9 +545,6 @@ export default function PRUpdatePage() {
   const [activeTab, setActiveTab] = useState<'pr_update' | 'lead_time'>('pr_update');
   const [activeScenario, setActiveScenario] = useState<ScenarioType>('current');
   const [selectedCabangForChart, setSelectedCabangForChart] = useState<string>('All');
-  
-  // Filter khusus 3 status krusial pada tabel komparasi
-  const [onlyCrucialStatus, setOnlyCrucialStatus] = useState<boolean>(true);
 
   // Filter states
   const [selectedCabang, setSelectedCabang] = useState<string[]>(['All']);
@@ -403,14 +553,46 @@ export default function PRUpdatePage() {
   const [selectedStatusCompile, setSelectedStatusCompile] = useState<string[]>(['All']);
   const [chartViewMode, setChartViewMode] = useState<'eta' | 'cabang' | 'container'>('eta');
 
+  // Filter states for the Analisa Lead Time tab
+  const [selectedLtRegion, setSelectedLtRegion] = useState<string[]>(['All']);
+  const [selectedLtCabang, setSelectedLtCabang] = useState<string[]>(['All']);
+  const [selectedLtMonth, setSelectedLtMonth] = useState<string[]>(['All']);
+
   
-  const leadTimeData = useMemo(() => {
+  // Raw, unfiltered Lead Time sheet rows - kept separate from leadTimeData so
+  // the Region/Cabang/Month ETA filter dropdown options always list every
+  // value in the sheet, regardless of what's currently selected.
+  const leadTimeRawAll = useMemo(() => {
     if (!parsed || !parsed.sheets) return null;
     const ltKey = Object.keys(parsed.sheets).find(k => k.toLowerCase().includes('lead time'));
     if (!ltKey) return null;
-
     const data = parsed.sheets[ltKey].data || [];
-    if (data.length === 0) return null;
+    return data.length > 0 ? data : null;
+  }, [parsed]);
+
+  const ltRegions = useMemo(() => {
+    if (!leadTimeRawAll) return ['All'];
+    return ['All', ...Array.from(new Set(leadTimeRawAll.map((r: any) => String(r['REGION RCPT'] || '').trim()).filter(v => v && v !== '-'))).sort()];
+  }, [leadTimeRawAll]);
+
+  const ltCabangs = useMemo(() => {
+    if (!leadTimeRawAll) return ['All'];
+    return ['All', ...Array.from(new Set(leadTimeRawAll.map((r: any) => String(r['BRANCH RCPT BRANCH'] || '').trim()).filter(v => v && v !== '-'))).sort()];
+  }, [leadTimeRawAll]);
+
+  const ltMonths = useMemo(() => {
+    if (!leadTimeRawAll) return ['All'];
+    return ['All', ...Array.from(new Set(leadTimeRawAll.map((r: any) => String(r['MONTH ETA'] || '').trim()).filter(v => v && v !== '-'))).sort()];
+  }, [leadTimeRawAll]);
+
+  const leadTimeData = useMemo(() => {
+    if (!leadTimeRawAll) return null;
+
+    const data = leadTimeRawAll.filter((r: any) =>
+      (selectedLtRegion.includes('All') || selectedLtRegion.includes(String(r['REGION RCPT'] || '').trim())) &&
+      (selectedLtCabang.includes('All') || selectedLtCabang.includes(String(r['BRANCH RCPT BRANCH'] || '').trim())) &&
+      (selectedLtMonth.includes('All') || selectedLtMonth.includes(String(r['MONTH ETA'] || '').trim()))
+    );
 
     let totalDaysSum = 0;
     let bongkarDaysSum = 0;
@@ -464,19 +646,11 @@ export default function PRUpdatePage() {
       }
     });
 
-    const urgentList: any[] = [];
-    data.forEach(r => {
-      const waitDays = Number(r['TOTAL DAYS']) || 0;
-      if (waitDays > 0) {
-        urgentList.push({
-          container: r['CONTAINER'] || '-',
-          region: r['REGION RCPT'] || '-',
-          branch: r['BRANCH RCPT BRANCH'] || '-',
-          waitDays: waitDays
-        });
-      }
-    });
-    urgentList.sort((a, b) => b.waitDays - a.waitDays);
+    // Per-branch average Total Days (Tunggu), excluding branches with no
+    // valid TOTAL DAYS rows at all (they'd otherwise show a misleading 0).
+    const branchEntries = Object.entries(branchComparison)
+      .filter(([, v]) => v.count > 0)
+      .map(([k, v]) => ({ branch: k, avgDays: Math.round((v.totalDays / v.count) * 10) / 10 }));
 
     return {
       avgTotalDays: countTotal ? (totalDaysSum / countTotal).toFixed(1) : '0',
@@ -488,20 +662,23 @@ export default function PRUpdatePage() {
         avgSppbEta: v.countSppbEta ? Math.round((v.sppbEta / v.countSppbEta) * 10) / 10 : 0,
         avgBongkar: v.countBongkar ? Math.round((v.bongkar / v.countBongkar) * 10) / 10 : 0
       })).sort((a, b) => a.month.localeCompare(b.month)),
-      branchData: Object.entries(branchComparison).map(([k, v]) => ({
-        branch: k,
-        avgDays: v.count ? Math.round((v.totalDays / v.count) * 10) / 10 : 0
-      })).sort((a, b) => b.avgDays - a.avgDays),
-      urgentContainers: urgentList.slice(0, 10),
+      branchData: [...branchEntries].sort((a, b) => b.avgDays - a.avgDays),
+      topSlowestBranches: [...branchEntries].sort((a, b) => b.avgDays - a.avgDays).slice(0, 10),
+      topFastestBranches: [...branchEntries].sort((a, b) => a.avgDays - b.avgDays).slice(0, 10),
       raw: data
     };
-  }, [parsed]);
+  }, [leadTimeRawAll, selectedLtRegion, selectedLtCabang, selectedLtMonth]);
 
 
   // Excel-like column filters for Table Detail
   const [colFilters, setColFilters] = useState<Record<string, { search: string; selected: string[] }>>({});
   const [activeFilterModalCol, setActiveFilterModalCol] = useState<string | null>(null);
   const [modalSearchInput, setModalSearchInput] = useState<string>('');
+
+  // Excel-like column filters for the Insight PO Overdue table
+  const [overdueColFilters, setOverdueColFilters] = useState<ColFilters>({});
+  const [activeOverdueFilterCol, setActiveOverdueFilterCol] = useState<string | null>(null);
+  const [overdueModalSearchInput, setOverdueModalSearchInput] = useState<string>('');
 
   useEffect(() => {
     const fetchGlobalData = async () => {
@@ -595,10 +772,10 @@ export default function PRUpdatePage() {
 
     // Sheet 1: PR Update
     const ws1Data = [
-      ['PO','NoPR','Branch Name','GRUP','Category','Description','STATUS Compile','No Container','bl','Shipping Line','Tanggal ETA','Week ETA','Qty'],
-      ['PO-2026-101','PR-08-01','Surabaya','Minyak Goreng Premium','Food Basic','Minyak Goreng 2L','ON VESSEL','MRTU1234567','BL-MRT-9988','Meratus Line','2026-08-10','Week 2 Agu',2500],
-      ['PO-2026-102','PR-08-02','Jakarta','Beras Setra Ramos','Groceries Premium','Beras Premium 5kg','SPJM','TEMU7654321','BL-TMS-7766','Temas Line','2026-08-15','Week 3 Agu',1800],
-      ['PO-2026-103','PR-08-03','Bandung','Gula Pasir Kristal','Baking Ingredients','Gula Kristal 1kg','HOLD DELIVERY','-','-','-','2026-08-18','Week 3 Agu',3200]
+      ['PO','NoPR','Branch Name','GRUP','Category','Description','STATUS Compile','No Container','PI','bl','Shipping Line','Tanggal ETA','Week ETA','Qty'],
+      ['PO-2026-101','PR-08-01','Surabaya','Minyak Goreng Premium','Food Basic','Minyak Goreng 2L','ON VESSEL','MRTU1234567','PI-2026-9001','BL-MRT-9988','Meratus Line','2026-08-10','Week 2 Agu',2500],
+      ['PO-2026-102','PR-08-02','Jakarta','Beras Setra Ramos','Groceries Premium','Beras Premium 5kg','SPJM','TEMU7654321','PI-2026-9002','BL-TMS-7766','Temas Line','2026-08-15','Week 3 Agu',1800],
+      ['PO-2026-103','PR-08-03','Bandung','Gula Pasir Kristal','Baking Ingredients','Gula Kristal 1kg','HOLD DELIVERY','-','PI-2026-9003','-','-','2026-08-18','Week 3 Agu',3200]
     ];
     const ws1 = XLSX.utils.aoa_to_sheet(ws1Data);
     XLSX.utils.book_append_sheet(wb, ws1, "PR Update");
@@ -650,6 +827,7 @@ export default function PRUpdatePage() {
   const colQty = useMemo(() => parsed ? findColumn(parsed.headers, ['qty', 'quantity', 'jumlah', 'qty order', 'kuantitas']) : undefined, [parsed]);
   const colContainer = useMemo(() => parsed ? findColumn(parsed.headers, ['no container', 'nocontainer', 'no. container', 'no_kontainer', 'no kontainer', 'container', 'nomor container']) : undefined, [parsed]);
   const colBl = useMemo(() => parsed ? findColumn(parsed.headers, ['bill of lading', 'no bl', 'no. bl', 'no_bl', 'nomor bl', 'b/l', 'no b/l', 'bl no', 'bl_no', 'no booking', 'booking', 'nomor booking', 'bl']) : undefined, [parsed]);
+  const colPi = useMemo(() => parsed ? findColumn(parsed.headers, ['pi', 'no pi', 'no. pi', 'nomor pi', 'pi no', 'pi_no', 'proforma invoice', 'nomor proforma invoice']) : undefined, [parsed]);
   const colCarrier = useMemo(() => parsed ? findColumn(parsed.headers, ['shipping line', 'shipping_line', 'shippingline', 'pelayaran', 'carrier', 'maskapai', 'shipping', 'line']) : undefined, [parsed]);
 
   const colTanggalEta = useMemo(() => {
@@ -719,7 +897,11 @@ export default function PRUpdatePage() {
       .map(row => {
         const copy = { ...row };
         if (colQty && copy[colQty] != null && copy[colQty] !== '') {
-          copy[colQty] = Math.round(Number(String(copy[colQty]).replace(/[^0-9.-]+/g, '')) * sc.multiplier || 0);
+          // parseIndonesianNumber (not a bare regex strip) so "2.500" parses
+          // as 2500, not 2.5 - a raw digit/dot/minus-only regex leaves the
+          // thousands-separator dot in place and Number() then reads it as
+          // a decimal point, undercounting every qty >= 1000 by ~1000x.
+          copy[colQty] = Math.round(parseIndonesianNumber(copy[colQty]) * sc.multiplier);
         }
         if (colStatus && sc.statusModifier === 'expedite' && String(copy[colStatus]).toUpperCase().includes('HOLD')) {
           copy[colStatus] = 'READY / EXPEDITED';
@@ -749,7 +931,11 @@ export default function PRUpdatePage() {
       const diffDays = Math.floor(diffMillis / (1000 * 60 * 60 * 24));
       
       if (diffDays > 0) {
-        const q = colQty && row[colQty] != null ? Math.round(Number(String(row[colQty]).replace(/[^0-9.-]+/g, '')) || 0) : 0;
+        // row[colQty] is already a parsed number by this point (see the
+        // `filtered` memo above), so this is just a null-safe coercion, not
+        // a re-parse of raw text - the actual Indonesian thousand-separator
+        // parsing happens once, upstream, via parseIndonesianNumber.
+        const q = colQty && row[colQty] != null ? Math.round(Number(row[colQty]) || 0) : 0;
         const cbg = colCabang ? (row[colCabang] || 'Unknown') : 'Unknown';
         const po = colPo ? (row[colPo] || '-') : '-';
         const desc = colDesc ? (row[colDesc] || '-') : '-';
@@ -782,16 +968,246 @@ export default function PRUpdatePage() {
     return results.sort((a, b) => b.overdueDays - a.overdueDays);
   }, [parsed, filtered, colTanggalEta, colStatus, colQty, colCabang, colPo, colDesc, colGrup, colCategory, colContainer, colCarrier, rawDataProcessingDate]);
 
+  // Columns exposed to the Excel-style filter on the Insight PO Overdue
+  // table - keyed by the fixed field names overdueInsights rows use (not the
+  // dynamic uploaded-file column names, since these are synthesized rows).
+  const OVERDUE_FILTER_COLUMNS: { key: string; label: string }[] = [
+    { key: 'cabang', label: 'Cabang' },
+    { key: 'po', label: 'No. PO' },
+    { key: 'status', label: 'Status Compile' },
+    { key: 'etaFormatted', label: 'Tanggal ETA' },
+    { key: 'overdueDays', label: 'Durasi Terlewat' },
+    { key: 'deskripsi', label: 'Deskripsi' },
+    { key: 'qty', label: 'Total Qty' },
+  ];
+
+  const displayedOverdueInsights = useMemo(
+    () => applyColumnFilters(overdueInsights, overdueColFilters, (row: any, col) => row[col]),
+    [overdueInsights, overdueColFilters]
+  );
+
+  const currentOverdueModalUniqueValues = useMemo(() => {
+    if (!activeOverdueFilterCol) return [];
+    return getUniqueColumnValues(overdueInsights, activeOverdueFilterCol, (row: any, col) => row[col]);
+  }, [activeOverdueFilterCol, overdueInsights]);
+
+  const handleApplyOverdueModalFilter = (selectedVals: string[]) => {
+    if (!activeOverdueFilterCol) return;
+    setOverdueColFilters(prev => ({
+      ...prev,
+      [activeOverdueFilterCol]: {
+        search: overdueModalSearchInput,
+        selected: selectedVals.length === currentOverdueModalUniqueValues.length ? [] : selectedVals,
+      },
+    }));
+    setActiveOverdueFilterCol(null);
+    setOverdueModalSearchInput('');
+    toast.success(`Filter kolom ${activeOverdueFilterCol} diaplikasikan!`);
+  };
+
+  // Target-status rows (SPJM/Hold Delivery/On Vessel/Delay/Ship) that could
+  // NOT be counted in overdueInsights above because their Tanggal ETA is
+  // empty or in a format parseDateVal doesn't recognize. Previously these
+  // rows were silently `continue`d and vanished from every count with no
+  // trace, which reads as "the insight is wrong" - surfacing them here
+  // instead makes clear it's a data-completeness gap, not a calculation bug.
+  const overdueEtaDataIssues = useMemo(() => {
+    if (!parsed || filtered.length === 0 || !colStatus) return [];
+    const results: any[] = [];
+    for (const row of filtered) {
+      const stat = String(row[colStatus] || '').trim().toUpperCase();
+      const isTargetStatus = stat.includes('SPJM') || stat.includes('HOLD') || stat.includes('VESSEL') || stat.includes('DELAY') || stat.includes('SHIP');
+      if (!isTargetStatus) continue;
+      const rawEta = colTanggalEta ? row[colTanggalEta] : undefined;
+      if (colTanggalEta && parseDateVal(rawEta)) continue; // has a valid ETA - already counted above
+      results.push({
+        cabang: colCabang ? (row[colCabang] || 'Unknown') : 'Unknown',
+        po: colPo ? (row[colPo] || '-') : '-',
+        status: stat,
+        etaRaw: rawEta === undefined || rawEta === null || rawEta === '' ? '(kosong)' : String(rawEta),
+      });
+    }
+    return results;
+  }, [parsed, filtered, colStatus, colTanggalEta, colCabang, colPo]);
+
+  function isEmptyDocVal(v: any): boolean {
+    const s = String(v ?? '').trim();
+    return !s || s === '-' || s === '0' || s.toUpperCase() === 'N/A' || s.toUpperCase() === '#N/A';
+  }
+
+  function countDistinctField(rows: any[], col?: string): number {
+    if (!col) return rows.length;
+    const set = new Set(rows.map(r => String(r[col] ?? '').trim()).filter(v => !isEmptyDocVal(v)));
+    return set.size;
+  }
+
+  function countDistinctPo(rows: any[]): number {
+    return countDistinctField(rows, colPo);
+  }
+
+  // Same as countDistinctField, but for rows that already carry a fixed,
+  // normalized key name (e.g. overdueInsights' `po` field) rather than the
+  // dynamic uploaded-file column name held in colPo/colPr/etc. Using
+  // countDistinctField(rows, colPo) against those rows silently produced 0 -
+  // colPo holds the raw header name (e.g. "PO"), which never matches the
+  // normalized `po` key those objects actually use.
+  function countDistinctByKey(rows: any[], key: string): number {
+    const set = new Set(rows.map(r => String(r[key] ?? '').trim()).filter(v => !isEmptyDocVal(v)));
+    return set.size;
+  }
+
+  // "Jumlah dokumen" must count distinct PO numbers, not raw rows - one PO
+  // commonly spans several rows here (one per container/shipment), so a
+  // plain row count (previously used everywhere below) overstates document
+  // counts by however many containers/line-items each PO happens to have.
+  const distinctPoCountFiltered = useMemo(() => countDistinctPo(filtered), [filtered, colPo]);
+
+  // Status totals across the WHOLE filtered dataset (not just the overdue
+  // subset) - i.e. what you'd get filtering Status Compile = Hold Delivery
+  // in the raw file and summing Qty. The Insight section's overdue table
+  // below stays scoped to rows whose ETA has actually passed; these mini
+  // cards instead answer "how much Hold/SPJM/On Vessel is there in total",
+  // with the overdue subset shown as a secondary figure so neither number
+  // is lost.
+  const statusOverview = useMemo(() => {
+    const empty = { qty: 0, docs: 0 };
+    if (!colStatus || filtered.length === 0) return { spjm: empty, hold: empty, vessel: empty };
+
+    const rowsFor = (cat: 'SPJM' | 'HOLD' | 'VESSEL') => filtered.filter(row => {
+      const stat = String(row[colStatus] || '').trim().toUpperCase();
+      if (cat === 'SPJM') return stat.includes('SPJM');
+      if (cat === 'HOLD') return stat.includes('HOLD') || stat.includes('DELAY');
+      return stat.includes('VESSEL') || stat.includes('SHIP');
+    });
+
+    const summarize = (rows: any[]) => ({
+      qty: Math.round(rows.reduce((s, r) => s + (colQty && r[colQty] != null ? Number(r[colQty]) || 0 : 0), 0)),
+      docs: countDistinctPo(rows),
+    });
+
+    return {
+      spjm: summarize(rowsFor('SPJM')),
+      hold: summarize(rowsFor('HOLD')),
+      vessel: summarize(rowsFor('VESSEL')),
+    };
+  }, [filtered, colStatus, colQty, colPo]);
+
+  // Distinct-PO counterparts of the overdue-only figures (overdueInsights
+  // rows are already one-per-container, same as `filtered`).
+  const overdueDocCounts = useMemo(() => {
+    const byCat = (cat: string) => countDistinctByKey(overdueInsights.filter((x: any) => x.statusCategory === cat), 'po');
+    return {
+      total: countDistinctByKey(overdueInsights, 'po'),
+      spjm: byCat('SPJM'),
+      hold: byCat('HOLD'),
+      vessel: byCat('VESSEL'),
+    };
+  }, [overdueInsights]);
+
+  // Top 3 cabang with the most overdue documents, per status category - lets
+  // ops immediately see WHERE to escalate instead of just how many overall.
+  const topOverdueBranchesByStatus = useMemo(() => {
+    const topForCategory = (cat: string) => {
+      const rows = overdueInsights.filter((x: any) => x.statusCategory === cat);
+      const byBranch: Record<string, any[]> = {};
+      rows.forEach((r: any) => {
+        const b = r.cabang || 'Unknown';
+        if (!byBranch[b]) byBranch[b] = [];
+        byBranch[b].push(r);
+      });
+      return Object.entries(byBranch)
+        .map(([branch, branchRows]) => ({ branch, count: countDistinctByKey(branchRows, 'po') }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 3);
+    };
+    return {
+      spjm: topForCategory('SPJM'),
+      hold: topForCategory('HOLD'),
+      vessel: topForCategory('VESSEL'),
+    };
+  }, [overdueInsights]);
+
+  // Document-chain completeness gaps: PR -> PO -> PI -> BL. A "gap" row is one
+  // where the upstream document number exists but the next one in the chain
+  // is still blank - i.e. work that's stalled at that handoff.
+  const documentChainGaps = useMemo(() => {
+    const empty = { count: 0, topCabang: [] as { branch: string; count: number }[] };
+    if (filtered.length === 0) return { prNoPo: empty, poNoPi: empty, piNoBl: empty };
+
+    const buildGap = (fromCol?: string, toCol?: string) => {
+      if (!fromCol) return empty;
+      const rows = filtered.filter(r => !isEmptyDocVal(r[fromCol]) && isEmptyDocVal(toCol ? r[toCol] : undefined));
+      const count = countDistinctField(rows, fromCol);
+      const byBranch: Record<string, Set<string>> = {};
+      rows.forEach(r => {
+        const b = colCabang ? String(r[colCabang] || 'Unknown') : 'Unknown';
+        const key = String(r[fromCol] ?? '').trim();
+        if (isEmptyDocVal(key)) return;
+        if (!byBranch[b]) byBranch[b] = new Set();
+        byBranch[b].add(key);
+      });
+      const topCabang = Object.entries(byBranch)
+        .map(([branch, set]) => ({ branch, count: set.size }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 3);
+      return { count, topCabang };
+    };
+
+    return {
+      prNoPo: buildGap(colPr, colPo),
+      poNoPi: buildGap(colPo, colPi),
+      piNoBl: buildGap(colPi, colBl),
+    };
+  }, [filtered, colPr, colPo, colPi, colBl, colCabang]);
+
+  // Distinct count of PR still "IN PROCESS" whose Tanggal ETA has already passed.
+  const inProcessOverdueCount = useMemo(() => {
+    if (!colStatus || !colTanggalEta || filtered.length === 0) return 0;
+    const rows = filtered.filter(row => {
+      const stat = String(row[colStatus] || '').trim().toUpperCase();
+      if (!stat.includes('PROCESS')) return false;
+      const etaDate = parseDateVal(row[colTanggalEta]);
+      if (!etaDate) return false;
+      const diffDays = Math.floor((rawDataProcessingDate.getTime() - etaDate.getTime()) / (1000 * 60 * 60 * 24));
+      return diffDays > 0;
+    });
+    return countDistinctField(rows, colPr);
+  }, [filtered, colStatus, colTanggalEta, colPr, rawDataProcessingDate]);
+
+  // Distinct count of PR already at status READY, plus the top 3 branches
+  // holding the most of them (i.e. where stock is ready to be picked up/unloaded).
+  const readyPrInsight = useMemo(() => {
+    const empty = { count: 0, topCabang: [] as { branch: string; count: number }[] };
+    if (!colStatus || filtered.length === 0) return empty;
+
+    const rows = filtered.filter(row => String(row[colStatus] || '').trim().toUpperCase().includes('READY'));
+    const count = countDistinctField(rows, colPr);
+
+    const byBranch: Record<string, Set<string>> = {};
+    rows.forEach(row => {
+      const b = colCabang ? String(row[colCabang] || 'Unknown') : 'Unknown';
+      const key = colPr ? String(row[colPr] ?? '').trim() : '';
+      if (isEmptyDocVal(key)) return;
+      if (!byBranch[b]) byBranch[b] = new Set();
+      byBranch[b].add(key);
+    });
+    const topCabang = Object.entries(byBranch)
+      .map(([branch, set]) => ({ branch, count: set.size }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 3);
+
+    return { count, topCabang };
+  }, [filtered, colStatus, colPr, colCabang]);
+
   // Chart data: Grouped by Cabang, Week ETA & by Category, Count by STATUS Compile and Category
-  const { chartData, chartEtaData, chartContainerData, totalContainers, chartCategoryData, statusList, categoryList, totalQty, holdCount } = useMemo(() => {
-    if (!parsed || filtered.length === 0) return { chartData: [], chartEtaData: [], chartContainerData: [], totalContainers: 0, chartCategoryData: [], statusList: [], categoryList: [], totalQty: 0, holdCount: 0 };
+  const { chartData, chartEtaData, chartContainerData, totalContainers, chartCategoryData, statusList, categoryList, totalQty } = useMemo(() => {
+    if (!parsed || filtered.length === 0) return { chartData: [], chartEtaData: [], chartContainerData: [], totalContainers: 0, chartCategoryData: [], statusList: [], categoryList: [], totalQty: 0 };
     const mapCabang: Record<string, any> = {};
     const mapEta: Record<string, any> = {};
     const mapCat: Record<string, any> = {};
     const statuses = new Set<string>();
     const categories = new Set<string>();
     let qtySum = 0;
-    let holdSum = 0;
 
     const colCatUse = colCategory || colGrup;
 
@@ -799,18 +1215,16 @@ export default function PRUpdatePage() {
       const cbg = colCabang ? (row[colCabang] || 'Unknown') : 'All';
       const cat = colCatUse ? (String(row[colCatUse] || 'Umum / No Kategori').trim()) : 'Umum';
       const eta = colEta ? (row[colEta] || 'Unscheduled / Tanpa ETA') : 'Unscheduled';
-      
+
       if (selectedCabangForChart !== 'All' && cbg !== selectedCabangForChart) continue;
 
       const stat = colStatus ? (String(row[colStatus] || 'Unknown').toUpperCase()) : 'TOTAL';
-      const q = colQty && row[colQty] != null ? Math.round(Number(String(row[colQty]).replace(/[^0-9.-]+/g, '')) || 0) : 1;
-      
+      // row[colQty] is already a parsed number from the `filtered` memo.
+      const q = colQty && row[colQty] != null ? Math.round(Number(row[colQty]) || 0) : 1;
+
       statuses.add(stat);
       categories.add(cat);
       qtySum += q;
-      if (stat.includes('HOLD') || stat.includes('DELAY') || stat.includes('TUNDA')) {
-        holdSum += 1;
-      }
 
       // Group by Cabang
       if (!mapCabang[cbg]) {
@@ -852,101 +1266,23 @@ export default function PRUpdatePage() {
       chartEtaData: Object.values(mapEta).sort((a, b) => parseEtaRank(String(a.eta)) - parseEtaRank(String(b.eta))),
       chartContainerData,
       totalContainers,
-      chartCategoryData: Object.values(mapCat), 
-      statusList: Array.from(statuses), 
+      chartCategoryData: Object.values(mapCat),
+      statusList: Array.from(statuses),
       categoryList: Array.from(categories),
-      totalQty: Math.round(qtySum), 
-      holdCount: holdSum 
+      totalQty: Math.round(qtySum)
     };
   }, [parsed, filtered, colCabang, colCategory, colGrup, colEta, colStatus, colQty, colPo, selectedCabangForChart]);
-
-  // Pivot Table Data (Grouped by Cabang - PO - Grup - Category - Description)
-  const pivotData = useMemo(() => {
-    if (!parsed || filtered.length === 0) return [];
-    const map: Record<string, any> = {};
-
-    for (const row of filtered) {
-      const stat = colStatus ? (String(row[colStatus] || 'Unknown').toUpperCase()) : 'UNKNOWN';
-      
-      // Filter khusus status ON VESSEL, HOLD DELIVERY, SPJM (atau simulasi delay/expedite dari status tsb)
-      if (onlyCrucialStatus) {
-        const isCrucial = stat.includes('VESSEL') || stat.includes('HOLD') || stat.includes('SPJM') || stat.includes('DELAY') || stat.includes('EXPEDITED');
-        if (!isCrucial) continue;
-      }
-
-      const cbg = colCabang ? (row[colCabang] || 'Unknown') : 'All';
-      const po = colPo ? (row[colPo] || '-') : '-';
-      const grup = colGrup ? (row[colGrup] || '-') : '-';
-      const cat = colCategory ? (row[colCategory] || '-') : '-';
-      const desc = colDesc ? (row[colDesc] || 'Unknown') : 'Unknown';
-      const eta = colEta ? (row[colEta] || 'Unknown') : 'Unknown';
-      const q = colQty && row[colQty] != null ? Math.round(Number(String(row[colQty]).replace(/[^0-9.-]+/g, '')) || 0) : 0;
-
-      const key = `${cbg}_${po}_${grup}_${cat}_${desc}_${stat}_${eta}`;
-      if (!map[key]) {
-        map[key] = {
-          'Cabang': cbg,
-          'PO': po,
-          'Grup': grup,
-          'Category': cat,
-          'Deskripsi': desc,
-          'Status': stat,
-          'ETA': eta,
-          'Total Qty': 0,
-          'Jumlah Dokumen': 0
-        };
-      }
-      map[key]['Total Qty'] = Math.round(map[key]['Total Qty'] + q);
-      map[key]['Jumlah Dokumen'] += 1;
-    }
-    return Object.values(map).sort((a: any, b: any) => {
-      const cabA = String(a['Cabang'] || '').trim();
-      const cabB = String(b['Cabang'] || '').trim();
-      const diffCab = cabA.localeCompare(cabB, 'id', { numeric: true });
-      if (diffCab !== 0) return diffCab;
-
-      const poA = String(a['PO'] || '').trim();
-      const poB = String(b['PO'] || '').trim();
-      const diffPo = poA.localeCompare(poB, 'id', { numeric: true });
-      if (diffPo !== 0) return diffPo;
-
-      return (Number(b['Total Qty']) || 0) - (Number(a['Total Qty']) || 0);
-    });
-  }, [parsed, filtered, colCabang, colPo, colGrup, colCategory, colDesc, colStatus, colEta, colQty, onlyCrucialStatus]);
 
   // Excel-like Filtered Rows for Table Detail
   const displayedDetailRows = useMemo(() => {
     if (!filtered || filtered.length === 0) return [];
-    const activeRules = Object.entries(colFilters).filter(([_, rule]) => rule && (rule.search.trim() !== '' || (rule.selected && rule.selected.length > 0)));
-    if (activeRules.length === 0) return filtered;
-
-    return filtered.filter(row => {
-      for (const [col, rule] of activeRules) {
-        let val = row[col];
-        if (val === undefined || val === null) val = '-';
-        const strVal = String(val).trim();
-        
-        if (rule.search && rule.search.trim() !== '') {
-          if (!strVal.toLowerCase().includes(rule.search.toLowerCase().trim())) return false;
-        }
-        if (rule.selected && rule.selected.length > 0) {
-          if (!rule.selected.includes(strVal)) return false;
-        }
-      }
-      return true;
-    });
+    return applyColumnFilters(filtered, colFilters, (row, col) => row[col]);
   }, [filtered, colFilters]);
 
   // Unique values for Active Filter Modal
   const currentModalUniqueValues = useMemo(() => {
     if (!activeFilterModalCol || !filtered) return [];
-    const setVals = new Set<string>();
-    filtered.forEach(r => {
-      let val = r[activeFilterModalCol];
-      if (val === undefined || val === null || val === '') val = '-';
-      setVals.add(String(val).trim());
-    });
-    return Array.from(setVals).sort();
+    return getUniqueColumnValues(filtered, activeFilterModalCol, (row, col) => row[col]);
   }, [activeFilterModalCol, filtered]);
 
   const handleApplyModalFilter = (selectedVals: string[]) => {
@@ -1099,8 +1435,8 @@ export default function PRUpdatePage() {
       ? [{ id: 'avg_total_days', label: 'Avg Total Days', sourceTableId: 'lead_time_raw', field: 'total_days', agg: 'avg', decimals: 1, suffix: ' hari' }]
       : [
           { id: 'total_qty', label: 'Total Qty Pesanan PR', sourceTableId: 'pr_detail', field: 'qty', agg: 'sum', decimals: 0, suffix: ' Qty' },
-          { id: 'total_dokumen', label: 'Total Dokumen PO/PR', sourceTableId: 'pr_detail', field: 'qty', agg: 'count', decimals: 0, suffix: ' Dokumen' },
-          { id: 'hold_count', label: 'Item Hold/SPJM/Delay', sourceTableId: 'hold_items', field: 'qty', agg: 'count', decimals: 0, suffix: ' Dokumen' },
+          { id: 'total_dokumen', label: 'Total Dokumen PO/PR', sourceTableId: 'pr_detail', field: 'po', agg: 'countDistinct', decimals: 0, suffix: ' Dokumen' },
+          { id: 'hold_count', label: 'Item Hold/SPJM/Delay', sourceTableId: 'hold_items', field: 'po', agg: 'countDistinct', decimals: 0, suffix: ' Dokumen' },
         ],
   } : undefined;
 
@@ -1150,13 +1486,13 @@ export default function PRUpdatePage() {
             <div className="flex flex-wrap gap-2">
               <button
                 onClick={handleDownloadTemplate}
-                className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-slate-900 font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-purple-600/20"
+                className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-purple-600/20"
               >
                 <Download className="w-4 h-4" /> Unduh Template CSV
               </button>
               <button
                 onClick={handleGenerateDemo}
-                className="px-4 py-2 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-slate-900 font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-purple-500/20"
+                className="px-4 py-2 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-purple-500/20"
               >
                 <Sparkles className="w-4 h-4" /> Gunakan Data Demo (+ SPJM)
               </button>
@@ -1221,7 +1557,7 @@ export default function PRUpdatePage() {
           <h2 className="text-sm font-bold uppercase tracking-wider text-purple-400 flex items-center gap-2">
             <Zap className="w-4 h-4" /> Pilih 3 Jalur Simulasi Rantai Pasok PR/PO:
           </h2>
-          <span className="text-xs text-slate-600 italic hidden sm:inline">Klik tab untuk memproyeksikan percepatan atau delay lead time!</span>
+          <span className="text-xs text-slate-400 italic hidden sm:inline">Klik tab untuk memproyeksikan percepatan atau delay lead time!</span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -1237,22 +1573,22 @@ export default function PRUpdatePage() {
                 }}
                 className={`relative group p-4 sm:p-5 rounded-2xl transition-all duration-300 text-left border overflow-hidden shadow-lg ${
                   isSelected
-                    ? `bg-gradient-to-br ${sc.color} text-slate-900 border-transparent ring-2 ring-white/20 shadow-purple-500/25 scale-[1.02]`
+                    ? `bg-gradient-to-br ${sc.color} text-white border-transparent ring-2 ring-white/20 shadow-purple-500/25 scale-[1.02]`
                     : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 hover:border-slate-600'
                 }`}
               >
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-bold text-base tracking-wide flex items-center gap-2.5">
-                    <Icon className={`w-5 h-5 ${isSelected ? 'text-slate-900' : 'text-purple-400'}`} />
+                    <Icon className={`w-5 h-5 ${isSelected ? 'text-white' : 'text-purple-400'}`} />
                     {sc.title}
                   </span>
                   {isSelected && (
-                    <span className="px-2 py-0.5 rounded-full bg-white/20 text-slate-900 text-xs font-black uppercase tracking-wider">
+                    <span className="px-2 py-0.5 rounded-full bg-white/20 text-white text-xs font-black uppercase tracking-wider">
                       Aktif
                     </span>
                   )}
                 </div>
-                <p className={`text-xs sm:text-sm leading-relaxed ${isSelected ? 'text-slate-900 font-medium' : 'text-slate-600'}`}>
+                <p className={`text-xs sm:text-sm leading-relaxed ${isSelected ? 'text-white font-medium' : 'text-slate-600'}`}>
                   {sc.desc}
                 </p>
               </button>
@@ -1272,16 +1608,16 @@ export default function PRUpdatePage() {
         />
         <KPICard
           title="Total Dokumen PO/PR"
-          value={`${filtered.length.toLocaleString('id-ID')} Dokumen`}
-          trend="Berdasarkan Filter Aktif"
+          value={`${distinctPoCountFiltered.toLocaleString('id-ID')} Dokumen`}
+          trend="Distinct No. PO • Berdasarkan Filter Aktif"
           icon={<FileBarChart className="w-5 h-5 text-blue-400" />}
           className="border-blue-500/20 bg-blue-500/5 hover:border-blue-500/40 transition"
         />
         <KPICard
           title="Item Hold Delivery / SPJM"
-          value={`${holdCount} Dokumen`}
-          trend={holdCount === 0 ? "Aliran Pasokan Lancar" : "Perlu Tindak Lanjut / Cek Port"}
-          isAlert={holdCount > 0}
+          value={`${statusOverview.hold.docs + statusOverview.spjm.docs} Dokumen`}
+          trend={statusOverview.hold.docs + statusOverview.spjm.docs === 0 ? "Aliran Pasokan Lancar" : "Perlu Tindak Lanjut / Cek Port"}
+          isAlert={statusOverview.hold.docs + statusOverview.spjm.docs > 0}
           icon={<AlertCircle className="w-5 h-5 text-rose-400" />}
           className="border-rose-500/20 bg-rose-500/5 hover:border-rose-500/40 transition"
         />
@@ -1362,7 +1698,7 @@ export default function PRUpdatePage() {
                 <BarChart3 className="w-5 h-5 text-purple-400" />
                 Grafik Distribusi Status Compile & Persebaran Category ({chartViewMode === 'eta' ? 'per Week ETA' : chartViewMode === 'cabang' ? 'per Cabang' : 'Jumlah Container per Cabang'})
               </h3>
-              <p className="text-xs text-slate-600 mt-1">
+              <p className="text-xs text-slate-300 mt-1">
                 {chartViewMode === 'container' ? (
                   <>Sumbu X: <b className="text-emerald-400">Cabang</b> • Sumbu Y: <b className="text-cyan-300">Jumlah Container</b> (dihitung otomatis dari distinct count nomor PO per cabang).</>
                 ) : (
@@ -1376,7 +1712,7 @@ export default function PRUpdatePage() {
                 <button
                   onClick={() => setChartViewMode('eta')}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
-                    chartViewMode === 'eta' ? 'bg-purple-600 text-slate-900 shadow-md ring-1 ring-purple-400' : 'text-slate-600 hover:text-slate-900'
+                    chartViewMode === 'eta' ? 'bg-purple-600 text-white shadow-md ring-1 ring-purple-400' : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
                   🗓️ Week ETA
@@ -1384,7 +1720,7 @@ export default function PRUpdatePage() {
                 <button
                   onClick={() => setChartViewMode('cabang')}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
-                    chartViewMode === 'cabang' ? 'bg-purple-600 text-slate-900 shadow-md ring-1 ring-purple-400' : 'text-slate-600 hover:text-slate-900'
+                    chartViewMode === 'cabang' ? 'bg-purple-600 text-white shadow-md ring-1 ring-purple-400' : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
                   🏢 Cabang
@@ -1392,7 +1728,7 @@ export default function PRUpdatePage() {
                 <button
                   onClick={() => setChartViewMode('container')}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
-                    chartViewMode === 'container' ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-slate-900 shadow-md ring-1 ring-cyan-400' : 'text-slate-600 hover:text-slate-900'
+                    chartViewMode === 'container' ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-md ring-1 ring-cyan-400' : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
                   📦 Jumlah Container
@@ -1466,32 +1802,65 @@ export default function PRUpdatePage() {
             <h3 className="text-lg sm:text-xl font-black text-white flex items-center gap-2.5">
               Insight PO Overdue: SPJM, Hold Delivery & On Vessel
             </h3>
-            <p className="text-xs sm:text-sm text-slate-700">
+            <p className="text-xs sm:text-sm text-slate-300">
               Mendeteksi dokumen dengan status krusial yang <b className="text-rose-400 underline">sudah melewati Tanggal ETA</b> dari tanggal pengolahan raw data (<b>{rawDataProcessingDate.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}</b>).
             </p>
           </div>
-          
+
           <div className="flex items-center gap-2 shrink-0">
+            {Object.keys(overdueColFilters).some(k => overdueColFilters[k]?.search || overdueColFilters[k]?.selected?.length > 0) && (
+              <button
+                onClick={() => { setOverdueColFilters({}); toast.success('Semua filter kolom overdue dibersihkan!'); }}
+                className="px-3 py-2 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+              >
+                <RefreshCw className="w-3.5 h-3.5" /> Reset Filter Kolom
+              </button>
+            )}
             <span className="px-4 py-2 rounded-xl bg-amber-500/20 border-2 border-amber-500/60 font-black text-xs sm:text-sm text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.3)] flex items-center gap-2">
               <Timer className="w-4 h-4 text-amber-400 animate-spin-slow" />
-              Total Overdue: {overdueInsights.length} PO
+              Total Overdue: {overdueDocCounts.total} PO
             </span>
           </div>
         </div>
+
+        {overdueEtaDataIssues.length > 0 && (
+          <div className="mb-6 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/40 text-amber-300 text-xs font-semibold flex items-start gap-2.5">
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+            <span>
+              {overdueEtaDataIssues.length} dokumen berstatus SPJM/Hold Delivery/On Vessel <b>tidak ikut dihitung</b> di insight ini karena kolom Tanggal ETA kosong atau formatnya tidak terbaca
+              (contoh: {overdueEtaDataIssues.slice(0, 5).map((i: any) => `${i.po} [${i.status}, ETA: ${i.etaRaw}]`).join('; ')}
+              {overdueEtaDataIssues.length > 5 ? `, dan ${overdueEtaDataIssues.length - 5} lainnya` : ''}).
+              Periksa format tanggal pada kolom Tanggal ETA di file sumber untuk baris-baris ini.
+            </span>
+          </div>
+        )}
 
         {/* Mini KPI Cards for Overdue Insights */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           <div className="p-4 rounded-2xl bg-gradient-to-br from-purple-950/80 to-slate-900 border border-purple-500/50 shadow-[0_0_20px_rgba(168,85,247,0.25)] flex items-center justify-between transition-all hover:scale-[1.02]">
             <div>
               <div className="text-xs text-purple-300 font-extrabold uppercase tracking-wider flex items-center gap-1.5">
-                <span>🟣 SPJM Overdue</span>
+                <span>🟣 SPJM</span>
               </div>
               <div className="text-xl sm:text-2xl font-black text-white mt-1.5 drop-shadow-md">
-                {overdueInsights.filter(x => x.statusCategory === 'SPJM').length} <span className="text-xs font-semibold text-purple-300">Dokumen</span>
+                {statusOverview.spjm.docs} <span className="text-xs font-semibold text-purple-300">Dokumen (Distinct PO)</span>
               </div>
               <div className="text-[11px] text-purple-100 font-mono font-bold mt-1 bg-purple-900/60 px-2 py-0.5 rounded border border-purple-500/50 inline-block shadow-sm">
-                Total Qty: {overdueInsights.filter(x => x.statusCategory === 'SPJM').reduce((s, x) => s + x.qty, 0).toLocaleString('id-ID')}
+                Total Qty: {statusOverview.spjm.qty.toLocaleString('id-ID')}
               </div>
+              <div className="text-[11px] text-purple-300/80 font-semibold mt-1">
+                Overdue (ETA lewat): {overdueDocCounts.spjm} dokumen
+              </div>
+              {topOverdueBranchesByStatus.spjm.length > 0 && (
+                <div className="text-[10px] text-purple-200/90 font-semibold mt-1.5 space-y-0.5">
+                  <div className="uppercase tracking-wider text-purple-400/80">Top 3 Cabang Overdue:</div>
+                  {topOverdueBranchesByStatus.spjm.map((b, i) => (
+                    <div key={i} className="flex items-center gap-1">
+                      <span className="text-purple-400">{i + 1}.</span> {b.branch} <span className="text-purple-300 font-mono">({b.count})</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="w-12 h-12 rounded-2xl bg-purple-500/20 border border-purple-400/50 flex items-center justify-center text-purple-300 text-2xl font-black shadow-[0_0_15px_rgba(168,85,247,0.4)]">
               🟣
@@ -1501,14 +1870,27 @@ export default function PRUpdatePage() {
           <div className="p-4 rounded-2xl bg-gradient-to-br from-rose-950/80 to-slate-900 border border-rose-500/50 shadow-[0_0_20px_rgba(244,63,94,0.25)] flex items-center justify-between transition-all hover:scale-[1.02]">
             <div>
               <div className="text-xs text-rose-300 font-extrabold uppercase tracking-wider flex items-center gap-1.5">
-                <span>🔴 Hold Delivery Overdue</span>
+                <span>🔴 Hold Delivery</span>
               </div>
               <div className="text-xl sm:text-2xl font-black text-white mt-1.5 drop-shadow-md">
-                {overdueInsights.filter(x => x.statusCategory === 'HOLD').length} <span className="text-xs font-semibold text-rose-300">Dokumen</span>
+                {statusOverview.hold.docs} <span className="text-xs font-semibold text-rose-300">Dokumen (Distinct PO)</span>
               </div>
               <div className="text-[11px] text-rose-100 font-mono font-bold mt-1 bg-rose-900/60 px-2 py-0.5 rounded border border-rose-500/50 inline-block shadow-sm">
-                Total Qty: {overdueInsights.filter(x => x.statusCategory === 'HOLD').reduce((s, x) => s + x.qty, 0).toLocaleString('id-ID')}
+                Total Qty: {statusOverview.hold.qty.toLocaleString('id-ID')}
               </div>
+              <div className="text-[11px] text-rose-300/80 font-semibold mt-1">
+                Overdue (ETA lewat): {overdueDocCounts.hold} dokumen
+              </div>
+              {topOverdueBranchesByStatus.hold.length > 0 && (
+                <div className="text-[10px] text-rose-200/90 font-semibold mt-1.5 space-y-0.5">
+                  <div className="uppercase tracking-wider text-rose-400/80">Top 3 Cabang Overdue:</div>
+                  {topOverdueBranchesByStatus.hold.map((b, i) => (
+                    <div key={i} className="flex items-center gap-1">
+                      <span className="text-rose-400">{i + 1}.</span> {b.branch} <span className="text-rose-300 font-mono">({b.count})</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="w-12 h-12 rounded-2xl bg-rose-500/20 border border-rose-400/50 flex items-center justify-center text-rose-300 text-2xl font-black shadow-[0_0_15px_rgba(244,63,94,0.4)]">
               🔴
@@ -1518,14 +1900,27 @@ export default function PRUpdatePage() {
           <div className="p-4 rounded-2xl bg-gradient-to-br from-blue-950/80 to-slate-900 border border-blue-500/50 shadow-[0_0_20px_rgba(59,130,246,0.25)] flex items-center justify-between transition-all hover:scale-[1.02]">
             <div>
               <div className="text-xs text-blue-300 font-extrabold uppercase tracking-wider flex items-center gap-1.5">
-                <span>🔵 On Vessel Overdue</span>
+                <span>🔵 On Vessel</span>
               </div>
               <div className="text-xl sm:text-2xl font-black text-white mt-1.5 drop-shadow-md">
-                {overdueInsights.filter(x => x.statusCategory === 'VESSEL').length} <span className="text-xs font-semibold text-blue-300">Dokumen</span>
+                {statusOverview.vessel.docs} <span className="text-xs font-semibold text-blue-300">Dokumen (Distinct PO)</span>
               </div>
               <div className="text-[11px] text-blue-100 font-mono font-bold mt-1 bg-blue-900/60 px-2 py-0.5 rounded border border-blue-500/50 inline-block shadow-sm">
-                Total Qty: {overdueInsights.filter(x => x.statusCategory === 'VESSEL').reduce((s, x) => s + x.qty, 0).toLocaleString('id-ID')}
+                Total Qty: {statusOverview.vessel.qty.toLocaleString('id-ID')}
               </div>
+              <div className="text-[11px] text-blue-300/80 font-semibold mt-1">
+                Overdue (ETA lewat): {overdueDocCounts.vessel} dokumen
+              </div>
+              {topOverdueBranchesByStatus.vessel.length > 0 && (
+                <div className="text-[10px] text-blue-200/90 font-semibold mt-1.5 space-y-0.5">
+                  <div className="uppercase tracking-wider text-blue-400/80">Top 3 Cabang Overdue:</div>
+                  {topOverdueBranchesByStatus.vessel.map((b, i) => (
+                    <div key={i} className="flex items-center gap-1">
+                      <span className="text-blue-400">{i + 1}.</span> {b.branch} <span className="text-blue-300 font-mono">({b.count})</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="w-12 h-12 rounded-2xl bg-blue-500/20 border border-blue-400/50 flex items-center justify-center text-blue-300 text-2xl font-black shadow-[0_0_15px_rgba(59,130,246,0.4)]">
               🔵
@@ -1534,17 +1929,46 @@ export default function PRUpdatePage() {
         </div>
 
         {/* Table of Overdue POs */}
+        <p className="text-xs text-slate-400 mb-2">
+          Menampilkan {displayedOverdueInsights.length} dari {overdueInsights.length} dokumen overdue
+          {Object.keys(overdueColFilters).some(k => overdueColFilters[k]?.search || overdueColFilters[k]?.selected?.length > 0) ? ' (terfilter)' : ''}.
+        </p>
         <div className="overflow-x-auto rounded-xl border border-slate-200 max-h-[420px] overflow-y-auto shadow-inner">
           <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[1050px]">
             <thead className="bg-slate-800/80 text-slate-200 uppercase font-bold sticky top-0 z-20 shadow-md text-center text-[11px] tracking-wider">
               <tr className="border-b border-slate-700">
-                <th className="py-3.5 px-3 text-left">Cabang</th>
-                <th className="py-3.5 px-3 border-l border-slate-700 text-amber-400">No. PO</th>
-                <th className="py-3.5 px-3 border-l border-slate-700 text-purple-400">Status Compile</th>
-                <th className="py-3.5 px-3 border-l border-slate-700 text-cyan-300">Tanggal ETA</th>
-                <th className="py-3.5 px-4 border-l border-slate-700 text-rose-400 bg-rose-950/40 font-extrabold">Durasi Terlewat</th>
-                <th className="py-3.5 px-3 border-l border-slate-700 text-left">Deskripsi & Kategori</th>
-                <th className="py-3.5 px-3 border-l border-slate-700 text-emerald-400">Total Qty</th>
+                {OVERDUE_FILTER_COLUMNS.map((col, idx) => {
+                  const isFiltered = overdueColFilters[col.key]?.search || (overdueColFilters[col.key]?.selected && overdueColFilters[col.key]?.selected.length > 0);
+                  return (
+                    <th
+                      key={col.key}
+                      className={`py-3.5 px-3 border-slate-700 align-middle ${idx === 0 ? 'text-left' : 'border-l'} ${
+                        col.key === 'po' ? 'text-amber-400' :
+                        col.key === 'status' ? 'text-purple-400' :
+                        col.key === 'etaFormatted' ? 'text-cyan-300' :
+                        col.key === 'overdueDays' ? 'text-rose-400 bg-rose-950/40 font-extrabold' :
+                        col.key === 'deskripsi' ? 'text-left' :
+                        col.key === 'qty' ? 'text-emerald-400' : ''
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-1.5">
+                        <span className="truncate">{col.key === 'deskripsi' ? 'Deskripsi & Kategori' : col.label}</span>
+                        <button
+                          onClick={() => {
+                            setActiveOverdueFilterCol(col.key);
+                            setOverdueModalSearchInput(overdueColFilters[col.key]?.search || '');
+                          }}
+                          className={`p-1 rounded transition shrink-0 ${
+                            isFiltered ? 'bg-emerald-500 text-slate-900 shadow-sm ring-2 ring-emerald-400' : 'text-slate-400 hover:text-white hover:bg-slate-700'
+                          }`}
+                          title={`Filter Kolom ala Excel: ${col.label}`}
+                        >
+                          <Filter className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </th>
+                  );
+                })}
                 <th className="py-3.5 px-4 border-l border-slate-700">Action & Rekomendasi</th>
               </tr>
             </thead>
@@ -1555,7 +1979,14 @@ export default function PRUpdatePage() {
                     🎉 Tidak ada dokumen SPJM, Hold Delivery, atau On Vessel yang melewati Tanggal ETA! Seluruh rantai pasok tepat waktu.
                   </td>
                 </tr>
-              ) : overdueInsights.map((item: any, idx: number) => {
+              ) : displayedOverdueInsights.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="py-12 text-center text-slate-400 font-medium">
+                    Tidak ada baris yang cocok dengan filter kolom aktif.{' '}
+                    <span className="text-rose-400 underline cursor-pointer" onClick={() => setOverdueColFilters({})}>Klik di sini untuk mereset filter</span>.
+                  </td>
+                </tr>
+              ) : displayedOverdueInsights.map((item: any, idx: number) => {
                 const isSevere = item.overdueDays >= 14;
                 const isMod = item.overdueDays >= 7 && !isSevere;
                 return (
@@ -1612,130 +2043,36 @@ export default function PRUpdatePage() {
             </tbody>
           </table>
         </div>
-      </GlassCard>
 
-      {/* ─── TABEL COMPLEMENTARY: ANALISIS KOMPARATIF PR & STATUS COMPILE (CABANG - PO - GRUP - CATEGORY - DESCRIPTION) ─── */}
-      <GlassCard className="p-6 border-slate-200 bg-white shadow-2xl overflow-hidden">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-slate-200 pb-4 mb-6 gap-4">
-          <div>
-            <div className="flex items-center gap-3">
-              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2.5">
-                <FileSpreadsheet className="w-5 h-5 text-purple-400" />
-                Tabel Analisis Komparatif PR & Status Compile ({pivotData.length} Kombinasi Item)
-              </h3>
-              <button
-                onClick={() => setOnlyCrucialStatus(!onlyCrucialStatus)}
-                className={`no-export px-3 py-1 rounded-xl text-xs font-extrabold transition flex items-center gap-1.5 border shadow-md ${
-                  onlyCrucialStatus
-                    ? 'bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-300 border-amber-500/50'
-                    : 'bg-slate-100 text-slate-700 border-slate-600 hover:bg-slate-700'
-                }`}
-                title="Klik untuk mengubah filter status"
-              >
-                <Filter className="w-3.5 h-3.5" />
-                <span>{onlyCrucialStatus ? '🎯 Khusus: On Vessel • Hold • SPJM' : '📋 Semua Status Compile'}</span>
-              </button>
-            </div>
-            <p className="text-xs text-slate-600 mt-1">
-              Diurutkan rapi berdasarkan: <b className="text-amber-300">Cabang (A-Z) ➔ No PO (A-Z)</b>. Menampilkan kuota dan zonasi tindak lanjut supply chain.
-            </p>
-          </div>
-
-          <button
-            onClick={handleExport}
-            className="no-export px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-slate-900 font-semibold text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-purple-600/20 shrink-0"
-          >
-            <Download className="w-4 h-4" /> Ekspor Hasil ke Excel / CSV
-          </button>
-        </div>
-
-        <div className="overflow-x-auto rounded-xl border border-slate-200 max-h-[600px] overflow-y-auto">
-          <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[1100px]">
-            <thead className="bg-slate-50 text-slate-700 uppercase font-bold sticky top-0 z-20 shadow-md">
-              <tr className="border-b border-slate-200 text-[11px] tracking-wider text-center">
-                <th className="py-3.5 px-4 text-left">Cabang</th>
-                <th className="py-3.5 px-3 border-l border-slate-200 text-amber-400">No. PO</th>
-                <th className="py-3.5 px-4 border-l border-slate-200 text-left">Grup & Kategori</th>
-                <th className="py-3.5 px-4 border-l border-slate-200 text-left">Deskripsi Barang</th>
-                <th className="py-3.5 px-3 border-l border-slate-200 text-purple-400">Status Compile</th>
-                <th className="py-3.5 px-3 border-l border-slate-200 text-cyan-400">Week ETA</th>
-                <th className="py-3.5 px-4 border-l border-slate-200 text-emerald-400">Total Qty</th>
-                <th className="py-3.5 px-3 border-l border-slate-200 bg-slate-100 text-slate-900">Jumlah Dokumen</th>
-                <th className="py-3.5 px-4 border-l border-slate-200">Zonasi Tindakan</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/80 text-slate-700 text-center">
-              {pivotData.length === 0 ? (
-                <tr>
-                  <td colSpan={9} className="py-12 text-center text-slate-600 font-medium">
-                    Tidak ada item yang memenuhi kriteria filter. Cobalah nonaktifkan filter status krusial atau perluas filter cabang/ETA.
-                  </td>
-                </tr>
-              ) : pivotData.slice(0, 150).map((row: any, idx: number) => {
-                const stat = String(row['Status']).toUpperCase();
-                const isHold = stat.includes('HOLD') || stat.includes('DELAY');
-                const isVessel = stat.includes('VESSEL') || stat.includes('SHIP');
-                const isSpjm = stat.includes('SPJM');
-                const isReady = stat.includes('READY') || stat.includes('DONE') || stat.includes('EXPEDITED');
-                
-                return (
-                  <tr
-                    key={idx}
-                    className="hover:bg-slate-100 transition cursor-pointer font-medium"
-                    onClick={() => setSelectedCabangForChart(row['Cabang'] === selectedCabangForChart ? 'All' : row['Cabang'])}
-                  >
-                    <td className="py-3 px-4 text-left font-bold text-slate-900 align-middle">
-                      {row['Cabang']}
-                    </td>
-                    <td className="py-3 px-3 border-l border-slate-200 font-mono font-bold text-amber-300 align-middle">
-                      {row['PO']}
-                    </td>
-                    <td className="py-3 px-4 border-l border-slate-200 text-left align-middle">
-                      <div className="font-semibold text-slate-800 text-xs">{row['Grup']}</div>
-                      <div className="text-[11px] text-purple-300 mt-0.5 font-mono">{row['Category']}</div>
-                    </td>
-                    <td className="py-3 px-4 border-l border-slate-200 text-left text-slate-700 max-w-[220px] truncate align-middle" title={row['Deskripsi']}>
-                      {row['Deskripsi']}
-                    </td>
-                    <td className="py-3 px-3 border-l border-slate-200 font-extrabold text-slate-800 align-middle">
-                      <span className={`px-2 py-1 rounded-lg text-xs font-bold inline-block ${
-                        isHold ? 'bg-rose-950/60 text-rose-300 border border-rose-500/30' :
-                        isSpjm ? 'bg-purple-950/60 text-purple-300 border border-purple-500/30' :
-                        isVessel ? 'bg-blue-950/60 text-blue-300 border border-blue-500/30' : ''
-                      }`}>
-                        {row['Status']}
-                      </span>
-                    </td>
-                    <td className="py-3 px-3 border-l border-slate-200 font-mono font-bold text-cyan-300 align-middle">
-                      {row['ETA']}
-                    </td>
-                    <td className="py-3 px-4 border-l border-slate-200 font-mono font-black text-emerald-400 text-base align-middle">
-                      {Number(row['Total Qty']).toLocaleString('id-ID')}
-                    </td>
-                    <td className="py-3 px-3 border-l border-slate-200 bg-slate-50 font-bold font-mono text-slate-900 text-base align-middle">
-                      {Number(row['Jumlah Dokumen']).toLocaleString('id-ID')}
-                    </td>
-                    <td className="py-3 px-4 border-l border-slate-200 align-middle">
-                      <span className={`px-2.5 py-1 rounded-full text-[11px] font-black uppercase tracking-wider inline-block ${
-                        isHold ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40 animate-pulse' :
-                        isSpjm ? 'bg-purple-500/20 text-purple-400 border border-purple-500/40 shadow-sm' :
-                        isVessel ? 'bg-blue-500/20 text-blue-400 border border-blue-500/40' :
-                        isReady ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' :
-                        'bg-amber-500/20 text-amber-400 border border-amber-500/40'
-                      }`}>
-                        {isHold ? '🔴 HOLD (ESKALASI VENDOR)' : isSpjm ? '🟣 SPJM (SIAP KELUAR PORT)' : isVessel ? '🔵 ON VESSEL (PANTAU PORT)' : isReady ? '🟢 READY (SIAP BONGKAR)' : '🟡 IN PROCESS (FOLLOW UP)'}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-        {pivotData.length > 150 && (
-          <p className="text-xs text-slate-600 mt-4 italic text-center">
-            *Menampilkan 150 baris pertama dengan Qty terbesar dari total {pivotData.length} kombinasi item...
-          </p>
+        {activeOverdueFilterCol && (
+          <ExcelFilterModal
+            columnLabel={OVERDUE_FILTER_COLUMNS.find(c => c.key === activeOverdueFilterCol)?.label || activeOverdueFilterCol}
+            uniqueValues={currentOverdueModalUniqueValues}
+            searchInput={overdueModalSearchInput}
+            onSearchInputChange={setOverdueModalSearchInput}
+            isChecked={(val) => !overdueColFilters[activeOverdueFilterCol]?.selected?.length || overdueColFilters[activeOverdueFilterCol]?.selected?.includes(val)}
+            onToggleValue={(val) => {
+              const currentSel = overdueColFilters[activeOverdueFilterCol]?.selected?.length
+                ? [...overdueColFilters[activeOverdueFilterCol].selected]
+                : [...currentOverdueModalUniqueValues];
+              const idxPos = currentSel.indexOf(val);
+              if (idxPos > -1) currentSel.splice(idxPos, 1);
+              else currentSel.push(val);
+              handleApplyOverdueModalFilter(currentSel);
+            }}
+            onReset={() => {
+              setOverdueColFilters(prev => {
+                const copy = { ...prev };
+                delete copy[activeOverdueFilterCol];
+                return copy;
+              });
+              setActiveOverdueFilterCol(null);
+              setOverdueModalSearchInput('');
+              toast.success(`Filter kolom ${activeOverdueFilterCol} dibersihkan.`);
+            }}
+            onApply={() => handleApplyOverdueModalFilter(overdueColFilters[activeOverdueFilterCol]?.selected || [])}
+            onClose={() => setActiveOverdueFilterCol(null)}
+          />
         )}
       </GlassCard>
 
@@ -1759,107 +2096,93 @@ export default function PRUpdatePage() {
                 )}
               </div>
               <p className="text-xs text-slate-600 mt-1">
-                Dilengkapi <b className="text-emerald-400">Filter Kolom ala Excel</b> (klik ikon filter di setiap header untuk cari & pilih data) dan kolom <b className="text-teal-300">Shipping Line / Pelayarań</b>.
+                Dilengkapi <b className="text-emerald-700">Filter Kolom ala Excel</b> (klik ikon filter di setiap header untuk cari & pilih data) dan kolom <b className="text-teal-700">Shipping Line / Pelayarań</b>.
               </p>
             </div>
 
             <button
               onClick={handleExport}
-              className="px-5 py-2.5 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-slate-900 font-semibold text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-sky-600/20 shrink-0"
+              className="px-5 py-2.5 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white font-semibold text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-sky-600/20 shrink-0"
             >
-              <Download className="w-4 h-4" /> Ekspor Data 13 Kolom ({displayedDetailRows.length} baris)
+              <Download className="w-4 h-4" /> Ekspor Data 14 Kolom ({displayedDetailRows.length} baris)
             </button>
+          </div>
+
+          {/* ─── INSIGHT: KELENGKAPAN DOKUMEN PR → PO → PI → BL ─── */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            {[
+              { key: 'prNoPo', label: 'PR Belum Ada PO', emoji: '📄', data: documentChainGaps.prNoPo,
+                box: 'bg-amber-50 border-amber-200', title: 'text-amber-800', rank: 'text-amber-700/80', num: 'text-amber-600' },
+              { key: 'poNoPi', label: 'PO Belum Ada PI', emoji: '📋', data: documentChainGaps.poNoPi,
+                box: 'bg-orange-50 border-orange-200', title: 'text-orange-800', rank: 'text-orange-700/80', num: 'text-orange-600' },
+              { key: 'piNoBl', label: 'PI Belum Ada BL', emoji: '🧾', data: documentChainGaps.piNoBl,
+                box: 'bg-rose-50 border-rose-200', title: 'text-rose-800', rank: 'text-rose-700/80', num: 'text-rose-600' },
+              { key: 'prReady', label: 'PR Status READY', emoji: '✅', data: readyPrInsight,
+                box: 'bg-emerald-50 border-emerald-200', title: 'text-emerald-800', rank: 'text-emerald-700/80', num: 'text-emerald-600' },
+            ].map(card => (
+              <div key={card.key} className={`p-4 rounded-2xl border shadow-sm ${card.box}`}>
+                <div className={`text-xs font-extrabold uppercase tracking-wider flex items-center gap-1.5 ${card.title}`}>
+                  <span>{card.emoji} {card.label}</span>
+                </div>
+                <div className="text-xl sm:text-2xl font-black text-slate-900 mt-1.5">
+                  {card.data.count} <span className="text-xs font-semibold text-slate-600">Dokumen (Distinct)</span>
+                </div>
+                {card.data.topCabang.length > 0 && (
+                  <div className="text-[11px] text-slate-700 font-semibold mt-2 space-y-0.5">
+                    <div className={`uppercase tracking-wider text-[10px] ${card.rank}`}>Top 3 Cabang:</div>
+                    {card.data.topCabang.map((b, i) => (
+                      <div key={i} className="flex items-center gap-1">
+                        <span className={card.num}>{i + 1}.</span> {b.branch} <span className="font-mono text-slate-500">({b.count})</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+
+            <div className="p-4 rounded-2xl bg-indigo-50 border border-indigo-200 shadow-sm">
+              <div className="text-xs text-indigo-800 font-extrabold uppercase tracking-wider flex items-center gap-1.5">
+                <span>⏱️ PR &quot;In Process&quot; Overdue ETA</span>
+              </div>
+              <div className="text-xl sm:text-2xl font-black text-slate-900 mt-1.5">
+                {inProcessOverdueCount} <span className="text-xs font-semibold text-slate-600">PR (Distinct)</span>
+              </div>
+              <p className="text-[11px] text-slate-600 mt-2 leading-snug">
+                Jumlah PR berstatus IN PROCESS yang Tanggal ETA-nya sudah lewat dari tanggal olah data.
+              </p>
+            </div>
           </div>
 
           {/* Excel Filter Modal Popover */}
           {activeFilterModalCol && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
-              <div className="bg-white border border-slate-200 rounded-2xl p-5 max-w-sm w-full shadow-2xl text-slate-800">
-                <div className="flex items-center justify-between border-b border-slate-200 pb-3 mb-4">
-                  <h4 className="font-bold text-sm text-slate-900 flex items-center gap-2">
-                    <Filter className="w-4 h-4 text-emerald-400" /> Filter Kolom: <span className="text-emerald-400">{activeFilterModalCol}</span>
-                  </h4>
-                  <button onClick={() => setActiveFilterModalCol(null)} className="text-slate-600 hover:text-slate-900 transition">
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="relative">
-                    <Search className="w-4 h-4 absolute left-3 top-3 text-slate-600" />
-                    <input
-                      type="text"
-                      value={modalSearchInput}
-                      onChange={e => setModalSearchInput(e.target.value)}
-                      placeholder={`Cari teks dalam ${activeFilterModalCol}...`}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-900 placeholder-slate-500 focus:outline-none focus:border-emerald-500"
-                    />
-                    {modalSearchInput && (
-                      <button onClick={() => setModalSearchInput('')} className="absolute right-3 top-2.5 text-slate-500 hover:text-slate-900 text-xs">
-                        Hapus
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="max-h-48 overflow-y-auto border border-slate-200 rounded-xl bg-slate-50 p-2 space-y-1 text-xs">
-                    <div className="text-[11px] font-semibold text-slate-600 mb-1 px-1 flex justify-between">
-                      <span>Daftar Nilai Unik ({currentModalUniqueValues.length}):</span>
-                    </div>
-                    {currentModalUniqueValues.filter(val => !modalSearchInput || val.toLowerCase().includes(modalSearchInput.toLowerCase())).slice(0, 50).map((val, idx) => {
-                      const isChecked = !colFilters[activeFilterModalCol]?.selected?.length || colFilters[activeFilterModalCol]?.selected?.includes(val);
-                      return (
-                        <label
-                          key={idx}
-                          className="flex items-center gap-2 py-1 px-2 rounded hover:bg-slate-100 cursor-pointer text-slate-700 truncate"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            const currentSel = colFilters[activeFilterModalCol]?.selected?.length
-                              ? [...colFilters[activeFilterModalCol].selected]
-                              : [...currentModalUniqueValues];
-                            const idxPos = currentSel.indexOf(val);
-                            if (idxPos > -1) {
-                              currentSel.splice(idxPos, 1);
-                            } else {
-                              currentSel.push(val);
-                            }
-                            handleApplyModalFilter(currentSel);
-                          }}
-                        >
-                          <div className={`w-3.5 h-3.5 rounded flex items-center justify-center border ${isChecked ? 'bg-emerald-500 border-emerald-500 text-slate-900' : 'border-slate-600 bg-white'}`}>
-                            {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
-                          </div>
-                          <span className="truncate">{val}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-
-                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
-                    <button
-                      onClick={() => {
-                        setColFilters(prev => {
-                          const copy = { ...prev };
-                          delete copy[activeFilterModalCol];
-                          return copy;
-                        });
-                        setActiveFilterModalCol(null);
-                        setModalSearchInput('');
-                        toast.success(`Filter kolom ${activeFilterModalCol} dibersihkan.`);
-                      }}
-                      className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-700 text-slate-700 text-xs font-semibold transition"
-                    >
-                      Reset Kolom Ini
-                    </button>
-                    <button
-                      onClick={() => handleApplyModalFilter(colFilters[activeFilterModalCol]?.selected || [])}
-                      className="px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-slate-900 text-xs font-bold transition shadow-lg shadow-emerald-600/20"
-                    >
-                      Terapkan Filter
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <ExcelFilterModal
+              columnLabel={activeFilterModalCol}
+              uniqueValues={currentModalUniqueValues}
+              searchInput={modalSearchInput}
+              onSearchInputChange={setModalSearchInput}
+              isChecked={(val) => !colFilters[activeFilterModalCol]?.selected?.length || colFilters[activeFilterModalCol]?.selected?.includes(val)}
+              onToggleValue={(val) => {
+                const currentSel = colFilters[activeFilterModalCol]?.selected?.length
+                  ? [...colFilters[activeFilterModalCol].selected]
+                  : [...currentModalUniqueValues];
+                const idxPos = currentSel.indexOf(val);
+                if (idxPos > -1) currentSel.splice(idxPos, 1);
+                else currentSel.push(val);
+                handleApplyModalFilter(currentSel);
+              }}
+              onReset={() => {
+                setColFilters(prev => {
+                  const copy = { ...prev };
+                  delete copy[activeFilterModalCol];
+                  return copy;
+                });
+                setActiveFilterModalCol(null);
+                setModalSearchInput('');
+                toast.success(`Filter kolom ${activeFilterModalCol} dibersihkan.`);
+              }}
+              onApply={() => handleApplyModalFilter(colFilters[activeFilterModalCol]?.selected || [])}
+              onClose={() => setActiveFilterModalCol(null)}
+            />
           )}
 
           <div className="overflow-x-auto rounded-xl border border-slate-200 max-h-[580px] overflow-y-auto">
@@ -1894,7 +2217,7 @@ export default function PRUpdatePage() {
                           </button>
                         </div>
                         {isFiltered && (
-                          <div className="text-[9px] text-emerald-300 font-normal normal-case italic mt-0.5 truncate max-w-[100px]">
+                          <div className="text-[9px] text-emerald-700 font-normal normal-case italic mt-0.5 truncate max-w-[100px]">
                             {colFilters[h]?.search ? `"${colFilters[h].search}"` : `Filteraktif`}
                           </div>
                         )}
@@ -1908,7 +2231,7 @@ export default function PRUpdatePage() {
                 {displayedDetailRows.length === 0 ? (
                   <tr>
                     <td colSpan={parsed.headers.length + 1} className="py-12 text-center text-slate-600 font-medium">
-                      Tidak ada baris yang cocok dengan kombinasi filter kolom aktif. <span className="text-rose-400 underline cursor-pointer" onClick={() => setColFilters({})}>Klik di sini untuk mereset filter</span>.
+                      Tidak ada baris yang cocok dengan kombinasi filter kolom aktif. <span className="text-rose-600 underline cursor-pointer" onClick={() => setColFilters({})}>Klik di sini untuk mereset filter</span>.
                     </td>
                   </tr>
                 ) : displayedDetailRows.slice(0, 150).map((row, idx) => {
@@ -1943,16 +2266,16 @@ export default function PRUpdatePage() {
                           <td
                             key={h}
                             className={`py-2.5 px-3 border-l border-slate-200 whitespace-nowrap ${
-                              h === colContainer && hasCont ? 'font-mono font-bold text-sky-300' : 
-                              isShippingLine ? 'font-semibold text-teal-300' : 
-                              isBl ? 'font-mono text-purple-300 font-medium' : 
+                              h === colContainer && hasCont ? 'font-mono font-bold text-sky-700' :
+                              isShippingLine ? 'font-semibold text-teal-700' :
+                              isBl ? 'font-mono text-purple-700 font-medium' :
                               h === colCabang || h.toLowerCase().includes('branch') || h.toLowerCase().includes('cabang') ? 'font-bold text-slate-800' : ''
                             }`}
                           >
                             {h === colContainer && hasCont && trackInfo && trackInfo.url ? (
                               <a href={trackInfo.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 hover:underline hover:text-slate-900 transition group font-bold" title={`Lacak ${val} di ${trackInfo.carrier}`}>
                                 <span>{val}</span>
-                                <ExternalLink className="w-3 h-3 text-sky-400 group-hover:text-slate-900 inline ml-0.5 shrink-0" />
+                                <ExternalLink className="w-3 h-3 text-sky-600 group-hover:text-slate-900 inline ml-0.5 shrink-0" />
                               </a>
                             ) : (val !== undefined && val !== null && val !== '' ? val : '-')}
                           </td>
@@ -1964,7 +2287,7 @@ export default function PRUpdatePage() {
                             href={trackInfo.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 hover:text-slate-900 border border-sky-500/40 font-bold transition shadow-sm"
+                            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 text-sky-700 hover:text-slate-900 border border-sky-500/40 font-bold transition shadow-sm"
                             title={`Lacak ${contVal} via ${trackInfo.carrier}`}
                           >
                             <span>Lacak ({trackInfo.carrier.split(' ')[0]})</span>
@@ -1997,7 +2320,41 @@ export default function PRUpdatePage() {
             <h2 className="text-xl font-black text-slate-900 flex items-center gap-2 mb-4 border-b border-slate-200 pb-3">
               <Timer className="w-6 h-6 text-indigo-600" /> Analisa Lead Time Aktual
             </h2>
-            
+
+            {/* Filters: Region, Cabang, Month ETA */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-700 mb-1 block uppercase tracking-wider">🌏 Filter Region:</label>
+                <MultiSelect
+                  options={ltRegions}
+                  selected={selectedLtRegion}
+                  onChange={setSelectedLtRegion}
+                  selectAllLabel="Semua Region"
+                  placeholder="Pilih Region..."
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-700 mb-1 block uppercase tracking-wider">🏢 Filter Cabang:</label>
+                <MultiSelect
+                  options={ltCabangs}
+                  selected={selectedLtCabang}
+                  onChange={setSelectedLtCabang}
+                  selectAllLabel="Semua Cabang"
+                  placeholder="Pilih Cabang..."
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-700 mb-1 block uppercase tracking-wider">📅 Filter Month ETA:</label>
+                <MultiSelect
+                  options={ltMonths}
+                  selected={selectedLtMonth}
+                  onChange={setSelectedLtMonth}
+                  selectAllLabel="Semua Bulan"
+                  placeholder="Pilih Month ETA..."
+                />
+              </div>
+            </div>
+
             {/* KPI Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
               <div className="bg-white border border-slate-200 p-6 rounded-xl flex items-center gap-4 shadow-md">
@@ -2059,37 +2416,68 @@ export default function PRUpdatePage() {
               </div>
             </div>
             
-            {/* Urgent Containers */}
-            <div className="mt-8 bg-white rounded-xl p-6 border border-rose-200 shadow-md">
-              <h3 className="text-sm font-bold text-rose-600 mb-4 flex items-center gap-2">
-                <AlertTriangle className="w-5 h-5" /> Top 10 Kontainer Urgent Untuk Segera Dibongkar (Berdasarkan Total Hari Menunggu)
-              </h3>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-200 bg-slate-50">
-                      <th className="p-3 text-slate-700 font-semibold rounded-tl-lg">Region</th>
-                      <th className="p-3 text-slate-700 font-semibold">Cabang</th>
-                      <th className="p-3 text-slate-700 font-semibold">No. Kontainer</th>
-                      <th className="p-3 text-slate-700 font-semibold text-right rounded-tr-lg">Total Days (Tunggu)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {leadTimeData.urgentContainers.map((c: any, i: number) => (
-                      <tr key={i} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
-                        <td className="p-3 text-slate-600">{c.region}</td>
-                        <td className="p-3 text-slate-900 font-medium">{c.branch}</td>
-                        <td className="p-3 text-indigo-600 font-mono text-xs">{c.container}</td>
-                        <td className="p-3 text-right font-bold text-rose-600">{c.waitDays} <span className="text-xs font-normal text-slate-400">Hari</span></td>
+            {/* Top 10 Cabang: Total Days (Tunggu) Terlama & Tercepat */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
+              <div className="bg-white rounded-xl p-6 border border-rose-200 shadow-md">
+                <h3 className="text-sm font-bold text-rose-600 mb-4 flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5" /> 10 Cabang Total Days (Tunggu) Terlama
+                </h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-200 bg-slate-50">
+                        <th className="p-3 text-slate-700 font-semibold rounded-tl-lg">#</th>
+                        <th className="p-3 text-slate-700 font-semibold">Cabang</th>
+                        <th className="p-3 text-slate-700 font-semibold text-right rounded-tr-lg">Total Days (Tunggu)</th>
                       </tr>
-                    ))}
-                    {leadTimeData.urgentContainers.length === 0 && (
-                      <tr>
-                        <td colSpan={4} className="p-4 text-center text-slate-500 italic">Tidak ada data kontainer urgent.</td>
+                    </thead>
+                    <tbody>
+                      {leadTimeData.topSlowestBranches.map((b: any, i: number) => (
+                        <tr key={i} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                          <td className="p-3 text-slate-400 font-mono text-xs">{i + 1}</td>
+                          <td className="p-3 text-slate-900 font-medium">{b.branch}</td>
+                          <td className="p-3 text-right font-bold text-rose-600">{b.avgDays} <span className="text-xs font-normal text-slate-400">Hari</span></td>
+                        </tr>
+                      ))}
+                      {leadTimeData.topSlowestBranches.length === 0 && (
+                        <tr>
+                          <td colSpan={3} className="p-4 text-center text-slate-500 italic">Tidak ada data.</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-xl p-6 border border-emerald-200 shadow-md">
+                <h3 className="text-sm font-bold text-emerald-600 mb-4 flex items-center gap-2">
+                  <CheckCircle2 className="w-5 h-5" /> 10 Cabang Total Days (Tunggu) Tercepat
+                </h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-200 bg-slate-50">
+                        <th className="p-3 text-slate-700 font-semibold rounded-tl-lg">#</th>
+                        <th className="p-3 text-slate-700 font-semibold">Cabang</th>
+                        <th className="p-3 text-slate-700 font-semibold text-right rounded-tr-lg">Total Days (Tunggu)</th>
                       </tr>
-                    )}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {leadTimeData.topFastestBranches.map((b: any, i: number) => (
+                        <tr key={i} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                          <td className="p-3 text-slate-400 font-mono text-xs">{i + 1}</td>
+                          <td className="p-3 text-slate-900 font-medium">{b.branch}</td>
+                          <td className="p-3 text-right font-bold text-emerald-600">{b.avgDays} <span className="text-xs font-normal text-slate-400">Hari</span></td>
+                        </tr>
+                      ))}
+                      {leadTimeData.topFastestBranches.length === 0 && (
+                        <tr>
+                          <td colSpan={3} className="p-4 text-center text-slate-500 italic">Tidak ada data.</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
             

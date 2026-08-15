@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Query
 from sqlalchemy.orm import Session
 from database import get_db
 from schemas.models import ProcessedResult
@@ -13,6 +13,14 @@ from services.forecast_engine import run_forecast_pipeline
 from utils.response_guard import enforce_payload_budget
 
 router = APIRouter()
+
+# Vercel's 4.5MB response cap makes a single-response `forecast_data` array
+# unworkable for large uploads (many Cabang x Kategori groups x many months
+# comfortably exceeds it). Instead of silently truncating rows, the endpoint
+# below returns only the first PAGE_SIZE rows plus a `result_id`, and the
+# frontend pages through the rest via GET /analyze/forecast/{result_id}/page
+# - the full, untruncated data lives in Postgres (`processed_results`).
+FORECAST_PAGE_SIZE = 8000
 
 @router.post("/analyze/forecast")
 async def analyze_forecast(file: UploadFile = File(...), db: Session = Depends(get_db)):
@@ -65,18 +73,30 @@ async def analyze_forecast(file: UploadFile = File(...), db: Session = Depends(g
                 "tanggal valid — baris lainnya tetap diproses normal.",
             )
         
-        # Save to DB for global visibility
+        # Save the full, untruncated result to DB so the frontend can page
+        # through `forecast_data` for large datasets instead of losing rows
+        # to the response-size guard below.
+        result_id = None
         try:
             result_str = json.dumps(results)
             db_result = ProcessedResult(module="forecast", result_json=result_str)
-            # db.add(db_result)
-            # db.commit()
-            # db.refresh(db_result)
+            db.add(db_result)
+            db.commit()
+            db.refresh(db_result)
+            result_id = db_result.id
             results["processed_at"] = (db_result.created_at or datetime.now()).isoformat()
         except Exception as e:
             print("Failed to save to DB:", e)
             results["processed_at"] = datetime.now().isoformat()
-        
+
+        full_forecast_data = results.get("forecast_data", [])
+        total_rows = len(full_forecast_data)
+        results["forecast_data"] = full_forecast_data[:FORECAST_PAGE_SIZE]
+        results["result_id"] = result_id
+        results["forecast_data_total_rows"] = total_rows
+        results["forecast_data_page_size"] = FORECAST_PAGE_SIZE
+        results["forecast_data_has_more"] = result_id is not None and total_rows > FORECAST_PAGE_SIZE
+
         return enforce_payload_budget(results)
 
     except Exception as e:
@@ -85,3 +105,40 @@ async def analyze_forecast(file: UploadFile = File(...), db: Session = Depends(g
         if isinstance(e, HTTPException):
             raise e
         raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)}")
+
+
+@router.get("/analyze/forecast/{result_id}/page")
+async def get_forecast_page(
+    result_id: int,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(FORECAST_PAGE_SIZE, ge=1, le=FORECAST_PAGE_SIZE),
+    db: Session = Depends(get_db),
+):
+    """Fetch a slice of a previously computed forecast's `forecast_data`.
+
+    Lets the frontend assemble the complete (untruncated) array for large
+    uploads across multiple small requests, each safely under Vercel's
+    4.5MB response cap.
+    """
+    db_result = db.query(ProcessedResult).filter(
+        ProcessedResult.id == result_id, ProcessedResult.module == "forecast"
+    ).first()
+    if db_result is None:
+        raise HTTPException(status_code=404, detail="Hasil forecast tidak ditemukan.")
+
+    try:
+        full_results = json.loads(db_result.result_json)
+    except Exception:
+        raise HTTPException(status_code=500, detail="Gagal membaca hasil forecast tersimpan.")
+
+    forecast_data = full_results.get("forecast_data", [])
+    total = len(forecast_data)
+    page = forecast_data[offset: offset + limit]
+
+    return enforce_payload_budget({
+        "data": page,
+        "offset": offset,
+        "limit": limit,
+        "total": total,
+        "has_more": offset + limit < total,
+    })

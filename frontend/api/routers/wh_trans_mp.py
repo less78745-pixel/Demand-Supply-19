@@ -38,9 +38,9 @@ async def run_simulation(req: SimulateRequest, db: Session = Depends(get_db)):
         try:
             result_str = json.dumps(response_data)
             db_result = ProcessedResult(module="wh_trans_mp", result_json=result_str)
-            # db.add(db_result)
-            # db.commit()
-            # db.refresh(db_result)
+            db.add(db_result)
+            db.commit()
+            db.refresh(db_result)
             response_data["processed_at"] = (db_result.created_at or datetime.now()).isoformat()
         except Exception as e:
             logger.error(f"Failed to save to DB: {e}")
@@ -70,9 +70,9 @@ async def run_simulation_file(
         try:
             result_str = json.dumps(response_data)
             db_result = ProcessedResult(module="wh_trans_mp", result_json=result_str)
-            # db.add(db_result)
-            # db.commit()
-            # db.refresh(db_result)
+            db.add(db_result)
+            db.commit()
+            db.refresh(db_result)
             response_data["processed_at"] = (db_result.created_at or datetime.now()).isoformat()
         except Exception as e:
             logger.error(f"Failed to save to DB: {e}")

@@ -1,8 +1,21 @@
+import os
+
+# Must be set before numpy/scipy import their BLAS backend (OpenBLAS reads
+# these at library load time). Windows builds of OpenBLAS have a known
+# multi-threading bug that surfaces as a native "On entry to DLASCL
+# parameter number X had an illegal value" crash - not a catchable Python
+# exception - under concurrent/rapid linear-algebra calls (e.g. the
+# forecast module's per-group trend fitting). Forcing single-threaded BLAS
+# avoids that race entirely; for this app's per-request/per-group workload
+# sizes it costs no meaningful performance.
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("MKL_NUM_THREADS", "1")
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import tempfile
-import os
 import logging
 
 # Configure logging for better error visibility

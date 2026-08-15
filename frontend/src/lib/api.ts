@@ -30,8 +30,75 @@ api.interceptors.response.use(
 
 // ── API Functions ──
 
+// Vercel Serverless Functions hard-cap request bodies at 4.5MB regardless of
+// plan. Give ourselves headroom under that hard cap for multipart overhead.
+const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
+
+/**
+ * Shrink a file for upload and guard against the platform's payload cap.
+ * Excel workbooks carry heavy XML/styling overhead vs. their actual data, so
+ * converting to CSV before upload buys a lot of headroom - every module's
+ * upload function below runs the file through this first instead of each
+ * page reimplementing it (previously only the forecast page did this, and
+ * even there it ran after the dropzone's own size check, so it never had a
+ * chance to help on the exact large files it was meant for).
+ *
+ * A workbook can also split branches/regions across multiple sheets (e.g.
+ * one per city) - reading only the first sheet would silently drop every
+ * other sheet's rows, so all non-empty sheets are concatenated under the
+ * first sheet's header before the CSV conversion.
+ */
+async function prepareUploadFile(file: File): Promise<File> {
+  let payloadFile = file;
+
+  if (/\.(xlsx|xls)$/i.test(file.name)) {
+    const XLSX = await import('xlsx');
+    const buffer = await file.arrayBuffer();
+    const wb = XLSX.read(buffer, { type: 'array' });
+
+    const allData: any[] = [];
+    for (const sheetName of wb.SheetNames) {
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName]);
+      if (!rows || rows.length === 0) continue;
+      
+      for (const row of rows as any[]) {
+        // Inject sheet name as Cabang if missing (very common for multi-city workbooks)
+        if (!row['Cabang'] || String(row['Cabang']).trim() === '') {
+          row['Cabang'] = sheetName;
+        }
+        allData.push(row);
+      }
+    }
+
+    if (allData.length > 0) {
+      const combinedSheet = XLSX.utils.json_to_sheet(allData);
+      const csvStr = XLSX.utils.sheet_to_csv(combinedSheet);
+      payloadFile = new File([csvStr], file.name.replace(/\.xlsx?$/i, '.csv'), { type: 'text/csv' });
+    }
+  }
+
+  if (payloadFile.size > MAX_UPLOAD_BYTES) {
+    const mb = (payloadFile.size / 1024 / 1024).toFixed(1);
+    throw new Error(
+      `File terlalu besar untuk diproses sekaligus (${mb}MB, maks ±4MB setelah konversi ke CSV). ` +
+      `Pecah file menjadi beberapa bagian (mis. per cabang atau per bulan) lalu upload satu per satu.`
+    );
+  }
+
+  return payloadFile;
+}
+
 export const uploadOccupancyFile = async (file: File) => {
   const formData = new FormData();
+  // Bypass prepareUploadFile because Occupancy MRP requires the original 
+  // multi-sheet Excel file (Raw, WH, Harga Container) and cannot be flattened to CSV.
+  if (file.size > MAX_UPLOAD_BYTES) {
+    const mb = (file.size / 1024 / 1024).toFixed(1);
+    throw new Error(
+      `File terlalu besar untuk diproses sekaligus (${mb}MB, maks ±4MB). ` +
+      `Pecah file menjadi beberapa bagian lalu upload satu per satu.`
+    );
+  }
   formData.append('file', file);
   const response = await api.post('/analyze/occupancy', formData);
   return response.data;
@@ -46,14 +113,28 @@ export const downloadOccupancyTemplate = async () => {
 
 export const uploadForecastFile = async (file: File) => {
   const formData = new FormData();
-  formData.append('file', file);
+  formData.append('file', await prepareUploadFile(file));
   const response = await api.post('/analyze/forecast', formData);
+  return response.data;
+};
+
+/**
+ * Fetch one page of a previously computed forecast's `forecast_data`.
+ * Large uploads produce more rows than fit in a single 4.5MB Vercel
+ * response, so `/analyze/forecast` returns only the first page plus a
+ * `result_id` - the rest is paged in through this endpoint (see
+ * fetchAllForecastPages in the forecast page for the assembly loop).
+ */
+export const fetchForecastPage = async (resultId: number, offset: number, limit = 8000) => {
+  const response = await api.get(`/analyze/forecast/${resultId}/page`, {
+    params: { offset, limit },
+  });
   return response.data;
 };
 
 export const uploadInventoryFile = async (file: File) => {
   const formData = new FormData();
-  formData.append('file', file);
+  formData.append('file', await prepareUploadFile(file));
   const response = await api.post('/analyze/inventory', formData);
   return response.data;
 };
@@ -62,24 +143,33 @@ export const uploadInventoryFile = async (file: File) => {
 
 export const uploadSafetyStockFile = async (file: File) => {
   const formData = new FormData();
-  formData.append('file', file);
+  formData.append('file', await prepareUploadFile(file));
   const response = await api.post('/analyze/safety-stock', formData);
   return response.data;
 };
 
 export const uploadRebalancingFiles = async (stockFile: File, demandFile: File, freightFile: File) => {
   const formData = new FormData();
-  formData.append('stock_file', stockFile);
-  formData.append('demand_file', demandFile);
-  formData.append('freight_file', freightFile);
+  const [stock, demand, freight] = await Promise.all([
+    prepareUploadFile(stockFile),
+    prepareUploadFile(demandFile),
+    prepareUploadFile(freightFile),
+  ]);
+  formData.append('stock_file', stock);
+  formData.append('demand_file', demand);
+  formData.append('freight_file', freight);
   const response = await api.post('/analyze/rebalancing', formData);
   return response.data;
 };
 
 export const uploadLandedCostFiles = async (trackingFile: File, allocationFile: File, exchangeRate?: number) => {
   const formData = new FormData();
-  formData.append('tracking_file', trackingFile);
-  formData.append('allocation_file', allocationFile);
+  const [tracking, allocation] = await Promise.all([
+    prepareUploadFile(trackingFile),
+    prepareUploadFile(allocationFile),
+  ]);
+  formData.append('tracking_file', tracking);
+  formData.append('allocation_file', allocation);
   if (exchangeRate) formData.append('exchange_rate', exchangeRate.toString());
   const response = await api.post('/analyze/landed-cost', formData);
   return response.data;
@@ -87,7 +177,7 @@ export const uploadLandedCostFiles = async (trackingFile: File, allocationFile: 
 
 export const uploadControlTowerFile = async (file: File) => {
   const formData = new FormData();
-  formData.append('file', file);
+  formData.append('file', await prepareUploadFile(file));
   const response = await api.post('/analyze/control-tower', formData);
   return response.data;
 };
@@ -117,7 +207,7 @@ export const uploadDDMRPFile = async (
   params: { dlt_days: number; moq: number; order_cycle_days: number; on_hand: number; on_order: number; qualified_demand: number }
 ) => {
   const formData = new FormData();
-  formData.append('file', file);
+  formData.append('file', await prepareUploadFile(file));
   const queryParams = new URLSearchParams();
   Object.entries(params).forEach(([k, v]) => queryParams.append(k, String(v)));
   const response = await api.post(`/analyze/ddmrp?${queryParams.toString()}`, formData);
@@ -136,7 +226,7 @@ export const uploadRouteOptimizationFile = async (
   params: Record<string, any>
 ) => {
   const formData = new FormData();
-  formData.append('file', file);
+  formData.append('file', await prepareUploadFile(file));
   Object.entries(params).forEach(([k, v]) => {
     if (v !== undefined && v !== null) {
       if (typeof v === 'object' && !Array.isArray(v)) {
@@ -167,7 +257,7 @@ export const simulateWHTrans = async (numHubs: number, data: any) => {
 
 export const uploadWHTransFile = async (file: File, numHubs: number, costPerCbmKm: number) => {
   const formData = new FormData();
-  formData.append('file', file);
+  formData.append('file', await prepareUploadFile(file));
   formData.append('num_hubs', String(numHubs));
   formData.append('cost_per_cbm_km', String(costPerCbmKm));
   const response = await api.post(`/wh-trans/file`, formData);

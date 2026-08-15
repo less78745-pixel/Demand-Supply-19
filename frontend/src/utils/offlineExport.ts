@@ -51,7 +51,7 @@ export interface ExportKpiSpec {
   label: string;
   sourceTableId: string;
   field: string;
-  agg: 'avg' | 'sum' | 'max' | 'min' | 'count';
+  agg: 'avg' | 'sum' | 'max' | 'min' | 'count' | 'countDistinct';
   decimals?: number;
   suffix?: string;
   emptyValue?: string;
@@ -147,8 +147,19 @@ function renderTableHtml(table: ExportTableSpec): string {
 }
 
 function aggValue(rows: Record<string, unknown>[], field: string, agg: ExportKpiSpec['agg']): number | null {
-  const nums = rows.map((r) => Number(r[field])).filter((n) => !Number.isNaN(n));
   if (agg === 'count') return rows.length;
+  // Counts distinct non-empty values of `field` (e.g. distinct PO numbers)
+  // rather than rows - a document commonly spans several rows (one per
+  // container/line-item), so a plain row count overstates document totals.
+  if (agg === 'countDistinct') {
+    const set = new Set(
+      rows
+        .map((r) => String(r[field] ?? '').trim())
+        .filter((v) => v && v !== '-' && v !== '0' && v.toUpperCase() !== 'N/A')
+    );
+    return set.size;
+  }
+  const nums = rows.map((r) => Number(r[field])).filter((n) => !Number.isNaN(n));
   if (nums.length === 0) return null;
   switch (agg) {
     case 'sum':
@@ -289,6 +300,16 @@ function buildRuntimeScript(config: { filters: ExportFilterSpec[]; tables: Expor
   }
   function aggValue(rows, field, agg){
     if (agg === 'count') return rows.length;
+    if (agg === 'countDistinct') {
+      var seen = {};
+      var n = 0;
+      for (var i=0;i<rows.length;i++){
+        var v = String(rows[i][field] == null ? '' : rows[i][field]).trim();
+        if (!v || v === '-' || v === '0' || v.toUpperCase() === 'N/A') continue;
+        if (!seen[v]) { seen[v] = true; n++; }
+      }
+      return n;
+    }
     var nums = rows.map(function(r){ return Number(r[field]); }).filter(function(n){ return !isNaN(n); });
     if (nums.length === 0) return null;
     if (agg === 'sum') return nums.reduce(function(a,b){return a+b;},0);
