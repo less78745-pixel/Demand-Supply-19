@@ -98,9 +98,13 @@ def parse_standard_users(raw_csv: str) -> List[Dict]:
     users = []
     for row in reader:
         username = row["User name"].strip()
+        password = row["Password"].strip()
         users.append({
             "username": username,
-            "password_hash": hash_password(row["Password"].strip()),
+            # password_plain hanya disimpan untuk kebutuhan tabel verifikasi di terminal (bagian 7).
+            # JANGAN pernah menyimpan/menampilkan plaintext password ini di sistem produksi.
+            "password_plain": password,
+            "password_hash": hash_password(password),
             "role": "STANDARD",
             "is_super_admin": False,
             "allowed_modules": STANDARD_MODULES,
@@ -120,6 +124,8 @@ def parse_standard_users(raw_csv: str) -> List[Dict]:
 def build_super_admin() -> Dict:
     return {
         "username": SUPER_ADMIN_USERNAME,
+        # password_plain hanya disimpan untuk kebutuhan tabel verifikasi di terminal (bagian 7).
+        "password_plain": SUPER_ADMIN_PASSWORD,
         "password_hash": hash_password(SUPER_ADMIN_PASSWORD),
         "role": "SUPER_ADMIN",
         "is_super_admin": True,
@@ -189,14 +195,78 @@ class DashboardAccessControl:
 
 
 # ---------------------------------------------------------------------------
-# 7. DEMO / SELF-TEST
+# 7. VERIFIKASI & SIMULASI TERMINAL
 # ---------------------------------------------------------------------------
+def print_account_status(user_db: Dict[str, Dict], sample_usernames: List[str]) -> None:
+    """Cetak tabel ringkas beberapa akun (termasuk AFIF) untuk memverifikasi hasil parsing."""
+    header = f"{'Username':<15}{'Password Asli':<15}{'Password Hashed (bcrypt)':<35}{'Hak Akses':<20}"
+    print("=" * len(header))
+    print("STATUS AKUN SAAT INI (SAMPLE)")
+    print("=" * len(header))
+    print(header)
+    print("-" * len(header))
+
+    for username in sample_usernames:
+        user = user_db.get(username)
+        if user is None:
+            continue
+        role_summary = "SUPER ADMIN (semua modul)" if user["is_super_admin"] else "Pengguna Standar"
+        hash_preview = user["password_hash"][:29] + "..."
+        print(f"{user['username']:<15}{user['password_plain']:<15}{hash_preview:<35}{role_summary:<20}")
+
+    print("-" * len(header))
+    print(f"Total akun ter-load di database : {len(user_db)} "
+          f"({len(user_db) - 1} standar + 1 super admin)\n")
+
+
+def simulate_login_scenarios(acl: "DashboardAccessControl", sample_soh: pd.DataFrame) -> None:
+    """Simulasi otomatis 3 skenario login + penarikan data (tanpa input manual)."""
+    print("=" * 70)
+    print("SIMULASI LOGIN & AKSES DATA (ROW-LEVEL SECURITY)")
+    print("=" * 70)
+
+    # --- Skenario A: pengguna standar, login benar ---------------------------------
+    print("\n[Skenario A] Login 'Bali' dengan password benar ('7889#')")
+    user = acl.authenticate("Bali", "7889#")
+    if user:
+        print("  -> Login BERHASIL. Role:", user["role"])
+        filtered = acl.filter_dataframe("Bali", sample_soh)
+        print("  -> Data yang berhasil ditarik (harus hanya kota Bali):")
+        print(filtered.to_string(index=False))
+    else:
+        print("  -> Login GAGAL (tidak sesuai harapan!)")
+
+    # --- Skenario B: pengguna standar, password salah -------------------------------
+    print("\n[Skenario B] Login 'Yogyakarta' dengan password SALAH ('salahpassword')")
+    user = acl.authenticate("Yogyakarta", "salahpassword")
+    if user is None:
+        print("  -> Akses DITOLAK (sesuai harapan). Tidak ada data yang ditarik.")
+    else:
+        print("  -> PERINGATAN: login seharusnya ditolak tapi malah berhasil!")
+
+    # --- Skenario C: super admin -----------------------------------------------------
+    print("\n[Skenario C] Login 'AFIF' (Super Admin) dengan password benar ('out19')")
+    user = acl.authenticate("AFIF", "out19")
+    if user:
+        print("  -> Login BERHASIL. Role:", user["role"])
+        filtered = acl.filter_dataframe("AFIF", sample_soh)
+        print(f"  -> Data yang berhasil ditarik: {len(filtered)} dari {len(sample_soh)} baris total "
+              f"({'BYPASS filter kota terbukti' if len(filtered) == len(sample_soh) else 'FILTER MASIH AKTIF - cek logika!'})")
+        print(filtered.to_string(index=False))
+    else:
+        print("  -> Login GAGAL (tidak sesuai harapan!)")
+
+    print("\n" + "=" * 70)
+    print("SIMULASI SELESAI")
+    print("=" * 70)
+
+
 if __name__ == "__main__":
     user_db = build_user_database()
     acl = DashboardAccessControl(user_db)
 
-    print(f"Total akun ter-load : {len(user_db)}")
-    print(f"Super admin         : {SUPER_ADMIN_USERNAME}\n")
+    # 7a. Cetak status akun saat ini (sample: beberapa user standar + AFIF)
+    print_account_status(user_db, sample_usernames=["Aceh", "Bali", "Jakarta", "Yogyakarta", "AFIF"])
 
     # Contoh dataset SOH (ganti dengan data asli dari DB/upload di produksi)
     sample_soh = pd.DataFrame({
@@ -205,17 +275,5 @@ if __name__ == "__main__":
         "SOH_Qty": [120, 45, 300, 980, 210],
     })
 
-    # Kasus 1: user biasa "Bali" hanya melihat baris kotanya sendiri
-    if acl.authenticate("Bali", "7889#"):
-        print("Data yang terlihat oleh 'Bali':")
-        print(acl.filter_dataframe("Bali", sample_soh), "\n")
-
-    # Kasus 2: AFIF (super admin) melihat seluruh dataset tanpa filter kota
-    if acl.authenticate("AFIF", "out19"):
-        print("Data yang terlihat oleh 'AFIF' (Super Admin):")
-        print(acl.filter_dataframe("AFIF", sample_soh), "\n")
-
-    # Kasus 3: pengecekan akses modul & tombol
-    print("Bali bisa akses modul 'Upload Data'?  ->", acl.can_access_module("Bali", "Upload Data"))
-    print("AFIF bisa akses modul 'Upload Data'?  ->", acl.can_access_module("AFIF", "Upload Data"))
-    print("Bali bisa akses modul 'SKU Velocity'? ->", acl.can_access_module("Bali", "SKU Velocity"))
+    # 7b. Simulasi login & akses data (3 skenario otomatis)
+    simulate_login_scenarios(acl, sample_soh)
