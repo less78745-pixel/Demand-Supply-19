@@ -15,6 +15,10 @@ if not exist venv\ (
 echo Activating venv and installing requirements...
 call venv\Scripts\activate.bat
 pip install -r requirements.txt
+
+echo Initializing user accounts (standard users + Super Admin RLS)...
+python scripts\init_users.py
+
 echo Starting FastAPI Backend...
 start "WMS Backend (FastAPI)" cmd /c "call venv\Scripts\activate.bat && uvicorn main:app --reload --port 8000"
 
