@@ -250,7 +250,7 @@ export default function LandedCostPage() {
             toast.success('Pembaruan data dari pengguna lain diterima!', { 
               icon: '🔄',
               duration: 5000,
-              style: { background: '#22c55e', color: '#fff', fontWeight: 'bold' } 
+              style: { background: 'hsl(var(--accent))', color: '#fff', fontWeight: 'bold' } 
             });
           } catch (e) {
             console.error("Failed parsing realtime data", e);
@@ -399,16 +399,16 @@ export default function LandedCostPage() {
 
       {/* ─── COMMAND TOWER HERO BANNER ─── */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-cyan-950 to-slate-900 p-6 sm:p-8 border border-cyan-500/20 shadow-2xl">
-        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#06b6d4_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
+        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(hsl(var(--accent))_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
         <div className="relative z-10 flex flex-col xl:flex-row xl:items-center justify-between gap-6">
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 uppercase tracking-widest">
               <Ship className="w-3.5 h-3.5" /> SCM Analytic • Import Financial Intelligence
             </div>
-            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-slate-900 flex items-center gap-3">
+            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white flex items-center gap-3">
               Import Landed Cost <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-teal-300 to-blue-300">Tracker</span>
             </h1>
-            <p className="text-slate-700 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
+            <p className="text-white/75 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
               Pantau posisi kontainer impor secara real-time, kalkulasi HPP per unit (Landed Cost) dengan alokasi bobot & kubikasi, serta simulasi dampak kurs valas dan risiko demurrage.
             </p>
           </div>
@@ -431,15 +431,15 @@ export default function LandedCostPage() {
 
       {/* ─── PANDUAN & UPLOAD SECTION ─── */}
       {showHowTo && (
-        <GlassCard className="p-6 border-cyan-500/30 bg-white backdrop-blur-xl animate-fade-in">
-          <div className="flex items-center justify-between border-b border-slate-200 pb-4 mb-6">
-            <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+        <GlassCard className="p-6 border-cyan-500/30 bg-card backdrop-blur-xl animate-fade-in">
+          <div className="flex items-center justify-between border-b border-border pb-4 mb-6">
+            <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
               <FileSpreadsheet className="w-5 h-5 text-cyan-400" /> Upload 2 File Impor & Panduan HPP
             </h3>
             <div className="flex flex-wrap gap-2">
               <button
                 onClick={handleGenerateDemo}
-                className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-slate-900 font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-cyan-500/20"
+                className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-cyan-500/20"
               >
                 <Zap className="w-4 h-4" /> Gunakan Data Demo
               </button>
@@ -460,12 +460,12 @@ export default function LandedCostPage() {
           </div>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-2">
             <div className="flex items-center gap-2">
-              <label className="text-sm text-slate-700 font-medium">Kurs USD/IDR (Rp):</label>
+              <label className="text-sm text-muted-foreground font-medium">Kurs USD/IDR (Rp):</label>
               <input type="number" value={exchangeRate} onChange={(e) => setExchangeRate(Number(e.target.value))}
-                className="w-32 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-mono font-bold text-sm" />
+                className="w-32 px-3 py-2 bg-muted border border-border rounded-xl text-foreground font-mono font-bold text-sm" />
             </div>
             <button onClick={handleAnalyze} disabled={isProcessing || !trackingFile || !allocationFile}
-              className="px-8 py-3 bg-cyan-600 text-slate-900 rounded-xl hover:bg-cyan-500 disabled:opacity-50 transition text-sm font-bold uppercase tracking-wide flex items-center gap-2 shadow-lg shadow-cyan-600/20">
+              className="px-8 py-3 bg-cyan-600 text-white rounded-xl hover:bg-cyan-500 disabled:opacity-50 transition text-sm font-bold uppercase tracking-wide flex items-center gap-2 shadow-lg shadow-cyan-600/20">
               {isProcessing ? 'Memproses...' : <><Ship className="w-4 h-4" /> Hitung</>}
             </button>
           </div>
@@ -478,7 +478,7 @@ export default function LandedCostPage() {
           <h2 className="text-sm font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-2">
             <Zap className="w-4 h-4" /> Pilih 3 Jalur Simulasi Kurs & Risiko Demurrage:
           </h2>
-          <span className="text-xs text-slate-600 italic hidden sm:inline">Klik tab untuk memproyeksikan depresiasi Rupiah atau antrean dermaga!</span>
+          <span className="text-xs text-muted-foreground italic hidden sm:inline">Klik tab untuk memproyeksikan depresiasi Rupiah atau antrean dermaga!</span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -496,22 +496,22 @@ export default function LandedCostPage() {
                 }}
                 className={`relative group p-4 sm:p-5 rounded-2xl transition-all duration-300 text-left border overflow-hidden shadow-lg ${
                   isSelected
-                    ? `bg-gradient-to-br ${sc.color} text-slate-900 border-transparent ring-2 ring-white/20 shadow-cyan-500/25 scale-[1.02]`
-                    : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 hover:border-slate-600'
+                    ? `bg-gradient-to-br ${sc.color} text-white border-transparent ring-2 ring-white/20 shadow-cyan-500/25 scale-[1.02]`
+                    : 'bg-card hover:bg-muted text-muted-foreground border-border hover:border-primary/50'
                 }`}
               >
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-bold text-base tracking-wide flex items-center gap-2.5">
-                    <Icon className={`w-5 h-5 ${isSelected ? 'text-slate-900' : 'text-cyan-400'}`} />
+                    <Icon className={`w-5 h-5 ${isSelected ? 'text-white' : 'text-cyan-400'}`} />
                     {sc.title}
                   </span>
                   {isSelected && (
-                    <span className="px-2 py-0.5 rounded-full bg-white/20 text-slate-900 text-xs font-black uppercase tracking-wider">
+                    <span className="px-2 py-0.5 rounded-full bg-white/20 text-white text-xs font-black uppercase tracking-wider">
                       Aktif
                     </span>
                   )}
                 </div>
-                <p className={`text-xs sm:text-sm leading-relaxed ${isSelected ? 'text-slate-900 font-medium' : 'text-slate-600'}`}>
+                <p className={`text-xs sm:text-sm leading-relaxed ${isSelected ? 'text-white/90 font-medium' : 'text-muted-foreground'}`}>
                   {sc.desc}
                 </p>
               </button>
@@ -521,25 +521,25 @@ export default function LandedCostPage() {
       </div>
 
       {/* ─── ACTION BAR KETIKA RESULTS ADA ─── */}
-      <div className="no-export flex flex-wrap items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-200">
+      <div className="no-export flex flex-wrap items-center justify-between gap-4 bg-card p-4 rounded-2xl border border-border">
         <div className="flex items-center gap-3">
-          <label className="text-xs text-slate-600 font-medium uppercase">Kurs Aktif:</label>
+          <label className="text-xs text-muted-foreground font-medium uppercase">Kurs Aktif:</label>
           <input
             type="number"
             value={exchangeRate}
             onChange={(e) => setExchangeRate(Number(e.target.value))}
-            className="w-28 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-cyan-400 font-mono font-bold text-sm"
+            className="w-28 px-3 py-1.5 bg-muted border border-border rounded-xl text-foreground font-mono font-bold text-sm"
           />
         </div>
         <div className="flex flex-wrap items-center gap-3">
           {modifiedResults && (
-            <button onClick={handleExport} className="px-4 py-2 bg-cyan-600 text-slate-900 rounded-xl hover:bg-cyan-500 transition text-xs sm:text-sm font-bold flex items-center gap-2 uppercase tracking-wide shadow-md">
+            <button onClick={handleExport} className="px-4 py-2 bg-cyan-600 text-white rounded-xl hover:bg-cyan-500 transition text-xs sm:text-sm font-bold flex items-center gap-2 uppercase tracking-wide shadow-md">
               <Download className="w-4 h-4" /> Export Report (Excel)
             </button>
           )}
           <button
             onClick={handleGenerateDemo}
-            className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-slate-900 font-bold rounded-xl shadow-lg transition flex items-center gap-2 text-xs sm:text-sm"
+            className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-bold rounded-xl shadow-lg transition flex items-center gap-2 text-xs sm:text-sm"
           >
             <Zap className="w-4 h-4" /> Gunakan Data Demo
           </button>
@@ -598,7 +598,7 @@ export default function LandedCostPage() {
           <GlassCard className="no-export">
             <h3 className="text-sm font-bold text-foreground mb-4 uppercase tracking-wide">Status Kontainer Impor</h3>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left text-slate-700 dark:text-slate-300">
+              <table className="w-full text-sm text-left text-muted-foreground">
                 <thead className="text-xs text-foreground uppercase bg-muted/50 border-b border-border font-bold tracking-wider">
                   <tr>
                     <th className="px-3 py-3">No BL</th>
@@ -646,7 +646,7 @@ export default function LandedCostPage() {
               Landed Cost Breakdown per SKU ({(modifiedResults.sku_costs || []).length} items)
             </h3>
             <div className="overflow-x-auto max-h-[400px] overflow-y-auto custom-scrollbar">
-              <table className="w-full text-sm text-left text-slate-700 dark:text-slate-300">
+              <table className="w-full text-sm text-left text-muted-foreground">
                 <thead className="text-xs text-foreground uppercase bg-muted/50 border-b border-border sticky top-0 font-bold tracking-wider z-10">
                   <tr>
                     <th className="px-3 py-3">BL</th>
@@ -687,8 +687,8 @@ export default function LandedCostPage() {
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={modifiedResults.currency_simulations || []} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                    <XAxis dataKey="rate" tick={{ fill: '#475569', fontSize: 10 }} tickLine={false} axisLine={false} />
-                    <YAxis tick={{ fill: '#475569', fontSize: 11 }} tickLine={false} axisLine={false}
+                    <XAxis dataKey="rate" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} tickLine={false} axisLine={false} />
+                    <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} tickLine={false} axisLine={false}
                       tickFormatter={(v) => `${(v / 1e6).toFixed(0)}M`} />
                     <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--popover))', borderColor: 'hsl(var(--border))', color: 'hsl(var(--popover-foreground))' }}
                       formatter={(value: any) => [`Rp ${Number(value).toLocaleString('id-ID')}`]} />
@@ -716,8 +716,8 @@ export default function LandedCostPage() {
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={modifiedResults.monte_carlo.histogram} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                    <XAxis dataKey="bin" tick={{ fill: '#475569', fontSize: 10 }} tickLine={false} axisLine={false} label={{ value: 'Hari', position: 'insideBottom', offset: -2 }} />
-                    <YAxis tick={{ fill: '#475569', fontSize: 11 }} tickLine={false} axisLine={false} />
+                    <XAxis dataKey="bin" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} tickLine={false} axisLine={false} label={{ value: 'Hari', position: 'insideBottom', offset: -2 }} />
+                    <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} tickLine={false} axisLine={false} />
                     <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--popover))', borderColor: 'hsl(var(--border))', color: 'hsl(var(--popover-foreground))' }} />
                     <Bar dataKey="count" name="Frekuensi" fill="hsl(var(--primary))" radius={[2, 2, 0, 0]} opacity={0.8} />
                   </BarChart>

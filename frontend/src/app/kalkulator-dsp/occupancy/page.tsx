@@ -20,7 +20,7 @@ import { supabase } from '@/lib/supabase';
 // after a file has been processed, so defer it out of the initial route bundle.
 const OccupancyChart = dynamic(
   () => import('@/components/charts/OccupancyChart').then(m => m.OccupancyChart),
-  { ssr: false, loading: () => <div className="h-72 w-full animate-pulse rounded-xl bg-slate-100" /> }
+  { ssr: false, loading: () => <div className="h-72 w-full animate-pulse rounded-xl bg-muted" /> }
 );
 
 type ScenarioType = 'actual' | 'surge' | 'expansion';
@@ -262,7 +262,7 @@ export default function OccupancyPage() {
             toast.success('Pembaruan data dari pengguna lain diterima!', { 
               icon: '🔄',
               duration: 5000,
-              style: { background: '#22c55e', color: '#fff', fontWeight: 'bold' } 
+              style: { background: 'hsl(var(--accent))', color: 'hsl(var(--accent-foreground))', fontWeight: 'bold' } 
             });
           } catch (e) {
             console.error("Failed parsing realtime data", e);
@@ -588,7 +588,7 @@ export default function OccupancyPage() {
     <div id="export-container" className="space-y-8 max-w-[1550px] mx-auto pb-16 animate-in fade-in duration-500 text-foreground">
 
       {/* ─── COMMAND TOWER HERO BANNER ─── */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-6 sm:p-8 border border-indigo-500/20 shadow-2xl">
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#1E1E2C] via-indigo-950 to-[#1E1E2C] p-6 sm:p-8 border border-indigo-500/20 shadow-2xl">
         <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#6366f1_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
         <div className="relative z-10 flex flex-col xl:flex-row xl:items-center justify-between gap-6">
           <div className="space-y-2">
@@ -598,7 +598,7 @@ export default function OccupancyPage() {
             <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white flex items-center gap-3">
               Occupancy & <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-violet-300 to-purple-300">Inventory Projector</span>
             </h1>
-            <p className="text-slate-300 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
+            <p className="text-muted-foreground text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
               Analisis utilitas ruang simpan gudang per cabang, mitigasi kekurangan kapasitas, dan klasifikasi ABC-XYZ Inventory untuk pengoptimalan rantai pasok Anda.
             </p>
           </div>
@@ -632,20 +632,20 @@ export default function OccupancyPage() {
       {/* ─── PANDUAN & DEMO DATA SECTION ─── */}
       {showHowTo && (
         <GlassCard className="p-6 border-indigo-500/30 bg-white backdrop-blur-xl animate-fade-in">
-          <div className="flex items-center justify-between border-b border-slate-200 pb-4 mb-6">
-            <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+          <div className="flex items-center justify-between border-b border-border pb-4 mb-6">
+            <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
               <FileSpreadsheet className="w-5 h-5 text-indigo-400" /> Panduan & Skema File Excel Occupancy
             </h3>
             <div className="flex flex-wrap gap-2.5">
               <button
                 onClick={handleDownloadTemplate}
-                className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-slate-900 font-bold text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-emerald-500/20"
+                className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-[#1E1E2C] font-bold text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-emerald-500/20"
               >
                 <FileSpreadsheet className="w-4 h-4" /> Download Template Excel MRP
               </button>
               <button
                 onClick={handleGenerateDemo}
-                className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-slate-900 font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-indigo-500/20"
+                className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-indigo-500/20"
               >
                 <Zap className="w-4 h-4" /> Gunakan Data Demo
               </button>
@@ -658,19 +658,19 @@ export default function OccupancyPage() {
               </button>
             </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm text-slate-700">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm text-foreground">
             <div>
-              <h4 className="font-semibold text-slate-900 mb-2">📌 Skema Kolom Diperlukan (2 Pilihan Format):</h4>
+              <h4 className="font-semibold text-foreground mb-2">📌 Skema Kolom Diperlukan (2 Pilihan Format):</h4>
               <div className="space-y-2 mb-3">
                 <p className="text-xs font-bold text-indigo-400">Option 1: Format Multi-Sheet MRP (Terbaru)</p>
-                <p className="text-xs text-slate-600">• Sheet <code>Raw</code>: No, Cabang, Grup, Category, On Hand + blok mingguan [TO, Vessel, Forecast, Target].</p>
-                <p className="text-xs text-slate-600">• Sheet <code>WH</code>: No, Cabang, Kapasitas Existing, Tambahan, dan sel <code>Week Awal</code> (cth: 1 untuk JAN-1).</p>
+                <p className="text-xs text-muted-foreground">• Sheet <code>Raw</code>: No, Cabang, Grup, Category, On Hand + blok mingguan [TO, Vessel, Forecast, Target].</p>
+                <p className="text-xs text-muted-foreground">• Sheet <code>WH</code>: No, Cabang, Kapasitas Existing, Tambahan, dan sel <code>Week Awal</code> (cth: 1 untuk JAN-1).</p>
               </div>
               <div className="space-y-2">
                 <p className="text-xs font-bold text-teal-400">Option 2: Format Tabel Tunggal (Legacy CSV/XLSX)</p>
-                <ul className="grid grid-cols-2 gap-2 text-xs text-slate-700">
+                <ul className="grid grid-cols-2 gap-2 text-xs text-foreground">
                   {['Cabang','Category','On Hand (stok awal)','In (masuk)','Out (keluar / penjualan)','Capacity (kapasitas cabang)','Date'].map(col => (
-                    <li key={col} className="flex items-center gap-2 font-mono bg-white/5 p-2 rounded border border-slate-200">
+                    <li key={col} className="flex items-center gap-2 font-mono bg-white/5 p-2 rounded border border-border">
                       <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0" />
                       <span>{col}</span>
                     </li>
@@ -679,8 +679,8 @@ export default function OccupancyPage() {
               </div>
             </div>
             <div className="space-y-3">
-              <h4 className="font-semibold text-slate-900">⚙️ Proxy Penjualan & Klasifikasi ABC-XYZ:</h4>
-              <p className="text-xs text-slate-600 leading-relaxed">
+              <h4 className="font-semibold text-foreground">⚙️ Proxy Penjualan & Klasifikasi ABC-XYZ:</h4>
+              <p className="text-xs text-muted-foreground leading-relaxed">
                 Kolom <code>Out</code> atau demand <code>Forecast/Target</code> diproses sebagai proxy <b>Penjualan</b> untuk memetakan inventory ke kelas ABC (Volume) dan XYZ (Variabilitas/Coefficient of Variation), sehingga Anda mengetahui risiko Stockout dan Dead Stock secara otomatis.
               </p>
               <div className="p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-xl text-xs text-indigo-300 flex items-center gap-2">
@@ -698,7 +698,7 @@ export default function OccupancyPage() {
           <h2 className="text-sm font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-2">
             <Zap className="w-4 h-4" /> Pilih 3 Jalur Simulasi & Uji Ketahanan Gudang:
           </h2>
-          <span className="text-xs text-slate-600 italic hidden sm:inline">Klik tab untuk memproyeksikan lonjakan inflow atau ekspansi gudang!</span>
+          <span className="text-xs text-muted-foreground italic hidden sm:inline">Klik tab untuk memproyeksikan lonjakan inflow atau ekspansi gudang!</span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -714,22 +714,22 @@ export default function OccupancyPage() {
                 }}
                 className={`relative group p-4 sm:p-5 rounded-2xl transition-all duration-300 text-left border overflow-hidden shadow-lg ${
                   isSelected
-                    ? `bg-gradient-to-br ${sc.color} text-slate-900 border-transparent ring-2 ring-white/20 shadow-indigo-500/25 scale-[1.02]`
-                    : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 hover:border-slate-600'
+                    ? `bg-gradient-to-br ${sc.color} text-white border-transparent ring-2 ring-white/20 shadow-indigo-500/25 scale-[1.02]`
+                    : 'bg-white hover:bg-muted text-foreground border-border hover:border-primary'
                 }`}
               >
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-bold text-base tracking-wide flex items-center gap-2.5">
-                    <Icon className={`w-5 h-5 ${isSelected ? 'text-slate-900' : 'text-indigo-400'}`} />
+                    <Icon className={`w-5 h-5 ${isSelected ? 'text-white' : 'text-indigo-400'}`} />
                     {sc.title}
                   </span>
                   {isSelected && (
-                    <span className="px-2 py-0.5 rounded-full bg-white/20 text-slate-900 text-xs font-black uppercase tracking-wider">
+                    <span className="px-2 py-0.5 rounded-full bg-white/20 text-white text-xs font-black uppercase tracking-wider">
                       Aktif
                     </span>
                   )}
                 </div>
-                <p className={`text-xs sm:text-sm leading-relaxed ${isSelected ? 'text-slate-900 font-medium' : 'text-slate-600'}`}>
+                <p className={`text-xs sm:text-sm leading-relaxed ${isSelected ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>
                   {sc.desc}
                 </p>
               </button>
@@ -739,7 +739,7 @@ export default function OccupancyPage() {
       </div>
 
       {/* ─── UPLOAD BOX WHEN RESULTS PRESENT OR HIDDEN ─── */}
-      <GlassCard className="no-export p-4 bg-white border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <GlassCard className="no-export p-4 bg-white border-border flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="flex-1 w-full">
           <FileUploader
             onFileUpload={handleFileUpload}
@@ -754,16 +754,16 @@ export default function OccupancyPage() {
             description="Format Multi-Sheet MRP (Raw & WH) atau Format Legacy CSV/XLSX (Cabang, Category, On Hand, In, Out, Capacity, Date)."
           />
         </div>
-        <div className="sm:border-l border-slate-200 sm:pl-4 flex flex-col justify-center items-center shrink-0 gap-2.5">
+        <div className="sm:border-l border-border sm:pl-4 flex flex-col justify-center items-center shrink-0 gap-2.5">
           <button
             onClick={handleDownloadTemplate}
-            className="w-full sm:w-auto px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-slate-900 font-bold rounded-xl shadow-lg transition flex items-center justify-center gap-2 text-xs sm:text-sm"
+            className="w-full sm:w-auto px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-[#1E1E2C] font-bold rounded-xl shadow-lg transition flex items-center justify-center gap-2 text-xs sm:text-sm"
           >
             <FileSpreadsheet className="w-4 h-4" /> Download Template MRP
           </button>
           <button
             onClick={handleGenerateDemo}
-            className="w-full sm:w-auto px-5 py-2.5 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-slate-900 font-bold rounded-xl shadow-lg transition flex items-center justify-center gap-2 text-xs sm:text-sm"
+            className="w-full sm:w-auto px-5 py-2.5 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-bold rounded-xl shadow-lg transition flex items-center justify-center gap-2 text-xs sm:text-sm"
           >
             <Zap className="w-4 h-4" /> Gunakan Data Demo
           </button>
@@ -947,8 +947,8 @@ export default function OccupancyPage() {
           )}
 
           {/* Chart Card */}
-          <GlassCard allowOverflow={true} className="mb-10 p-6 bg-white border-slate-200 shadow-xl relative z-30">
-            <div className="flex flex-col md:flex-row justify-between md:items-center mb-6 gap-6 border-b border-slate-200 pb-6">
+          <GlassCard allowOverflow={true} className="mb-10 p-6 bg-white border-border shadow-xl relative z-30">
+            <div className="flex flex-col md:flex-row justify-between md:items-center mb-6 gap-6 border-b border-border pb-6">
               <div className="flex-1">
                 <h3 className="text-lg font-bold text-foreground uppercase tracking-wide">
                   Occupancy per Cabang per Tanggal
@@ -959,7 +959,7 @@ export default function OccupancyPage() {
                 {/* Filters (live-only — dead after clone, so excluded from export; real offline filters are generated below) */}
                 <div className="no-export grid grid-cols-1 sm:grid-cols-2 gap-4 mt-5 max-w-2xl">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">🏢 Filter Cabang:</label>
+                    <label className="text-xs font-bold text-foreground uppercase tracking-wider block">🏢 Filter Cabang:</label>
                     <MultiSelect
                       options={cabangs}
                       selected={selectedCabang}
@@ -969,7 +969,7 @@ export default function OccupancyPage() {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">📅 Filter Tanggal:</label>
+                    <label className="text-xs font-bold text-foreground uppercase tracking-wider block">📅 Filter Tanggal:</label>
                     <MultiSelect
                       options={dates}
                       selected={selectedDate}
@@ -1035,14 +1035,14 @@ export default function OccupancyPage() {
 
           {/* ═══ MRP AUTOMATED ANALYSIS SECTION (WHEN MULTI-SHEET EXCEL UPLOADED) ═══ */}
           {mrpData && (
-            <GlassCard className="p-6 border-indigo-500/30 bg-gradient-to-br from-slate-900/90 via-indigo-950/20 to-slate-900/90 shadow-2xl relative z-30 mb-10">
+            <GlassCard className="p-6 border-indigo-500/30 bg-gradient-to-br from-[#1E1E2C]/90 via-indigo-950/20 to-[#1E1E2C]/90 shadow-2xl relative z-30 mb-10">
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-indigo-500/20 pb-5 mb-6">
                 <div>
-                  <h3 className="text-xl font-extrabold text-slate-900 uppercase tracking-wide flex items-center gap-2.5">
+                  <h3 className="text-xl font-extrabold text-foreground uppercase tracking-wide flex items-center gap-2.5">
                     <Sparkles className="w-6 h-6 text-indigo-400 animate-pulse" />
                     Analisa &amp; Grafik MRP (Skenario Forecast vs Target)
                   </h3>
-                  <p className="text-xs text-slate-600 mt-1 font-medium">
+                  <p className="text-xs text-muted-foreground mt-1 font-medium">
                     Hasil kalkulasi otomatis balance mingguan, rasio demand, dan occupancy gudang per periode ({mrpData.period_labels?.join(', ')}).
                   </p>
                 </div>
@@ -1056,7 +1056,7 @@ export default function OccupancyPage() {
                         link.click();
                         toast.success('File Excel MRP dengan rumus berhasil diunduh!');
                       }}
-                      className="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-slate-900 font-bold rounded-xl shadow-lg transition text-xs flex items-center gap-2"
+                      className="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-[#1E1E2C] font-bold rounded-xl shadow-lg transition text-xs flex items-center gap-2"
                     >
                       <FileSpreadsheet className="w-4 h-4" /> Download Excel Hasil (Rumus &amp; Ratio)
                     </button>
@@ -1072,7 +1072,7 @@ export default function OccupancyPage() {
                         link.click();
                         toast.success('Laporan HTML Analisa MRP berhasil diunduh!');
                       }}
-                      className="px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-slate-900 font-bold rounded-xl shadow-lg transition text-xs flex items-center gap-2"
+                      className="px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold rounded-xl shadow-lg transition text-xs flex items-center gap-2"
                     >
                       <Download className="w-4 h-4" /> Download Laporan Analisa HTML
                     </button>
@@ -1083,12 +1083,12 @@ export default function OccupancyPage() {
               {/* Komparasi Occupancy Skenario Forecast vs Target Table */}
               {(mrpData.occupancy_series_forecast || mrpData.occupancy_series_target) && (
                 <div className="mb-8">
-                  <h4 className="text-sm sm:text-base font-extrabold text-slate-900 mb-4 flex items-center gap-2.5 border-b border-slate-200 pb-2.5">
+                  <h4 className="text-sm sm:text-base font-extrabold text-foreground mb-4 flex items-center gap-2.5 border-b border-border pb-2.5">
                     <Activity className="w-5 h-5 text-emerald-400" /> Komparasi Occupancy Mingguan - Skenario Forecast vs Target (%)
                   </h4>
-                  <div className="overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 shadow-xl">
-                    <table className="w-full text-xs text-left text-slate-700">
-                      <thead className="bg-white text-slate-900 uppercase font-extrabold border-b border-slate-200 tracking-wider">
+                  <div className="overflow-x-auto rounded-xl border border-border bg-muted shadow-xl">
+                    <table className="w-full text-xs text-left text-foreground">
+                      <thead className="bg-white text-foreground uppercase font-extrabold border-b border-border tracking-wider">
                         <tr>
                           <th className="py-3.5 px-4">Cabang</th>
                           <th className="py-3.5 px-4 text-center">Skenario</th>
@@ -1104,7 +1104,7 @@ export default function OccupancyPage() {
                           const tVals = mrpData.occupancy_series_target?.[cabang] || [];
                           return (
                             <React.Fragment key={cabang}>
-                              <tr className="bg-white hover:bg-slate-100 transition border-b border-slate-200">
+                              <tr className="bg-white hover:bg-muted transition border-b border-border">
                                 <td className="py-3 px-4 font-bold text-indigo-700 text-sm" rowSpan={1}>{cabang}</td>
                                 <td className="py-2 px-3 text-center font-bold text-emerald-700 bg-emerald-500/10 rounded">Target</td>
                                 {tVals.map((v: number, vIdx: number) => {
@@ -1112,7 +1112,7 @@ export default function OccupancyPage() {
                                   const isHigh = v >= 90 && v <= 100;
                                   return (
                                     <td key={vIdx} className={`py-2.5 px-3 text-right text-sm font-bold ${
-                                      isOver ? 'text-rose-600 bg-rose-500/20 font-black' : isHigh ? 'text-amber-600 font-extrabold' : 'text-slate-800'
+                                      isOver ? 'text-rose-600 bg-rose-500/20 font-black' : isHigh ? 'text-amber-600 font-extrabold' : 'text-foreground'
                                     }`}>
                                       {v.toFixed(1)}%
                                       {isOver && <span className="block text-[9px] font-extrabold text-rose-600 uppercase tracking-tighter">Over Capacity!</span>}
@@ -1136,8 +1136,8 @@ export default function OccupancyPage() {
                 const hasInsights = filteredShortageAlerts.length > 0 || filteredDailyData.some((d: any) => d.occupancy_pct > 100);
                 if (!hasInsights) return null;
                 return (
-                  <div className="mb-6 bg-slate-50 border border-slate-200 rounded-2xl p-5 shadow-sm">
-                    <h4 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
+                  <div className="mb-6 bg-muted border border-border rounded-2xl p-5 shadow-sm">
+                    <h4 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
                       <Sparkles className="w-5 h-5 text-amber-500" /> Rangkuman Status Gudang (Mengikuti Filter)
                     </h4>
                     <div className="flex flex-wrap gap-4">
@@ -1167,14 +1167,14 @@ export default function OccupancyPage() {
 
           {/* ═══ SHEET HARGA CONTAINER / MOS (frozen snapshot — replaced by the filterable table in the offline export section) ═══ */}
           {results.mos_data && results.mos_data.length > 0 && (
-            <GlassCard className="no-export p-6 border-cyan-500/30 bg-gradient-to-br from-slate-900/90 via-cyan-950/20 to-slate-900/90 shadow-2xl relative z-30 mb-10">
-              <h3 className="text-xl font-extrabold text-slate-100 uppercase tracking-wide flex items-center gap-2.5 mb-4">
+            <GlassCard className="no-export p-6 border-cyan-500/30 bg-gradient-to-br from-[#1E1E2C]/90 via-cyan-950/20 to-[#1E1E2C]/90 shadow-2xl relative z-30 mb-10">
+              <h3 className="text-xl font-extrabold text-foreground uppercase tracking-wide flex items-center gap-2.5 mb-4">
                 <FileSpreadsheet className="w-6 h-6 text-cyan-400" />
                 Sheet Harga Container & Kalkulasi MOS
               </h3>
-              <div className="overflow-x-auto rounded-xl border border-slate-700 bg-slate-800/50 shadow-xl">
-                <table className="w-full text-xs text-left text-slate-200">
-                  <thead className="bg-slate-900/80 text-cyan-300 uppercase font-extrabold border-b border-slate-700 tracking-wider">
+              <div className="overflow-x-auto rounded-xl border border-border bg-card/50 shadow-xl">
+                <table className="w-full text-xs text-left text-muted-foreground">
+                  <thead className="bg-card/80 text-cyan-300 uppercase font-extrabold border-b border-border tracking-wider">
                     <tr>
                       <th className="py-2.5 px-4 font-semibold">Cabang</th>
                       <th className="py-2.5 px-4 font-semibold">Grup</th>
@@ -1186,11 +1186,11 @@ export default function OccupancyPage() {
                       <th className="py-2.5 px-4 font-semibold text-right rounded-tr-lg">MOS</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-700">
+                  <tbody className="divide-y divide-border">
                     {results.mos_data
                       .filter((row: any) => selectedCabang.includes('All') || selectedCabang.includes(row.Cabang))
                       .map((row: any, i: number) => (
-                      <tr key={i} className="hover:bg-slate-700/30 transition">
+                      <tr key={i} className="hover:bg-muted/30 transition">
                         <td className="py-2.5 px-4 font-medium">{row.Cabang}</td>
                         <td className="py-2.5 px-4">{row.Grup}</td>
                         <td className="py-2.5 px-4 text-center">{row.Week}</td>

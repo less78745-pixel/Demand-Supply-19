@@ -28,8 +28,8 @@ const CustomTickOcc = (props: any) => {
 
   return (
     <g transform={`translate(${x},${y})`}>
-      <text x={0} y={0} dy={16} textAnchor="middle" fill="#64748b" fontSize={11}>{date}</text>
-      <text x={0} y={0} dy={30} textAnchor="middle" fill="#475569" fontSize={11} className="font-semibold">{cabang}</text>
+      <text x={0} y={0} dy={16} textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize={11}>{date}</text>
+      <text x={0} y={0} dy={30} textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize={11} className="font-semibold">{cabang}</text>
     </g>
   );
 };
@@ -37,10 +37,10 @@ const CustomTickOcc = (props: any) => {
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
     return (
-      <div className="bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm shadow-xl">
-        <p className="text-slate-300 mb-1 font-semibold">{label}</p>
+      <div className="bg-popover border border-border rounded-lg p-3 text-sm shadow-xl">
+        <p className="text-popover-foreground mb-1 font-semibold">{label}</p>
         {payload.map((p: any) => (
-          <p key={p.name} style={{ color: p.fill || '#60a5fa' }}>
+          <p key={p.name} style={{ color: p.fill || 'hsl(var(--secondary))' }}>
             {p.name}: <span className="font-bold">{Number(p.value).toFixed(2)}%</span>
           </p>
         ))}
@@ -63,23 +63,23 @@ export function OccupancyChart({ data }: OccupancyChartProps) {
           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
           <XAxis
             dataKey="label"
-            stroke="#94a3b8"
+            stroke="hsl(var(--muted-foreground))"
             tick={<CustomTickOcc />}
             tickLine={false}
             axisLine={false}
             height={60}
           />
           <YAxis
-            stroke="#94a3b8"
-            tick={{ fill: '#64748b', fontSize: 11, fontWeight: 500 }}
+            stroke="hsl(var(--muted-foreground))"
+            tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11, fontWeight: 500 }}
             tickLine={false}
             axisLine={false}
             unit="%"
           />
-          <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f1f5f9', opacity: 0.8 }} />
+          <Tooltip content={<CustomTooltip />} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.6 }} />
           <Legend wrapperStyle={{ paddingTop: '20px' }} />
-          <ReferenceLine y={100} stroke="#ef4444" strokeDasharray="4 2" label={{ value: '100% Full', fill: '#ef4444', fontSize: 11 }} />
-          <ReferenceLine y={80}  stroke="#f59e0b" strokeDasharray="4 2" label={{ value: '80% Warn', fill: '#f59e0b', fontSize: 11 }} />
+          <ReferenceLine y={100} stroke="hsl(var(--destructive))" strokeDasharray="4 2" label={{ value: '100% Full', fill: 'hsl(var(--destructive))', fontSize: 11 }} />
+          <ReferenceLine y={80}  stroke="hsl(var(--chart-4))" strokeDasharray="4 2" label={{ value: '80% Warn', fill: 'hsl(var(--chart-4))', fontSize: 11 }} />
 
           <Bar
             dataKey="occupancy_pct"

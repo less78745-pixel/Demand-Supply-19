@@ -52,12 +52,12 @@ const SCENARIOS = [
 
 function generateDemoControlTower() {
   const branches = [
-    { cabang: 'Jakarta', region: 'Jawa & Bali', in_stock_rate: 96, days_of_supply: 18, otif_score: 94, health_score: 95, zone: 'GREEN', total_stock: 80000, color: '#22c55e', description: 'Stok optimal dan jadwal pengiriman lancar.' },
-    { cabang: 'Surabaya', region: 'Jawa & Bali', in_stock_rate: 92, days_of_supply: 15, otif_score: 90, health_score: 91, zone: 'GREEN', total_stock: 65000, color: '#22c55e', description: 'Kondisi suplai stabil untuk Jawa Timur.' },
-    { cabang: 'Medan', region: 'Sumatera', in_stock_rate: 78, days_of_supply: 6, otif_score: 75, health_score: 76, zone: 'YELLOW', total_stock: 20000, color: '#f59e0b', description: 'Perlu pengiriman tambahan dari gudang pusat.' },
-    { cabang: 'Makassar', region: 'Sulawesi', in_stock_rate: 82, days_of_supply: 9, otif_score: 80, health_score: 81, zone: 'YELLOW', total_stock: 24500, color: '#f59e0b', description: 'Stok penyangga batas aman.' },
-    { cabang: 'Jayapura', region: 'Indonesia Timur', in_stock_rate: 55, days_of_supply: 3, otif_score: 52, health_score: 53, zone: 'RED', total_stock: 5500, color: '#ef4444', description: 'CRITICAL: Risiko putus stok tinggi, percepat clearance kapal.' },
-    { cabang: 'Kupang', region: 'Indonesia Timur', in_stock_rate: 60, days_of_supply: 4, otif_score: 58, health_score: 59, zone: 'RED', total_stock: 7200, color: '#ef4444', description: 'CRITICAL: Diperlukan rebalancing dari Bali atau Surabaya.' }
+    { cabang: 'Jakarta', region: 'Jawa & Bali', in_stock_rate: 96, days_of_supply: 18, otif_score: 94, health_score: 95, zone: 'GREEN', total_stock: 80000, color: 'hsl(var(--accent))', description: 'Stok optimal dan jadwal pengiriman lancar.' },
+    { cabang: 'Surabaya', region: 'Jawa & Bali', in_stock_rate: 92, days_of_supply: 15, otif_score: 90, health_score: 91, zone: 'GREEN', total_stock: 65000, color: 'hsl(var(--accent))', description: 'Kondisi suplai stabil untuk Jawa Timur.' },
+    { cabang: 'Medan', region: 'Sumatera', in_stock_rate: 78, days_of_supply: 6, otif_score: 75, health_score: 76, zone: 'YELLOW', total_stock: 20000, color: 'hsl(var(--chart-4))', description: 'Perlu pengiriman tambahan dari gudang pusat.' },
+    { cabang: 'Makassar', region: 'Sulawesi', in_stock_rate: 82, days_of_supply: 9, otif_score: 80, health_score: 81, zone: 'YELLOW', total_stock: 24500, color: 'hsl(var(--chart-4))', description: 'Stok penyangga batas aman.' },
+    { cabang: 'Jayapura', region: 'Indonesia Timur', in_stock_rate: 55, days_of_supply: 3, otif_score: 52, health_score: 53, zone: 'RED', total_stock: 5500, color: 'hsl(var(--destructive))', description: 'CRITICAL: Risiko putus stok tinggi, percepat clearance kapal.' },
+    { cabang: 'Kupang', region: 'Indonesia Timur', in_stock_rate: 60, days_of_supply: 4, otif_score: 58, health_score: 59, zone: 'RED', total_stock: 7200, color: 'hsl(var(--destructive))', description: 'CRITICAL: Diperlukan rebalancing dari Bali atau Surabaya.' }
   ];
 
   const region_summary = [
@@ -68,10 +68,10 @@ function generateDemoControlTower() {
   ];
 
   const ddmrp_distribution = [
-    { zone: 'GREEN', count: 2, color: '#22c55e' },
-    { zone: 'YELLOW', count: 2, color: '#f59e0b' },
-    { zone: 'RED', count: 2, color: '#ef4444' },
-    { zone: 'BLUE', count: 0, color: '#3b82f6' }
+    { zone: 'GREEN', count: 2, color: 'hsl(var(--accent))' },
+    { zone: 'YELLOW', count: 2, color: 'hsl(var(--chart-4))' },
+    { zone: 'RED', count: 2, color: 'hsl(var(--destructive))' },
+    { zone: 'BLUE', count: 0, color: 'hsl(var(--secondary))' }
   ];
 
   const weekly_actions = [
@@ -105,7 +105,7 @@ function generateDemoControlTower() {
 }
 
 const ZONE_COLORS: Record<string, string> = {
-  RED: '#ef4444', YELLOW: '#f59e0b', GREEN: '#22c55e', BLUE: '#3b82f6',
+  RED: 'hsl(var(--destructive))', YELLOW: 'hsl(var(--chart-4))', GREEN: 'hsl(var(--accent))', BLUE: 'hsl(var(--secondary))',
 };
 
 const TEMPLATE_CSV = `Cabang,In_Stock_Rate,Days_of_Supply,OTIF_Score,Current_Stock,ROP_Level,Category
@@ -229,7 +229,7 @@ export default function ControlTowerPage() {
             toast.success('Pembaruan data dari pengguna lain diterima!', { 
               icon: '🔄',
               duration: 5000,
-              style: { background: '#22c55e', color: '#fff', fontWeight: 'bold' } 
+              style: { background: 'hsl(var(--accent))', color: '#fff', fontWeight: 'bold' } 
             });
           } catch (e) {
             console.error("Failed parsing realtime data", e);
@@ -281,7 +281,7 @@ export default function ControlTowerPage() {
       const newInStock = Math.min(100, Math.round(b.in_stock_rate * mod));
       const newHealth = Math.min(100, Math.round((newOtif + newInStock) / 2));
       const newZone = newHealth < 65 ? 'RED' : newHealth < 85 ? 'YELLOW' : 'GREEN';
-      const color = newZone === 'RED' ? '#ef4444' : newZone === 'YELLOW' ? '#f59e0b' : '#22c55e';
+      const color = newZone === 'RED' ? 'hsl(var(--destructive))' : newZone === 'YELLOW' ? 'hsl(var(--chart-4))' : 'hsl(var(--accent))';
       return {
         ...b,
         otif_score: newOtif,
@@ -380,16 +380,16 @@ export default function ControlTowerPage() {
 
       {/* ─── COMMAND TOWER HERO BANNER ─── */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-6 sm:p-8 border border-indigo-500/20 shadow-2xl">
-        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#6366f1_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
+        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(hsl(var(--secondary))_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
         <div className="relative z-10 flex flex-col xl:flex-row xl:items-center justify-between gap-6">
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 uppercase tracking-widest">
               <Radar className="w-3.5 h-3.5" /> SCM Analytic • Executive Supply Chain Surveillance
             </div>
-            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-slate-900 flex items-center gap-3">
+            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white flex items-center gap-3">
               SCM Control <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-blue-300 to-cyan-300">Tower</span>
             </h1>
-            <p className="text-slate-700 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
+            <p className="text-white/75 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
               Dashboard eksekutif terpadu untuk memantau health score supply chain 28 kantor cabang secara real-time, mendeteksi krisis stok cepat, serta merekomendasikan aksi mitigasi mingguan.
             </p>
           </div>
@@ -412,15 +412,15 @@ export default function ControlTowerPage() {
 
       {/* ─── PANDUAN & DEMO DATA SECTION ─── */}
       {showHowTo && (
-        <GlassCard className="p-6 border-indigo-500/30 bg-white backdrop-blur-xl animate-fade-in">
-          <div className="flex items-center justify-between border-b border-slate-200 pb-4 mb-6">
-            <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+        <GlassCard className="p-6 border-indigo-500/30 bg-card backdrop-blur-xl animate-fade-in">
+          <div className="flex items-center justify-between border-b border-border pb-4 mb-6">
+            <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
               <FileSpreadsheet className="w-5 h-5 text-indigo-400" /> Panduan Upload & Parameter Control Tower
             </h3>
             <div className="flex flex-wrap gap-2">
               <button
                 onClick={handleGenerateDemo}
-                className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-blue-600 hover:from-indigo-600 hover:to-blue-700 text-slate-900 font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-indigo-500/20"
+                className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-blue-600 hover:from-indigo-600 hover:to-blue-700 text-white font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-indigo-500/20"
               >
                 <Zap className="w-4 h-4" /> Gunakan Data Demo
               </button>
@@ -433,12 +433,12 @@ export default function ControlTowerPage() {
               </button>
             </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm text-slate-700">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm text-muted-foreground">
             <div>
-              <h4 className="font-semibold text-slate-900 mb-2">📌 Skema Kolom Upload (Excel / CSV):</h4>
-              <ul className="grid grid-cols-2 gap-2 text-xs text-slate-700">
+              <h4 className="font-semibold text-foreground mb-2">📌 Skema Kolom Upload (Excel / CSV):</h4>
+              <ul className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
                 {['Cabang','In_Stock_Rate','Days_of_Supply','OTIF_Score','Current_Stock','ROP_Level','Category'].map(col => (
-                  <li key={col} className="flex items-center gap-2 font-mono bg-white/5 p-2 rounded border border-slate-200">
+                  <li key={col} className="flex items-center gap-2 font-mono bg-muted/40 p-2 rounded border border-border">
                     <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0" />
                     <span>{col}</span>
                   </li>
@@ -446,8 +446,8 @@ export default function ControlTowerPage() {
               </ul>
             </div>
             <div className="space-y-3">
-              <h4 className="font-semibold text-slate-900">⚙️ Kalkulasi Health Score:</h4>
-              <p className="text-xs text-slate-600 leading-relaxed">
+              <h4 className="font-semibold text-foreground">⚙️ Kalkulasi Health Score:</h4>
+              <p className="text-xs text-muted-foreground leading-relaxed">
                 Health score merupakan rata-rata berbobot dari In-Stock Rate dan skor pengiriman tepat waktu (OTIF). Cabang dengan health score &lt; 65 otomatis ditandai sebagai zona RED (Critical).
               </p>
               <div className="p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-xl text-xs text-indigo-300 flex items-center gap-2">
@@ -465,7 +465,7 @@ export default function ControlTowerPage() {
           <h2 className="text-sm font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-2">
             <Zap className="w-4 h-4" /> Pilih 3 Jalur Simulasi Ketahanan Suplai Nasional:
           </h2>
-          <span className="text-xs text-slate-600 italic hidden sm:inline">Klik tab untuk menguji ketahanan stok saat musim puncak atau krisis nasional!</span>
+          <span className="text-xs text-muted-foreground italic hidden sm:inline">Klik tab untuk menguji ketahanan stok saat musim puncak atau krisis nasional!</span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -481,22 +481,22 @@ export default function ControlTowerPage() {
                 }}
                 className={`relative group p-4 sm:p-5 rounded-2xl transition-all duration-300 text-left border overflow-hidden shadow-lg ${
                   isSelected
-                    ? `bg-gradient-to-br ${sc.color} text-slate-900 border-transparent ring-2 ring-white/20 shadow-indigo-500/25 scale-[1.02]`
-                    : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 hover:border-slate-600'
+                    ? `bg-gradient-to-br ${sc.color} text-white border-transparent ring-2 ring-white/20 shadow-indigo-500/25 scale-[1.02]`
+                    : 'bg-card hover:bg-muted text-muted-foreground border-border hover:border-primary/50'
                 }`}
               >
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-bold text-base tracking-wide flex items-center gap-2.5">
-                    <Icon className={`w-5 h-5 ${isSelected ? 'text-slate-900' : 'text-indigo-400'}`} />
+                    <Icon className={`w-5 h-5 ${isSelected ? 'text-white' : 'text-indigo-400'}`} />
                     {sc.title}
                   </span>
                   {isSelected && (
-                    <span className="px-2 py-0.5 rounded-full bg-white/20 text-slate-900 text-xs font-black uppercase tracking-wider">
+                    <span className="px-2 py-0.5 rounded-full bg-white/20 text-white text-xs font-black uppercase tracking-wider">
                       Aktif
                     </span>
                   )}
                 </div>
-                <p className={`text-xs sm:text-sm leading-relaxed ${isSelected ? 'text-slate-900 font-medium' : 'text-slate-600'}`}>
+                <p className={`text-xs sm:text-sm leading-relaxed ${isSelected ? 'text-white/90 font-medium' : 'text-muted-foreground'}`}>
                   {sc.desc}
                 </p>
               </button>
@@ -506,7 +506,7 @@ export default function ControlTowerPage() {
       </div>
 
       {/* ─── UPLOAD BOX WHEN RESULTS PRESENT OR HIDDEN ─── */}
-      <GlassCard className="p-4 bg-white border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <GlassCard className="p-4 bg-card border-border flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="flex-1 w-full">
           <FileUploader
             onFileUpload={handleFileUpload}
@@ -517,10 +517,10 @@ export default function ControlTowerPage() {
             templateName="template_branch_health.csv"
           />
         </div>
-        <div className="sm:border-l border-slate-200 sm:pl-4 flex flex-col justify-center items-center shrink-0">
+        <div className="sm:border-l border-border sm:pl-4 flex flex-col justify-center items-center shrink-0">
           <button
             onClick={handleGenerateDemo}
-            className="w-full sm:w-auto px-5 py-3 bg-gradient-to-r from-indigo-500 to-blue-600 hover:from-indigo-600 hover:to-blue-700 text-slate-900 font-bold rounded-xl shadow-lg transition flex items-center justify-center gap-2 text-sm"
+            className="w-full sm:w-auto px-5 py-3 bg-gradient-to-r from-indigo-500 to-blue-600 hover:from-indigo-600 hover:to-blue-700 text-white font-bold rounded-xl shadow-lg transition flex items-center justify-center gap-2 text-sm"
           >
             <Zap className="w-4 h-4" /> Gunakan Data Demo
           </button>
@@ -537,17 +537,17 @@ export default function ControlTowerPage() {
       {results && (
         <div className="space-y-8 animate-in fade-in duration-700">
           {/* ─── FILTER & EXPORT ACTION BAR ─── */}
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-white p-6 rounded-2xl border border-slate-200 shadow-xl relative z-30 overflow-visible mb-10">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-card p-6 rounded-2xl border border-border shadow-xl relative z-30 overflow-visible mb-10">
             <div className="no-export flex flex-col sm:flex-row sm:items-center gap-4 flex-1">
-              <span className="text-xs font-bold text-indigo-300 uppercase tracking-wider whitespace-nowrap">🏢 Filter Cabang & Zona:</span>
+              <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider whitespace-nowrap">Filter Cabang & Zona:</span>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-lg">
                 <MultiSelect options={regionOptions} selected={selectedRegion} onChange={setSelectedRegion} selectAllLabel="Semua Region" placeholder="Pilih Region..." />
                 <MultiSelect options={zoneOptions} selected={selectedZone} onChange={setSelectedZone} selectAllLabel="Semua Zone" placeholder="Pilih Zona..." />
               </div>
             </div>
-            <div className="flex flex-wrap items-center justify-end gap-3 pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-200">
+            <div className="flex flex-wrap items-center justify-end gap-3 pt-2 lg:pt-0 border-t lg:border-t-0 border-border">
               <TimestampBadge timestamp={results.processed_at} />
-              <button onClick={handleExport} className="no-export px-5 py-2.5 bg-indigo-600 text-slate-900 rounded-xl hover:bg-indigo-500 transition text-xs sm:text-sm font-bold flex items-center gap-2 uppercase tracking-wide shadow-lg">
+              <button onClick={handleExport} className="no-export px-5 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-500 transition text-xs sm:text-sm font-bold flex items-center gap-2 uppercase tracking-wide shadow-lg">
                 <Download className="w-4 h-4" /> Export Report (CSV)
               </button>
             </div>
@@ -613,13 +613,13 @@ export default function ControlTowerPage() {
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={results.region_summary || []} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                    <XAxis dataKey="region" tick={{ fill: '#475569', fontSize: 10 }} tickLine={false} axisLine={false} />
-                    <YAxis tick={{ fill: '#475569', fontSize: 11 }} tickLine={false} axisLine={false} />
+                    <XAxis dataKey="region" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} tickLine={false} axisLine={false} />
+                    <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} tickLine={false} axisLine={false} />
                     <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--popover))', borderColor: 'hsl(var(--border))', color: 'hsl(var(--popover-foreground))' }} />
                     <Legend />
-                    <Bar dataKey="avg_in_stock" name="In-Stock %" fill="#22c55e" radius={[2, 2, 0, 0]} />
+                    <Bar dataKey="avg_in_stock" name="In-Stock %" fill="hsl(var(--accent))" radius={[2, 2, 0, 0]} />
                     <Bar dataKey="avg_otif" name="OTIF %" fill="hsl(var(--primary))" radius={[2, 2, 0, 0]} />
-                    <Bar dataKey="health_score" name="Health Score" fill="#3b82f6" radius={[2, 2, 0, 0]} />
+                    <Bar dataKey="health_score" name="Health Score" fill="hsl(var(--secondary))" radius={[2, 2, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -635,8 +635,8 @@ export default function ControlTowerPage() {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={filtered} layout="vertical" margin={{ top: 10, right: 20, left: 90, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
-                  <XAxis type="number" tick={{ fill: '#475569', fontSize: 11 }} tickLine={false} axisLine={false} unit=" hari" />
-                  <YAxis type="category" dataKey="cabang" tick={{ fill: '#475569', fontSize: 10 }} tickLine={false} axisLine={false} width={85} />
+                  <XAxis type="number" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} tickLine={false} axisLine={false} unit=" hari" />
+                  <YAxis type="category" dataKey="cabang" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} tickLine={false} axisLine={false} width={85} />
                   <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--popover))', borderColor: 'hsl(var(--border))', color: 'hsl(var(--popover-foreground))' }}
                     formatter={(value: any) => [`${value} hari`, 'Days of Supply']}
                     labelFormatter={(label: any) => {
@@ -653,10 +653,10 @@ export default function ControlTowerPage() {
             </div>
             <div className="flex justify-center gap-6 mt-4">
               {[
-                { label: 'Stockout Risk (<3 hari)', color: '#ef4444' },
-                { label: 'Warning (3-7 hari)', color: '#f59e0b' },
-                { label: 'Safe (7-30 hari)', color: '#22c55e' },
-                { label: 'Overstock (>30 hari)', color: '#3b82f6' },
+                { label: 'Stockout Risk (<3 hari)', color: 'hsl(var(--destructive))' },
+                { label: 'Warning (3-7 hari)', color: 'hsl(var(--chart-4))' },
+                { label: 'Safe (7-30 hari)', color: 'hsl(var(--accent))' },
+                { label: 'Overstock (>30 hari)', color: 'hsl(var(--secondary))' },
               ].map((l) => (
                 <div key={l.label} className="flex items-center gap-1.5">
                   <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: l.color }} />
@@ -693,7 +693,7 @@ export default function ControlTowerPage() {
               Detail Health per Cabang ({filtered.length} cabang)
             </h3>
             <div className="overflow-x-auto max-h-[500px] overflow-y-auto custom-scrollbar">
-              <table className="w-full text-sm text-left text-slate-700 dark:text-slate-300">
+              <table className="w-full text-sm text-left text-muted-foreground">
                 <thead className="text-xs text-foreground uppercase bg-muted/50 border-b border-border sticky top-0 font-bold tracking-wider z-10">
                   <tr>
                     <th className="px-3 py-3">Cabang</th>
@@ -716,8 +716,8 @@ export default function ControlTowerPage() {
                       <td className="px-3 py-2.5 text-right font-bold">{b.health_score}%</td>
                       <td className="px-3 py-2.5">
                         <span className="px-2 py-0.5 rounded text-xs font-bold uppercase" style={{
-                          backgroundColor: `${b.zone_color || '#22c55e'}20`,
-                          color: b.zone_color || '#22c55e',
+                          backgroundColor: `${b.zone_color || '#34B1AA'}20`,
+                          color: b.zone_color || '#34B1AA',
                         }}>
                           {b.zone_label || b.zone}
                         </span>

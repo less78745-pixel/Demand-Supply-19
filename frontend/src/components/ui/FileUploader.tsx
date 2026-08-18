@@ -78,12 +78,12 @@ export function FileUploader({
           "border-white/10 bg-white/[0.02]"
         )}>
           <div className="flex flex-col items-center text-center space-y-1.5">
-            <div className="p-1.5 rounded-full bg-white/5 text-slate-500">
+            <div className="p-1.5 rounded-full bg-white/5 text-muted-foreground">
               <Lock className="w-5 h-5" />
             </div>
             <div className="flex flex-col items-center">
-              <h3 className="text-xs font-bold text-slate-500 tracking-wide">{label}</h3>
-              <p className="text-[10px] text-slate-600 mt-0.5 max-w-[200px] leading-tight">
+              <h3 className="text-xs font-bold text-muted-foreground tracking-wide">{label}</h3>
+              <p className="text-[10px] text-muted-foreground mt-0.5 max-w-[200px] leading-tight">
                 Akses upload hanya untuk Super Admin
               </p>
             </div>
@@ -128,13 +128,13 @@ export function FileUploader({
             >
               <div className={cn(
                 "p-1.5 rounded-full transition-colors duration-300",
-                isDragActive ? "bg-primary/20 text-primary" : "bg-white/5 text-slate-400"
+                isDragActive ? "bg-primary/20 text-primary" : "bg-white/5 text-muted-foreground"
               )}>
                 <UploadCloud className="w-5 h-5" />
               </div>
               <div className="flex flex-col items-center">
                 <h3 className="text-xs font-bold text-white tracking-wide">{label}</h3>
-                <p className="text-[10px] text-slate-400 mt-0.5 max-w-[200px] leading-tight line-clamp-2">
+                <p className="text-[10px] text-muted-foreground mt-0.5 max-w-[200px] leading-tight line-clamp-2">
                   {description}
                 </p>
                 {templateCsv && (
@@ -185,7 +185,7 @@ export function FileUploader({
               </div>
               <div>
                 <p className="font-medium text-[11px] text-white truncate max-w-[160px]">{selectedFile.name}</p>
-                <p className="text-[9px] text-slate-400 mt-0.5">
+                <p className="text-[9px] text-muted-foreground mt-0.5">
                   {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
                 </p>
               </div>

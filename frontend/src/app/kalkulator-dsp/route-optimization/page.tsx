@@ -24,11 +24,11 @@ import { ModuleExportConfig } from '@/utils/offlineExport';
 
 const RouteMapChart = dynamic(
   () => import('@/components/charts/RouteMapChart').then(m => m.RouteMapChart),
-  { ssr: false, loading: () => <div className="h-72 w-full animate-pulse rounded-xl bg-slate-100" /> }
+  { ssr: false, loading: () => <div className="h-72 w-full animate-pulse rounded-xl bg-muted" /> }
 );
 const SensitivityChart = dynamic(
   () => import('@/components/charts/SensitivityChart').then(m => m.SensitivityChart),
-  { ssr: false, loading: () => <div className="h-72 w-full animate-pulse rounded-xl bg-slate-100" /> }
+  { ssr: false, loading: () => <div className="h-72 w-full animate-pulse rounded-xl bg-muted" /> }
 );
 
 // ═══════════════════════════════════════════════
@@ -280,7 +280,7 @@ export default function RouteOptimizationPage() {
             toast.success('Pembaruan data dari pengguna lain diterima!', { 
               icon: '🔄',
               duration: 5000,
-              style: { background: '#22c55e', color: '#fff', fontWeight: 'bold' } 
+              style: { background: 'hsl(var(--accent))', color: 'hsl(var(--accent-foreground))', fontWeight: 'bold' } 
             });
           } catch (e) {
             console.error("Failed parsing realtime data", e);
@@ -515,17 +515,17 @@ export default function RouteOptimizationPage() {
   return (
     <div id="export-container" className="space-y-8 max-w-[1550px] mx-auto pb-16 animate-in fade-in duration-500 text-foreground">
       {/* ─── COMMAND TOWER HERO BANNER ─── */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-teal-950 to-slate-900 p-6 sm:p-8 border border-teal-500/20 shadow-2xl">
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#1E1E2C] via-teal-950 to-[#1E1E2C] p-6 sm:p-8 border border-teal-500/20 shadow-2xl">
         <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#14b8a6_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
         <div className="relative z-10 flex flex-col xl:flex-row xl:items-center justify-between gap-6">
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-teal-500/10 text-teal-400 border border-teal-500/20 uppercase tracking-widest">
               <Route className="w-3.5 h-3.5" /> Kalkulator DSP • VRP Solver & Milk-Run
             </div>
-            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-slate-900 flex items-center gap-3">
+            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-foreground flex items-center gap-3">
               Route Optimization <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-400 via-emerald-300 to-cyan-300">(VRP Solver)</span>
             </h1>
-            <p className="text-slate-700 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
+            <p className="text-foreground text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
               Vehicle Routing Problem solver memadukan jarak Haversine dengan algoritma Clarke-Wright Savings, Genetic Algorithm, dan Hybrid Ant Colony Optimization (ACO).
             </p>
           </div>
@@ -549,14 +549,14 @@ export default function RouteOptimizationPage() {
       {/* ─── PANDUAN & DEMO DATA SECTION ─── */}
       {showHowTo && (
         <GlassCard className="p-6 border-teal-500/30 bg-white backdrop-blur-xl animate-fade-in">
-          <div className="flex items-center justify-between border-b border-slate-200 pb-4 mb-6">
-            <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+          <div className="flex items-center justify-between border-b border-border pb-4 mb-6">
+            <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
               <FileSpreadsheet className="w-5 h-5 text-teal-400" /> Panduan Upload & Skema Koordinat Pelanggan
             </h3>
             <div className="flex flex-wrap gap-2">
               <button
                 onClick={handleGenerateDemo}
-                className="px-4 py-2 bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 text-slate-900 font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-teal-500/20"
+                className="px-4 py-2 bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 text-[#1E1E2C] font-medium text-xs sm:text-sm rounded-xl transition flex items-center gap-2 shadow-lg shadow-teal-500/20"
               >
                 <Zap className="w-4 h-4" /> Gunakan Data Demo
               </button>
@@ -569,12 +569,12 @@ export default function RouteOptimizationPage() {
               </button>
             </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm text-slate-700">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm text-foreground">
             <div>
-              <h4 className="font-semibold text-slate-900 mb-2">📌 Skema Kolom File VRP (Excel / CSV):</h4>
-              <ul className="grid grid-cols-2 gap-2 text-xs text-slate-700">
+              <h4 className="font-semibold text-foreground mb-2">📌 Skema Kolom File VRP (Excel / CSV):</h4>
+              <ul className="grid grid-cols-2 gap-2 text-xs text-foreground">
                 {['Customer ID','Nama Pelanggan','Latitude','Longitude','Demand (Unit)','Time Window Start','Time Window End','Service Duration (Mins)'].map(col => (
-                  <li key={col} className="flex items-center gap-2 font-mono bg-white/5 p-2 rounded border border-slate-200">
+                  <li key={col} className="flex items-center gap-2 font-mono bg-white/5 p-2 rounded border border-border">
                     <div className="w-1.5 h-1.5 rounded-full bg-teal-400 shrink-0" />
                     <span>{col}</span>
                   </li>
@@ -582,8 +582,8 @@ export default function RouteOptimizationPage() {
               </ul>
             </div>
             <div className="space-y-3">
-              <h4 className="font-semibold text-slate-900">⚙️ Clarke-Wright & Hybrid ACO Metaheuristic:</h4>
-              <p className="text-xs text-slate-600 leading-relaxed">
+              <h4 className="font-semibold text-foreground">⚙️ Clarke-Wright & Hybrid ACO Metaheuristic:</h4>
+              <p className="text-xs text-muted-foreground leading-relaxed">
                 Algoritma menguji ribuan kemungkinan rute untuk meminimalkan jarak tempuh total, menurunkan biaya operasional armada, dan menekan emisi CO2 sekaligus memaksimalkan utilisasi muatan (Load Utilization).
               </p>
               <div className="p-3 bg-teal-500/10 border border-teal-500/20 rounded-xl text-xs text-teal-300 flex items-center gap-2">
@@ -601,7 +601,7 @@ export default function RouteOptimizationPage() {
           <h2 className="text-sm font-bold uppercase tracking-wider text-teal-400 flex items-center gap-2">
             <Zap className="w-4 h-4" /> Pilih 3 Jalur Simulasi Kondisi Rute & Lalu Lintas:
           </h2>
-          <span className="text-xs text-slate-600 italic hidden sm:inline">Klik tab untuk menguji kemacetan peak-hours atau rute Eco-Driving!</span>
+          <span className="text-xs text-muted-foreground italic hidden sm:inline">Klik tab untuk menguji kemacetan peak-hours atau rute Eco-Driving!</span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -617,22 +617,22 @@ export default function RouteOptimizationPage() {
                 }}
                 className={`relative group p-4 sm:p-5 rounded-2xl transition-all duration-300 text-left border overflow-hidden shadow-lg ${
                   isSelected
-                    ? `bg-gradient-to-br ${sc.color} text-slate-900 border-transparent ring-2 ring-white/20 shadow-teal-500/25 scale-[1.02]`
-                    : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 hover:border-slate-600'
+                    ? `bg-gradient-to-br ${sc.color} text-white border-transparent ring-2 ring-white/20 shadow-teal-500/25 scale-[1.02]`
+                    : 'bg-white hover:bg-muted text-foreground border-border hover:border-primary'
                 }`}
               >
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-bold text-base tracking-wide flex items-center gap-2.5">
-                    <Icon className={`w-5 h-5 ${isSelected ? 'text-slate-900' : 'text-teal-400'}`} />
+                    <Icon className={`w-5 h-5 ${isSelected ? 'text-white' : 'text-teal-400'}`} />
                     {sc.title}
                   </span>
                   {isSelected && (
-                    <span className="px-2 py-0.5 rounded-full bg-white/20 text-slate-900 text-xs font-black uppercase tracking-wider">
+                    <span className="px-2 py-0.5 rounded-full bg-white/20 text-white text-xs font-black uppercase tracking-wider">
                       Aktif
                     </span>
                   )}
                 </div>
-                <p className={`text-xs sm:text-sm leading-relaxed ${isSelected ? 'text-slate-900 font-medium' : 'text-slate-600'}`}>
+                <p className={`text-xs sm:text-sm leading-relaxed ${isSelected ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>
                   {sc.desc}
                 </p>
               </button>
@@ -806,21 +806,21 @@ Pelanggan,Toko A,-6.210000,106.820000,15,08:00-12:00,30`}
                   toast.error('Tidak ada data rute untuk diexport');
                 }
               }}
-              className="no-export bg-emerald-600 hover:bg-emerald-500 text-slate-900 px-4 py-2 rounded-md text-sm font-semibold flex items-center gap-2 transition-colors shadow-sm"
+              className="no-export bg-emerald-600 hover:bg-emerald-500 text-[#1E1E2C] px-4 py-2 rounded-md text-sm font-semibold flex items-center gap-2 transition-colors shadow-sm"
             >
               <FileSpreadsheet className="w-4 h-4" /> Download Excel
             </button>
           </div>
 
           {/* Interactive Filters (Expanded & Overflow Visible) */}
-          <GlassCard allowOverflow={true} className="no-export p-6 mb-10 border-slate-200 bg-white shadow-xl relative z-30">
+          <GlassCard allowOverflow={true} className="no-export p-6 mb-10 border-border bg-white shadow-xl relative z-30">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
               <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-700 mb-1 block uppercase tracking-wider">🏢 Filter Cabang / Grup:</label>
+                <label className="text-xs font-bold text-foreground mb-1 block uppercase tracking-wider">🏢 Filter Cabang / Grup:</label>
                 <select 
                   value={selectedGroup} 
                   onChange={e => { setSelectedGroup(Number(e.target.value)); setSelectedMethod(0); setFilterTipeRute(['All']); setFilterSearchStop(['All']); }}
-                  className="w-full min-h-[44px] rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-800 focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30 outline-none transition font-semibold cursor-pointer shadow-md"
+                  className="w-full min-h-[44px] rounded-xl border border-border bg-muted px-3.5 py-2.5 text-sm text-foreground focus:border-primary focus:ring-2 focus:ring-primary/30 outline-none transition font-semibold cursor-pointer shadow-md"
                 >
                   {results.map((res: any, idx: number) => (
                     <option key={idx} value={idx}>{res.label || `Cabang ${idx + 1}`}</option>
@@ -828,7 +828,7 @@ Pelanggan,Toko A,-6.210000,106.820000,15,08:00-12:00,30`}
                 </select>
               </div>
               <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-700 mb-1 block uppercase tracking-wider">🚚 Filter Tipe Armada / Rute:</label>
+                <label className="text-xs font-bold text-foreground mb-1 block uppercase tracking-wider">🚚 Filter Tipe Armada / Rute:</label>
                 <MultiSelect
                   options={['All', 'Dedicated', 'Optimasi']}
                   selected={filterTipeRute}
@@ -839,7 +839,7 @@ Pelanggan,Toko A,-6.210000,106.820000,15,08:00-12:00,30`}
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-700 mb-1 block uppercase tracking-wider">📍 Cari Titik Pemberhentian:</label>
+                <label className="text-xs font-bold text-foreground mb-1 block uppercase tracking-wider">📍 Cari Titik Pemberhentian:</label>
                 <MultiSelect
                   options={['All', ...(Array.from(new Set(
                     (Array.isArray(results[selectedGroup]?.methods?.[selectedMethod]?.routes) ? results[selectedGroup].methods[selectedMethod].routes : []).flatMap((r: any) => getRouteStopNames(r))
@@ -899,28 +899,28 @@ Pelanggan,Toko A,-6.210000,106.820000,15,08:00-12:00,30`}
             if (!bestObj) return null;
 
             return (
-              <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-emerald-950 via-teal-900 to-slate-900 p-6 sm:p-7 border-2 border-emerald-500/40 shadow-2xl animate-fade-in my-6">
+              <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-emerald-950 via-teal-900 to-[#1E1E2C] p-6 sm:p-7 border-2 border-emerald-500/40 shadow-2xl animate-fade-in my-6">
                 <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#10b981_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
                 <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
                   <div className="space-y-2.5 max-w-3xl">
-                    <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full text-xs font-black bg-emerald-400 text-slate-950 uppercase tracking-wider shadow-md">
-                      <Award className="w-4 h-4 text-slate-950 fill-slate-950" />
+                    <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full text-xs font-black bg-emerald-400 text-[#1E1E2C] uppercase tracking-wider shadow-md">
+                      <Award className="w-4 h-4 text-foreground fill-[#1E1E2C]" />
                       Rekomendasi Rute Paling OK (Best Optimization)
                     </div>
-                    <h3 className="text-xl sm:text-3xl font-black text-slate-900 flex items-center gap-3">
+                    <h3 className="text-xl sm:text-3xl font-black text-foreground flex items-center gap-3">
                       <span>🏆 {bestMethodName}</span>
                     </h3>
-                    <p className="text-slate-800 text-sm sm:text-base leading-relaxed">
+                    <p className="text-foreground text-sm sm:text-base leading-relaxed">
                       Berdasarkan analisis komputasi VRP (Vehicle Routing Problem), metode ini terbukti <b>Paling OK</b> dan optimal karena memberikan efisiensi tertinggi dengan penghematan biaya <b className="text-emerald-300 font-extrabold">{savingsPct}%</b> berbanding rute konvensional (Nearest Neighbor).
                     </p>
-                    <div className="flex flex-wrap items-center gap-3 text-xs font-bold pt-1 text-slate-700">
-                      <span className="px-3.5 py-1.5 rounded-xl bg-white border border-slate-200 flex items-center gap-1.5 shadow">
+                    <div className="flex flex-wrap items-center gap-3 text-xs font-bold pt-1 text-foreground">
+                      <span className="px-3.5 py-1.5 rounded-xl bg-white border border-border flex items-center gap-1.5 shadow">
                         💰 Total Cost: <b className="text-emerald-400 text-sm font-mono">{formatRp(bestObj.cost?.total_cost || 0)}</b>
                       </span>
-                      <span className="px-3.5 py-1.5 rounded-xl bg-white border border-slate-200 flex items-center gap-1.5 shadow">
+                      <span className="px-3.5 py-1.5 rounded-xl bg-white border border-border flex items-center gap-1.5 shadow">
                         🛣️ Jarak Rute: <b className="text-cyan-400 text-sm font-mono">{Number(bestObj.total_distance_km || 0).toFixed(1)} KM</b>
                       </span>
-                      <span className="px-3.5 py-1.5 rounded-xl bg-white border border-slate-200 flex items-center gap-1.5 shadow">
+                      <span className="px-3.5 py-1.5 rounded-xl bg-white border border-border flex items-center gap-1.5 shadow">
                         🚚 Armada Operasional: <b className="text-amber-400 text-sm font-mono">{bestObj.n_vehicles || 0} Unit</b>
                       </span>
                     </div>
@@ -934,7 +934,7 @@ Pelanggan,Toko A,-6.210000,106.820000,15,08:00-12:00,30`}
                           toast.success(`Menyoroti rute dari metode terbaik: ${bestMethodName}`);
                         }
                       }}
-                      className="no-export px-5 py-3 rounded-xl bg-gradient-to-r from-emerald-400 to-teal-400 hover:from-emerald-500 hover:to-teal-500 text-slate-950 font-black text-xs sm:text-sm transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 active:scale-95"
+                      className="no-export px-5 py-3 rounded-xl bg-gradient-to-r from-emerald-400 to-teal-400 hover:from-emerald-500 hover:to-teal-500 text-[#1E1E2C] font-black text-xs sm:text-sm transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 active:scale-95"
                     >
                       <CheckCircle2 className="w-5 h-5 stroke-[2.5]" />
                       Sorot Peta Rute Terbaik Ini
@@ -1079,14 +1079,14 @@ Pelanggan,Toko A,-6.210000,106.820000,15,08:00-12:00,30`}
               </GlassCard>
 
               {/* MASTER CATALOG: ALL ROUTES FROM ALL METHODS WITH BEST BADGE */}
-              <GlassCard className="no-export p-6 border-slate-200 bg-white shadow-2xl my-6">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 pb-4 mb-6 gap-3">
+              <GlassCard className="no-export p-6 border-border bg-white shadow-2xl my-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border pb-4 mb-6 gap-3">
                   <div>
-                    <h3 className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2.5 uppercase tracking-wide">
+                    <h3 className="text-base sm:text-lg font-bold text-foreground flex items-center gap-2.5 uppercase tracking-wide">
                       <Layers className="w-5 h-5 text-purple-400" />
                       Semua Rute Optimasi & Indikator Paling OK (Seluruh Metode)
                     </h3>
-                    <p className="text-xs text-slate-600 mt-1">
+                    <p className="text-xs text-muted-foreground mt-1">
                       Daftar lengkap seluruh rute komputasi dari berbagai algoritma untuk membandingkan mana konfigurasi stop dan kendaraan yang paling efektif.
                     </p>
                   </div>
@@ -1096,22 +1096,22 @@ Pelanggan,Toko A,-6.210000,106.820000,15,08:00-12:00,30`}
                   </div>
                 </div>
 
-                <div className="overflow-x-auto rounded-xl border border-slate-200 max-h-[650px] overflow-y-auto">
+                <div className="overflow-x-auto rounded-xl border border-border max-h-[650px] overflow-y-auto">
                   <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[1100px]">
-                    <thead className="bg-slate-50 text-slate-700 uppercase font-bold sticky top-0 z-20 shadow-md text-[11px] tracking-wider text-center">
-                      <tr className="border-b border-slate-200">
+                    <thead className="bg-muted text-foreground uppercase font-bold sticky top-0 z-20 shadow-md text-[11px] tracking-wider text-center">
+                      <tr className="border-b border-border">
                         <th className="py-3 px-4 text-left">Metode Optimasi</th>
-                        <th className="py-3 px-3 border-l border-slate-200 text-left">Armada / Rute</th>
-                        <th className="py-3 px-3 border-l border-slate-200">Tipe</th>
-                        <th className="py-3 px-3 border-l border-slate-200 text-right">Stop</th>
-                        <th className="py-3 px-3 border-l border-slate-200 text-right">Muatan</th>
-                        <th className="py-3 px-3 border-l border-slate-200 text-right">Utilisasi</th>
-                        <th className="py-3 px-3 border-l border-slate-200 text-right text-cyan-400">Jarak</th>
-                        <th className="py-3 px-4 border-l border-slate-200 text-left">Urutan Stop / Titik Tujuan</th>
-                        <th className="py-3 px-3 border-l border-slate-200 bg-slate-100 text-slate-900">Action</th>
+                        <th className="py-3 px-3 border-l border-border text-left">Armada / Rute</th>
+                        <th className="py-3 px-3 border-l border-border">Tipe</th>
+                        <th className="py-3 px-3 border-l border-border text-right">Stop</th>
+                        <th className="py-3 px-3 border-l border-border text-right">Muatan</th>
+                        <th className="py-3 px-3 border-l border-border text-right">Utilisasi</th>
+                        <th className="py-3 px-3 border-l border-border text-right text-cyan-400">Jarak</th>
+                        <th className="py-3 px-4 border-l border-border text-left">Urutan Stop / Titik Tujuan</th>
+                        <th className="py-3 px-3 border-l border-border bg-muted text-foreground">Action</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-800 text-slate-700 text-center font-medium">
+                    <tbody className="divide-y divide-border text-foreground text-center font-medium">
                       {results[selectedGroup]?.methods?.flatMap((m: any, mIdx: number) => {
                         const isBestMethod = m.method === (results[selectedGroup].best_method || results[selectedGroup].summary?.best_method);
                         const routes = Array.isArray(m.routes) ? m.routes : [];
@@ -1136,9 +1136,9 @@ Pelanggan,Toko A,-6.210000,106.820000,15,08:00-12:00,30`}
                       }).map((item: any) => (
                         <tr
                           key={item.uniqueKey}
-                          className={`hover:bg-slate-100 transition ${item.isBestMethod ? 'bg-emerald-950/20 border-l-4 border-l-emerald-500' : ''}`}
+                          className={`hover:bg-muted transition ${item.isBestMethod ? 'bg-emerald-950/20 border-l-4 border-l-emerald-500' : ''}`}
                         >
-                          <td className="py-3 px-4 text-left align-middle font-bold text-slate-900">
+                          <td className="py-3 px-4 text-left align-middle font-bold text-foreground">
                             <div className="flex flex-col gap-1">
                               <span className="flex items-center gap-1.5 text-sm">
                                 {item.isBestMethod && <span title="Paling OK (Best Method)">🏆</span>}
@@ -1151,10 +1151,10 @@ Pelanggan,Toko A,-6.210000,106.820000,15,08:00-12:00,30`}
                               )}
                             </div>
                           </td>
-                          <td className="py-3 px-3 border-l border-slate-200 text-left align-middle font-bold text-slate-800">
+                          <td className="py-3 px-3 border-l border-border text-left align-middle font-bold text-foreground">
                             {item.vehicle_name || `Kendaraan #${item.route_id || '—'}`}
                           </td>
-                          <td className="py-3 px-3 border-l border-slate-200 align-middle">
+                          <td className="py-3 px-3 border-l border-border align-middle">
                             {item.is_dedicated ? (
                               <span className="px-2 py-0.5 bg-orange-500/10 border border-orange-500/30 text-orange-700 font-bold rounded text-xs uppercase inline-block">
                                 Dedicated
@@ -1165,30 +1165,30 @@ Pelanggan,Toko A,-6.210000,106.820000,15,08:00-12:00,30`}
                               </span>
                             )}
                           </td>
-                          <td className="py-3 px-3 border-l border-slate-200 align-middle font-mono text-right">
+                          <td className="py-3 px-3 border-l border-border align-middle font-mono text-right">
                             {getRouteStopsCount(item)} stop
                           </td>
-                          <td className="py-3 px-3 border-l border-slate-200 align-middle font-mono text-right">
+                          <td className="py-3 px-3 border-l border-border align-middle font-mono text-right">
                             {item.load ?? '—'} unit
                           </td>
-                          <td className="py-3 px-3 border-l border-slate-200 align-middle text-right font-mono text-xs">
+                          <td className="py-3 px-3 border-l border-border align-middle text-right font-mono text-xs">
                             <span className={Number(item.capacity_pct) > 90 ? 'text-amber-600 font-bold' : 'text-emerald-600 font-bold'}>
                               {item.capacity_pct ?? '—'}%
                             </span>
                           </td>
-                          <td className="py-3 px-3 border-l border-slate-200 align-middle text-right font-mono font-black text-cyan-700 text-sm">
+                          <td className="py-3 px-3 border-l border-border align-middle text-right font-mono font-black text-cyan-700 text-sm">
                             {item.distance_km ?? '—'} km
                           </td>
-                          <td className="py-3 px-4 border-l border-slate-200 text-left align-middle text-xs text-slate-700 max-w-sm truncate" title={getRouteStopNames(item).join(' ➔ ')}>
+                          <td className="py-3 px-4 border-l border-border text-left align-middle text-xs text-foreground max-w-sm truncate" title={getRouteStopNames(item).join(' ➔ ')}>
                             {getRouteStopNames(item).join(' ➔ ')}
                           </td>
-                          <td className="py-3 px-3 border-l border-slate-200 bg-slate-50 align-middle">
+                          <td className="py-3 px-3 border-l border-border bg-muted align-middle">
                             <button
                               onClick={() => {
                                 setSelectedMethod(item.methodIndex);
                                 toast.success(`Menyoroti di peta: ${item.methodName}`);
                               }}
-                              className="px-3 py-1 rounded-lg bg-slate-100 hover:bg-slate-700 text-slate-800 hover:text-slate-900 font-bold text-xs transition border border-slate-600 shadow-sm"
+                              className="px-3 py-1 rounded-lg bg-muted hover:bg-primary hover:text-primary-foreground font-bold text-xs transition border border-border shadow-sm"
                             >
                               📍 Sorot Peta
                             </button>

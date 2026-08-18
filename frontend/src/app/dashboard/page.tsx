@@ -19,18 +19,20 @@ import {
   Legend, ResponsiveContainer, ReferenceLine, Cell,
 } from 'recharts';
 
-/* ─── Color Palette ─── */
+/* ─── Color Palette ───
+   Fixed categorical order drawn from the brand tokens (never cycled/random),
+   so every chart in the app reads from the same identity mapping. */
 const BRANCH_COLORS = [
-  'hsl(var(--primary))', '#4f46e5', '#059669', '#ea580c',
-  '#2563eb', '#db2777', '#65a30d', '#d97706',
+  'hsl(var(--primary))', 'hsl(var(--secondary))', 'hsl(var(--accent))', 'hsl(var(--chart-4))',
+  'hsl(217 91% 40%)', 'hsl(340 75% 55%)', 'hsl(142 60% 40%)', 'hsl(280 60% 55%)',
 ];
 
 const STATUS_COLORS: Record<string, string> = {
-  CRITICAL: '#ef4444', WARNING: '#f59e0b', SAFE: '#22c55e', OVERSTOCK: '#3b82f6',
+  CRITICAL: 'hsl(var(--destructive))', WARNING: 'hsl(var(--chart-4))', SAFE: 'hsl(var(--accent))', OVERSTOCK: 'hsl(var(--secondary))',
 };
 
 const ZONE_COLORS: Record<string, string> = {
-  RED: '#ef4444', YELLOW: '#f59e0b', GREEN: '#22c55e', BLUE: '#3b82f6',
+  RED: 'hsl(var(--destructive))', YELLOW: 'hsl(var(--chart-4))', GREEN: 'hsl(var(--accent))', BLUE: 'hsl(var(--secondary))',
 };
 
 /* ─── Section Header Component ─── */
@@ -461,7 +463,7 @@ export default function DashboardOverview() {
         {hasAnyData && (
           <div className="flex flex-col sm:flex-row sm:items-center gap-4 relative z-[100]">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">🏢 Filter Cabang:</span>
+              <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Filter Cabang:</span>
               <MultiSelect
                 options={allCabangs}
                 selected={globalCabang}
@@ -470,8 +472,8 @@ export default function DashboardOverview() {
                 placeholder="Pilih Cabang..."
               />
             </div>
-            <button onClick={handleExport} className="px-5 py-2.5 bg-slate-100 text-slate-900 border border-slate-200 rounded-xl hover:border-sky-500 hover:bg-slate-700 transition text-sm font-bold flex items-center gap-2 shadow-md">
-              <Download className="w-4 h-4 text-sky-400" /> Export Dashboard
+            <button onClick={handleExport} className="px-5 py-2.5 bg-card text-foreground border border-border rounded-xl hover:border-primary hover:bg-primary hover:text-primary-foreground transition text-sm font-bold flex items-center gap-2 shadow-md">
+              <Download className="w-4 h-4" /> Export Dashboard
             </button>
           </div>
         )}
@@ -526,12 +528,12 @@ export default function DashboardOverview() {
                         <ResponsiveContainer width="100%" height="100%">
                           <BarChart data={occChartData.chartRows} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                            <XAxis dataKey="date" tick={{ fill: '#475569', fontSize: 11 }} tickLine={false} axisLine={false} />
-                            <YAxis tick={{ fill: '#475569', fontSize: 11 }} tickLine={false} axisLine={false} unit="%" />
+                            <XAxis dataKey="date" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} tickLine={false} axisLine={false} />
+                            <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} tickLine={false} axisLine={false} unit="%" />
                             <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--popover))', borderColor: 'hsl(var(--border))', color: 'hsl(var(--popover-foreground))' }} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }} formatter={(value: any) => [`${Number(value).toFixed(2)}%`]} />
                             <Legend />
                             <ReferenceLine y={100} stroke="hsl(var(--destructive))" strokeDasharray="4 2" />
-                            <ReferenceLine y={80} stroke="#f59e0b" strokeDasharray="4 2" />
+                            <ReferenceLine y={80} stroke="hsl(var(--chart-4))" strokeDasharray="4 2" />
                             {occChartData.branches.map((branch: string, idx: number) => (
                               <Bar key={branch} dataKey={branch} name={branch} fill={BRANCH_COLORS[idx % BRANCH_COLORS.length]} radius={[2, 2, 0, 0]} />
                             ))}
@@ -569,11 +571,11 @@ export default function DashboardOverview() {
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={forecastSnapshot.chartRows} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
                           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                          <XAxis dataKey="cabang" tick={{ fill: '#475569', fontSize: 11 }} tickLine={false} axisLine={false} />
-                          <YAxis tick={{ fill: '#475569', fontSize: 11 }} tickLine={false} axisLine={false} />
+                          <XAxis dataKey="cabang" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} tickLine={false} axisLine={false} />
+                          <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} tickLine={false} axisLine={false} />
                           <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--popover))', borderColor: 'hsl(var(--border))', color: 'hsl(var(--popover-foreground))' }} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }} />
                           <Legend />
-                          <Bar dataKey="Avg Actual" fill="#475569" radius={[2, 2, 0, 0]} />
+                          <Bar dataKey="Avg Actual" fill="hsl(var(--secondary))" radius={[2, 2, 0, 0]} />
                           <Bar dataKey={`Forecast (${forecastSnapshot.bestModel})`} fill="hsl(var(--primary))" radius={[2, 2, 0, 0]} />
                         </BarChart>
                       </ResponsiveContainer>
@@ -681,9 +683,9 @@ export default function DashboardOverview() {
               <div className="grid md:grid-cols-5 gap-4">
                 <KPICard title="Total Cabang" value={controlTowerSnapshot.total} icon={<Radar />} />
                 <KPICard title="Avg Health Score" value={controlTowerSnapshot.avgHealth} icon={<Activity />} />
-                <KPICard title="🔴 RED Zone" value={controlTowerSnapshot.zones.RED} icon={<XCircle />} isAlert={controlTowerSnapshot.zones.RED > 0} />
-                <KPICard title="🟡 YELLOW Zone" value={controlTowerSnapshot.zones.YELLOW} icon={<AlertTriangle />} />
-                <KPICard title="🟢 GREEN Zone" value={controlTowerSnapshot.zones.GREEN} icon={<CheckCircle />} />
+                <KPICard title="RED Zone" value={controlTowerSnapshot.zones.RED} icon={<XCircle />} isAlert={controlTowerSnapshot.zones.RED > 0} />
+                <KPICard title="YELLOW Zone" value={controlTowerSnapshot.zones.YELLOW} icon={<AlertTriangle />} />
+                <KPICard title="GREEN Zone" value={controlTowerSnapshot.zones.GREEN} icon={<CheckCircle />} />
               </div>
             ) : <EmptySection label="Control Tower" />}
           </section>

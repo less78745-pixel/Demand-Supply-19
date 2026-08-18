@@ -78,7 +78,7 @@ export default function WHTransMPPage() {
             toast.success('Pembaruan data dari pengguna lain diterima!', { 
               icon: '🔄',
               duration: 5000,
-              style: { background: '#22c55e', color: '#fff', fontWeight: 'bold' } 
+              style: { background: 'hsl(var(--accent))', color: 'hsl(var(--accent-foreground))', fontWeight: 'bold' } 
             });
           } catch (e) {
             console.error("Failed parsing realtime data", e);
@@ -224,13 +224,13 @@ export default function WHTransMPPage() {
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 flex items-center gap-3">
+          <h1 className="text-2xl sm:text-3xl font-black text-foreground flex items-center gap-3">
             <div className="p-2.5 bg-indigo-600 rounded-xl shadow-lg shadow-indigo-200">
               <MapPin className="w-6 h-6 text-white" />
             </div>
             WH-TRANS-MP
           </h1>
-          <p className="text-slate-500 mt-2 flex items-center gap-2">
+          <p className="text-muted-foreground mt-2 flex items-center gap-2">
             Decentralized Logistics Network Simulator
           </p>
         </div>
@@ -244,8 +244,8 @@ export default function WHTransMPPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* Controls Panel */}
-        <GlassCard className="no-export p-6 border-slate-200 bg-white/60 shadow-xl lg:col-span-1 h-fit">
-          <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2 mb-6 pb-4 border-b border-slate-200">
+        <GlassCard className="no-export p-6 border-border bg-white/60 shadow-xl lg:col-span-1 h-fit">
+          <h2 className="text-lg font-bold text-foreground flex items-center gap-2 mb-6 pb-4 border-b border-border">
             <Settings className="w-5 h-5 text-indigo-500" />
             Simulation Parameters
           </h2>
@@ -265,7 +265,7 @@ export default function WHTransMPPage() {
             <div className="flex gap-2">
               <button 
                 onClick={handleDownloadTemplate}
-                className="w-1/2 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition-all text-sm flex items-center justify-center gap-2"
+                className="w-1/2 py-2 bg-muted hover:bg-muted text-foreground rounded-xl font-bold transition-all text-sm flex items-center justify-center gap-2"
               >
                 <Download className="w-4 h-4" />
                 Template
@@ -279,31 +279,31 @@ export default function WHTransMPPage() {
               </button>
             </div>
 
-            <div className="pt-6 border-t border-slate-200 space-y-4">
+            <div className="pt-6 border-t border-border space-y-4">
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Cost per CBM per KM (Rp)</label>
+                <label className="block text-sm font-semibold text-foreground mb-2">Cost per CBM per KM (Rp)</label>
                 <input 
                   type="number" 
                   value={costPerCbmKm}
                   onChange={(e) => setCostPerCbmKm(parseInt(e.target.value) || 0)}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                  className="w-full px-4 py-2 border border-border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Target SLA (Max Lead Time Days)</label>
+                <label className="block text-sm font-semibold text-foreground mb-2">Target SLA (Max Lead Time Days)</label>
                 <input 
                   type="number" 
                   value={maxSla}
                   onChange={(e) => setMaxSla(parseInt(e.target.value) || 1)}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                  className="w-full px-4 py-2 border border-border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
                 />
               </div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">Number of Decentralized Hubs (N)</label>
+              <label className="block text-sm font-semibold text-foreground mb-2">Number of Decentralized Hubs (N)</label>
               <input 
                 type="number" 
                 value={numHubs}
                 onChange={(e) => setNumHubs(parseInt(e.target.value) || 1)}
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                className="w-full px-4 py-2 border border-border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
               />
             </div>
 
@@ -352,9 +352,9 @@ export default function WHTransMPPage() {
               </div>
 
               {/* Map View */}
-              <GlassCard className="p-0 border-slate-200 bg-white shadow-xl overflow-hidden rounded-xl">
-                <div className="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
-                  <h3 className="font-bold text-slate-800 flex items-center gap-2">
+              <GlassCard className="p-0 border-border bg-white shadow-xl overflow-hidden rounded-xl">
+                <div className="p-4 border-b border-border flex justify-between items-center bg-muted">
+                  <h3 className="font-bold text-foreground flex items-center gap-2">
                     <MapPin className="w-5 h-5 text-indigo-500" />
                     Interactive Network Map
                   </h3>
@@ -371,35 +371,35 @@ export default function WHTransMPPage() {
 
               {/* Chart & Tables */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <GlassCard className="p-6 border-slate-200 bg-white shadow-xl">
-                  <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
+                <GlassCard className="p-6 border-border bg-white shadow-xl">
+                  <h3 className="font-bold text-foreground mb-6 flex items-center gap-2">
                     <Layers className="w-5 h-5 text-indigo-500" />
                     Cost vs SLA Trade-off
                   </h3>
                   <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={simulationResult.chart_data}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                        <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                        <YAxis yAxisId="left" tickFormatter={(v) => (v/1000000).toFixed(0) + 'M'} tick={{ fontSize: 12, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                        <YAxis yAxisId="right" orientation="right" tickFormatter={(v) => v.toFixed(0) + 'km'} tick={{ fontSize: 12, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                        <RechartsTooltip cursor={{ fill: '#f1f5f9' }} formatter={(val: any, name: any) => [String(name).includes('Cost') ? formatRp(val) : val.toFixed(2) + ' km', name]} />
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                        <XAxis dataKey="name" tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
+                        <YAxis yAxisId="left" tickFormatter={(v) => (v/1000000).toFixed(0) + 'M'} tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
+                        <YAxis yAxisId="right" orientation="right" tickFormatter={(v) => v.toFixed(0) + 'km'} tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
+                        <RechartsTooltip cursor={{ fill: 'hsl(var(--muted))' }} formatter={(val: any, name: any) => [String(name).includes('Cost') ? formatRp(val) : val.toFixed(2) + ' km', name]} />
                         <Legend wrapperStyle={{ fontSize: 12, paddingTop: '10px' }} />
-                        <Bar yAxisId="left" dataKey="Total Cost" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={50} />
-                        <Bar yAxisId="right" dataKey="Avg Lead Dist (KM)" fill="#6366f1" radius={[4, 4, 0, 0]} maxBarSize={50} />
+                        <Bar yAxisId="left" dataKey="Total Cost" fill="hsl(var(--accent))" radius={[4, 4, 0, 0]} maxBarSize={50} />
+                        <Bar yAxisId="right" dataKey="Avg Lead Dist (KM)" fill="hsl(var(--secondary))" radius={[4, 4, 0, 0]} maxBarSize={50} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
                 </GlassCard>
 
-                <GlassCard className="no-export p-6 border-slate-200 bg-white shadow-xl">
-                  <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
+                <GlassCard className="no-export p-6 border-border bg-white shadow-xl">
+                  <h3 className="font-bold text-foreground mb-6 flex items-center gap-2">
                     <MapPin className="w-5 h-5 text-indigo-500" />
                     Hub Allocation Summary
                   </h3>
-                  <div className="overflow-auto max-h-64 rounded-lg border border-slate-200">
+                  <div className="overflow-auto max-h-64 rounded-lg border border-border">
                     <table className="w-full text-sm text-left">
-                      <thead className="bg-slate-50 text-slate-600 font-semibold sticky top-0">
+                      <thead className="bg-muted text-muted-foreground font-semibold sticky top-0">
                         <tr>
                           <th className="px-4 py-3">Hub ID</th>
                           <th className="px-4 py-3">Customers</th>
@@ -407,10 +407,10 @@ export default function WHTransMPPage() {
                           <th className="px-4 py-3">Status</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-100">
+                      <tbody className="divide-y divide-border">
                         {simulationResult.summary.hubs.map((hub: any, i: number) => (
-                          <tr key={i} className="hover:bg-slate-50 transition-colors">
-                            <td className="px-4 py-3 font-medium text-slate-700">{hub.hub_id}</td>
+                          <tr key={i} className="hover:bg-muted transition-colors">
+                            <td className="px-4 py-3 font-medium text-foreground">{hub.hub_id}</td>
                             <td className="px-4 py-3">{hub.customer_count}</td>
                             <td className="px-4 py-3 font-medium">{hub.allocated_volume.toLocaleString()} CBM</td>
                             <td className="px-4 py-3">
@@ -429,8 +429,8 @@ export default function WHTransMPPage() {
               </div>
             </>
           ) : (
-            <div className="h-full min-h-[400px] flex items-center justify-center bg-slate-50 border border-slate-200 border-dashed rounded-xl">
-              <div className="text-center text-slate-400">
+            <div className="h-full min-h-[400px] flex items-center justify-center bg-muted border border-border border-dashed rounded-xl">
+              <div className="text-center text-muted-foreground">
                 <MapPin className="w-12 h-12 mx-auto mb-3 opacity-20" />
                 <p>Generate data and run simulation to view network analytics</p>
               </div>
@@ -439,18 +439,18 @@ export default function WHTransMPPage() {
           
           {/* Raw Data Model */}
           {data && (
-            <GlassCard className="no-export p-6 border-slate-200 bg-white shadow-xl mt-6">
-              <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
+            <GlassCard className="no-export p-6 border-border bg-white shadow-xl mt-6">
+              <h3 className="font-bold text-foreground mb-6 flex items-center gap-2">
                 <Database className="w-5 h-5 text-indigo-500" />
                 Raw Data Model (Preview)
               </h3>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <h4 className="text-sm font-semibold text-slate-600 mb-2">Demand Data (Sample)</h4>
-                  <div className="overflow-auto max-h-48 rounded-lg border border-slate-200">
+                  <h4 className="text-sm font-semibold text-muted-foreground mb-2">Demand Data (Sample)</h4>
+                  <div className="overflow-auto max-h-48 rounded-lg border border-border">
                     <table className="w-full text-xs text-left">
-                      <thead className="bg-slate-50 text-slate-600 font-semibold sticky top-0">
+                      <thead className="bg-muted text-muted-foreground font-semibold sticky top-0">
                         <tr>
                           <th className="px-3 py-2">ID</th>
                           <th className="px-3 py-2">Lat</th>
@@ -458,9 +458,9 @@ export default function WHTransMPPage() {
                           <th className="px-3 py-2">Volume</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-100">
+                      <tbody className="divide-y divide-border">
                         {data.customers?.slice(0, 50).map((c: any, i: number) => (
-                          <tr key={i} className="hover:bg-slate-50">
+                          <tr key={i} className="hover:bg-muted">
                             <td className="px-3 py-2 font-medium">{c.id}</td>
                             <td className="px-3 py-2">{c.lat.toFixed(4)}</td>
                             <td className="px-3 py-2">{c.lon.toFixed(4)}</td>
@@ -473,10 +473,10 @@ export default function WHTransMPPage() {
                 </div>
 
                 <div>
-                  <h4 className="text-sm font-semibold text-slate-600 mb-2">Red Zone Constraints</h4>
-                  <div className="overflow-auto max-h-48 rounded-lg border border-slate-200">
+                  <h4 className="text-sm font-semibold text-muted-foreground mb-2">Red Zone Constraints</h4>
+                  <div className="overflow-auto max-h-48 rounded-lg border border-border">
                     <table className="w-full text-xs text-left">
-                      <thead className="bg-slate-50 text-slate-600 font-semibold sticky top-0">
+                      <thead className="bg-muted text-muted-foreground font-semibold sticky top-0">
                         <tr>
                           <th className="px-3 py-2">Zone Name</th>
                           <th className="px-3 py-2">Lat</th>
@@ -484,9 +484,9 @@ export default function WHTransMPPage() {
                           <th className="px-3 py-2">Radius (KM)</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-100">
+                      <tbody className="divide-y divide-border">
                         {data.red_zones?.map((rz: any, i: number) => (
-                          <tr key={i} className="hover:bg-slate-50">
+                          <tr key={i} className="hover:bg-muted">
                             <td className="px-3 py-2 font-medium">{rz.name}</td>
                             <td className="px-3 py-2">{rz.lat.toFixed(4)}</td>
                             <td className="px-3 py-2">{rz.lon.toFixed(4)}</td>
@@ -495,7 +495,7 @@ export default function WHTransMPPage() {
                         ))}
                         {(!data.red_zones || data.red_zones.length === 0) && (
                           <tr>
-                            <td colSpan={4} className="px-3 py-4 text-center text-slate-400">No Red Zones defined</td>
+                            <td colSpan={4} className="px-3 py-4 text-center text-muted-foreground">No Red Zones defined</td>
                           </tr>
                         )}
                       </tbody>

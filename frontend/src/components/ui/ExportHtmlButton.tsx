@@ -56,7 +56,7 @@ export function ExportHtmlButton({
       disabled={isExporting}
       className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold shadow-md transition-all no-export
         ${isExporting 
-          ? 'bg-slate-200 text-slate-500 cursor-not-allowed border border-slate-300' 
+          ? 'bg-muted text-muted-foreground cursor-not-allowed border border-border'
           : 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white hover:-translate-y-0.5 border border-emerald-400'
         } ${className}`}
       title="Unduh seluruh halaman ini ke dalam bentuk file HTML interaktif statis"
