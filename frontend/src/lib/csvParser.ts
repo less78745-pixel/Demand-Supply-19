@@ -17,19 +17,50 @@ export function parseIndonesianNumber(val: any): number {
   } else {
     const s = String(val).trim();
     if (s === '' || s === '-' || s === ' - ' || s === '  -   ') return 0;
-    
-    if (s.includes(',') && !s.includes('.')) {
+
+    const commaCount = (s.match(/,/g) || []).length;
+    const dotCount = (s.match(/\./g) || []).length;
+
+    if (commaCount > 0 && dotCount > 0) {
+      // Both separator kinds present - whichever occurs LAST is the decimal
+      // point, and every earlier occurrence of either kind is a thousands
+      // grouper. This is order-independent, so "1.234.567,89" (EU/ID) and
+      // "1,234,567.89" (US) both read correctly regardless of which
+      // convention the source file used - the old code always assumed
+      // dot=thousands/comma=decimal and silently mis-parsed the US order.
+      const lastSep = Math.max(s.lastIndexOf(','), s.lastIndexOf('.'));
+      num = parseFloat(s.slice(0, lastSep).replace(/[.,]/g, '') + '.' + s.slice(lastSep + 1));
+    } else if (commaCount > 1) {
+      // Multiple commas, no dot - a number has only one decimal point, so
+      // every comma here must be a thousands grouper (e.g. "1,234,567"). The
+      // old code only stripped the FIRST comma and left the rest in place,
+      // corrupting values like this one entirely.
+      num = parseFloat(s.replace(/,/g, ''));
+    } else if (commaCount === 1) {
+      // Single comma, no dot - Indonesian convention: decimal comma.
       num = parseFloat(s.replace(',', '.'));
-    } else if (s.includes('.') && !s.includes(',')) {
+    } else if (dotCount > 1) {
+      // Multiple dots, no comma - unambiguously thousands groupers with no
+      // decimal part (e.g. "1.234.567" = 1234567).
+      num = parseFloat(s.replace(/\./g, ''));
+    } else if (dotCount === 1) {
+      // Single dot, no comma - genuinely ambiguous between "1.234" as the
+      // thousands-grouped integer 1234 and the decimal 1.234. Business
+      // quantities/currency in this app are essentially never quoted to
+      // exactly 3 decimal places, so a 3-digit tail is read as a thousands
+      // group; anything else is kept as a decimal point. This is the exact
+      // spot the old digit-count heuristic mis-fired on: it applied the same
+      // 3-digit rule as intended, but a genuine 3-decimal value ("1.234,500"
+      // read via the mixed branch, or a lone "1.234" meant as 1.234 exactly)
+      // still got the thousands interpretation and came out 1000x too large -
+      // the "outstanding target jadi sangat besar" symptom. Real-world SOH/PR
+      // data doesn't carry 3-decimal quantities, so this heuristic stays as
+      // the pragmatic default for the single-dot case only.
       const parts = s.split('.');
-      if (parts.length === 2 && parts[1].length !== 3) {
-        num = parseFloat(s);
-      } else {
-        num = parseFloat(s.replace(/\./g, ''));
-      }
+      num = parts[1].length === 3 ? parseFloat(s.replace('.', '')) : parseFloat(s);
     } else {
-      const cleaned = s.replace(/\./g, '').replace(',', '.');
-      num = parseFloat(cleaned);
+      // No separators at all - plain integer/float string.
+      num = parseFloat(s);
     }
   }
 

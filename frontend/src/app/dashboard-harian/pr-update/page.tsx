@@ -25,7 +25,10 @@ import { getStandardFilename } from '@/utils/export';
 import { ExportHtmlButton } from '@/components/ui/ExportHtmlButton';
 import { ModuleExportConfig } from '@/utils/offlineExport';
 
-const COLORS = ['#a855f7', '#3b82f6', '#f97316', '#eab308', '#22c55e', '#ef4444', '#06b6d4', '#ec4899', '#8b5cf6', '#10b981'];
+// Validated categorical palette (dataviz skill, dark-surface steps) - chosen for
+// max adjacent contrast so stacked-bar categories stay distinguishable, unlike
+// the previous ad-hoc Tailwind picks which had several low-contrast neighbors.
+const COLORS = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', '#9085e9', '#e66767'];
 
 type ScenarioType = 'current' | 'expedite' | 'delay';
 
@@ -90,7 +93,7 @@ const CustomStackedTooltip = ({ active, payload, label }: any) => {
     const totalQty = validItems.reduce((sum: number, item: any) => sum + Number(item.value || 0), 0);
 
     return (
-      <div className="bg-[#090e1a] text-white p-3.5 rounded-xl border-2 border-purple-500 shadow-[0_15px_60px_rgba(0,0,0,1)] z-[999999] opacity-100 max-h-[300px] overflow-y-auto max-w-[340px] pointer-events-none select-none backdrop-blur-none" style={{ backgroundColor: '#090e1a', opacity: 1, zIndex: 999999 }}>
+      <div className="bg-[#090e1a] text-white p-3.5 rounded-xl border-2 border-purple-500 shadow-[0_15px_60px_rgba(0,0,0,1)] z-[999999] opacity-100 max-h-[300px] overflow-y-auto max-w-[340px] pointer-events-auto backdrop-blur-none" style={{ backgroundColor: '#090e1a', opacity: 1, zIndex: 999999 }}>
         <div className="border-b border-slate-200/80 pb-2 mb-2 sticky -top-3.5 bg-[#090e1a] pt-1 z-10 flex items-center justify-between gap-3">
           <span className="text-sky-400 font-extrabold text-sm tracking-wide">{label}</span>
           <span className="text-xs px-2 py-0.5 bg-purple-950/90 border border-purple-500/50 rounded-md font-bold text-purple-300 shadow-sm">
@@ -124,30 +127,44 @@ const CustomContainerTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
     const data = payload[0].payload;
     const poList: string[] = data.poList || [];
+    const statusBreakdown: { status: string; count: number }[] = data.statusBreakdown || [];
     return (
-      <div className="bg-[#090e1a] text-white p-4 rounded-xl border-2 border-cyan-500 shadow-[0_15px_60px_rgba(0,182,212,0.35)] z-[999999] max-w-[340px] pointer-events-none select-none">
-        <div className="border-b border-slate-200/80 pb-2 mb-2 flex items-center justify-between gap-3">
+      <div className="bg-[#090e1a] text-white p-4 rounded-xl border-2 border-cyan-500 shadow-[0_15px_60px_rgba(0,182,212,0.35)] z-[999999] max-h-[380px] overflow-y-auto max-w-[340px] pointer-events-auto">
+        <div className="border-b border-slate-200/80 pb-2 mb-2 sticky -top-4 bg-[#090e1a] pt-1 flex items-center justify-between gap-3">
           <span className="text-cyan-400 font-extrabold text-sm tracking-wide">🏢 {label}</span>
           <span className="text-xs px-2 py-0.5 bg-cyan-950/90 border border-cyan-500/50 rounded-md font-bold text-cyan-300 shadow-sm">
-            {data["Jumlah Container"]} Container
+            {data["Jumlah Container"]} Dokumen
           </span>
         </div>
         <div className="text-xs text-slate-300 font-medium space-y-2">
           <div className="flex items-center justify-between bg-slate-800/80 px-3 py-2 rounded-lg border border-slate-700">
-            <span className="text-slate-200 font-semibold">Total Container (Distinct PO):</span>
+            <span className="text-slate-200 font-semibold">Total Dokumen (Distinct):</span>
             <span className="font-extrabold text-cyan-300 text-sm bg-cyan-500/20 px-2.5 py-0.5 rounded border border-cyan-500/40">
               {data["Jumlah Container"]} Unit
             </span>
           </div>
+          {statusBreakdown.length > 0 && (
+            <div>
+              <div className="text-[11px] font-bold text-slate-300 mb-1">Rincian per Status Compile:</div>
+              <div className="space-y-1">
+                {statusBreakdown.map((s, i) => (
+                  <div key={i} className="flex items-center justify-between gap-2 bg-slate-800/60 px-2 py-1 rounded border border-slate-700/80">
+                    <span className="truncate font-semibold text-slate-200" title={s.status}>{s.status}</span>
+                    <span className="font-mono font-bold text-emerald-300 shrink-0">{s.count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           {poList.length > 0 && (
             <div>
-              <div className="text-[11px] font-bold text-slate-300 mb-1">Daftar No. PO di Cabang Ini:</div>
+              <div className="text-[11px] font-bold text-slate-300 mb-1">Daftar No. Dokumen di Cabang Ini:</div>
               <div className="max-h-[140px] overflow-y-auto bg-slate-800/80 p-2 rounded-lg border border-slate-700 space-y-1 font-mono text-[11px] text-amber-300">
                 {poList.slice(0, 10).map((po, i) => (
                   <div key={i} className="truncate">• {po}</div>
                 ))}
                 {poList.length > 10 && (
-                  <div className="text-slate-400 font-sans italic text-[10px]">...+ {poList.length - 10} PO lainnya</div>
+                  <div className="text-slate-400 font-sans italic text-[10px]">...+ {poList.length - 10} dokumen lainnya</div>
                 )}
               </div>
             </div>
@@ -157,6 +174,25 @@ const CustomContainerTooltip = ({ active, payload, label }: any) => {
     );
   }
   return null;
+};
+
+// Recharts' built-in <Legend> lays out inside the ResponsiveContainer's fixed
+// height - once category count grows past a couple of rows, entries get
+// squeezed/cut off instead of scrolling, no matter what wrapperStyle overflow
+// is set to. Rendering the legend ourselves, in normal document flow below the
+// chart with a real overflow-y-auto div, makes it reliably scrollable.
+const ScrollableLegend = ({ payload }: any) => {
+  if (!payload || payload.length === 0) return null;
+  return (
+    <div className="mt-3 max-h-32 overflow-y-auto overflow-x-hidden rounded-lg border border-slate-700/60 bg-slate-900/40 px-3 py-2 flex flex-wrap gap-x-4 gap-y-1.5">
+      {payload.map((entry: any, idx: number) => (
+        <div key={idx} className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-200">
+          <span className="w-2.5 h-2.5 rounded-full inline-block shrink-0" style={{ backgroundColor: entry.color }} />
+          <span className="truncate max-w-[180px]" title={entry.value}>{entry.value}</span>
+        </div>
+      ))}
+    </div>
+  );
 };
 
 const INDONESIAN_MONTHS: Record<string, number> = {
@@ -342,8 +378,11 @@ function generateDemoPRUpdate(): ParsedData {
   const cabangs = ['Surabaya', 'Jakarta', 'Bandung', 'Medan', 'Semarang', 'Makassar', 'Palembang', 'Denpasar'];
   const grups = ['Minyak Goreng Premium', 'Beras Setra Ramos', 'Gula Pasir Kristal', 'Tepung Terigu Serbaguna', 'Kopi Bubuk Murni', 'Susu Kental Manis'];
   const categories = ['Food Basic', 'Beverages & Dairy', 'Baking Ingredients', 'Groceries Premium'];
-  // Ditambahkan status SPJM sesuai permintaan pengguna
-  const statuses = ['ON VESSEL', 'HOLD DELIVERY', 'SPJM', 'READY', 'PLAN LOADING', 'IN PROCESS'];
+  // Ditambahkan status SPJM, PO ON PROCESS & PR BELUM RELEASE sesuai permintaan
+  // pengguna - dua status terakhir belum punya No. PO sama sekali, untuk
+  // mensimulasikan celah "PR Belum Ada PO" yang harus tetap terhitung sebagai
+  // dokumen (lihat getDocKey/PR Belum Ada PO fix).
+  const statuses = ['ON VESSEL', 'HOLD DELIVERY', 'SPJM', 'READY', 'PLAN LOADING', 'IN PROCESS', 'PO ON PROCESS', 'PR BELUM RELEASE'];
   const etas = ['Week 1 Agu', 'Week 2 Agu', 'Week 3 Agu', 'Week 4 Agu'];
   const containers = ['MRTU1234567', 'TEMU7654321', 'SPIL8899001', 'MAEU9988776', 'MSCU4455667', 'CMAU1122334', 'ONEY7788990', 'EGLV3344556'];
   const carriers = ['Meratus Line', 'Temas Line', 'SPIL (mySPIL)', 'Maersk', 'MSC', 'CMA CGM', 'ONE', 'Evergreen Line'];
@@ -362,11 +401,12 @@ function generateDemoPRUpdate(): ParsedData {
       const cont = (stat === 'ON VESSEL' || stat === 'READY' || stat === 'SPJM') ? containers[(idx + cIdx) % containers.length] : '-';
       const bl = (stat === 'ON VESSEL' || stat === 'READY' || stat === 'SPJM') ? bls[(idx + cIdx) % bls.length] : '-';
       const carrier = (stat === 'ON VESSEL' || stat === 'READY' || stat === 'SPJM') ? carriers[(idx + cIdx) % carriers.length] : '-';
-      // 'PLAN LOADING' simulates a PR raised before a PO is cut, 'IN PROCESS'
-      // simulates a PO placed before a PI is issued - so the demo data has
-      // real examples of the PR-without-PO and PO-without-PI gaps to show.
+      // 'PLAN LOADING', 'PO ON PROCESS' and 'PR BELUM RELEASE' simulate a PR
+      // raised before a PO is cut, 'IN PROCESS' simulates a PO placed before
+      // a PI is issued - so the demo data has real examples of the
+      // PR-without-PO and PO-without-PI gaps to show.
       const poNum = poCounter++;
-      const po = (stat === 'PLAN LOADING') ? '-' : `PO-2026-${poNum}`;
+      const po = (stat === 'PLAN LOADING' || stat === 'PO ON PROCESS' || stat === 'PR BELUM RELEASE') ? '-' : `PO-2026-${poNum}`;
       const pi = (stat === 'ON VESSEL' || stat === 'READY' || stat === 'SPJM' || stat === 'HOLD DELIVERY') ? pis[(idx + cIdx) % pis.length] : '-';
 
       const isOverdueTarget = (stat === 'SPJM' || stat === 'HOLD DELIVERY' || stat === 'ON VESSEL') && ((idx + cIdx) % 2 === 0 || cIdx <= 2);
@@ -387,23 +427,28 @@ function generateDemoPRUpdate(): ParsedData {
         'Shipping Line': carrier,
         'Tanggal ETA': tglEta,
         'Week ETA': eta,
-        'Qty': qty
+        'Qty': qty,
+        // Dedicated "Total" column, distinct from Qty - exercises colTotal
+        // detection so demo mode also demonstrates the SUM-kolom-total fix.
+        'Total': qty
       });
     });
   });
 
+  const parsedDemoHeaders = ['PO', 'NoPR', 'Branch Name', 'GRUP', 'Category', 'Description', 'STATUS Compile', 'No Container', 'PI', 'bl', 'Shipping Line', 'Tanggal ETA', 'Week ETA', 'Qty', 'Total'];
   const parsedDemo: ParsedData = {
-    headers: ['PO', 'NoPR', 'Branch Name', 'GRUP', 'Category', 'Description', 'STATUS Compile', 'No Container', 'PI', 'bl', 'Shipping Line', 'Tanggal ETA', 'Week ETA', 'Qty'],
+    headers: parsedDemoHeaders,
     targetColumns: [
-      { index: 13, name: 'Qty' }
+      { index: 13, name: 'Qty' },
+      { index: 14, name: 'Total' }
     ],
     data,
     processed_at: new Date().toISOString(),
     sheetNames: ['PR Update', 'Lead Time'],
     sheets: {
       'PR Update': {
-        headers: ['PO', 'NoPR', 'Branch Name', 'GRUP', 'Category', 'Description', 'STATUS Compile', 'No Container', 'PI', 'bl', 'Shipping Line', 'Tanggal ETA', 'Week ETA', 'Qty'],
-        targetColumns: [{ index: 13, name: 'Qty' }],
+        headers: parsedDemoHeaders,
+        targetColumns: [{ index: 13, name: 'Qty' }, { index: 14, name: 'Total' }],
         data: data
       },
       'Lead Time': {
@@ -829,6 +874,12 @@ export default function PRUpdatePage() {
   const colBl = useMemo(() => parsed ? findColumn(parsed.headers, ['bill of lading', 'no bl', 'no. bl', 'no_bl', 'nomor bl', 'b/l', 'no b/l', 'bl no', 'bl_no', 'no booking', 'booking', 'nomor booking', 'bl']) : undefined, [parsed]);
   const colPi = useMemo(() => parsed ? findColumn(parsed.headers, ['pi', 'no pi', 'no. pi', 'nomor pi', 'pi no', 'pi_no', 'proforma invoice', 'nomor proforma invoice']) : undefined, [parsed]);
   const colCarrier = useMemo(() => parsed ? findColumn(parsed.headers, ['shipping line', 'shipping_line', 'shippingline', 'pelayaran', 'carrier', 'maskapai', 'shipping', 'line']) : undefined, [parsed]);
+  // Dedicated "Total" column (grand total qty/value per line) - distinct from
+  // colQty. When the source file has both, every Qty-sum metric below (Total
+  // Qty Pesanan PR, category breakdown, Week ETA labels) must SUM this column,
+  // not colQty, per the manual-Excel reconciliation. Falls back to colQty when
+  // the file has no separate Total column (e.g. the demo dataset).
+  const colTotal = useMemo(() => parsed ? findColumn(parsed.headers, ['total', 'grand total', 'total qty', 'total pesanan', 'jumlah total', 'nilai total', 'total order', 'total value']) : undefined, [parsed]);
 
   const colTanggalEta = useMemo(() => {
     if (!parsed) return undefined;
@@ -903,6 +954,9 @@ export default function PRUpdatePage() {
           // a decimal point, undercounting every qty >= 1000 by ~1000x.
           copy[colQty] = Math.round(parseIndonesianNumber(copy[colQty]) * sc.multiplier);
         }
+        if (colTotal && copy[colTotal] != null && copy[colTotal] !== '') {
+          copy[colTotal] = Math.round(parseIndonesianNumber(copy[colTotal]) * sc.multiplier);
+        }
         if (colStatus && sc.statusModifier === 'expedite' && String(copy[colStatus]).toUpperCase().includes('HOLD')) {
           copy[colStatus] = 'READY / EXPEDITED';
         }
@@ -911,7 +965,7 @@ export default function PRUpdatePage() {
         }
         return copy;
       });
-  }, [parsed, selectedCabang, selectedCategory, selectedEta, selectedStatusCompile, colCabang, colCategory, colGrup, colEta, colQty, colStatus, activeScenario]);
+  }, [parsed, selectedCabang, selectedCategory, selectedEta, selectedStatusCompile, colCabang, colCategory, colGrup, colEta, colQty, colTotal, colStatus, activeScenario]);
 
   // Insight PO Overdue ETA (SPJM, Hold Delivery, On Vessel)
   const overdueInsights = useMemo(() => {
@@ -1056,19 +1110,92 @@ export default function PRUpdatePage() {
     return set.size;
   }
 
-  // "Jumlah dokumen" must count distinct PO numbers, not raw rows - one PO
-  // commonly spans several rows here (one per container/shipment), so a
-  // plain row count (previously used everywhere below) overstates document
-  // counts by however many containers/line-items each PO happens to have.
-  const distinctPoCountFiltered = useMemo(() => countDistinctPo(filtered), [filtered, colPo]);
+  // Canonical "one document" key for a raw row: PO number if the PO has
+  // already been cut, else the PR number, else the container number, else a
+  // per-row fallback. Early-lifecycle statuses ("PR belum release", "PO on
+  // Process") have no PO yet - keying distinct-count purely on colPo (as the
+  // old logic did everywhere) silently drops every one of those rows from
+  // every "Total Dokumen" / "Jumlah Container" metric, which is why a raw
+  // file of 129 rows previously surfaced as only ~5 documents.
+  function getDocKey(row: any, idx: number): string {
+    if (colPo) { const v = String(row[colPo] ?? '').trim(); if (!isEmptyDocVal(v)) return `PO:${v}`; }
+    if (colPr) { const v = String(row[colPr] ?? '').trim(); if (!isEmptyDocVal(v)) return `PR:${v}`; }
+    if (colContainer) { const v = String(row[colContainer] ?? '').trim(); if (!isEmptyDocVal(v)) return `CT:${v}`; }
+    return `ROW:${idx}`;
+  }
+
+  // Human-readable counterpart of getDocKey, for display lists (no type prefix).
+  function getDocLabel(row: any): string {
+    if (colPo) { const v = String(row[colPo] ?? '').trim(); if (!isEmptyDocVal(v)) return v; }
+    if (colPr) { const v = String(row[colPr] ?? '').trim(); if (!isEmptyDocVal(v)) return v; }
+    if (colContainer) { const v = String(row[colContainer] ?? '').trim(); if (!isEmptyDocVal(v)) return v; }
+    return '(Belum Ada No. Dokumen)';
+  }
+
+  function countDistinctDocs(rows: any[]): number {
+    return new Set(rows.map((r, i) => getDocKey(r, i))).size;
+  }
+
+  // "Jumlah dokumen" must count distinct documents (PO -> PR -> Container
+  // fallback, see getDocKey), not raw rows and not distinct-PO-only - one
+  // document commonly spans several rows here (one per container/shipment),
+  // and rows still awaiting a PO number (PR belum release / PO on Process)
+  // must still count as one document each instead of being dropped.
+  const distinctPoCountFiltered = useMemo(() => countDistinctDocs(filtered), [filtered, colPo, colPr, colContainer]);
+
+  // Distinct document count broken down by Status Compile - answers "how many
+  // documents are in each stage" (point 2's requested detail).
+  const docCountByStatus = useMemo(() => {
+    if (!colStatus || filtered.length === 0) return [];
+    const map: Record<string, Set<string>> = {};
+    filtered.forEach((row, i) => {
+      const stat = String(row[colStatus] || '').trim() || 'Tanpa Status';
+      if (!map[stat]) map[stat] = new Set();
+      map[stat].add(getDocKey(row, i));
+    });
+    return Object.entries(map)
+      .map(([status, set]) => ({ status, count: set.size }))
+      .sort((a, b) => b.count - a.count);
+  }, [filtered, colStatus, colPo, colPr, colContainer]);
+
+  // Distinct document count broken down by Week ETA - "Sebaran ETA" (point 3).
+  const docCountByEta = useMemo(() => {
+    if (!colEta || filtered.length === 0) return [];
+    const map: Record<string, Set<string>> = {};
+    filtered.forEach((row, i) => {
+      const eta = String(row[colEta] || '').trim() || 'Unscheduled / Tanpa ETA';
+      if (!map[eta]) map[eta] = new Set();
+      map[eta].add(getDocKey(row, i));
+    });
+    return Object.entries(map)
+      .map(([eta, set]) => ({ eta, count: set.size }))
+      .sort((a, b) => parseEtaRank(a.eta) - parseEtaRank(b.eta));
+  }, [filtered, colEta, colPo, colPr, colContainer]);
+
+  // Top 5 Item Category by summed Total column value (point 1's detail).
+  const top5Categories = useMemo(() => {
+    const colCatUse = colCategory || colGrup;
+    if (!colCatUse || filtered.length === 0) return [];
+    const amountCol = colTotal || colQty;
+    const map: Record<string, number> = {};
+    filtered.forEach(row => {
+      const cat = String(row[colCatUse] || 'Umum / No Kategori').trim() || 'Umum / No Kategori';
+      const amt = amountCol && row[amountCol] != null && row[amountCol] !== '' ? Number(row[amountCol]) || 0 : 0;
+      map[cat] = (map[cat] || 0) + amt;
+    });
+    return Object.entries(map)
+      .map(([category, total]) => ({ category, total: Math.round(total) }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 5);
+  }, [filtered, colCategory, colGrup, colTotal, colQty]);
 
   // Status totals across the WHOLE filtered dataset (not just the overdue
   // subset) - i.e. what you'd get filtering Status Compile = Hold Delivery
-  // in the raw file and summing Qty. The Insight section's overdue table
-  // below stays scoped to rows whose ETA has actually passed; these mini
-  // cards instead answer "how much Hold/SPJM/On Vessel is there in total",
-  // with the overdue subset shown as a secondary figure so neither number
-  // is lost.
+  // in the raw file and summing the Total column. The Insight section's
+  // overdue table below stays scoped to rows whose ETA has actually passed;
+  // these mini cards instead answer "how much Hold/SPJM/On Vessel is there in
+  // total", with the overdue subset shown as a secondary figure so neither
+  // number is lost.
   const statusOverview = useMemo(() => {
     const empty = { qty: 0, docs: 0 };
     if (!colStatus || filtered.length === 0) return { spjm: empty, hold: empty, vessel: empty };
@@ -1080,9 +1207,10 @@ export default function PRUpdatePage() {
       return stat.includes('VESSEL') || stat.includes('SHIP');
     });
 
+    const amountCol = colTotal || colQty;
     const summarize = (rows: any[]) => ({
-      qty: Math.round(rows.reduce((s, r) => s + (colQty && r[colQty] != null ? Number(r[colQty]) || 0 : 0), 0)),
-      docs: countDistinctPo(rows),
+      qty: Math.round(rows.reduce((s, r) => s + (amountCol && r[amountCol] != null ? Number(r[amountCol]) || 0 : 0), 0)),
+      docs: countDistinctDocs(rows),
     });
 
     return {
@@ -1090,7 +1218,7 @@ export default function PRUpdatePage() {
       hold: summarize(rowsFor('HOLD')),
       vessel: summarize(rowsFor('VESSEL')),
     };
-  }, [filtered, colStatus, colQty, colPo]);
+  }, [filtered, colStatus, colQty, colTotal, colPo, colPr, colContainer]);
 
   // Distinct-PO counterparts of the overdue-only figures (overdueInsights
   // rows are already one-per-container, same as `filtered`).
@@ -1130,21 +1258,31 @@ export default function PRUpdatePage() {
   // Document-chain completeness gaps: PR -> PO -> PI -> BL. A "gap" row is one
   // where the upstream document number exists but the next one in the chain
   // is still blank - i.e. work that's stalled at that handoff.
+  // A row counts as "PO belum ada / on process" either because its PO column
+  // is literally still blank, OR because Status Compile already says so in
+  // words ("PO on Process" / "PO belum release") even when some placeholder
+  // value sits in the PO column - the previous version only checked column
+  // emptiness, so those two statuses fell out of the "PR Belum Ada PO" count.
+  const isPoNotYetReleasedStatus = (stat: string) =>
+    /PO\s*ON\s*PROCESS/.test(stat) || /PO\s*(SEDANG\s*)?PROSES/.test(stat) || /PO\s*BELUM\s*RELEASE/.test(stat);
+
   const documentChainGaps = useMemo(() => {
     const empty = { count: 0, topCabang: [] as { branch: string; count: number }[] };
     if (filtered.length === 0) return { prNoPo: empty, poNoPi: empty, piNoBl: empty };
 
-    const buildGap = (fromCol?: string, toCol?: string) => {
+    const buildGap = (fromCol?: string, toCol?: string, extraStatusMatch?: (stat: string) => boolean) => {
       if (!fromCol) return empty;
-      const rows = filtered.filter(r => !isEmptyDocVal(r[fromCol]) && isEmptyDocVal(toCol ? r[toCol] : undefined));
-      const count = countDistinctField(rows, fromCol);
+      const rows = filtered.filter(r => {
+        const missingViaColumns = !isEmptyDocVal(r[fromCol]) && isEmptyDocVal(toCol ? r[toCol] : undefined);
+        const missingViaStatus = extraStatusMatch && colStatus ? extraStatusMatch(String(r[colStatus] || '').trim().toUpperCase()) : false;
+        return missingViaColumns || missingViaStatus;
+      });
+      const count = countDistinctDocs(rows);
       const byBranch: Record<string, Set<string>> = {};
-      rows.forEach(r => {
+      rows.forEach((r, i) => {
         const b = colCabang ? String(r[colCabang] || 'Unknown') : 'Unknown';
-        const key = String(r[fromCol] ?? '').trim();
-        if (isEmptyDocVal(key)) return;
         if (!byBranch[b]) byBranch[b] = new Set();
-        byBranch[b].add(key);
+        byBranch[b].add(getDocKey(r, i));
       });
       const topCabang = Object.entries(byBranch)
         .map(([branch, set]) => ({ branch, count: set.size }))
@@ -1154,11 +1292,11 @@ export default function PRUpdatePage() {
     };
 
     return {
-      prNoPo: buildGap(colPr, colPo),
+      prNoPo: buildGap(colPr, colPo, isPoNotYetReleasedStatus),
       poNoPi: buildGap(colPo, colPi),
       piNoBl: buildGap(colPi, colBl),
     };
-  }, [filtered, colPr, colPo, colPi, colBl, colCabang]);
+  }, [filtered, colPr, colPo, colPi, colBl, colCabang, colStatus, colContainer]);
 
   // Distinct count of PR still "IN PROCESS" whose Tanggal ETA has already passed.
   const inProcessOverdueCount = useMemo(() => {
@@ -1210,8 +1348,10 @@ export default function PRUpdatePage() {
     let qtySum = 0;
 
     const colCatUse = colCategory || colGrup;
+    const amountCol = colTotal || colQty;
 
-    for (const row of filtered) {
+    for (let rowIdx = 0; rowIdx < filtered.length; rowIdx++) {
+      const row = filtered[rowIdx];
       const cbg = colCabang ? (row[colCabang] || 'Unknown') : 'All';
       const cat = colCatUse ? (String(row[colCatUse] || 'Umum / No Kategori').trim()) : 'Umum';
       const eta = colEta ? (row[colEta] || 'Unscheduled / Tanpa ETA') : 'Unscheduled';
@@ -1219,8 +1359,13 @@ export default function PRUpdatePage() {
       if (selectedCabangForChart !== 'All' && cbg !== selectedCabangForChart) continue;
 
       const stat = colStatus ? (String(row[colStatus] || 'Unknown').toUpperCase()) : 'TOTAL';
-      // row[colQty] is already a parsed number from the `filtered` memo.
-      const q = colQty && row[colQty] != null ? Math.round(Number(row[colQty]) || 0) : 1;
+      // row[amountCol] is already a parsed number from the `filtered` memo
+      // (colTotal preferred - this is the "kolom total" SUM the Qty metrics
+      // must reconcile against; colQty is only a fallback for files with no
+      // dedicated Total column). Missing value defaults to 0, NOT 1 - the old
+      // "default to 1" here silently turned every row lacking colQty into a
+      // fake "1 unit" and inflated/corrupted every downstream Qty total.
+      const q = amountCol && row[amountCol] != null && row[amountCol] !== '' ? Math.round(Number(row[amountCol]) || 0) : 0;
 
       statuses.add(stat);
       categories.add(cat);
@@ -1228,16 +1373,19 @@ export default function PRUpdatePage() {
 
       // Group by Cabang
       if (!mapCabang[cbg]) {
-        mapCabang[cbg] = { cabang: cbg, distinctPOs: new Set<string>() };
+        mapCabang[cbg] = { cabang: cbg, distinctPOs: new Map<string, string>(), statusDocSets: {} as Record<string, Set<string>> };
       }
       mapCabang[cbg][stat] = Math.round((mapCabang[cbg][stat] || 0) + q);
       mapCabang[cbg][cat] = Math.round((mapCabang[cbg][cat] || 0) + q);
 
-      // Record distinct PO per Cabang
-      const poVal = colPo && row[colPo] ? String(row[colPo]).trim() : '';
-      if (poVal && poVal !== '-' && poVal !== '0' && poVal.toUpperCase() !== 'N/A') {
-        mapCabang[cbg].distinctPOs.add(poVal);
-      }
+      // Record distinct document per Cabang (PO -> PR -> Container -> row
+      // fallback via getDocKey) instead of distinct-PO-only - a PO-only key
+      // silently dropped every row still in an early stage (PR belum
+      // release / PO on Process) that has no PO number yet.
+      const docKey = getDocKey(row, rowIdx);
+      mapCabang[cbg].distinctPOs.set(docKey, getDocLabel(row));
+      if (!mapCabang[cbg].statusDocSets[stat]) mapCabang[cbg].statusDocSets[stat] = new Set<string>();
+      mapCabang[cbg].statusDocSets[stat].add(docKey);
 
       // Group by Week ETA
       if (!mapEta[eta]) {
@@ -1253,16 +1401,23 @@ export default function PRUpdatePage() {
       mapCat[cat][stat] = Math.round((mapCat[cat][stat] || 0) + q);
     }
 
-    const chartContainerData = Object.values(mapCabang).map((item: any) => ({
-      cabang: item.cabang,
-      "Jumlah Container": item.distinctPOs ? item.distinctPOs.size : 0,
-      poList: item.distinctPOs ? Array.from(item.distinctPOs) : []
-    })).sort((a: any, b: any) => b["Jumlah Container"] - a["Jumlah Container"]);
+    const chartContainerData = Object.values(mapCabang).map((item: any) => {
+      const statusDocSets: Record<string, Set<string>> = item.statusDocSets || {};
+      const statusBreakdown = Object.entries(statusDocSets)
+        .map(([status, set]) => ({ status, count: (set as Set<string>).size }))
+        .sort((a, b) => b.count - a.count);
+      return {
+        cabang: item.cabang,
+        "Jumlah Container": item.distinctPOs ? item.distinctPOs.size : 0,
+        poList: item.distinctPOs ? Array.from((item.distinctPOs as Map<string, string>).values()) : [],
+        statusBreakdown,
+      };
+    }).sort((a: any, b: any) => b["Jumlah Container"] - a["Jumlah Container"]);
 
     const totalContainers = chartContainerData.reduce((sum, d) => sum + d["Jumlah Container"], 0);
 
-    return { 
-      chartData: Object.values(mapCabang), 
+    return {
+      chartData: Object.values(mapCabang),
       chartEtaData: Object.values(mapEta).sort((a, b) => parseEtaRank(String(a.eta)) - parseEtaRank(String(b.eta))),
       chartContainerData,
       totalContainers,
@@ -1271,7 +1426,7 @@ export default function PRUpdatePage() {
       categoryList: Array.from(categories),
       totalQty: Math.round(qtySum)
     };
-  }, [parsed, filtered, colCabang, colCategory, colGrup, colEta, colStatus, colQty, colPo, selectedCabangForChart]);
+  }, [parsed, filtered, colCabang, colCategory, colGrup, colEta, colStatus, colQty, colTotal, colPo, colPr, colContainer, selectedCabangForChart]);
 
   // Excel-like Filtered Rows for Table Detail
   const displayedDetailRows = useMemo(() => {
@@ -1327,23 +1482,31 @@ export default function PRUpdatePage() {
   // ── Offline HTML export config: normalize dynamic-column data to fixed
   // field names so the export's filters/tables have a stable schema regardless
   // of what headers the uploaded file happened to use. ──
-  const normalizedFiltered = useMemo(() => filtered.map((row: any) => ({
-    cabang: colCabang ? row[colCabang] : '-',
-    po: colPo ? row[colPo] : '-',
-    nopr: colPr ? row[colPr] : '-',
-    grup: colGrup ? row[colGrup] : '-',
-    category: (colCategory || colGrup) ? row[(colCategory || colGrup) as string] : '-',
-    description: colDesc ? row[colDesc] : '-',
-    status: colStatus ? row[colStatus] : '-',
-    eta: colEta ? row[colEta] : '-',
-    tanggal_eta: colTanggalEta ? row[colTanggalEta] : '-',
-    qty: colQty ? row[colQty] : 0,
-    container: colContainer ? row[colContainer] : '-',
-    carrier: colCarrier ? row[colCarrier] : '-',
-  })), [filtered, colCabang, colPo, colPr, colGrup, colCategory, colDesc, colStatus, colEta, colTanggalEta, colQty, colContainer, colCarrier]);
+  const normalizedFiltered = useMemo(() => filtered.map((row: any, idx: number) => {
+    const amountCol = colTotal || colQty;
+    return {
+      cabang: colCabang ? row[colCabang] : '-',
+      po: colPo ? row[colPo] : '-',
+      nopr: colPr ? row[colPr] : '-',
+      grup: colGrup ? row[colGrup] : '-',
+      category: (colCategory || colGrup) ? row[(colCategory || colGrup) as string] : '-',
+      description: colDesc ? row[colDesc] : '-',
+      status: colStatus ? row[colStatus] : '-',
+      eta: colEta ? row[colEta] : '-',
+      tanggal_eta: colTanggalEta ? row[colTanggalEta] : '-',
+      qty: colQty ? row[colQty] : 0,
+      total: amountCol ? row[amountCol] : 0,
+      // Distinct-document key (PO -> PR -> Container -> row fallback) so the
+      // offline export's "Total Dokumen" KPI stays consistent with the live
+      // dashboard's distinct-document count instead of distinct-PO-only.
+      doc_key: getDocKey(row, idx),
+      container: colContainer ? row[colContainer] : '-',
+      carrier: colCarrier ? row[colCarrier] : '-',
+    };
+  }), [filtered, colCabang, colPo, colPr, colGrup, colCategory, colDesc, colStatus, colEta, colTanggalEta, colQty, colTotal, colContainer, colCarrier]);
 
   const holdItemsNormalized = useMemo(
-    () => normalizedFiltered.filter((r) => /HOLD|DELAY|TUNDA/.test(String(r.status || '').toUpperCase())),
+    () => normalizedFiltered.filter((r) => /HOLD|DELAY|TUNDA|SPJM/.test(String(r.status || '').toUpperCase())),
     [normalizedFiltered]
   );
 
@@ -1412,6 +1575,7 @@ export default function PRUpdatePage() {
               { key: 'eta', label: 'Week ETA' },
               { key: 'tanggal_eta', label: 'Tanggal ETA' },
               { key: 'qty', label: 'Qty', align: 'right', format: 'number' },
+              { key: 'total', label: 'Total', align: 'right', format: 'number' },
               { key: 'container', label: 'No. Container' },
               { key: 'carrier', label: 'Shipping Line' },
             ],
@@ -1434,9 +1598,9 @@ export default function PRUpdatePage() {
     kpis: activeTab === 'lead_time'
       ? [{ id: 'avg_total_days', label: 'Avg Total Days', sourceTableId: 'lead_time_raw', field: 'total_days', agg: 'avg', decimals: 1, suffix: ' hari' }]
       : [
-          { id: 'total_qty', label: 'Total Qty Pesanan PR', sourceTableId: 'pr_detail', field: 'qty', agg: 'sum', decimals: 0, suffix: ' Qty' },
-          { id: 'total_dokumen', label: 'Total Dokumen PO/PR', sourceTableId: 'pr_detail', field: 'po', agg: 'countDistinct', decimals: 0, suffix: ' Dokumen' },
-          { id: 'hold_count', label: 'Item Hold/SPJM/Delay', sourceTableId: 'hold_items', field: 'po', agg: 'countDistinct', decimals: 0, suffix: ' Dokumen' },
+          { id: 'total_qty', label: 'Total Qty Pesanan PR', sourceTableId: 'pr_detail', field: 'total', agg: 'sum', decimals: 0, suffix: ' Qty' },
+          { id: 'total_dokumen', label: 'Total Dokumen PO/PR', sourceTableId: 'pr_detail', field: 'doc_key', agg: 'countDistinct', decimals: 0, suffix: ' Dokumen' },
+          { id: 'hold_count', label: 'Item Hold/SPJM/Delay', sourceTableId: 'hold_items', field: 'doc_key', agg: 'countDistinct', decimals: 0, suffix: ' Dokumen' },
         ],
   } : undefined;
 
@@ -1602,14 +1766,14 @@ export default function PRUpdatePage() {
         <KPICard
           title="Total Qty Pesanan PR"
           value={`${totalQty.toLocaleString('id-ID')} Qty`}
-          trend="Total Kuantitas Order Masuk"
+          trend={colTotal ? `SUM Kolom "${colTotal}"` : 'Total Kuantitas Order Masuk'}
           icon={<Truck className="w-5 h-5 text-purple-400" />}
           className="border-purple-500/20 bg-purple-500/5 hover:border-purple-500/40 transition"
         />
         <KPICard
           title="Total Dokumen PO/PR"
           value={`${distinctPoCountFiltered.toLocaleString('id-ID')} Dokumen`}
-          trend="Distinct No. PO • Berdasarkan Filter Aktif"
+          trend="Distinct Dokumen (PO/PR/Container) • Filter Aktif"
           icon={<FileBarChart className="w-5 h-5 text-blue-400" />}
           className="border-blue-500/20 bg-blue-500/5 hover:border-blue-500/40 transition"
         />
@@ -1622,12 +1786,72 @@ export default function PRUpdatePage() {
           className="border-rose-500/20 bg-rose-500/5 hover:border-rose-500/40 transition"
         />
         <KPICard
-          title="Variasi Status Compile"
-          value={`${statusList.length} Status`}
-          trend={statusList.join(', ').slice(0, 25) + (statusList.join(', ').length > 25 ? '...' : '')}
-          icon={<CheckCircle2 className="w-5 h-5 text-emerald-400" />}
+          title="Sebaran ETA"
+          value={`${docCountByEta.reduce((s, d) => s + d.count, 0).toLocaleString('id-ID')} Dokumen`}
+          trend={docCountByEta.length > 0 ? `${docCountByEta.length} Periode ETA` : 'Belum ada data Week ETA'}
+          icon={<Calendar className="w-5 h-5 text-emerald-400" />}
           className="border-emerald-500/20 bg-emerald-500/5 hover:border-emerald-500/40 transition"
         />
+      </div>
+
+      {/* ─── RINCIAN: TOP 5 KATEGORI, DOKUMEN PER STATUS COMPILE, SEBARAN ETA ─── */}
+      <div className="no-export grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <GlassCard className="p-5 border-purple-500/20 bg-white shadow-md">
+          <h4 className="text-xs font-extrabold uppercase tracking-wider text-purple-700 flex items-center gap-1.5 mb-3">
+            <Package className="w-4 h-4" /> Top 5 Item Category ({colTotal ? 'by Total' : 'by Qty'})
+          </h4>
+          {top5Categories.length === 0 ? (
+            <p className="text-xs text-slate-500">Tidak ada data kategori untuk filter aktif.</p>
+          ) : (
+            <div className="space-y-2">
+              {top5Categories.map((c, i) => (
+                <div key={c.category} className="flex items-center justify-between gap-2 text-xs">
+                  <span className="flex items-center gap-1.5 min-w-0">
+                    <span className="w-5 h-5 shrink-0 rounded-full bg-purple-100 text-purple-700 font-black flex items-center justify-center text-[10px]">{i + 1}</span>
+                    <span className="truncate font-semibold text-slate-800" title={c.category}>{c.category}</span>
+                  </span>
+                  <span className="font-mono font-bold text-purple-700 shrink-0">{c.total.toLocaleString('id-ID')}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </GlassCard>
+
+        <GlassCard className="p-5 border-blue-500/20 bg-white shadow-md">
+          <h4 className="text-xs font-extrabold uppercase tracking-wider text-blue-700 flex items-center gap-1.5 mb-3">
+            <FileBarChart className="w-4 h-4" /> Dokumen per Status Compile (Distinct)
+          </h4>
+          {docCountByStatus.length === 0 ? (
+            <p className="text-xs text-slate-500">Tidak ada data status untuk filter aktif.</p>
+          ) : (
+            <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+              {docCountByStatus.map((s) => (
+                <div key={s.status} className="flex items-center justify-between gap-2 text-xs">
+                  <span className="truncate font-semibold text-slate-800" title={s.status}>{s.status}</span>
+                  <span className="font-mono font-bold text-blue-700 shrink-0">{s.count.toLocaleString('id-ID')}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </GlassCard>
+
+        <GlassCard className="p-5 border-emerald-500/20 bg-white shadow-md">
+          <h4 className="text-xs font-extrabold uppercase tracking-wider text-emerald-700 flex items-center gap-1.5 mb-3">
+            <Calendar className="w-4 h-4" /> Sebaran ETA (Dokumen per Week ETA)
+          </h4>
+          {docCountByEta.length === 0 ? (
+            <p className="text-xs text-slate-500">Tidak ada data Week ETA untuk filter aktif.</p>
+          ) : (
+            <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+              {docCountByEta.map((e) => (
+                <div key={e.eta} className="flex items-center justify-between gap-2 text-xs">
+                  <span className="truncate font-semibold text-slate-800" title={e.eta}>{e.eta}</span>
+                  <span className="font-mono font-bold text-emerald-700 shrink-0">{e.count.toLocaleString('id-ID')}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </GlassCard>
       </div>
 
       {/* ─── FILTER CONTROLS & SELECTION (live-only — dead after clone; real offline filters are generated below) ─── */}
@@ -1700,9 +1924,9 @@ export default function PRUpdatePage() {
               </h3>
               <p className="text-xs text-slate-300 mt-1">
                 {chartViewMode === 'container' ? (
-                  <>Sumbu X: <b className="text-emerald-400">Cabang</b> • Sumbu Y: <b className="text-cyan-300">Jumlah Container</b> (dihitung otomatis dari distinct count nomor PO per cabang).</>
+                  <>Sumbu X: <b className="text-emerald-400">Cabang</b> • Sumbu Y: <b className="text-cyan-300">Jumlah Dokumen</b> (distinct count PO → PR → Container per cabang, termasuk dokumen yang belum punya No. PO).</>
                 ) : (
-                  <>Sumbu X: <b className="text-emerald-400">{chartViewMode === 'eta' ? 'Week ETA' : 'Cabang'}</b> • Batang bertingkat (Stacked Bar): <b className="text-sky-300">Category Barang</b> sesuai filter terpilih.</>
+                  <>Sumbu X: <b className="text-emerald-400">{chartViewMode === 'eta' ? 'Week ETA' : 'Cabang'}</b> • Batang bertingkat (Stacked Bar): <b className="text-sky-300">Category Barang</b> sesuai filter terpilih • Nilai = SUM {colTotal ? `kolom "${colTotal}"` : 'Qty'}.</>
                 )}
               </p>
             </div>
@@ -1735,19 +1959,19 @@ export default function PRUpdatePage() {
                 </button>
               </div>
               
-              <div className="flex items-center gap-2 text-xs font-bold text-cyan-300 bg-cyan-950/60 px-3.5 py-2 rounded-xl border border-cyan-500/50 shadow-sm" title="Total container dari distinct count nomor PO per Cabang">
+              <div className="flex items-center gap-2 text-xs font-bold text-cyan-300 bg-cyan-950/60 px-3.5 py-2 rounded-xl border border-cyan-500/50 shadow-sm" title="Total dokumen dari distinct count PO → PR → Container per Cabang">
                 <Package className="w-4 h-4 text-cyan-400 shrink-0" />
-                <span>Jumlah Container: {totalContainers?.toLocaleString('id-ID') || 0} (Distinct PO)</span>
+                <span>Jumlah Dokumen: {totalContainers?.toLocaleString('id-ID') || 0} (Distinct)</span>
               </div>
 
               <div className="flex items-center gap-2 text-xs text-slate-600 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200">
-                <span>🏷️ Menampilkan {chartViewMode === 'container' ? `${chartContainerData.length} cabang (Distinct PO)` : `${categoryList.length} kategori pada ${chartViewMode === 'eta' ? `${chartEtaData.length} periode ETA` : `${chartData.length} cabang`}`}</span>
+                <span>🏷️ Menampilkan {chartViewMode === 'container' ? `${chartContainerData.length} cabang (Distinct Dokumen)` : `${categoryList.length} kategori pada ${chartViewMode === 'eta' ? `${chartEtaData.length} periode ETA` : `${chartData.length} cabang`}`}</span>
               </div>
             </div>
           </div>
 
           <div className="w-full pb-4" style={{ minHeight: '520px' }}>
-            <ResponsiveContainer width="100%" height={520}>
+            <ResponsiveContainer width="100%" height={460}>
               <BarChart data={chartViewMode === 'eta' ? chartEtaData : chartViewMode === 'container' ? chartContainerData : chartData} margin={{ top: 20, right: 60, left: 40, bottom: 60 }}>
                 <defs>
                   <linearGradient id="containerBarGradient" x1="0" y1="0" x2="0" y2="1">
@@ -1760,14 +1984,13 @@ export default function PRUpdatePage() {
                 <YAxis stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 12 }} width={100} tickFormatter={(val) => Number(val).toLocaleString('en-US')} />
                 <Tooltip
                   content={chartViewMode === 'container' ? <CustomContainerTooltip /> : <CustomStackedTooltip />}
-                  wrapperStyle={{ zIndex: 999999, pointerEvents: 'none', outline: 'none' }}
+                  wrapperStyle={{ zIndex: 999999, pointerEvents: 'auto', outline: 'none' }}
                   cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }}
                 />
-                <Legend wrapperStyle={{ paddingTop: '24px', fontSize: '11px', maxHeight: '120px', overflowY: 'auto' }} />
                 {chartViewMode === 'container' ? (
                   <Bar
                     dataKey="Jumlah Container"
-                    name="Jumlah Container (Distinct Count No. PO per Cabang)"
+                    name="Jumlah Dokumen (Distinct Count PO → PR → Container per Cabang)"
                     fill="url(#containerBarGradient)"
                     maxBarSize={60}
                     radius={[8, 8, 0, 0]}
@@ -1787,6 +2010,14 @@ export default function PRUpdatePage() {
               </BarChart>
             </ResponsiveContainer>
           </div>
+          {/* Custom scrollable legend - see ScrollableLegend for why this replaces recharts' <Legend> */}
+          <ScrollableLegend
+            payload={
+              chartViewMode === 'container'
+                ? [{ value: 'Jumlah Dokumen (Distinct)', color: '#3987e5' }]
+                : categoryList.map((cat, idx) => ({ value: cat, color: COLORS[idx % COLORS.length] }))
+            }
+          />
         </GlassCard>
       )}
 
@@ -1816,8 +2047,8 @@ export default function PRUpdatePage() {
                 <RefreshCw className="w-3.5 h-3.5" /> Reset Filter Kolom
               </button>
             )}
-            <span className="px-4 py-2 rounded-xl bg-amber-500/20 border-2 border-amber-500/60 font-black text-xs sm:text-sm text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.3)] flex items-center gap-2">
-              <Timer className="w-4 h-4 text-amber-400 animate-spin-slow" />
+            <span className="px-4 py-2 rounded-xl bg-amber-400 border-2 border-amber-300 font-black text-xs sm:text-sm text-slate-900 shadow-[0_0_15px_rgba(245,158,11,0.5)] flex items-center gap-2">
+              <Timer className="w-4 h-4 text-slate-900 animate-spin-slow" />
               Total Overdue: {overdueDocCounts.total} PO
             </span>
           </div>
@@ -2084,7 +2315,7 @@ export default function PRUpdatePage() {
               <div className="flex items-center gap-3">
                 <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2.5">
                   <Globe className="w-5 h-5 text-sky-400" />
-                  Tabel Detail PR & Live Tracking Container ({displayedDetailRows.length} dari {filtered.length} Dokumen)
+                  Tabel Detail PR & Live Tracking Container ({displayedDetailRows.length} dari {filtered.length} baris)
                 </h3>
                 {Object.keys(colFilters).some(k => colFilters[k]?.search || colFilters[k]?.selected?.length > 0) && (
                   <button
@@ -2489,7 +2720,7 @@ export default function PRUpdatePage() {
         <div className="flex flex-col items-center justify-center min-h-[40vh] bg-slate-900/50 rounded-2xl border border-slate-700/50 text-slate-400 p-8 text-center">
           <Timer className="w-12 h-12 text-slate-500 mb-4" />
           <h3 className="text-lg font-bold text-slate-300">Data Lead Time Tidak Ditemukan</h3>
-          <p className="text-sm mt-2 max-w-md">Sheet "Lead Time" tidak ditemukan di dalam file Excel yang diunggah. Pastikan Anda mengunggah file Excel terbaru menggunakan format template yang baru.</p>
+          <p className="text-sm mt-2 max-w-md">Sheet &quot;Lead Time&quot; tidak ditemukan di dalam file Excel yang diunggah. Pastikan Anda mengunggah file Excel terbaru menggunakan format template yang baru.</p>
         </div>
       )}
     </div>

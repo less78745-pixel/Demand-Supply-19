@@ -21,7 +21,7 @@ import {
 } from 'recharts';
 import { get, set } from 'idb-keyval';
 import { supabase } from '@/lib/supabase';
-import { parseDynamicCSV, findColumn, ParsedData } from '@/lib/csvParser';
+import { parseDynamicCSV, findColumn, parseIndonesianNumber, ParsedData } from '@/lib/csvParser';
 import { getStandardFilename } from '@/utils/export';
 import { formatNumberCompact } from '@/lib/utils';
 
@@ -39,6 +39,22 @@ const getPillarCategory = (colName: string): 'On Hand' | 'VESSEL' | 'TO' | 'PLAN
   if (lower.includes('to ') || lower.startsWith('to') || lower.includes('transfer order')) return 'TO';
   if (lower.includes('plan loading') || lower.includes('loading') || lower.includes('load')) return 'PLAN LOADING';
   return 'Lainnya';
+};
+
+// Point 1: Handling Null pada Porsi per Status DOI.
+// Blank/null/NaN Status DOI must group into their own labeled bucket, not
+// silently fall into an unrelated real status (the old `row[colDoi] || 'ACTIVE'`
+// fallback merged every blank-DOI row straight into the "ACTIVE" slice,
+// corrupting its count and inflating the ACTIVE pie-chart proportion).
+const normalizeDoiStatus = (val: any): string => {
+  if (val === null || val === undefined) return 'undefined';
+  const s = String(val).trim();
+  if (!s) return 'undefined';
+  const lower = s.toLowerCase();
+  if (lower === 'nan' || lower === 'null' || lower === 'undefined' || lower === '#n/a' || lower === 'n/a' || lower === '-') {
+    return 'undefined';
+  }
+  return s;
 };
 
 const PILLAR_COLORS: Record<string, string> = {
@@ -104,6 +120,16 @@ const parseHighPrecision = (val: any): number => {
 const toExactFloat = (num: number, decimals: number = 2): number => {
   if (isNaN(num) || !isFinite(num)) return 0;
   return Number(Math.round(Number(num + 'e' + decimals)) + 'e-' + decimals);
+};
+
+// Point 3: Normalisasi Hasil Rasio vs Target. calculateStockCondition already
+// returns ratio: 0 whenever effectiveTarget <= 0, but the two display sites
+// below re-derived their own "N/A" text instead of trusting that clean 0 -
+// this coerces any NaN/Infinity/N/A-shaped ratio to a plain 0 in one place so
+// nothing renders the literal string "N/A" (or NaN) in the ratio column.
+const safeRatio = (ratio: any): number => {
+  const n = Number(ratio);
+  return isNaN(n) || !isFinite(n) ? 0 : n;
 };
 
 export interface StockCondition {
@@ -464,7 +490,10 @@ export default function SOHAnalysisPage() {
   const categories = useMemo(() => currentData && colCategory ? ['All', ...Array.from(new Set(currentData.data.map(d => d[colCategory]).filter(v => v && !String(v).includes('#N/A') && !String(v).includes('#REF!') && String(v).toLowerCase() !== 'semua kategori'))).sort()] : [], [currentData, colCategory]);
   const grups = useMemo(() => currentData && colGrup ? ['All', ...Array.from(new Set(currentData.data.map(d => d[colGrup]).filter(v => v && !String(v).includes('#N/A') && !String(v).includes('#REF!') && String(v).toLowerCase() !== 'semua grup'))).sort()] : [], [currentData, colGrup]);
   const insentifs = useMemo(() => currentData && colInsentif ? ['All', ...Array.from(new Set(currentData.data.map(d => d[colInsentif]).filter(v => v && !String(v).includes('#N/A') && !String(v).includes('#REF!') && String(v).toLowerCase() !== 'semua insentif'))).sort()] : [], [currentData, colInsentif]);
-  const dois = useMemo(() => currentData && colDoi ? ['All', ...Array.from(new Set(currentData.data.map(d => d[colDoi]).filter(v => v && !String(v).includes('#N/A') && !String(v).includes('#REF!') && String(v).toLowerCase() !== 'semua doi'))).sort()] : [], [currentData, colDoi]);
+  // Normalized through normalizeDoiStatus so blank/null/NaN rows surface as a
+  // selectable "undefined" option instead of being dropped from the filter
+  // entirely (the old `.filter(v => v && ...)` silently excluded them).
+  const dois = useMemo(() => currentData && colDoi ? ['All', ...Array.from(new Set(currentData.data.map(d => normalizeDoiStatus(d[colDoi])).filter(v => !v.includes('#N/A') && !v.includes('#REF!') && v.toLowerCase() !== 'semua doi'))).sort()] : [], [currentData, colDoi]);
 
   // Filtered Data with Scenario Multiplier applied to numerical metrics
   const filtered = useMemo(() => {
@@ -475,7 +504,7 @@ export default function SOHAnalysisPage() {
         (!colCabang || selectedCabang.includes('All') || selectedCabang.includes(d[colCabang])) &&
         (!colCategory || selectedCategory.includes('All') || selectedCategory.includes(d[colCategory])) &&
         (!colInsentif || selectedInsentif.includes('All') || selectedInsentif.includes(d[colInsentif])) &&
-        (!colDoi || selectedDoi.includes('All') || selectedDoi.includes(d[colDoi]))
+        (!colDoi || selectedDoi.includes('All') || selectedDoi.includes(normalizeDoiStatus(d[colDoi])))
       )
       .map(row => {
         const copy = { ...row };
@@ -511,7 +540,7 @@ export default function SOHAnalysisPage() {
         currentData.targetColumns.forEach(tc => { map[cbg].details[tc.name] = 0; });
       }
       currentData.targetColumns.forEach(tc => {
-        const val = Math.round(Number(row[tc.name]) || 0);
+        const val = Math.round(parseIndonesianNumber(row[tc.name]));
         const cat = getPillarCategory(tc.name);
         if (map[cbg][cat] !== undefined) {
           map[cbg][cat] += val;
@@ -554,7 +583,7 @@ export default function SOHAnalysisPage() {
         currentData.targetColumns.forEach(tc => {
           const name = tc.name.toLowerCase();
           if (name.includes(`week ${w}`) || name.endsWith(`w${w}`) || name.includes(`wk ${w}`) || name.includes(`minggu ${w}`)) {
-            const val = Math.round(Number(row[tc.name]) || 0);
+            const val = Math.round(parseIndonesianNumber(row[tc.name]));
             if (name.includes('to') || name.startsWith('to') || name.includes('transfer')) {
               item[`${grup} (TO)`] = (item[`${grup} (TO)`] || 0) + val;
             } else if (name.includes('vessel') || name.includes('kapal') || name.includes('laut')) {
@@ -582,11 +611,15 @@ export default function SOHAnalysisPage() {
       }
       currentData.targetColumns.forEach(tc => {
         if (getPillarCategory(tc.name) === 'On Hand') {
-          map[cat]['On Hand'] += Math.round(Number(row[tc.name]) || 0);
+          map[cat]['On Hand'] += Math.round(parseIndonesianNumber(row[tc.name]));
         }
       });
     }
-    return Object.values(map).sort((a, b) => b['On Hand'] - a['On Hand']);
+    // Point 5: cap to the top 25 categories by On Hand so the chart stays
+    // readable instead of rendering every category in the file at once.
+    return Object.values(map)
+      .sort((a, b) => b['On Hand'] - a['On Hand'])
+      .slice(0, 25);
   }, [currentData, filtered, colCabang, colCategory, selectedCabangForChart]);
 
   // Detailed Table Data per Cabang per Category with Condition Logic
@@ -600,7 +633,7 @@ export default function SOHAnalysisPage() {
       const cat = colCategory ? (row[colCategory] || 'Umum') : 'Umum';
       const desc = colDescription ? (row[colDescription] || '-') : '-';
       const ins = colInsentif ? (row[colInsentif] || 'Non-Insentif') : 'Non-Insentif';
-      const doi = colDoi ? (row[colDoi] || 'ACTIVE') : 'ACTIVE';
+      const doi = normalizeDoiStatus(colDoi ? row[colDoi] : undefined);
       const key = `${cbg}___${grp}___${cat}___${ins}___${doi}`;
 
       if (!map[key]) {
@@ -623,7 +656,7 @@ export default function SOHAnalysisPage() {
       }
 
       currentData.targetColumns.forEach(tc => {
-        const val = Math.round(Number(row[tc.name]) || 0);
+        const val = Math.round(parseIndonesianNumber(row[tc.name]));
         const pillar = getPillarCategory(tc.name);
         if (colTargetSales && tc.name === colTargetSales) {
           map[key]['Target Sales'] += val;
@@ -681,7 +714,7 @@ export default function SOHAnalysisPage() {
     if (colKey === 'target') return row['Outstanding Target'] > 0 ? String(Math.round(row['Outstanding Target']).toLocaleString('id-ID')) : '-';
     if (colKey === 'salesBerjalan') return row['Sales Berjalan'] > 0 ? String(Math.round(row['Sales Berjalan']).toLocaleString('id-ID')) : '-';
     if (colKey === 'effectiveTarget') return row.effectiveTarget > 0 ? String(Math.round(row.effectiveTarget).toLocaleString('id-ID')) : '-';
-    if (colKey === 'ratio') return row.effectiveTarget > 0 ? `${row.ratio}x` : 'N/A';
+    if (colKey === 'ratio') return `${safeRatio(row.ratio)}x`;
     if (colKey === 'badge') return String(row.badge || '');
     return '';
   };
@@ -745,7 +778,10 @@ export default function SOHAnalysisPage() {
 
     for (const row of detailedTableData) {
       if (selectedCabangForChart !== 'All' && row.cabang !== selectedCabangForChart) continue;
-      const doi = row.statusDoi || 'ACTIVE / UMUM';
+      // row.statusDoi is already normalized to 'undefined' for blank/null/NaN
+      // by normalizeDoiStatus when detailedTableData was built - this pie
+      // chart just consumes that grouped bucket as-is.
+      const doi = row.statusDoi;
       if (!map[doi]) map[doi] = 0;
       map[doi] += (row.totalSupply || 0);
     }
@@ -1010,7 +1046,7 @@ export default function SOHAnalysisPage() {
       const cat = colCategory ? (row[colCategory] || 'Umum') : 'Umum';
       const desc = colDescription ? (row[colDescription] || '-') : '-';
       const ins = colInsentif ? (row[colInsentif] || 'Non-Insentif') : 'Non-Insentif';
-      const doi = colDoi ? (row[colDoi] || 'ACTIVE') : 'ACTIVE';
+      const doi = normalizeDoiStatus(colDoi ? row[colDoi] : undefined);
       const key = `${cbg}___${grp}___${cat}___${ins}___${doi}`;
 
       if (!map[key]) {
@@ -1033,7 +1069,7 @@ export default function SOHAnalysisPage() {
       }
 
       currentData.targetColumns.forEach(tc => {
-        const val = Math.round(Number(row[tc.name]) || 0);
+        const val = Math.round(parseIndonesianNumber(row[tc.name]));
         const pillar = getPillarCategory(tc.name);
         if (colTargetSales && tc.name === colTargetSales) {
           map[key]['Target Sales'] += val;
@@ -1416,7 +1452,7 @@ export default function SOHAnalysisPage() {
             <div>
               <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
                 <BarChart3 className="w-5 h-5 text-emerald-400" />
-                {chartMode === 'weekly' ? 'Grafik Grouping Mingguan: TO vs Vessel per Group (W1 - W4)' : chartMode === 'stock' ? 'Detail On Hand (Fisik) per Kategori Barang' : 'Grafik Komparasi Pilar SOH & Inbound per Cabang'}
+                {chartMode === 'weekly' ? 'Grafik Grouping Mingguan: TO vs Vessel per Group (W1 - W4)' : chartMode === 'stock' ? `Detail On Hand (Fisik) per Kategori Barang (Top ${Math.min(25, onHandByCategoryData.length)})` : 'Grafik Komparasi Pilar SOH & Inbound per Cabang'}
               </h3>
               <p className="text-xs text-slate-600 mt-1">
                 Sorotan: <b className="text-cyan-400">{selectedCabangForChart === 'All' ? 'Seluruh Cabang' : selectedCabangForChart}</b> • Skenario Aktif: <b className="text-amber-300">{activeScenario.toUpperCase()}</b> • Satuan: <b className="text-emerald-400">{unitLabel}</b>
@@ -1910,7 +1946,11 @@ export default function SOHAnalysisPage() {
                   Insight Strategis Evaluasi Rasio Ketersediaan (SOH & TO vs Target)
                 </h4>
                 <p className="text-[11px] sm:text-xs text-emerald-200/90 font-medium px-1">
-                  Analisis otomatis keseimbangan stok berdasarkan rasio pasokan terhadap sisa target operasional.
+                  Analisis otomatis keseimbangan stok berdasarkan rasio pasokan terhadap sisa target operasional
+                  {/* Point 4: ratioInsights.totalItems was already computed but never
+                      rendered anywhere - this is the fix, showing the item count that
+                      backs the distribution/critical/overstock boxes below. */}
+                  {' '}dari <b className="text-emerald-100">{ratioInsights.totalItems.toLocaleString('id-ID')} item</b> valid yang dianalisis.
                 </p>
               </div>
             </div>
@@ -2161,7 +2201,7 @@ export default function SOHAnalysisPage() {
                     {row.effectiveTarget > 0 ? Math.round(row.effectiveTarget).toLocaleString('id-ID') : (row.effectiveTarget < 0 ? `(${Math.round(Math.abs(row.effectiveTarget)).toLocaleString('id-ID')})` : '-')}
                   </td>
                   <td className="py-3 px-3 border-l border-slate-200 font-black font-mono text-sm text-slate-900">
-                    {row.effectiveTarget > 0 ? `${row.ratio}x` : 'N/A'}
+                    {safeRatio(row.ratio)}x
                   </td>
                   <td className="py-3 px-3 border-l border-slate-200">
                     <div className="flex items-center justify-center">
