@@ -80,6 +80,7 @@ export function FilterableHeader({
   onChange,
   options,
   className = '',
+  accentClassName = 'text-emerald-400',
 }: {
   label: string;
   columnKey: string;
@@ -89,6 +90,8 @@ export function FilterableHeader({
   onChange: (value: ActiveColumnFilter | undefined) => void;
   options?: string[];
   className?: string;
+  /** Override the active-filter icon color, e.g. for modules with a strict palette. */
+  accentClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -118,7 +121,7 @@ export function FilterableHeader({
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }}
-          className={`no-export p-0.5 rounded hover:bg-white/10 transition ${isActive ? 'text-emerald-400' : 'text-muted-foreground/60'}`}
+          className={`no-export p-0.5 rounded hover:bg-white/10 transition ${isActive ? accentClassName : 'text-muted-foreground/60'}`}
           aria-label={`Filter ${label}`}
         >
           <Filter className="w-3 h-3" fill={isActive ? 'currentColor' : 'none'} />

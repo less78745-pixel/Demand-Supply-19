@@ -390,60 +390,69 @@ export default function RouteOptimizationPage() {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(num);
   };
 
-  // ── Offline HTML export: flatten ALL groups × ALL methods × ALL routes so the
-  // exported file's own filters can range over everything, not just the group/
-  // method currently selected on screen. ──
+  // ── Offline HTML export: scope to the group + route-type/stop-search filters
+  // currently active on screen (selectedGroup, filterTipeRute, filterSearchStop),
+  // so the exported HTML matches what the user actually sees, not the full raw dataset. ──
   const allRoutesFlat = useMemo(() => {
-    if (!results) return [];
+    if (!results || !results[selectedGroup]) return [];
+    const g = results[selectedGroup];
+    const label = g.label || `Cabang ${selectedGroup + 1}`;
     const rows: Record<string, unknown>[] = [];
-    results.forEach((g: any) => {
-      const label = g.label || 'Cabang';
-      (g.methods || []).forEach((m: any) => {
-        (Array.isArray(m.routes) ? m.routes : []).forEach((r: any) => {
-          rows.push({
-            cabang: label,
-            metode: m.method,
-            armada: r.vehicle_name || `Kendaraan #${r.route_id || ''}`,
-            tipe: r.is_dedicated ? 'Dedicated' : 'Optimasi',
-            stops: getRouteStopsCount(r),
-            load: r.load ?? 0,
-            capacity_pct: Number(r.capacity_pct) || 0,
-            distance_km: Number(r.distance_km) || 0,
-            rute: getRouteStopNames(r).join(' -> '),
-          });
-        });
-      });
-    });
-    return rows;
-  }, [results]);
-
-  const methodSummaryFlat = useMemo(() => {
-    if (!results) return [];
-    const rows: Record<string, unknown>[] = [];
-    results.forEach((g: any) => {
-      const label = g.label || 'Cabang';
-      const bestMethodName = g.best_method || g.summary?.best_method;
-      (g.methods || []).forEach((m: any) => {
+    (g.methods || []).forEach((m: any) => {
+      (Array.isArray(m.routes) ? m.routes : []).forEach((r: any) => {
+        if (!filterTipeRute.includes('All')) {
+          const routeType = r.is_dedicated ? 'Dedicated' : 'Optimasi';
+          if (!filterTipeRute.includes(routeType)) return;
+        }
+        if (!filterSearchStop.includes('All')) {
+          const stopNames = getRouteStopNames(r);
+          if (!stopNames.some((name: string) => filterSearchStop.includes(name))) return;
+        }
         rows.push({
           cabang: label,
           metode: m.method,
-          is_best: m.method === bestMethodName ? 'Ya' : 'Tidak',
-          jarak_km: Number(m.total_distance_km) || 0,
-          kendaraan: m.n_vehicles || 0,
-          total_cost: Number(m.cost?.total_cost) || 0,
-          waktu_jam: Number(m.cost?.estimated_time_hours) || 0,
+          armada: r.vehicle_name || `Kendaraan #${r.route_id || ''}`,
+          tipe: r.is_dedicated ? 'Dedicated' : 'Optimasi',
+          stops: getRouteStopsCount(r),
+          load: r.load ?? 0,
+          capacity_pct: Number(r.capacity_pct) || 0,
+          distance_km: Number(r.distance_km) || 0,
+          rute: getRouteStopNames(r).join(' -> '),
         });
       });
     });
     return rows;
-  }, [results]);
+  }, [results, selectedGroup, filterTipeRute, filterSearchStop]);
+
+  const methodSummaryFlat = useMemo(() => {
+    if (!results || !results[selectedGroup]) return [];
+    const g = results[selectedGroup];
+    const label = g.label || `Cabang ${selectedGroup + 1}`;
+    const bestMethodName = g.best_method || g.summary?.best_method;
+    const rows: Record<string, unknown>[] = [];
+    (g.methods || []).forEach((m: any) => {
+      rows.push({
+        cabang: label,
+        metode: m.method,
+        is_best: m.method === bestMethodName ? 'Ya' : 'Tidak',
+        jarak_km: Number(m.total_distance_km) || 0,
+        kendaraan: m.n_vehicles || 0,
+        total_cost: Number(m.cost?.total_cost) || 0,
+        waktu_jam: Number(m.cost?.estimated_time_hours) || 0,
+      });
+    });
+    return rows;
+  }, [results, selectedGroup]);
 
   const dedicatedRoutesFlat = useMemo(
     () => allRoutesFlat.filter((r) => r.tipe === 'Dedicated'),
     [allRoutesFlat]
   );
 
-  const groupLabels = useMemo(() => (results ? results.map((g: any) => g.label || 'Cabang') : []), [results]);
+  const groupLabels = useMemo(
+    () => (results && results[selectedGroup] ? [results[selectedGroup].label || `Cabang ${selectedGroup + 1}`] : []),
+    [results, selectedGroup]
+  );
   const methodNames = useMemo(
     () => Array.from(new Set(allRoutesFlat.map((r: any) => r.metode as string))),
     [allRoutesFlat]

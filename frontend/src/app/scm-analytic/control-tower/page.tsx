@@ -295,6 +295,21 @@ export default function ControlTowerPage() {
     });
   }, [results, selectedRegion, selectedZone, activeScenario]);
 
+  const filteredAlerts = useMemo(() => {
+    if (!Array.isArray(results?.alerts)) return [];
+    return results.alerts.filter((a: any) => selectedRegion.includes('All') || selectedRegion.includes(a.region));
+  }, [results, selectedRegion]);
+
+  const contextualRegionOptions = useMemo(
+    () => Array.from(new Set<string>(filtered.map((b: any) => b.region))).sort(),
+    [filtered]
+  );
+
+  const contextualZoneOptions = useMemo(
+    () => Array.from(new Set<string>(filtered.map((b: any) => b.zone))).sort(),
+    [filtered]
+  );
+
   const handleExport = () => {
     if (!filtered.length) { toast.error('Tidak ada data'); return; }
     const lines = ['Cabang,Region,In_Stock_%,DoS,OTIF_%,Health_Score,Zone,Total_Stock'];
@@ -313,24 +328,23 @@ export default function ControlTowerPage() {
     toast.success('Control Tower report exported!');
   };
 
-  // ── Offline HTML export config: full raw branch dataset (not the live
-  // scenario/region/zone-narrowed `filtered`) so the exported file's own
-  // filters can range over everything, not just what was selected at
-  // export time. ──
+  // ── Offline HTML export config: sources from the same filtered
+  // (region/zone/scenario-adjusted) data that drives the on-screen
+  // tables/chart, so the exported HTML matches what's visible on screen. ──
   const exportConfig: ModuleExportConfig | undefined = results ? {
     moduleName: 'SCM_Control_Tower',
     processedAt: results.processed_at,
     domElementId: 'export-container',
     filters: [
-      { field: 'region', label: 'Filter Region', options: regionOptions.filter((r) => r !== 'All') },
-      { field: 'zone', label: 'Filter Zone', options: zoneOptions.filter((z) => z !== 'All') },
+      { field: 'region', label: 'Filter Region', options: contextualRegionOptions },
+      { field: 'zone', label: 'Filter Zone', options: contextualZoneOptions },
     ],
     tables: [
       {
         id: 'branches',
         title: 'Detail Health per Cabang',
         filterFields: ['region', 'zone'],
-        data: results.branches || [],
+        data: filtered,
         columns: [
           { key: 'cabang', label: 'Cabang' },
           { key: 'region', label: 'Region' },
@@ -346,7 +360,7 @@ export default function ControlTowerPage() {
         id: 'red_zone_branches',
         title: 'Cabang Zona Kritis (RED)',
         filterFields: ['region'],
-        data: (results.branches || []).filter((b: any) => b.zone === 'RED'),
+        data: filtered.filter((b: any) => b.zone === 'RED'),
         emptyLabel: 'Tidak ada cabang zona RED untuk filter yang dipilih.',
         columns: [
           { key: 'cabang', label: 'Cabang' },
@@ -358,7 +372,7 @@ export default function ControlTowerPage() {
         id: 'alerts',
         title: 'Exception Alerts',
         filterFields: ['region'],
-        data: results.alerts || [],
+        data: filteredAlerts,
         emptyLabel: 'Tidak ada alert untuk filter yang dipilih.',
         columns: [
           { key: 'region', label: 'Region' },

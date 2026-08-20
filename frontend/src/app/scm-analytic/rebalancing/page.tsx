@@ -326,23 +326,30 @@ export default function RebalancingPage() {
     toast.success('Draft STO exported!');
   };
 
-  // ── Offline HTML export config: full raw recommendations/infeasible dataset
-  // (not the live-narrowed `filtered`) so the exported file's own filters can
-  // range over everything, not just whatever entity/scenario was selected at
-  // export time. ──
+  // ── Offline HTML export config: sources from `filtered` (the same
+  // entity + scenario narrowed data driving the on-screen "Rekomendasi
+  // Transfer" table) so the exported file matches what the user is actually
+  // looking at, not the full raw dataset. Infeasible intentionally still
+  // uses the raw `results.infeasible` list because the on-screen infeasible
+  // table is likewise not narrowed by the entity filter. ──
+  const contextualEntityOptions = useMemo(
+    () => Array.from(new Set<string>(filtered.map((r: any) => r.entity))).sort(),
+    [filtered]
+  );
+
   const exportConfig: ModuleExportConfig | undefined = results ? {
     moduleName: 'Stock_Rebalancing_Optimizer',
     processedAt: results.processed_at,
     domElementId: 'export-container',
     filters: [
-      { field: 'entity', label: 'Filter Entity', options: entityOptions.filter((e) => e !== 'All') },
+      { field: 'entity', label: 'Filter Entity', options: contextualEntityOptions },
     ],
     tables: [
       {
         id: 'recommendations',
         title: 'Rekomendasi Transfer Antar-Cabang',
         filterFields: ['entity'],
-        data: results.recommendations || [],
+        data: filtered,
         columns: [
           { key: 'entity', label: 'Entity' },
           { key: 'origin', label: 'Origin' },

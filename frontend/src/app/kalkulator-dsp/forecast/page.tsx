@@ -501,15 +501,15 @@ export default function ForecastPage() {
     });
   }, [results, selectedCabang, selectedCategory, activeScenario]);
 
-  // ── Offline HTML export config: full forecast_data (not the live-narrowed
-  // filteredData) flattened into a stable row shape so the exported file's
-  // own filters can range over every cabang/category, not just the active
-  // scenario/method selected at export time. ──
+  // ── Offline HTML export config: mirrors the live-narrowed filteredData
+  // (already scoped to selectedCabang/selectedCategory/activeScenario, same
+  // as what drives the on-screen chart) flattened into a stable row shape,
+  // so the exported file only contains what's actually visible on screen. ──
   const forecastRowsAll = useMemo(() => {
-    if (!results?.forecast_data) return [];
-    const methods: string[] = results.available_methods || [];
-    return results.forecast_data.map((r: any) => {
-      const bestModel = String(r.best_model || results.best_model || '').trim();
+    if (!filteredData) return [];
+    const methods: string[] = results?.available_methods || [];
+    return filteredData.map((r: any) => {
+      const bestModel = String(r.best_model || results?.best_model || '').trim();
       let bestModelValue: number | null = null;
       if (bestModel && r.forecasts) {
         const found = Object.entries(r.forecasts).find(
@@ -535,15 +535,25 @@ export default function ForecastPage() {
         is_future: r.is_future ? 'Ya' : 'Tidak',
       };
     });
-  }, [results]);
+  }, [filteredData, results]);
+
+  const contextualCabangOptions = useMemo(
+    () => Array.from(new Set<string>(filteredData.map((d: any) => d.cabang))).sort(),
+    [filteredData]
+  );
+
+  const contextualCategoryOptions = useMemo(
+    () => Array.from(new Set<string>(filteredData.map((d: any) => d.category))).sort(),
+    [filteredData]
+  );
 
   const exportConfig: ModuleExportConfig | undefined = results ? {
     moduleName: 'Demand_Forecast_ML',
     processedAt: results.processed_at,
     domElementId: 'export-container',
     filters: [
-      { field: 'cabang', label: 'Filter Cabang', options: cabangs.filter((c) => c !== 'All') },
-      { field: 'category', label: 'Filter Kategori', options: categories.filter((c) => c !== 'All') },
+      { field: 'cabang', label: 'Filter Cabang', options: contextualCabangOptions },
+      { field: 'category', label: 'Filter Kategori', options: contextualCategoryOptions },
     ],
     tables: [
       {

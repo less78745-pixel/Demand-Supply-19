@@ -1,4 +1,4 @@
-﻿# Python
+# Python
 venv/
 __pycache__/
 *.pyc
@@ -29,3 +29,7 @@ Thumbs.db
 # IDEs and Editors
 .vscode/
 .idea/
+
+# Secrets and Databases
+.env
+*.db

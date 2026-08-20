@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { supabase } from './supabase';
 
 /**
  * API Configuration
@@ -104,9 +105,83 @@ export const uploadOccupancyFile = async (file: File) => {
   return response.data;
 };
 
+// ── Upload asinkron via Supabase Storage (bypass limit payload 4.5MB Vercel) ──
+// Alur: upload file mentah ke Storage (bukan ke endpoint FastAPI) -> insert baris
+// job tracking -> panggil endpoint FastAPI hanya dengan job_id + storage_path
+// (payload kecil, tidak pernah menyentuh limit). FastAPI memproses file di
+// BackgroundTasks dan menyimpan hasil ke `processed_results`, yang sudah
+// otomatis diterima halaman ini lewat realtime subscription yang sudah ada.
+const DSP_UPLOAD_BUCKET = 'dsp-raw-uploads';
+
+export interface OccupancyJobHandle {
+  jobId: string;
+  storagePath: string;
+}
+
+export const uploadOccupancyFileAsync = async (file: File): Promise<OccupancyJobHandle> => {
+  if (!/\.(xlsx|xls)$/i.test(file.name)) {
+    throw new Error('Hanya file Excel (.xlsx/.xls) yang didukung untuk analisa MRP.');
+  }
+
+  const jobId = crypto.randomUUID();
+  const storagePath = `occupancy/${jobId}-${file.name}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from(DSP_UPLOAD_BUCKET)
+    .upload(storagePath, file, {
+      contentType: file.type || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      upsert: false,
+    });
+  if (uploadError) {
+    throw new Error(`Gagal mengunggah file ke Supabase Storage: ${uploadError.message}`);
+  }
+
+  // id di-generate di sini (bukan mengandalkan default kolom di DB) supaya tidak
+  // bergantung pada `gen_random_uuid()` benar-benar terpasang sebagai default --
+  // sekaligus job id sudah pasti diketahui sebelum insert, jadi tidak ada celah
+  // waktu untuk dedup by job_id di realtime handler.
+  const { data: job, error: jobError } = await supabase
+    .from('dsp_processing_jobs')
+    .insert({ id: jobId, module: 'occupancy', storage_path: storagePath, status: 'pending' })
+    .select('id')
+    .single();
+  if (jobError || !job) {
+    throw new Error(`Gagal membuat job tracking: ${jobError?.message ?? 'unknown error'}`);
+  }
+
+  // Ditulis SEKARANG (bukan setelah job selesai) supaya realtime INSERT handler
+  // di processed_results bisa langsung mengenali "ini hasil upload saya sendiri"
+  // begitu event itu tiba -- tidak peduli mana yang lebih dulu sampai, event job
+  // UPDATE atau event processed_results INSERT (lihat page.tsx dedup by job_id).
+  sessionStorage.setItem('last_dsp_job_id_occupancy', jobId);
+
+  await api.post('/analyze/occupancy/async', {
+    job_id: jobId,
+    storage_path: storagePath,
+  });
+
+  return { jobId, storagePath };
+};
+
 export const downloadOccupancyTemplate = async () => {
   const response = await api.get('/analyze/occupancy/template', {
     responseType: 'blob',
+  });
+  return response.data;
+};
+
+/**
+ * Download the processed MRP Excel workbook. Large datasets store the workbook
+ * in Supabase Storage instead of embedding it as base64 in `mrp_results.excel_base64`
+ * (that embedding was blowing up `processed_results` rows past Supabase Realtime's
+ * broadcast limit, which silently broke the dashboard's live sync) -- this fetches
+ * a short-lived signed URL from the backend and downloads through it instead.
+ */
+export const downloadOccupancyExcelFromStorage = async (storagePath: string) => {
+  const response = await api.get('/analyze/occupancy/download-excel', {
+    params: { path: storagePath },
+    responseType: 'blob',
+    maxRedirects: 5,
   });
   return response.data;
 };

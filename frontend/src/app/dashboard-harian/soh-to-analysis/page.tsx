@@ -1032,106 +1032,39 @@ export default function SOHAnalysisPage() {
   const isValueMode = Boolean(currentData?.sheetNames && selectedSheetName && (selectedSheetName.toLowerCase().includes('val') || selectedSheetName.toLowerCase().includes('rp')));
   const unitLabel = isValueMode ? 'Rp / Value' : 'Qty';
 
-  // ── Offline HTML export config: mirrors the detailedTableData aggregation but
-  // sources from the current sheet's FULL raw rows (no selectedCabang/Category/
-  // Insentif/Doi narrowing, no scenario multiplier) so the exported file's own
-  // filters can range over everything, not just whatever was selected live. ──
-  const fullDetailedTableData = useMemo(() => {
-    if (!currentData || !currentData.data || currentData.data.length === 0) return [];
-    const map: Record<string, any> = {};
-
-    for (const row of currentData.data) {
-      const cbg = colCabang ? (row[colCabang] || 'Unknown') : 'Unknown';
-      const grp = colGrup ? (row[colGrup] || 'Umum') : 'Umum';
-      const cat = colCategory ? (row[colCategory] || 'Umum') : 'Umum';
-      const desc = colDescription ? (row[colDescription] || '-') : '-';
-      const ins = colInsentif ? (row[colInsentif] || 'Non-Insentif') : 'Non-Insentif';
-      const doi = normalizeDoiStatus(colDoi ? row[colDoi] : undefined);
-      const key = `${cbg}___${grp}___${cat}___${ins}___${doi}`;
-
-      if (!map[key]) {
-        map[key] = {
-          key,
-          cabang: cbg,
-          grup: grp,
-          category: cat,
-          description: desc,
-          statusInsentif: ins,
-          statusDoi: doi,
-          'On Hand': 0,
-          'VESSEL': 0,
-          'TO': 0,
-          'PLAN LOADING': 0,
-          'Target Sales': 0,
-          'Outstanding Target': 0,
-          'Sales Berjalan': 0
-        };
-      }
-
-      currentData.targetColumns.forEach(tc => {
-        const val = Math.round(parseIndonesianNumber(row[tc.name]));
-        const pillar = getPillarCategory(tc.name);
-        if (colTargetSales && tc.name === colTargetSales) {
-          map[key]['Target Sales'] += val;
-        } else if (colOutstandingTarget && tc.name === colOutstandingTarget) {
-          map[key]['Outstanding Target'] += val;
-        } else if (colSalesBerjalan && tc.name === colSalesBerjalan) {
-          map[key]['Sales Berjalan'] += val;
-        } else if (pillar === 'OUTSTANDING TARGET') {
-          map[key]['Outstanding Target'] += val;
-        } else if (pillar === 'SALES BERJALAN') {
-          map[key]['Sales Berjalan'] += val;
-        } else if (pillar === 'TARGET SALES') {
-          map[key]['Target Sales'] += val;
-        } else if (map[key][pillar] !== undefined && pillar !== 'Lainnya') {
-          map[key][pillar] += val;
-        }
-      });
-    }
-
-    return Object.values(map).map((item: any) => {
-      const totalInbound = (item['VESSEL'] || 0) + (item['TO'] || 0) + (item['PLAN LOADING'] || 0);
-      const totalSupply = (item['On Hand'] || 0) + (item['TO'] || 0) + (item['VESSEL'] || 0);
-      const effectiveTarget = Math.max(0, (item['Outstanding Target'] || 0) - (item['Sales Berjalan'] || 0));
-      const cond = calculateStockCondition(item['On Hand'], item['TO'], item['VESSEL'], item['Outstanding Target'], item['Sales Berjalan']);
-      return {
-        ...item,
-        totalInbound,
-        totalSupply,
-        effectiveTarget,
-        ratio: cond.ratio,
-        status: cond.status,
-        badge: cond.badge,
-      };
-    }).sort((a: any, b: any) => {
-      if (a.cabang === b.cabang) {
-        return (b['On Hand'] + b.totalInbound) - (a['On Hand'] + a.totalInbound);
-      }
-      return a.cabang.localeCompare(b.cabang);
-    });
-  }, [currentData, colCabang, colGrup, colCategory, colDescription, colInsentif, colDoi, colTargetSales, colOutstandingTarget, colSalesBerjalan]);
-
   // Small pre-filtered subsets so count-agg KPIs can point at a condition
   // ("Bahaya" / "Overstock") without encoding it generically in the engine.
-  const bahayaItems = useMemo(() => fullDetailedTableData.filter((r: any) => r.status === 'Bahaya'), [fullDetailedTableData]);
-  const overstockItems = useMemo(() => fullDetailedTableData.filter((r: any) => r.status === 'Overstock'), [fullDetailedTableData]);
+  // Sourced from detailedTableData (already narrowed by the active
+  // selectedCabang/Category/Insentif/Doi filters and scenario multiplier) so
+  // the export matches whatever is actually shown on screen.
+  const bahayaItems = useMemo(() => detailedTableData.filter((r: any) => r.status === 'Bahaya'), [detailedTableData]);
+  const overstockItems = useMemo(() => detailedTableData.filter((r: any) => r.status === 'Overstock'), [detailedTableData]);
+
+  // Contextual filter options for the offline HTML export: derived from the
+  // already-filtered detailedTableData's own distinct values (not the full
+  // raw dataset), so the exported file's own re-filter UI doesn't offer
+  // values that aren't even present in the exported subset.
+  const contextualSohCabangOptions = useMemo(() => Array.from(new Set<string>(detailedTableData.map((d: any) => d.cabang))).sort(), [detailedTableData]);
+  const contextualSohCategoryOptions = useMemo(() => Array.from(new Set<string>(detailedTableData.map((d: any) => d.category))).sort(), [detailedTableData]);
+  const contextualSohInsentifOptions = useMemo(() => Array.from(new Set<string>(detailedTableData.map((d: any) => d.statusInsentif))).sort(), [detailedTableData]);
+  const contextualSohDoiOptions = useMemo(() => Array.from(new Set<string>(detailedTableData.map((d: any) => d.statusDoi))).sort(), [detailedTableData]);
 
   const exportConfig: ModuleExportConfig | undefined = currentData ? {
     moduleName: 'SOH_TO_Analysis',
     processedAt: parsed?.processed_at,
     domElementId: 'export-container',
     filters: [
-      { field: 'cabang', label: 'Filter Cabang', options: cabangs.filter((c) => c !== 'All') },
-      { field: 'category', label: 'Filter Kategori', options: categories.filter((c) => c !== 'All') },
-      { field: 'statusInsentif', label: 'Filter Status Insentif', options: insentifs.filter((i) => i !== 'All') },
-      { field: 'statusDoi', label: 'Filter Status DOI', options: dois.filter((d) => d !== 'All') },
+      { field: 'cabang', label: 'Filter Cabang', options: contextualSohCabangOptions },
+      { field: 'category', label: 'Filter Kategori', options: contextualSohCategoryOptions },
+      { field: 'statusInsentif', label: 'Filter Status Insentif', options: contextualSohInsentifOptions },
+      { field: 'statusDoi', label: 'Filter Status DOI', options: contextualSohDoiOptions },
     ],
     tables: [
       {
         id: 'soh_detail',
         title: `Detail SOH & TO per Cabang per Kategori (${unitLabel})`,
         filterFields: ['cabang', 'category', 'statusInsentif', 'statusDoi'],
-        data: fullDetailedTableData,
+        data: detailedTableData,
         columns: [
           { key: 'cabang', label: 'Cabang' },
           { key: 'grup', label: 'Grup' },

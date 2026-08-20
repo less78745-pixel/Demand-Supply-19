@@ -1467,6 +1467,26 @@ export default function HistorySalesPage() {
     toast.success('📊 Hasil Seluruh Analisis Berhasil Diekspor!');
   };
 
+  // Contextual filter options for the offline HTML export: derived from `filtered`
+  // (the same filtered dataset that feeds tableData/insentifAnalysis below), so the
+  // exported file's own filter dropdowns only ever offer values actually present in
+  // the exported subset — unlike `cabangs`/`categories`/`categoryInsentifs` above,
+  // which are linked-filter option lists computed from the full raw `parsed.data`.
+  const contextualCabangOptions = useMemo(() => {
+    if (!colCabang) return [];
+    return Array.from(new Set<string>(filtered.map((d: any) => d[colCabang]).filter((v: any) => v))).sort();
+  }, [filtered, colCabang]);
+
+  const contextualCategoryOptions = useMemo(() => {
+    if (!colCategory) return [];
+    return Array.from(new Set<string>(filtered.map((d: any) => d[colCategory]).filter((v: any) => v))).sort();
+  }, [filtered, colCategory]);
+
+  const contextualCategoryInsentifOptions = useMemo(() => {
+    if (!colCategoryInsentif) return [];
+    return Array.from(new Set<string>(filtered.map((d: any) => d[colCategoryInsentif]).filter((v: any) => v))).sort();
+  }, [filtered, colCategoryInsentif]);
+
   // ── Offline HTML export config: full computed tableData / insentifAnalysis
   // (not the search-narrowed displayedTable1Data/displayedTable2Data) so the
   // exported file's own filters can range over everything currently computed. ──
@@ -1475,9 +1495,9 @@ export default function HistorySalesPage() {
     processedAt: parsed.processed_at,
     domElementId: 'export-container',
     filters: [
-      { field: 'cabang', label: 'Filter Cabang', options: cabangs.filter((c) => c !== 'All') },
-      { field: 'category', label: 'Filter Kategori Item', options: categories.filter((c) => c !== 'All') },
-      { field: 'categoryInsentif', label: 'Filter Category Insentif', options: categoryInsentifs.filter((c) => c !== 'All') },
+      { field: 'cabang', label: 'Filter Cabang', options: contextualCabangOptions },
+      { field: 'category', label: 'Filter Kategori Item', options: contextualCategoryOptions },
+      { field: 'categoryInsentif', label: 'Filter Category Insentif', options: contextualCategoryInsentifOptions },
     ],
     tables: [
       {

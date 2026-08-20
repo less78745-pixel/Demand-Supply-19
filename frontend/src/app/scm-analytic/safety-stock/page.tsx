@@ -331,15 +331,35 @@ export default function SafetyStockPage() {
     toast.success('Safety Stock report exported!');
   };
 
-  // ── Offline HTML export config: full raw results/alerts dataset (not the
-  // live-narrowed `filtered`) so the exported file's own filters can range
-  // over everything, not just whatever cabang/status/scenario was selected at
-  // export time. Critical items are pre-filtered into their own small table so
-  // a count-agg KPI can point at them without needing conditional logic in
-  // the generic engine. ──
+  // ── Offline HTML export config: data yang diekspor HARUS berbanding lurus
+  // dengan state tampilan yang sedang dirender di layar saat ini
+  // (cabang/status/skenario yang aktif), bukan seluruh dataset mentah
+  // `results.*`. Karena itu setiap tabel di bawah bersumber dari state yang
+  // SUDAH difilter (`filtered`, `filteredAlerts`), dan daftar opsi filter
+  // offline-nya diturunkan dari data terfilter itu sendiri -- sehingga
+  // re-filter "Semua" di file HTML hasil unduhan tetap hanya menampilkan apa
+  // yang sedang aktif di layar, bukan data cabang/status lain yang sedang
+  // disembunyikan. Critical items are pre-filtered (from the already-filtered
+  // `filtered` data) into their own small table so a count-agg KPI can point
+  // at them without needing conditional logic in the generic engine. ──
+  const filteredAlerts = useMemo(() => {
+    if (!Array.isArray(results?.alerts)) return [];
+    return results.alerts.filter((a: any) => selectedCabang.includes('All') || selectedCabang.includes(a.cabang));
+  }, [results, selectedCabang]);
+
   const criticalItems = useMemo(
-    () => (Array.isArray(results?.results) ? results.results.filter((r: any) => r.status === 'CRITICAL') : []),
-    [results]
+    () => filtered.filter((r: any) => r.status === 'CRITICAL'),
+    [filtered]
+  );
+
+  const contextualCabangOptions = useMemo(
+    () => Array.from(new Set<string>(filtered.map((r: any) => r.cabang))).sort(),
+    [filtered]
+  );
+
+  const contextualStatusOptions = useMemo(
+    () => Array.from(new Set<string>(filtered.map((r: any) => r.status))).sort(),
+    [filtered]
   );
 
   const exportConfig: ModuleExportConfig | undefined = results ? {
@@ -347,15 +367,15 @@ export default function SafetyStockPage() {
     processedAt: results.processed_at,
     domElementId: 'export-container',
     filters: [
-      { field: 'cabang', label: 'Filter Cabang', options: allCabangs.filter((c) => c !== 'All') },
-      { field: 'status', label: 'Filter Status', options: statusOptions.filter((s) => s !== 'All') },
+      { field: 'cabang', label: 'Filter Cabang', options: contextualCabangOptions },
+      { field: 'status', label: 'Filter Status', options: contextualStatusOptions },
     ],
     tables: [
       {
         id: 'results',
         title: 'Detail Hasil Kalkulasi Safety Stock & ROP',
         filterFields: ['cabang', 'status'],
-        data: results.results || [],
+        data: filtered,
         columns: [
           { key: 'cabang', label: 'Cabang' },
           { key: 'sku', label: 'SKU' },
@@ -387,7 +407,7 @@ export default function SafetyStockPage() {
         id: 'alerts',
         title: 'Reorder Alerts — Cabang Butuh Pengisian Segera',
         filterFields: ['cabang'],
-        data: results.alerts || [],
+        data: filteredAlerts,
         emptyLabel: 'Tidak ada reorder alert untuk filter yang dipilih.',
         columns: [
           { key: 'cabang', label: 'Cabang' },

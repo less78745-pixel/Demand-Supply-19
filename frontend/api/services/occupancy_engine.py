@@ -138,7 +138,7 @@ def read_raw_records(ws_raw: Worksheet, n_weeks: int):
         onhand = get_val(ONHAND_COL)
         to, vessel, target = [], [], []
         for w in range(n_weeks):
-            c_to, c_vessel, c_forecast, c_target = raw_week_cols(w)
+            c_to, c_vessel, c_buffer, c_target = raw_week_cols(w)
             to.append(get_val(c_to))
             vessel.append(get_val(c_vessel))
             target.append(get_val(c_target))
@@ -218,6 +218,74 @@ FILL_JUDUL = PatternFill("solid", fgColor="D9D9D9")
 FILL_PERHITUNGAN = PatternFill("solid", fgColor="FCE4D6")
 FILL_RATIO = PatternFill("solid", fgColor="CFE2F3")
 FILL_HEADER2 = PatternFill("solid", fgColor="F2F2F2")
+FILL_QTY = PatternFill("solid", fgColor="A9D18E")
+FILL_RUPIAH = PatternFill("solid", fgColor="FFD966")
+
+# Faktor konversi Container -> QTY, sama seperti dsp_calculator_conversion.py
+FAKTOR_QTY = 68
+
+def compute_qty_rupiah_series(cabang, category, bal_series, n_weeks, cbm_dict, harga_product_dict):
+    """QTY = Running Balance (container) * FAKTOR_QTY / CBM (lookup Cabang+Category).
+    Rupiah = QTY * Harga Product (lookup Cabang+Category).
+    None saat CBM/Harga tidak ditemukan (lookup key tidak ada) atau CBM=0 --
+    dibiarkan blank di Excel/JSON, bukan dipaksa 0, supaya "tidak ada data harga"
+    tetap bisa dibedakan dari "nilainya nol"."""
+    key = (str(cabang).strip(), str(category).strip())
+    cbm_val = cbm_dict.get(key)
+    harga_val = harga_product_dict.get(key)
+    qty_series, rupiah_series = [], []
+    for w in range(n_weeks):
+        qty_val = (bal_series[w] * FAKTOR_QTY / cbm_val) if cbm_val else None
+        rupiah_val = (qty_val * harga_val) if (qty_val is not None and harga_val is not None) else None
+        qty_series.append(qty_val)
+        rupiah_series.append(rupiah_val)
+    return qty_series, rupiah_series
+
+def compute_mos_value_series_by_branch(records, n_weeks, cbm_dict, harga_product_dict, value_series_by_branch):
+    """MOS berbasis Value untuk metrik 'Analisa Nilai Inventori' (Fitur 3):
+
+    1. Variabel AA (per record, per minggu) = Target QTY * Harga Product * 4.
+       Target QTY didapat dari Target mentah (sheet Raw, satuan Container)
+       dikonversi ke satuan QTY dengan rumus & lookup CBM (Cabang+Category)
+       yang SAMA PERSIS dengan compute_qty_rupiah_series (Target * FAKTOR_QTY
+       / CBM) -- WAJIB disamakan karena Value(Rp) di pembilang (dari
+       value_series_by_branch) juga dihitung dari Balance yang sudah
+       dikonversi ke QTY, bukan dari Balance mentah dalam Container. Tanpa
+       konversi ini AA berada di satuan Container (jauh lebih kecil dari QTY,
+       biasanya puluhan-ribu kali lipat tergantung CBM), sehingga SUM(AA)
+       terlalu kecil dan MOS = Value/SUM(AA) meledak jadi jauh lebih besar
+       dari yang seharusnya -- persis gejala yang dilaporkan ("hasilnya besar
+       sekali"). Faktor `* 4` dikalikan DI SINI, per record, SEBELUM dijumlah
+       -- bukan diterapkan ke SUM(AA) sesudahnya (hasil akhirnya sama karena
+       4 konstanta, tapi urutan ini yang diminta).
+    2. AA dijumlahkan (SUM) per Cabang per minggu, lintas semua Category/Grup di
+       cabang tsb -- SUM(AA) merepresentasikan total nilai rupiah dari demand
+       mingguan cabang itu (sudah termasuk faktor `* 4` dari langkah 1).
+    3. MOS (Value) per Cabang per minggu = Value(Rp) dari `value_series_by_branch`
+       (hasil modul Analisa Nilai Inventori) / SUM(AA), TANPA dikali 4 lagi di
+       langkah ini (sudah dikali di langkah 1). Fallback ke 0 saat SUM(AA) = 0,
+       supaya pembagian oleh nol tidak melempar exception.
+    """
+    aa_sum_by_branch = {}
+    for rec in records:
+        key = (str(rec.cabang).strip(), str(rec.category).strip())
+        cbm_val = cbm_dict.get(key)
+        harga = harga_product_dict.get(key, 0.0)
+        acc = aa_sum_by_branch.setdefault(rec.cabang, [0.0] * n_weeks)
+        for w in range(n_weeks):
+            target_qty = (rec.target[w] * FAKTOR_QTY / cbm_val) if cbm_val else 0.0
+            acc[w] += target_qty * harga * 4
+
+    mos_value_series_by_branch = {}
+    for cabang, value_series in value_series_by_branch.items():
+        aa_sum = aa_sum_by_branch.get(cabang, [0.0] * n_weeks)
+        series = []
+        for w in range(n_weeks):
+            denom = aa_sum[w]
+            series.append(round(value_series[w] / denom, 4) if denom != 0 else 0.0)
+        mos_value_series_by_branch[cabang] = series
+    return mos_value_series_by_branch
+
 BOLD = Font(bold=True)
 CENTER = Alignment(horizontal="center", vertical="center", wrap_text=True)
 THIN = Side(style="thin", color="BFBFBF")
@@ -254,7 +322,7 @@ def build_step1_sheet(wb, ws_raw, raw_rows, n_weeks, period_labels):
     perhitungan_col_letters = [get_column_letter(col_perhitungan_start + w) for w in range(n_weeks)]
     raw_col_letters = []
     for w in range(n_weeks):
-        col_to, col_vessel, col_forecast, col_target = raw_week_cols(w)
+        col_to, col_vessel, col_buffer, col_target = raw_week_cols(w)
         raw_col_letters.append({
             "to": get_column_letter(col_to),
             "vessel": get_column_letter(col_vessel),
@@ -288,6 +356,58 @@ def build_step1_sheet(wb, ws_raw, raw_rows, n_weeks, period_labels):
     ws.freeze_panes = "E3"
     ws.views.sheetView[0].showGridLines = True
     return ws, col_perhitungan_start, out_row - 1
+
+def append_qty_rupiah_blocks(ws, raw_rows, n_weeks, period_labels, perhitungan_col_start, records, qty_rupiah_by_record):
+    """Tambahkan blok 'QTY (Container -> QTY)' dan 'Rupiah (QTY -> Rupiah)' di
+    sebelah kanan blok Perhitungan (Running Balance) pada sheet
+    '1. Running Balance', mengikuti logika konversi dsp_calculator_conversion.py.
+
+    Ditulis sebagai NILAI STATIS (bukan formula Excel live seperti blok
+    Perhitungan) dengan sengaja -- sheet lookup CBM/Harga Product bisa berisi
+    puluhan ribu baris di file nyata (satu upload user tercatat 51.275 &
+    49.621 baris). SUMIFS/VLOOKUP whole-column terhadap tabel selebar itu untuk
+    setiap sel per-minggu per-baris Raw akan membuat Excel sangat lambat/hang
+    saat recalculate; lookup dict Python menyelesaikan hal yang sama sekali
+    saat generate, jauh lebih murah."""
+    if not raw_rows:
+        return
+    n_cols = n_weeks
+    gap = 10
+    perhitungan_end_col = perhitungan_col_start + n_weeks - 1
+    qty_start_col = perhitungan_end_col + 1 + gap
+    rupiah_start_col = qty_start_col + n_cols + gap
+
+    def write_group_title(start_col, title, fill):
+        end_col = start_col + n_cols - 1
+        ws.merge_cells(start_row=1, start_column=start_col, end_row=1, end_column=end_col)
+        c = ws.cell(row=1, column=start_col, value=title)
+        c.font = BOLD
+        c.alignment = CENTER
+        c.border = BORDER
+        c.fill = fill
+
+    write_group_title(qty_start_col, "QTY (Container -> QTY)", FILL_QTY)
+    write_group_title(rupiah_start_col, "Rupiah (QTY -> Rupiah)", FILL_RUPIAH)
+
+    for w in range(n_weeks):
+        style_header_cell(ws, 2, qty_start_col + w, period_labels[w], FILL_HEADER2)
+        style_header_cell(ws, 2, rupiah_start_col + w, period_labels[w], FILL_HEADER2)
+
+    for out_row, rec in enumerate(records, start=3):
+        qty_series, rupiah_series = qty_rupiah_by_record.get(id(rec), ([None] * n_weeks, [None] * n_weeks))
+        for w in range(n_weeks):
+            qty_val = qty_series[w]
+            rupiah_val = rupiah_series[w]
+            qty_cell = ws.cell(row=out_row, column=qty_start_col + w, value=round(qty_val, 2) if qty_val is not None else None)
+            qty_cell.border = BORDER
+            rupiah_cell = ws.cell(row=out_row, column=rupiah_start_col + w, value=round(rupiah_val, 2) if rupiah_val is not None else None)
+            rupiah_cell.border = BORDER
+            rupiah_cell.number_format = "#,##0"
+
+    for c in range(qty_start_col, qty_start_col + n_weeks):
+        ws.column_dimensions[get_column_letter(c)].width = 12
+    for c in range(rupiah_start_col, rupiah_start_col + n_weeks):
+        ws.column_dimensions[get_column_letter(c)].width = 16
 
 def build_step2_sheet(wb, ws_wh, wh_rows, n_weeks, period_labels, perhitungan_col_start, hasil_last_row):
     sheet_name = "2. Occupancy"
@@ -365,9 +485,9 @@ def build_step3_sheet(wb, ws_raw, raw_rows, n_weeks, period_labels, perhitungan_
             f_target = f"=SUMIFS('Raw'!${raw_col}:${raw_col}, 'Raw'!$B:$B, B{out_row}, 'Raw'!$C:$C, C{out_row})"
             f_harga = f"=SUMIFS('Harga Container'!$D:$D, 'Harga Container'!$B:$B, B{out_row}, 'Harga Container'!$C:$C, C{out_row})"
             f_val = f"=E{out_row} * G{out_row}"
-            # MOS = Value_per_Week / (Target * Harga). Target * Harga is F{out_row} * G{out_row}
-            # Or MOS = Balance / Target => E{out_row} / F{out_row}
-            f_mos = f'=IFERROR(E{out_row} / F{out_row}, 0)'
+            # MOS = Balance / (Target * 4) -- lihat mos_rows di
+            # calculate_mrp_occupancy_from_bytes untuk penjelasan lengkap.
+            f_mos = f'=IFERROR(E{out_row} / (F{out_row} * 4), 0)'
             
             ws.append([idx, cab, grp, week_label, f_balance, f_target, f_harga, f_val, f_mos])
             
@@ -380,7 +500,7 @@ def build_step3_sheet(wb, ws_raw, raw_rows, n_weeks, period_labels, perhitungan_
     ws.views.sheetView[0].showGridLines = True
     return ws
 
-def generate_excel_workbook(wb: Workbook):
+def generate_excel_workbook(wb: Workbook, records=None, qty_rupiah_by_record=None):
     ws_raw, ws_wh = wb["Raw"], wb["WH"]
     n_weeks = detect_week_count(ws_raw)
     raw_rows, wh_rows = get_raw_rows(ws_raw), get_wh_rows(ws_wh)
@@ -390,11 +510,15 @@ def generate_excel_workbook(wb: Workbook):
     for r in wh_rows:
         ws_wh.cell(row=r, column=5, value=f"=C{r}+D{r}")
 
-    _, ht_start, ht_last = build_step1_sheet(wb, ws_raw, raw_rows, n_weeks, period_labels)
+    ws_step1, ht_start, ht_last = build_step1_sheet(wb, ws_raw, raw_rows, n_weeks, period_labels)
+
+    if records is not None and qty_rupiah_by_record is not None and len(records) == len(raw_rows):
+        append_qty_rupiah_blocks(ws_step1, raw_rows, n_weeks, period_labels, ht_start, records, qty_rupiah_by_record)
+
     build_step2_sheet(wb, ws_wh, wh_rows, n_weeks, period_labels, ht_start, ht_last)
     build_step3_sheet(wb, ws_raw, raw_rows, n_weeks, period_labels, ht_start)
 
-    order = ["Raw", "WH", "Harga Container", "1. Running Balance", "2. Occupancy", "3. Harga & MOS"]
+    order = ["Raw", "WH", "Harga Container", "CBM", "Harga Product", "1. Running Balance", "2. Occupancy", "3. Harga & MOS"]
     wb._sheets.sort(key=lambda s: order.index(s.title) if s.title in order else 999)
     return wb, period_labels, week_awal, n_weeks
 
@@ -530,6 +654,25 @@ def calculate_mrp_occupancy_from_bytes(file_bytes: bytes) -> dict:
                 if cab and grp:
                     harga_dict[(cab, grp)] = hrg
 
+    # Sheet CBM & Harga Product (key: Cabang+Category) -- dipakai untuk konversi
+    # Container -> QTY -> Rupiah, sama seperti dsp_calculator_conversion.py.
+    def _read_lookup_sheet(sheet_name):
+        lookup = {}
+        if sheet_name not in wb_data.sheetnames:
+            return lookup
+        ws = wb_data[sheet_name]
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            if len(row) >= 4:
+                cab = str(row[1]).strip() if row[1] else ""
+                cat = str(row[2]).strip() if row[2] else ""
+                val = _safe_float(row[3])
+                if cab and cat:
+                    lookup[(cab, cat)] = val
+        return lookup
+
+    cbm_dict = _read_lookup_sheet("CBM")
+    harga_product_dict = _read_lookup_sheet("Harga Product")
+
     bal_t, ratio_t = {}, {}
     for rec in records:
         bt = compute_balance_series(rec, n_weeks)
@@ -537,6 +680,29 @@ def calculate_mrp_occupancy_from_bytes(file_bytes: bytes) -> dict:
         ratio_t[id(rec)] = compute_ratio_series(bt, rec, n_weeks)
 
     occ_t = compute_occupancy(records, bal_t, wh_capacity)
+
+    # Konversi Container -> QTY -> Rupiah per record (per Cabang+Grup+Category),
+    # lalu diagregasi per cabang untuk ditampilkan di dashboard, dan disimpan
+    # per-record untuk dituliskan ke sheet "1. Running Balance" hasil Excel.
+    qty_rupiah_by_record = {}
+    qty_series_by_branch, value_series_by_branch = {}, {}
+    for rec in records:
+        qty_series, rupiah_series = compute_qty_rupiah_series(
+            rec.cabang, rec.category, bal_t[id(rec)], n_weeks, cbm_dict, harga_product_dict
+        )
+        qty_rupiah_by_record[id(rec)] = (qty_series, rupiah_series)
+
+        qty_acc = qty_series_by_branch.setdefault(rec.cabang, [0.0] * n_weeks)
+        value_acc = value_series_by_branch.setdefault(rec.cabang, [0.0] * n_weeks)
+        for w in range(n_weeks):
+            if qty_series[w] is not None:
+                qty_acc[w] += qty_series[w]
+            if rupiah_series[w] is not None:
+                value_acc[w] += rupiah_series[w]
+
+    # Fitur 3: MOS berbasis Value (AA = Target QTY x Harga Product x 4, SUM per
+    # cabang per minggu, lalu Value(Rp) / SUM(AA)) -- lihat compute_mos_value_series_by_branch.
+    mos_value_series_by_branch = compute_mos_value_series_by_branch(records, n_weeks, cbm_dict, harga_product_dict, value_series_by_branch)
 
     # B.5: Implementasi MOS
     # TAHAP 5.a: Agregasi Hasil Target
@@ -552,7 +718,6 @@ def calculate_mrp_occupancy_from_bytes(file_bytes: bytes) -> dict:
             agg_bal_t[key][w] += bt[w]
             agg_target[key][w] += rec.target[w]
 
-    print("AGG_BAL_T:", agg_bal_t)
     mos_rows = []
     for (cab, grp), bals in agg_bal_t.items():
         harga = harga_dict.get((cab, grp), 0.0)
@@ -563,11 +728,11 @@ def calculate_mrp_occupancy_from_bytes(file_bytes: bytes) -> dict:
             nilai_inventory = val_perhitungan * harga
             
             # TAHAP 5.d: Kalkulasi Final MOS
+            # MOS = Balance / (Target * 4). Fallback ke 0 saat (Target * 4) = 0
+            # (Target = 0), supaya pembagian oleh nol tidak melempar exception.
             val_target = targs[w]
-            if val_target == 0:
-                mos = 0.0
-            else:
-                mos = (val_perhitungan * harga) / (val_target * harga) if harga != 0 else (val_perhitungan / val_target)
+            target_x4 = val_target * 4
+            mos = (val_perhitungan / target_x4) if target_x4 != 0 else 0.0
             
             mos_rows.append({
                 "Cabang": cab,
@@ -597,7 +762,7 @@ def calculate_mrp_occupancy_from_bytes(file_bytes: bytes) -> dict:
     ], insights, period_labels, week_awal)
 
     wb_form = load_workbook(io.BytesIO(file_bytes), data_only=False)
-    wb_form, _, _, _ = generate_excel_workbook(wb_form)
+    wb_form, _, _, _ = generate_excel_workbook(wb_form, records=records, qty_rupiah_by_record=qty_rupiah_by_record)
             
     out_buf = io.BytesIO()
     wb_form.save(out_buf)
@@ -662,6 +827,14 @@ def calculate_mrp_occupancy_from_bytes(file_bytes: bytes) -> dict:
             "excel_base64": excel_base64,
             "insights_list": insights,
             "occupancy_series_target": {str(k): [round(v * 100, 2) if v is not None else 0 for v in val] for k, val in occ_t.items()},
+            # Konversi Container -> QTY -> Rupiah (lookup CBM & Harga Product per
+            # Cabang+Category), diagregasi per cabang per minggu -- dipakai untuk
+            # tabel "Analisa Nilai Inventori (QTY & Value)" di dashboard.
+            "qty_series_by_branch": {str(k): [round(v, 2) for v in val] for k, val in qty_series_by_branch.items()},
+            "value_series_by_branch": {str(k): [round(v, 2) for v in val] for k, val in value_series_by_branch.items()},
+            # Fitur 3: MOS berbasis Value, per cabang per minggu -- ditampilkan
+            # tepat di bawah baris "Value (Rp)" pada tabel Analisa Nilai Inventori.
+            "mos_value_series_by_branch": {str(k): v for k, v in mos_value_series_by_branch.items()},
         },
     }
 
@@ -669,7 +842,7 @@ def calculate_mrp_occupancy_from_bytes(file_bytes: bytes) -> dict:
 def generate_mrp_template_bytes() -> bytes:
     """
     Menghasilkan file Excel template resmi MRP Occupancy & Inventory Projector
-    lengkap dengan sheet 'Raw' (blok 4 kolom per minggu [TO, Vessel, Forecast, Target])
+    lengkap dengan sheet 'Raw' (blok 4 kolom per minggu [TO, Vessel, Buffer, Target])
     dan sheet 'WH' (Kapasitas & Week Awal).
     """
     wb = Workbook()
@@ -698,7 +871,7 @@ def generate_mrp_template_bytes() -> bytes:
         base_c = col_start_week + (w * 4)
         style_header_cell(ws_raw, 2, base_c, "TO", FILL_HEADER2)
         style_header_cell(ws_raw, 2, base_c + 1, "Vessel", FILL_HEADER2)
-        style_header_cell(ws_raw, 2, base_c + 2, "Forecast", FILL_HEADER2)
+        style_header_cell(ws_raw, 2, base_c + 2, "Buffer", FILL_HEADER2)
         style_header_cell(ws_raw, 2, base_c + 3, "Target", FILL_HEADER2)
 
     sample_raw = [

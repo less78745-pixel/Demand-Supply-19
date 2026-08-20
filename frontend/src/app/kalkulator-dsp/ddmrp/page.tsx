@@ -272,9 +272,10 @@ export default function DDMRPPage() {
     }
   };
 
-  // ── Offline HTML export config: full SKU result set (not the live-narrowed
-  // filterCabang/filterKategori/filterSku selection) flattened into a stable
-  // row shape so the exported file's own filters can range over every SKU. ──
+  // ── Offline HTML export config: SKU result set flattened into a stable row
+  // shape, then narrowed to the same filterCabang/filterKategori/filterSku
+  // selection that drives the on-screen results below, so the exported file
+  // matches what the user is actually looking at. ──
   const skuRowsAll = useMemo(() => {
     const dataArray: any[] = results?.results || (results ? [results] : []);
     return dataArray.map((res: any) => ({
@@ -296,24 +297,46 @@ export default function DDMRPPage() {
     }));
   }, [results]);
 
-  const orderNeededSkus = useMemo(() => skuRowsAll.filter((r) => r.urgency !== 'low'), [skuRowsAll]);
-  const overstockSkus = useMemo(() => skuRowsAll.filter((r) => r.urgency === 'low'), [skuRowsAll]);
+  const filteredSkuRows = useMemo(() => {
+    return skuRowsAll.filter((r) => {
+      if (!filterCabang.includes('All') && !filterCabang.includes(r.cabang)) return false;
+      if (!filterKategori.includes('All') && !filterKategori.includes(r.kategori)) return false;
+      if (!filterSku.includes('All') && !filterSku.includes(r.label)) return false;
+      return true;
+    });
+  }, [skuRowsAll, filterCabang, filterKategori, filterSku]);
+
+  const orderNeededSkus = useMemo(() => filteredSkuRows.filter((r) => r.urgency !== 'low'), [filteredSkuRows]);
+  const overstockSkus = useMemo(() => filteredSkuRows.filter((r) => r.urgency === 'low'), [filteredSkuRows]);
+
+  const contextualCabangOptions = useMemo(
+    () => Array.from(new Set(filteredSkuRows.map((r) => r.cabang))).filter((c) => c && c !== 'N/A'),
+    [filteredSkuRows]
+  );
+  const contextualKategoriOptions = useMemo(
+    () => Array.from(new Set(filteredSkuRows.map((r) => r.kategori))).filter((c) => c && c !== 'N/A'),
+    [filteredSkuRows]
+  );
+  const contextualSkuOptions = useMemo(
+    () => Array.from(new Set(filteredSkuRows.map((r) => r.label))),
+    [filteredSkuRows]
+  );
 
   const exportConfig: ModuleExportConfig | undefined = results ? {
     moduleName: 'DDMRP_Buffer',
     processedAt: results.processed_at,
     domElementId: 'export-container',
     filters: [
-      { field: 'cabang', label: 'Filter Cabang', options: Array.from(new Set(skuRowsAll.map((r) => r.cabang))).filter((c) => c && c !== 'N/A') },
-      { field: 'kategori', label: 'Filter Kategori', options: Array.from(new Set(skuRowsAll.map((r) => r.kategori))).filter((c) => c && c !== 'N/A') },
-      { field: 'label', label: 'Filter SKU', options: Array.from(new Set(skuRowsAll.map((r) => r.label))) },
+      { field: 'cabang', label: 'Filter Cabang', options: contextualCabangOptions },
+      { field: 'kategori', label: 'Filter Kategori', options: contextualKategoriOptions },
+      { field: 'label', label: 'Filter SKU', options: contextualSkuOptions },
     ],
     tables: [
       {
         id: 'sku_buffer',
-        title: 'Buffer DDMRP per SKU (Semua Cabang & Kategori)',
+        title: 'Buffer DDMRP per SKU (Mengikuti Filter Aktif di Layar)',
         filterFields: ['cabang', 'kategori', 'label'],
-        data: skuRowsAll,
+        data: filteredSkuRows,
         columns: [
           { key: 'label', label: 'SKU' },
           { key: 'cabang', label: 'Cabang' },

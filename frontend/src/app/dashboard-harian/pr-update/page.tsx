@@ -340,7 +340,12 @@ const syncToTrackingContainer = async (parsed: ParsedData) => {
     .map((row, index) => {
       const no = String(row[colCont]).trim().toUpperCase();
       const carrierRaw = colCarrier ? String(row[colCarrier] || '') : '';
-      const blVal = colBl ? String(row[colBl] || '') : '';
+      // isEmptyDocVal (defined in the main component below) also treats the
+      // literal "(blank)" placeholder text as empty -- this standalone sync
+      // helper duplicates just that one check so it doesn't leak "(blank)"
+      // as a literal BL value into the tracking container list.
+      const blRaw = colBl ? String(row[colBl] || '').trim() : '';
+      const blVal = /^\(?\s*blank\s*\)?$/i.test(blRaw) ? '' : blRaw;
       const info = getDirectTrackingUrl(no, carrierRaw);
       return {
         id: 'sync-' + Date.now() + '-' + index,
@@ -1086,7 +1091,21 @@ export default function PRUpdatePage() {
 
   function isEmptyDocVal(v: any): boolean {
     const s = String(v ?? '').trim();
-    return !s || s === '-' || s === '0' || s.toUpperCase() === 'N/A' || s.toUpperCase() === '#N/A';
+    if (!s || s === '-' || s === '0') return true;
+    const su = s.toUpperCase();
+    if (su === 'N/A' || su === '#N/A') return true;
+    // Real uploads showed two placeholder patterns typed directly INTO a
+    // document-number cell instead of leaving it blank, which silently broke
+    // every PR->PO->PI->BL gap count (they all read as "document already
+    // exists"): literal "(blank)" (an Excel/PivotTable export artifact, seen
+    // filling 100% of the BL column) and status phrases like "PO On Process"
+    // typed straight into the PO column itself (not the Status Compile column
+    // -- that one just says "ON PROCESS" with no PO/PI/BL prefix, so matching
+    // only there never catches this). Treat both as empty everywhere a doc
+    // column is checked, for any of the four doc types (PR/PO/PI/BL).
+    if (/^\(?\s*BLANK\s*\)?$/.test(su)) return true;
+    if (/^(PR|PO|PI|BL)\s*(ON\s*PROCESS|SEDANG\s*PROSES|BELUM\s*RELEASE|BELUM\s*ADA|BELUM\s*TERBIT|PENDING)\b/.test(su)) return true;
+    return false;
   }
 
   function countDistinctField(rows: any[], col?: string): number {
@@ -1529,6 +1548,31 @@ export default function PRUpdatePage() {
     [leadTimeRawNormalized]
   );
 
+  // Contextual filter options for the offline HTML export - derived from
+  // `normalizedFiltered` itself (the exact array used as `pr_detail.data`
+  // below), not from the raw dataset or the cross-linked-but-partial
+  // `cabangs`/`categories`/`etas`/`statusCompiles` selector-option lists
+  // above (those intentionally ignore some of the active filters so the
+  // on-screen dropdowns stay usable for multi-select). Without this, the
+  // exported HTML's own re-filter UI could offer values that don't even
+  // exist in the exported subset.
+  const contextualCabangOptions = useMemo(
+    () => Array.from(new Set(normalizedFiltered.map((r) => r.cabang))).filter((v) => v && v !== '-').sort() as string[],
+    [normalizedFiltered]
+  );
+  const contextualCategoryOptions = useMemo(
+    () => Array.from(new Set(normalizedFiltered.map((r) => r.category))).filter((v) => v && v !== '-').sort() as string[],
+    [normalizedFiltered]
+  );
+  const contextualEtaOptions = useMemo(
+    () => Array.from(new Set(normalizedFiltered.map((r) => r.eta))).filter((v) => v && v !== '-').sort() as string[],
+    [normalizedFiltered]
+  );
+  const contextualStatusOptions = useMemo(
+    () => Array.from(new Set(normalizedFiltered.map((r) => r.status))).filter((v) => v && v !== '-').sort() as string[],
+    [normalizedFiltered]
+  );
+
   const exportConfig: ModuleExportConfig | undefined = parsed ? {
     moduleName: 'PR_Update_Lead_Time',
     processedAt: parsed.processed_at,
@@ -1536,10 +1580,10 @@ export default function PRUpdatePage() {
     filters: activeTab === 'lead_time'
       ? [{ field: 'branch', label: 'Filter Cabang', options: leadTimeBranches }]
       : [
-          { field: 'cabang', label: 'Filter Cabang', options: cabangs.filter((c) => c !== 'All') },
-          { field: 'category', label: 'Filter Kategori/Grup', options: categories.filter((c) => c !== 'All') },
-          { field: 'eta', label: 'Filter Week ETA', options: etas.filter((e) => e !== 'All') },
-          { field: 'status', label: 'Filter Status Compile', options: statusCompiles.filter((s) => s !== 'All') },
+          { field: 'cabang', label: 'Filter Cabang', options: contextualCabangOptions },
+          { field: 'category', label: 'Filter Kategori/Grup', options: contextualCategoryOptions },
+          { field: 'eta', label: 'Filter Week ETA', options: contextualEtaOptions },
+          { field: 'status', label: 'Filter Status Compile', options: contextualStatusOptions },
         ],
     tables: activeTab === 'lead_time'
       ? [{

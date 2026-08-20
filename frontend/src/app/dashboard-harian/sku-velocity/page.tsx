@@ -840,15 +840,36 @@ export default function SKUVelocityPage() {
   const deadStockItems = useMemo(() => analyzedData.filter((r) => r.analysisStatus.includes('Discontinue')), [analyzedData]);
   const risingStarItems = useMemo(() => analyzedData.filter((r) => r.analysisStatus.includes('Fast')), [analyzedData]);
 
+  // Re-filter UI options for the offline export must reflect only the values
+  // present in analyzedData (the already-filtered/on-screen dataset), not the
+  // full raw dataset, so the exported HTML's own filters never offer values
+  // that aren't even present in the exported subset.
+  const contextualBulanOptions = useMemo(
+    () => Array.from(new Set<string>(analyzedData.map((d: any) => d['BULAN']))).filter(Boolean).sort(),
+    [analyzedData]
+  );
+  const contextualCabangOptions = useMemo(
+    () => Array.from(new Set<string>(analyzedData.map((d: any) => d['Branch Name']))).filter(Boolean).sort(),
+    [analyzedData]
+  );
+  const contextualCategoryOptions = useMemo(
+    () => Array.from(new Set<string>(analyzedData.map((d: any) => d['Category']))).filter(Boolean).sort(),
+    [analyzedData]
+  );
+  const contextualStatusOptions = useMemo(
+    () => Array.from(new Set<string>(analyzedData.map((d: any) => d['Status Product']))).filter(Boolean).sort(),
+    [analyzedData]
+  );
+
   const exportConfig: ModuleExportConfig | undefined = parsed ? {
     moduleName: 'SKU_Velocity_Insights',
     processedAt: parsed.processed_at,
     domElementId: 'export-container',
     filters: [
-      { field: 'BULAN', label: 'Filter Bulan', options: bulans.filter((b) => b !== 'All') },
-      { field: 'Branch Name', label: 'Filter Cabang', options: cabangs.filter((c) => c !== 'All') },
-      { field: 'Category', label: 'Filter Kategori', options: categories.filter((c) => c !== 'All') },
-      { field: 'Status Product', label: 'Filter Status Product', options: statuses.filter((s) => s !== 'All') },
+      { field: 'BULAN', label: 'Filter Bulan', options: contextualBulanOptions },
+      { field: 'Branch Name', label: 'Filter Cabang', options: contextualCabangOptions },
+      { field: 'Category', label: 'Filter Kategori', options: contextualCategoryOptions },
+      { field: 'Status Product', label: 'Filter Status Product', options: contextualStatusOptions },
     ],
     tables: [
       {
