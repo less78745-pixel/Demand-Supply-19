@@ -15,6 +15,7 @@ import { getStandardFilename } from '@/utils/export';
 import { ExportHtmlButton } from '@/components/ui/ExportHtmlButton';
 import { ModuleExportConfig } from '@/utils/offlineExport';
 import { supabase } from '@/lib/supabase';
+import { useColumnFilters, FilterableHeader } from '@/components/ui/ColumnFilterDropdown';
 
 // recharts pulls in ~150KB of d3 submodules; this chart only ever renders
 // after a file has been processed, so defer it out of the initial route bundle.
@@ -372,39 +373,6 @@ export default function OccupancyPage() {
     toast.success('Data Hasil Pengolahan Lengkap berhasil diekspor!');
   };
 
-  const handleExportWorkspace = () => {
-    if (!results) {
-      toast.error('Tidak ada data untuk disimpan!');
-      return;
-    }
-    const workspace = { results };
-    const blob = new Blob([JSON.stringify(workspace)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `workspace_dsp_${new Date().toISOString().split('T')[0]}.dsp`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success('Workspace berhasil diunduh! Anda dapat menyimpannya di Google Drive.');
-  };
-
-  const handleImportWorkspace = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const data = JSON.parse(event.target?.result as string);
-        if (data.results) setResults(data.results);
-        toast.success('Workspace berhasil dimuat! Sesi dipulihkan.');
-      } catch (err) {
-        toast.error('File .dsp tidak valid atau rusak!');
-      }
-    };
-    reader.readAsText(file);
-    e.target.value = '';
-  };
-
   // ── Dropdown options ──
   const cabangs = useMemo(() => {
     if (!results?.daily_data) return [];
@@ -518,6 +486,44 @@ export default function OccupancyPage() {
 
   const mrpData = results?.mrp_results || results?.ddmrp_results;
 
+  // ── Column filters: "Analisa & Grafik MRP" (Komparasi Occupancy Mingguan) table ──
+  const mrpCabangRows = useMemo(
+    () => Object.keys(mrpData?.occupancy_series_target || {})
+      .filter((cabang) => selectedCabang.includes('All') || selectedCabang.includes(cabang)),
+    [mrpData, selectedCabang]
+  );
+  const mrpColumnDefs = useMemo(() => {
+    const defs: Array<{ key: string; type: 'select' | 'number'; getValue: (cabang: string) => string | number }> = [
+      { key: 'cabang', type: 'select', getValue: (cabang: string) => cabang },
+    ];
+    (mrpData?.period_labels || []).forEach((_label: string, i: number) => {
+      defs.push({
+        key: `week_${i}`,
+        type: 'number',
+        getValue: (cabang: string) => Number(mrpData?.occupancy_series_target?.[cabang]?.[i] ?? 0),
+      });
+    });
+    return defs;
+  }, [mrpData]);
+  const mrpTableFilters = useColumnFilters(mrpCabangRows, mrpColumnDefs);
+
+  // ── Column filters: "Sheet Harga Container & Kalkulasi MOS" table ──
+  const mosBaseRows = useMemo(
+    () => (results?.mos_data || []).filter((row: any) => selectedCabang.includes('All') || selectedCabang.includes(row.Cabang)),
+    [results, selectedCabang]
+  );
+  const mosColumnDefs = useMemo(() => ([
+    { key: 'Cabang', type: 'select' as const, getValue: (r: any) => r.Cabang },
+    { key: 'Grup', type: 'select' as const, getValue: (r: any) => r.Grup },
+    { key: 'Week', type: 'select' as const, getValue: (r: any) => r.Week },
+    { key: 'Balance', type: 'number' as const, getValue: (r: any) => Number(r.Balance) },
+    { key: 'Target', type: 'number' as const, getValue: (r: any) => Number(r.Target) },
+    { key: 'Harga', type: 'number' as const, getValue: (r: any) => Number(r.Harga) },
+    { key: 'Value_per_Week', type: 'number' as const, getValue: (r: any) => Number(r.Value_per_Week) },
+    { key: 'MOS', type: 'number' as const, getValue: (r: any) => Number(r.MOS) },
+  ]), []);
+  const mosTableFilters = useColumnFilters(mosBaseRows, mosColumnDefs);
+
   // ── Offline HTML export config: full raw dataset (not the live-narrowed
   // filteredData) so the exported file's own filters can range over everything,
   // not just whatever cabang/date/scenario was selected at export time. ──
@@ -605,16 +611,6 @@ export default function OccupancyPage() {
 
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 shrink-0">
             <TimestampBadge timestamp={results?.processed_at} label="Olah Terakhir:" />
-            <label className="no-export w-full sm:w-auto px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2 cursor-pointer shadow-sm">
-              <Download className="w-4 h-4 rotate-180" /> Buka Sesi (.dsp)
-              <input type="file" accept=".dsp,.json" className="hidden" onChange={handleImportWorkspace} />
-            </label>
-            <button
-              onClick={handleExportWorkspace}
-              className="no-export w-full sm:w-auto px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white border border-indigo-500 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2 shadow-md"
-            >
-              <Download className="w-4 h-4" /> Simpan Sesi
-            </button>
             {exportConfig
               ? <ExportHtmlButton config={exportConfig} moduleName="Occupancy_Analisa" processedAt={results?.processed_at} />
               : <ExportHtmlButton elementId="export-container" moduleName="Occupancy_Analisa" processedAt={results?.processed_at} />}
@@ -1090,17 +1086,32 @@ export default function OccupancyPage() {
                     <table className="w-full text-xs text-left text-foreground">
                       <thead className="bg-white text-foreground uppercase font-extrabold border-b border-border tracking-wider">
                         <tr>
-                          <th className="py-3.5 px-4">Cabang</th>
+                          <FilterableHeader
+                            label="Cabang"
+                            columnKey="cabang"
+                            type="select"
+                            className="py-3.5 px-4"
+                            options={mrpTableFilters.uniqueValuesByKey['cabang']}
+                            activeFilter={mrpTableFilters.filters['cabang']}
+                            onChange={(v) => mrpTableFilters.setFilter('cabang', v)}
+                          />
                           <th className="py-3.5 px-4 text-center">Skenario</th>
                           {mrpData.period_labels?.map((label: string, i: number) => (
-                            <th key={i} className="py-3.5 px-3 text-right">{label}</th>
+                            <FilterableHeader
+                              key={i}
+                              label={label}
+                              columnKey={`week_${i}`}
+                              type="number"
+                              align="right"
+                              className="py-3.5 px-3"
+                              activeFilter={mrpTableFilters.filters[`week_${i}`]}
+                              onChange={(v) => mrpTableFilters.setFilter(`week_${i}`, v)}
+                            />
                           ))}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/5 font-medium">
-                        {Object.keys(mrpData.occupancy_series_target || {})
-                          .filter((cabang) => selectedCabang.includes('All') || selectedCabang.includes(cabang))
-                          .map((cabang) => {
+                        {mrpTableFilters.filteredData.map((cabang) => {
                           const tVals = mrpData.occupancy_series_target?.[cabang] || [];
                           return (
                             <React.Fragment key={cabang}>
@@ -1176,20 +1187,29 @@ export default function OccupancyPage() {
                 <table className="w-full text-xs text-left text-muted-foreground">
                   <thead className="bg-card/80 text-cyan-300 uppercase font-extrabold border-b border-border tracking-wider">
                     <tr>
-                      <th className="py-2.5 px-4 font-semibold">Cabang</th>
-                      <th className="py-2.5 px-4 font-semibold">Grup</th>
-                      <th className="py-2.5 px-4 font-semibold text-center">Week</th>
-                      <th className="py-2.5 px-4 font-semibold text-right">Balance</th>
-                      <th className="py-2.5 px-4 font-semibold text-right">Target</th>
-                      <th className="py-2.5 px-4 font-semibold text-right">Harga</th>
-                      <th className="py-2.5 px-4 font-semibold text-right">Value per Week</th>
-                      <th className="py-2.5 px-4 font-semibold text-right rounded-tr-lg">MOS</th>
+                      <FilterableHeader label="Cabang" columnKey="Cabang" type="select" className="py-2.5 px-4 font-semibold"
+                        options={mosTableFilters.uniqueValuesByKey['Cabang']} activeFilter={mosTableFilters.filters['Cabang']}
+                        onChange={(v) => mosTableFilters.setFilter('Cabang', v)} />
+                      <FilterableHeader label="Grup" columnKey="Grup" type="select" className="py-2.5 px-4 font-semibold"
+                        options={mosTableFilters.uniqueValuesByKey['Grup']} activeFilter={mosTableFilters.filters['Grup']}
+                        onChange={(v) => mosTableFilters.setFilter('Grup', v)} />
+                      <FilterableHeader label="Week" columnKey="Week" type="select" align="center" className="py-2.5 px-4 font-semibold"
+                        options={mosTableFilters.uniqueValuesByKey['Week']} activeFilter={mosTableFilters.filters['Week']}
+                        onChange={(v) => mosTableFilters.setFilter('Week', v)} />
+                      <FilterableHeader label="Balance" columnKey="Balance" type="number" align="right" className="py-2.5 px-4 font-semibold"
+                        activeFilter={mosTableFilters.filters['Balance']} onChange={(v) => mosTableFilters.setFilter('Balance', v)} />
+                      <FilterableHeader label="Target" columnKey="Target" type="number" align="right" className="py-2.5 px-4 font-semibold"
+                        activeFilter={mosTableFilters.filters['Target']} onChange={(v) => mosTableFilters.setFilter('Target', v)} />
+                      <FilterableHeader label="Harga" columnKey="Harga" type="number" align="right" className="py-2.5 px-4 font-semibold"
+                        activeFilter={mosTableFilters.filters['Harga']} onChange={(v) => mosTableFilters.setFilter('Harga', v)} />
+                      <FilterableHeader label="Value per Week" columnKey="Value_per_Week" type="number" align="right" className="py-2.5 px-4 font-semibold"
+                        activeFilter={mosTableFilters.filters['Value_per_Week']} onChange={(v) => mosTableFilters.setFilter('Value_per_Week', v)} />
+                      <FilterableHeader label="MOS" columnKey="MOS" type="number" align="right" className="py-2.5 px-4 font-semibold rounded-tr-lg"
+                        activeFilter={mosTableFilters.filters['MOS']} onChange={(v) => mosTableFilters.setFilter('MOS', v)} />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {results.mos_data
-                      .filter((row: any) => selectedCabang.includes('All') || selectedCabang.includes(row.Cabang))
-                      .map((row: any, i: number) => (
+                    {mosTableFilters.filteredData.map((row: any, i: number) => (
                       <tr key={i} className="hover:bg-muted/30 transition">
                         <td className="py-2.5 px-4 font-medium">{row.Cabang}</td>
                         <td className="py-2.5 px-4">{row.Grup}</td>

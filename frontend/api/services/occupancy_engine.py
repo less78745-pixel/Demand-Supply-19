@@ -303,7 +303,16 @@ def build_step2_sheet(wb, ws_wh, wh_rows, n_weeks, period_labels, perhitungan_co
         row_vals = [f"=WH!A{wh_row}", f"=WH!B{wh_row}"]
         for w in range(n_weeks):
             col_letter = perhitungan_col_letters[w]
-            formula = f"=IFERROR(IF(WH!$E{wh_row}=0,0,SUMIF('1. Running Balance'!$B$3:$B${hasil_last_row},$B{out_row},'1. Running Balance'!${col_letter}$3:${col_letter}${hasil_last_row})/WH!$E{wh_row}),0)"
+            # SUMPRODUCT (bukan SUMIF) supaya balance negatif (shortage) di-floor ke 0
+            # sebelum dijumlahkan -- meniru persis `max(0.0, bals[w])` di compute_occupancy()
+            # (baris ~206) sehingga sheet ini konsisten dengan angka dashboard/API.
+            rng_cabang = f"'1. Running Balance'!$B$3:$B${hasil_last_row}"
+            rng_val = f"'1. Running Balance'!${col_letter}$3:${col_letter}${hasil_last_row}"
+            formula = (
+                f"=IFERROR(IF(WH!$E{wh_row}=0,0,"
+                f"SUMPRODUCT(({rng_cabang}=$B{out_row})*({rng_val}>0)*{rng_val})"
+                f"/WH!$E{wh_row}),0)"
+            )
             row_vals.append(formula)
         ws.append(row_vals)
         for w in range(n_weeks):
@@ -668,6 +677,8 @@ def generate_mrp_template_bytes() -> bytes:
     ws_raw.title = "Raw"
     ws_wh = wb.create_sheet("WH")
     ws_harga = wb.create_sheet("Harga Container")
+    ws_cbm = wb.create_sheet("CBM")
+    ws_harga_product = wb.create_sheet("Harga Product")
 
     n_weeks = 6
     col_start_week = 6  # Kolom F (1-indexed = 6)
@@ -776,6 +787,55 @@ def generate_mrp_template_bytes() -> bytes:
     ws_harga.column_dimensions["B"].width = 15
     ws_harga.column_dimensions["C"].width = 15
     ws_harga.column_dimensions["D"].width = 18
+
+    # B.5: Template CBM (lookup volume per unit, key = Cabang + Category --
+    # skema ini disamakan persis dengan build_lookup_cbm() di
+    # dsp_calculator_conversion.py: kolom "Nilai" dipakai sebagai lookup value
+    # saat konversi Container -> QTY, Cabang+Category adalah kunci merge-nya)
+    cbm_headers = ["No", "Cabang", "Category", "Nilai"]
+    for i, h in enumerate(cbm_headers, start=1):
+        style_header_cell(ws_cbm, 1, i, h, FILL_HEADER2)
+
+    sample_cbm = [
+        [1, "DC Jakarta", "Beverages", 0.015],
+        [2, "DC Surabaya", "Gadgets", 0.008],
+        [3, "DC Medan", "Fashion Casual", 0.004],
+        [4, "DC Makassar", "Spareparts", 0.020],
+    ]
+    for row_idx, row_data in enumerate(sample_cbm, start=2):
+        for col_idx, val in enumerate(row_data, start=1):
+            cell = ws_cbm.cell(row=row_idx, column=col_idx, value=val)
+            cell.border = BORDER
+
+    ws_cbm.column_dimensions["A"].width = 6
+    ws_cbm.column_dimensions["B"].width = 15
+    ws_cbm.column_dimensions["C"].width = 16
+    ws_cbm.column_dimensions["D"].width = 14
+
+    # B.6: Template Harga Product (lookup harga per unit, key = Cabang + Category --
+    # skema ini disamakan persis dengan build_lookup_harga_product() di
+    # dsp_calculator_conversion.py: kolom "Nilai" dipakai sebagai lookup value
+    # saat konversi QTY -> Rupiah. Berbeda dari sheet "Harga Container" di atas
+    # yang granularitasnya Cabang + Grup saja untuk kebutuhan sheet "3. Harga & MOS")
+    harga_product_headers = ["No", "Cabang", "Category", "Nilai"]
+    for i, h in enumerate(harga_product_headers, start=1):
+        style_header_cell(ws_harga_product, 1, i, h, FILL_HEADER2)
+
+    sample_harga_product = [
+        [1, "DC Jakarta", "Beverages", 15000],
+        [2, "DC Surabaya", "Gadgets", 25000000],
+        [3, "DC Medan", "Fashion Casual", 120000],
+        [4, "DC Makassar", "Spareparts", 850000],
+    ]
+    for row_idx, row_data in enumerate(sample_harga_product, start=2):
+        for col_idx, val in enumerate(row_data, start=1):
+            cell = ws_harga_product.cell(row=row_idx, column=col_idx, value=val)
+            cell.border = BORDER
+
+    ws_harga_product.column_dimensions["A"].width = 6
+    ws_harga_product.column_dimensions["B"].width = 15
+    ws_harga_product.column_dimensions["C"].width = 16
+    ws_harga_product.column_dimensions["D"].width = 14
 
     out_buf = io.BytesIO()
     wb.save(out_buf)
