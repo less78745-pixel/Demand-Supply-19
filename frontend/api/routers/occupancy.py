@@ -148,7 +148,8 @@ async def _offload_excel_to_storage(results: dict, path_hint: str) -> dict:
             resp.raise_for_status()
         mrp["excel_base64"] = None
         mrp["excel_storage_path"] = path_hint
-    except Exception:
+    except Exception as exc:
+        print(f"[WARN] _offload_excel_to_storage GAGAL upload ke {path_hint}: {type(exc).__name__}: {exc}")
         traceback.print_exc()
 
     return results
@@ -163,20 +164,45 @@ async def download_occupancy_excel(path: str):
     if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
         raise HTTPException(status_code=500, detail="Supabase Storage belum dikonfigurasi di backend")
 
-    sign_url = f"{SUPABASE_URL}/storage/v1/object/sign/{DSP_RESULT_BUCKET}/{path}"
-    headers = {"Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}", "apikey": SUPABASE_SERVICE_ROLE_KEY}
-    async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=10.0)) as client:
-        resp = await client.post(sign_url, headers=headers, json={"expiresIn": 300})
-        if resp.status_code == 404:
-            raise HTTPException(status_code=404, detail="File Excel hasil olahan tidak ditemukan (mungkin sudah dihapus).")
-        resp.raise_for_status()
-        signed_path = resp.json().get("signedURL")
+    try:
+        sign_url = f"{SUPABASE_URL}/storage/v1/object/sign/{DSP_RESULT_BUCKET}/{path}"
+        headers = {"Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}", "apikey": SUPABASE_SERVICE_ROLE_KEY}
+        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=10.0)) as client:
+            resp = await client.post(sign_url, headers=headers, json={"expiresIn": 300})
 
-    if not signed_path:
-        raise HTTPException(status_code=500, detail="Gagal membuat signed URL untuk file Excel")
+            # Supabase Storage returns 400 (not 404) for missing objects with body
+            # {"statusCode":"404","error":"not_found","message":"Object not found",...}
+            if resp.status_code in (400, 404):
+                # Try to parse the body for a clearer message
+                try:
+                    body = resp.json()
+                    err_msg = body.get("message") or body.get("error", "")
+                except Exception:
+                    err_msg = ""
+                if "not_found" in str(err_msg).lower() or "not found" in str(err_msg).lower() or "nosuchkey" in resp.text.lower():
+                    raise HTTPException(
+                        status_code=404,
+                        detail="File Excel hasil olahan tidak ditemukan di Storage (mungkin sudah dihapus atau upload gagal)."
+                    )
+                raise HTTPException(
+                    status_code=resp.status_code,
+                    detail=f"Supabase Storage error: {err_msg or resp.text[:200]}"
+                )
 
-    full_url = f"{SUPABASE_URL}/storage/v1{signed_path}" if signed_path.startswith("/") else signed_path
-    return RedirectResponse(full_url)
+            resp.raise_for_status()
+            signed_path = resp.json().get("signedURL")
+
+        if not signed_path:
+            raise HTTPException(status_code=500, detail="Gagal membuat signed URL untuk file Excel")
+
+        full_url = f"{SUPABASE_URL}/storage/v1{signed_path}" if signed_path.startswith("/") else signed_path
+        return RedirectResponse(full_url)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Gagal mengunduh file Excel: {type(e).__name__}: {str(e)}")
 
 
 @router.get("/analyze/occupancy/template")
