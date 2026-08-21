@@ -39,20 +39,53 @@ const CustomTickOcc = (props: any) => {
   );
 };
 
+interface GrupBreakdown { nama: string; qty: number; }
+
+// Deliverable: sort desc + slice top 3 -- dilakukan di sini (bukan backend)
+// supaya backend bebas kirim SEMUA grup tanpa peduli "top berapa" yang mau
+// ditampilkan; ubah tooltip ke top-5 pun tidak perlu ubah backend.
+function getTop3Grup(grup: GrupBreakdown[] = []): GrupBreakdown[] {
+  return [...grup].sort((a, b) => b.qty - a.qty).slice(0, 3);
+}
+
+const fmtContainer = (n: number) => Math.round(n).toLocaleString('id-ID');
+
 const CustomTooltip = ({ active, payload, label }: any) => {
-  if (active && payload && payload.length) {
-    return (
-      <div className="bg-popover border border-border rounded-lg p-3 text-sm shadow-xl">
-        <p className="text-popover-foreground mb-1 font-semibold">{label}</p>
-        {payload.map((p: any) => (
-          <p key={p.name} style={{ color: p.fill || 'hsl(var(--secondary))' }}>
-            {p.name}: <span className="font-bold">{Number(p.value).toFixed(2)}%</span>
+  if (!active || !payload || !payload.length) return null;
+  const row = payload[0].payload; // full daily_data row (termasuk `breakdown`)
+  const b = row.breakdown || {};
+  const top3 = getTop3Grup(b.grup);
+
+  return (
+    <div className="bg-popover border border-border rounded-lg p-3 text-sm shadow-xl min-w-[240px]">
+      <p className="text-popover-foreground mb-2 font-semibold">{label}</p>
+
+      <p style={{ color: 'hsl(var(--chart-1))' }}>
+        Occupancy: <span className="font-bold">{Number(row.occupancy_pct).toFixed(2)}%</span>
+      </p>
+      <p className="text-muted-foreground">
+        Stock Awal: <span className="font-bold text-popover-foreground">{fmtContainer(b.stock_awal || 0)} Container</span>
+      </p>
+      <p className="text-muted-foreground">
+        Vessel (Inbound/Transit): <span className="font-bold text-popover-foreground">{fmtContainer(b.vessel_in || 0)} Container</span>
+      </p>
+
+      <div className="mt-2 pt-2 border-t border-border">
+        <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">Breakdown (3 Terbesar):</p>
+        {top3.length === 0 && <p className="text-xs italic text-muted-foreground">Tidak ada data grup</p>}
+        {top3.map((g) => (
+          <p key={g.nama} className="text-xs pl-2 text-muted-foreground">
+            {g.nama} : <span className="font-bold text-popover-foreground">{fmtContainer(g.qty)} Container</span>
           </p>
         ))}
       </div>
-    );
-  }
-  return null;
+
+      <div className="mt-2 pt-2 border-t border-border">
+        <p className="text-muted-foreground">TO: <span className="font-bold text-popover-foreground">{fmtContainer(b.to || 0)} Container</span></p>
+        <p className="text-muted-foreground">Target Penjualan: <span className="font-bold text-popover-foreground">{fmtContainer(b.target_penjualan || 0)} Container</span></p>
+      </div>
+    </div>
+  );
 };
 
 // Lebar per-bar (px) supaya label "Cabang - Tanggal" tidak saling tumpuk saat

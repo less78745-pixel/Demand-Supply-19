@@ -769,22 +769,67 @@ def calculate_mrp_occupancy_from_bytes(file_bytes: bytes) -> dict:
     out_buf.seek(0)
     excel_base64 = base64.b64encode(out_buf.read()).decode("ascii")
 
+    # Breakdown per (Cabang, Week) untuk tooltip chart Occupancy (Stock Awal,
+    # Vessel inbound, TO, Target penjualan, dan komposisi per Grup) -- dihitung
+    # dari field yang sama yang sudah dipakai shortage/overstock di atas
+    # (rec.onhand/.vessel/.to/.target dan running balance bt), cuma diagregasi
+    # ke level cabang+week di sini. `grup` dikirim TANPA dipotong top-N --
+    # sorting & slice top-3 sengaja dilakukan di frontend (lihat OccupancyChart).
+    breakdown_by_cabang_week = {}
+    for rec in records:
+        bt = bal_t[id(rec)]
+        for w in range(n_weeks):
+            key = (rec.cabang, w)
+            acc = breakdown_by_cabang_week.setdefault(key, {
+                "stock_awal": 0.0, "vessel_in": 0.0, "to": 0.0, "target": 0.0, "grup": {}
+            })
+            stock_awal_w = rec.onhand if w == 0 else bt[w - 1]
+            acc["stock_awal"] += stock_awal_w
+            acc["vessel_in"] += rec.vessel[w]
+            acc["to"] += rec.to[w]
+            acc["target"] += rec.target[w]
+            # Kuantitas per grup dalam Container -- pakai balance akhir minggu ini
+            # (max 0, sama seperti compute_occupancy: shortage/minus tidak
+            # membebaskan ruang fisik gudang), bukan target/demand.
+            acc["grup"][rec.grup] = acc["grup"].get(rec.grup, 0.0) + max(0.0, bt[w])
+
     daily_data = []
     for cabang, cap_val in wh_capacity:
         series_occ = occ_t.get(cabang, [0.0] * n_weeks)
         for w in range(n_weeks):
             occ_pct = series_occ[w] if series_occ[w] is not None else 0.0
             tot_bal = occ_pct * cap_val if cap_val else 0.0
+            b = breakdown_by_cabang_week.get((cabang, w), {})
+            # Cap 15 grup TERBESAR per baris -- frontend cuma butuh top-3, jadi
+            # angka ini cuma jaring pengaman ukuran payload (bukan nilai yang
+            # dianggap "final") untuk cabang dengan jumlah grup yang sangat
+            # banyak, sama motivasinya dengan INVENTORY_VALUE_ROWS_BYTE_BUDGET
+            # di routers/occupancy.py.
+            grup_items = sorted(b.get("grup", {}).items(), key=lambda kv: kv[1], reverse=True)[:15]
             daily_data.append({
                 "cabang": str(cabang),
                 "date": period_labels[w],
                 "total_on_hand": round(tot_bal, 2),
                 "capacity": round(cap_val, 2),
                 "occupancy_pct": round(occ_pct * 100, 2),
-                "is_shortage": tot_bal < 0
+                "is_shortage": tot_bal < 0,
+                "breakdown": {
+                    "stock_awal": round(b.get("stock_awal", 0.0), 2),
+                    "vessel_in": round(b.get("vessel_in", 0.0), 2),
+                    "to": round(b.get("to", 0.0), 2),
+                    "target_penjualan": round(b.get("target", 0.0), 2),
+                    "grup": [{"nama": g, "qty": round(q, 2)} for g, q in grup_items],
+                },
             })
 
     shortage_alerts = []
+    # Overstock = perhitungan SAMA PERSIS seperti Shortage di atas, cuma arah
+    # tandanya dibalik -- tidak ada threshold/pengali tambahan (coverage-weeks,
+    # target minggu depan, dll sudah dilepas atas permintaan langsung supaya
+    # logikanya benar-benar cermin 1:1 dengan Shortage):
+    #   Shortage  : bt[w] < 0  -> deficit = abs(bt[w])
+    #   Overstock : bt[w] > 0  -> excess  = bt[w]
+    overstock_alerts = []
     for rec in records:
         bt = bal_t[id(rec)]
         for w in range(n_weeks):
@@ -795,6 +840,35 @@ def calculate_mrp_occupancy_from_bytes(file_bytes: bytes) -> dict:
                     "date": period_labels[w],
                     "deficit": round(abs(bt[w]), 2)
                 })
+            elif bt[w] > 0:
+                overstock_alerts.append({
+                    "cabang": rec.cabang,
+                    "category": f"{rec.grup} - {rec.category}",
+                    "date": period_labels[w],
+                    "excess": round(bt[w], 2)
+                })
+
+    # Sheet 1 "Analisa Nilai Inventori": row per (Cabang, Grup, Category, Week)
+    # dengan alur Container (balance) -> QTY (CBM) -> Value, memakai deret yang
+    # SAMA dengan yang sudah dituliskan ke sheet "1. Running Balance" (lihat
+    # append_qty_rupiah_blocks) -- di sini cuma diserialisasi juga ke JSON
+    # supaya frontend bisa menyusun ulang sheet ini sesuai filter aktif di UI.
+    inventory_value_rows = []
+    for rec in records:
+        bt = bal_t[id(rec)]
+        qty_series, rupiah_series = qty_rupiah_by_record[id(rec)]
+        harga_satuan = harga_product_dict.get((rec.cabang, rec.category))
+        for w in range(n_weeks):
+            inventory_value_rows.append({
+                "cabang": rec.cabang,
+                "grup": rec.grup,
+                "category": rec.category,
+                "week": period_labels[w],
+                "balance_container": round(bt[w], 2),
+                "qty": round(qty_series[w], 2) if qty_series[w] is not None else None,
+                "harga_satuan": harga_satuan,
+                "value": round(rupiah_series[w], 2) if rupiah_series[w] is not None else None,
+            })
 
     avg_occ = sum(d["occupancy_pct"] for d in daily_data) / len(daily_data) if daily_data else 0
     max_occ = max(d["occupancy_pct"] for d in daily_data) if daily_data else 0
@@ -812,10 +886,13 @@ def calculate_mrp_occupancy_from_bytes(file_bytes: bytes) -> dict:
         "processed_at": datetime.now().isoformat(),
         "daily_data": daily_data,
         "shortage_alerts": shortage_alerts,
+        "overstock_alerts": overstock_alerts,
+        "inventory_value_rows": inventory_value_rows,
         "kpi_summary": {
             "avg_occupancy": round(avg_occ, 1),
             "max_occupancy": round(max_occ, 1),
-            "categories_at_risk": len(shortage_alerts)
+            "categories_at_risk": len(shortage_alerts),
+            "overstock_count": len(overstock_alerts)
         },
         "mos_data": df_mos.to_dict('records') if not df_mos.empty else [],
         "over_occupancy_insights": insights,

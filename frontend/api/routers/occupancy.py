@@ -64,6 +64,48 @@ DSP_RESULT_BUCKET = os.getenv("DSP_RESULT_BUCKET", "dsp-processed-files")
 # the same, Realtime-safe payload.
 PERSIST_SAFE_LIMIT_BYTES = 2 * 1024 * 1024
 MAX_STORED_SHORTAGE_ALERTS = 2000
+MAX_STORED_OVERSTOCK_ALERTS = 2000
+
+# inventory_value_rows punya SATU baris per (Cabang, Grup, Category, Week) --
+# beda dengan shortage/overstock_alerts yang cuma berisi pengecualian, field
+# ini padat: untuk dataset nasional (ribuan SKU x banyak minggu) dia dengan
+# mudah jadi kontributor ukuran TERBESAR di seluruh payload, jauh melampaui
+# semua field lain gabungan. Makanya dia dibatasi ke budget BYTE tetap (bukan
+# jumlah baris tetap seperti MAX_STORED_SHORTAGE_ALERTS) dan dipangkas PALING
+# AWAL, tanpa menunggu cek `_size(results) > PERSIST_SAFE_LIMIT_BYTES` --
+# lihat _trim_rows_to_byte_budget di bawah untuk alasan kenapa cap jumlah baris
+# saja tidak cukup.
+INVENTORY_VALUE_ROWS_BYTE_BUDGET = 300 * 1024
+
+def _trim_rows_to_byte_budget(rows: list, budget_bytes: int, sort_key) -> tuple:
+    """Urutkan `rows` (descending by `sort_key`) lalu potong sampai representasi
+    JSON-nya <= budget_bytes. Dipakai (bukan cap jumlah baris tetap) karena baris
+    dari dataset yang berbeda punya ukuran rata-rata yang beda jauh (field mana
+    yang None/terisi, panjang string category, dst) -- cap jumlah baris tetap
+    sempat terbukti tidak cukup: 5000 baris "aman" untuk satu dataset bisa jadi
+    tetap >1MB untuk dataset lain, persis skenario yang bikin Supabase Realtime
+    diam-diam menjatuhkan event INSERT (lihat komentar PERSIST_SAFE_LIMIT_BYTES).
+    Return (rows_trimmed, was_trimmed, total_original_count)."""
+    if not rows:
+        return rows, False, 0
+    if len(json.dumps(rows, default=str)) <= budget_bytes:
+        return rows, False, len(rows)
+
+    total = len(rows)
+    rows_sorted = sorted(rows, key=lambda r: (sort_key(r) or 0), reverse=True)
+
+    # Binary search jumlah baris terbanyak yang masih muat dalam budget --
+    # lebih murah daripada re-serialize satu-satu per baris yang dibuang.
+    lo, hi, best = 0, len(rows_sorted), 0
+    while lo <= hi:
+        mid = (lo + hi) // 2
+        if len(json.dumps(rows_sorted[:mid], default=str)) <= budget_bytes:
+            best = mid
+            lo = mid + 1
+        else:
+            hi = mid - 1
+    return rows_sorted[:best], True, total
+
 
 def _prepare_result_for_storage(results: dict) -> dict:
     """Trim the biggest size contributors (in order) until the payload fits
@@ -77,10 +119,30 @@ def _prepare_result_for_storage(results: dict) -> dict:
         except Exception:
             return 0
 
+    warnings = []
+
+    # inventory_value_rows: lihat komentar INVENTORY_VALUE_ROWS_BYTE_BUDGET --
+    # ditrim TANPA SYARAT (bukan cuma saat total payload sudah kebesaran) karena
+    # field ini cuma menyuplai Sheet 1 export opsional "Analisa Nilai Inventori",
+    # bukan bagian dari UI inti manapun, jadi tidak masalah selalu dibatasi kecil.
+    inv_rows = results.get("inventory_value_rows") or []
+    trimmed_rows, was_trimmed, total_inv = _trim_rows_to_byte_budget(
+        inv_rows, INVENTORY_VALUE_ROWS_BYTE_BUDGET, lambda r: r.get("value")
+    )
+    if was_trimmed:
+        results["inventory_value_rows"] = trimmed_rows
+        results["inventory_value_rows_truncated"] = True
+        results["inventory_value_rows_total_count"] = total_inv
+        warnings.append(f"Baris nilai inventori (menampilkan {len(trimmed_rows)} dari {total_inv} baris bernilai terbesar)")
+
     if _size(results) <= PERSIST_SAFE_LIMIT_BYTES:
+        if warnings:
+            results["warning"] = (
+                "Dataset sangat besar, sebagian data berikut dipangkas agar hasil tetap bisa "
+                "disinkronkan secara realtime ke semua pengguna: " + "; ".join(warnings) + "."
+            )
         return results
 
-    warnings = []
     mrp = results.get("mrp_results")
 
     if isinstance(mrp, dict) and mrp.get("excel_base64"):
@@ -101,6 +163,17 @@ def _prepare_result_for_storage(results: dict) -> dict:
         results["shortage_alerts_truncated"] = True
         results["shortage_alerts_total_count"] = total
         warnings.append(f"Shortage alerts (menampilkan {MAX_STORED_SHORTAGE_ALERTS} dari {total} defisit terbesar)")
+
+    # Overstock Alerts: trimming sama seperti shortage_alerts di atas, tapi
+    # diurutkan berdasarkan `excess` terbesar.
+    overstock = results.get("overstock_alerts") or []
+    if _size(results) > PERSIST_SAFE_LIMIT_BYTES and len(overstock) > MAX_STORED_OVERSTOCK_ALERTS:
+        total = len(overstock)
+        overstock_sorted = sorted(overstock, key=lambda a: a.get("excess", 0), reverse=True)
+        results["overstock_alerts"] = overstock_sorted[:MAX_STORED_OVERSTOCK_ALERTS]
+        results["overstock_alerts_truncated"] = True
+        results["overstock_alerts_total_count"] = total
+        warnings.append(f"Overstock alerts (menampilkan {MAX_STORED_OVERSTOCK_ALERTS} dari {total} kelebihan stok terbesar)")
 
     if warnings:
         results["warning"] = (

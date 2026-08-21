@@ -13,6 +13,7 @@ import { MultiSelect } from '@/components/ui/MultiSelect';
 import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import toast from 'react-hot-toast';
 import { getStandardFilename } from '@/utils/export';
+import { exportOccupancyWorkbook, exportCombinedWorkbook, base64ToArrayBuffer } from '@/utils/exportOccupancyWorkbook';
 import { ExportHtmlButton } from '@/components/ui/ExportHtmlButton';
 import { ModuleExportConfig } from '@/utils/offlineExport';
 import { supabase } from '@/lib/supabase';
@@ -568,6 +569,27 @@ export default function OccupancyPage() {
     );
   }, [results, selectedCabang, selectedDate]);
 
+  // Overstock Alerts: cermin persis filteredShortageAlerts di atas (arsitektur
+  // state & reaktivitas terhadap filter global yang sama).
+  const filteredOverstockAlerts = useMemo(() => {
+    if (!results?.overstock_alerts) return [];
+    return results.overstock_alerts.filter((a: any) =>
+      (selectedCabang.includes('All') || selectedCabang.includes(a.cabang)) &&
+      (selectedDate.includes('All') || selectedDate.includes(a.date))
+    );
+  }, [results, selectedCabang, selectedDate]);
+
+  // Sheet 1 "Analisa Nilai Inventori" (Download Excel Ringkasan): row per
+  // Cabang+Grup+Category+Week, mengikuti filter Cabang & Tanggal aktif di
+  // layar sama seperti filteredShortageAlerts/filteredOverstockAlerts.
+  const filteredInventoryValueRows = useMemo(() => {
+    if (!results?.inventory_value_rows) return [];
+    return results.inventory_value_rows.filter((r: any) =>
+      (selectedCabang.includes('All') || selectedCabang.includes(r.cabang)) &&
+      (selectedDate.includes('All') || selectedDate.includes(r.week))
+    );
+  }, [results, selectedCabang, selectedDate]);
+
   const kpiMetrics = useMemo(() => {
     if (!filteredData || filteredData.length === 0) {
       return {
@@ -578,6 +600,7 @@ export default function OccupancyPage() {
         bottom3Min: [] as Array<{ cabang: string; date: string; val: string }>,
         riskCount: 0,
         top5RiskCategories: [] as Array<{ category: string; cabang: string; reason: string }>,
+        overstockCount: 0,
       };
     }
 
@@ -631,6 +654,15 @@ export default function OccupancyPage() {
       ? (results?.kpi_summary?.categories_at_risk ?? riskList.length)
       : (riskList.length || results?.kpi_summary?.categories_at_risk || 0);
 
+    // Overstock Count: kept as its own KPI (not merged into riskMap) --
+    // shortage & overstock are opposite-direction risks, so collapsing them
+    // into one "risk score" would hide which direction is actually driving it.
+    // Sama seperti riskCount di atas, pakai kpi_summary.overstock_count saat
+    // overstock_alerts sudah dipangkas backend supaya tidak under-count.
+    const overstockCount = results?.overstock_alerts_truncated
+      ? (results?.kpi_summary?.overstock_count ?? filteredOverstockAlerts.length)
+      : (filteredOverstockAlerts.length || results?.kpi_summary?.overstock_count || 0);
+
     return {
       avg,
       peak,
@@ -639,8 +671,9 @@ export default function OccupancyPage() {
       bottom3Min,
       riskCount,
       top5RiskCategories,
+      overstockCount,
     };
-  }, [filteredData, filteredShortageAlerts, results]);
+  }, [filteredData, filteredShortageAlerts, filteredOverstockAlerts, results]);
 
   const mrpData = results?.mrp_results || results?.ddmrp_results;
 
@@ -698,6 +731,15 @@ export default function OccupancyPage() {
     { key: 'deficit', type: 'number' as const, getValue: (a: any) => Number(a.deficit || 0) },
   ]), []);
   const shortageTableFilters = useColumnFilters(filteredShortageAlerts, shortageColumnDefs);
+
+  // ── Column filters (Excel-like): "Overstock Alerts" table (mirrors Shortage above) ──
+  const overstockColumnDefs = useMemo(() => ([
+    { key: 'cabang', type: 'select' as const, getValue: (a: any) => a.cabang },
+    { key: 'category', type: 'text' as const, getValue: (a: any) => a.category },
+    { key: 'date', type: 'select' as const, getValue: (a: any) => a.date },
+    { key: 'excess', type: 'number' as const, getValue: (a: any) => Number(a.excess || 0) },
+  ]), []);
+  const overstockTableFilters = useColumnFilters(filteredOverstockAlerts, overstockColumnDefs);
 
   // ── Offline HTML export config: full raw dataset (not the live-narrowed
   // filteredData) so the exported file's own filters can range over everything,
@@ -762,6 +804,19 @@ export default function OccupancyPage() {
         ],
       },
       {
+        id: 'overstock_alerts',
+        title: 'Overstock Alerts (Mengikuti Filter & Kolom Aktif di Layar)',
+        filterFields: ['cabang', 'date'],
+        data: overstockTableFilters.filteredData,
+        emptyLabel: 'Tidak ada overstock alert untuk filter yang dipilih.',
+        columns: [
+          { key: 'cabang', label: 'Cabang' },
+          { key: 'category', label: 'Category' },
+          { key: 'date', label: 'Tanggal' },
+          { key: 'excess', label: 'Excess', align: 'right', format: 'number' },
+        ],
+      },
+      {
         id: 'mos_data',
         title: 'Sheet Harga Container & Kalkulasi MOS (Mengikuti Filter Cabang di Layar)',
         filterFields: ['cabang'],
@@ -786,6 +841,7 @@ export default function OccupancyPage() {
       { id: 'peak_occupancy', label: 'Peak Occupancy', sourceTableId: 'daily_data', field: 'occupancy_pct', agg: 'max', suffix: '%' },
       { id: 'min_occupancy', label: 'Min Occupancy', sourceTableId: 'daily_data', field: 'occupancy_pct', agg: 'min', suffix: '%' },
       { id: 'shortage_count', label: 'Shortage Alerts', sourceTableId: 'shortage_alerts', field: 'deficit', agg: 'count', decimals: 0, suffix: '' },
+      { id: 'overstock_count', label: 'Overstock Alerts', sourceTableId: 'overstock_alerts', field: 'excess', agg: 'count', decimals: 0, suffix: '' },
     ],
   } : undefined;
 
@@ -1054,7 +1110,7 @@ export default function OccupancyPage() {
           {/* ═══ OCCUPANCY SECTION ═══ */}
 
           {/* KPI Row & Deep Insights (frozen snapshot — a live, filterable copy is generated in the offline export section below) */}
-          <div className="no-export grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="no-export grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
             {/* Avg Occupancy */}
             <GlassCard className="flex flex-col justify-between p-5 border-primary/20">
               <div className="flex items-center justify-between">
@@ -1132,6 +1188,20 @@ export default function OccupancyPage() {
                     </div>
                   ))}
                   {kpiMetrics.top5RiskCategories.length === 0 && <p className="text-xs text-muted-foreground italic">Aman (Tidak ada risiko)</p>}
+                </div>
+              </div>
+            </GlassCard>
+
+            {/* Overstock Count (mirrors Categories at Risk, opposite direction) */}
+            <GlassCard className="flex flex-col justify-between p-5 border-amber-500/30 bg-amber-500/5">
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-amber-500 uppercase tracking-wider">Overstock Alerts</span>
+                  <TrendingUp className="w-5 h-5 text-amber-500" />
+                </div>
+                <div className="my-3">
+                  <div className="text-3xl font-extrabold tracking-tight text-foreground">{kpiMetrics.overstockCount}</div>
+                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mt-1">Kombinasi Cabang/Category kelebihan stok (&gt; {'8'} minggu coverage)</p>
                 </div>
               </div>
             </GlassCard>
@@ -1357,6 +1427,93 @@ export default function OccupancyPage() {
             </GlassCard>
           )}
 
+          {/* Overstock Alerts (cermin persis Shortage Alerts di atas — arsitektur state & UI yang sama) */}
+          {filteredOverstockAlerts.length > 0 && (
+            <GlassCard className="no-export border-amber-500/30 bg-amber-500/5">
+              <h3 className="text-lg font-bold text-amber-500 mb-4 flex items-center gap-2 uppercase tracking-wide">
+                <TrendingUp className="w-5 h-5" /> Overstock Alerts (Mengikuti Filter)
+              </h3>
+              {results?.overstock_alerts_truncated && (
+                <div className="mb-3 text-xs font-semibold text-amber-600/80 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2">
+                  Dataset sangat besar: hanya {(results.overstock_alerts || []).length.toLocaleString('id-ID')} dari total {Number(results.overstock_alerts_total_count || 0).toLocaleString('id-ID')} overstock alerts (kelebihan stok terbesar) yang disimpan, agar hasil tetap bisa disinkronkan secara realtime. KPI &quot;Overstock Alerts&quot; tetap menghitung total sebenarnya.
+                </div>
+              )}
+              {overstockTableFilters.activeCount > 0 && (
+                <button
+                  onClick={overstockTableFilters.clearAll}
+                  className="no-export mb-3 text-xs font-semibold text-orange-500 hover:text-orange-400 underline"
+                >
+                  Hapus semua filter kolom ({overstockTableFilters.activeCount})
+                </button>
+              )}
+              <PaginatedTable
+                data={overstockTableFilters.filteredData}
+                pageSize={50}
+                renderTable={(slicedData) => (
+                  <div className="relative overflow-x-auto max-h-96 overflow-y-auto rounded-lg border border-border">
+                    <table className="w-full text-sm text-left text-muted-foreground table-fixed">
+                      <colgroup>
+                        <col className="w-[25%]" />
+                        <col className="w-[35%]" />
+                        <col className="w-[20%]" />
+                        <col className="w-[20%]" />
+                      </colgroup>
+                      <thead className="text-xs text-foreground uppercase bg-muted border-b border-border sticky top-0 z-10 font-bold tracking-wider">
+                        <tr>
+                          <FilterableHeader
+                            label="Cabang"
+                            columnKey="cabang"
+                            type="select"
+                            className="py-3 px-4"
+                            options={overstockTableFilters.uniqueValuesByKey['cabang']}
+                            activeFilter={overstockTableFilters.filters['cabang']}
+                            onChange={(v) => overstockTableFilters.setFilter('cabang', v)}
+                          />
+                          <FilterableHeader
+                            label="Category"
+                            columnKey="category"
+                            type="text"
+                            className="py-3 px-4"
+                            activeFilter={overstockTableFilters.filters['category']}
+                            onChange={(v) => overstockTableFilters.setFilter('category', v)}
+                          />
+                          <FilterableHeader
+                            label="Tanggal"
+                            columnKey="date"
+                            type="select"
+                            className="py-3 px-4"
+                            options={overstockTableFilters.uniqueValuesByKey['date']}
+                            activeFilter={overstockTableFilters.filters['date']}
+                            onChange={(v) => overstockTableFilters.setFilter('date', v)}
+                          />
+                          <FilterableHeader
+                            label="Excess"
+                            columnKey="excess"
+                            type="number"
+                            align="right"
+                            className="py-3 px-4"
+                            activeFilter={overstockTableFilters.filters['excess']}
+                            onChange={(v) => overstockTableFilters.setFilter('excess', v)}
+                          />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {slicedData.map((a: any, i: number) => (
+                          <tr key={i} className="border-b border-border/50 hover:bg-muted/30 transition-colors bg-background">
+                            <td className="px-4 py-3 font-medium text-foreground truncate">{a.cabang}</td>
+                            <td className="px-4 py-3 font-medium text-foreground truncate">{a.category}</td>
+                            <td className="px-4 py-3 truncate">{a.date}</td>
+                            <td className="px-4 py-3 text-right text-amber-600 font-bold">{Number(a.excess).toFixed(0)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              />
+            </GlassCard>
+          )}
+
           {/* ═══ MRP AUTOMATED ANALYSIS SECTION (WHEN MULTI-SHEET EXCEL UPLOADED) ═══ */}
           {/* Fitur 5: modul ini SENGAJA dibatasi hanya memakai kombinasi warna
               Hitam, Putih, dan Oranye (tanpa indigo/emerald/rose/amber) --
@@ -1386,42 +1543,58 @@ export default function OccupancyPage() {
                   </p>
                 </div>
                 <div className="no-export flex flex-wrap gap-3 shrink-0">
-                  {/* excel_storage_path (baru): workbook disimpan di Supabase Storage,
-                      bukan di-embed sebagai base64 di JSON -- lihat _offload_excel_to_storage
-                      di routers/occupancy.py. excel_base64 tetap didukung sebagai fallback
-                      untuk hasil lama/dataset kecil yang belum lewat jalur Storage. */}
-                  {(mrpData.excel_storage_path || mrpData.excel_base64) && (
-                    <button
-                      onClick={async () => {
-                        try {
-                          if (mrpData.excel_storage_path) {
-                            toast.loading('Menyiapkan file Excel...', { id: 'dl-excel' });
-                            const blob = await downloadOccupancyExcelFromStorage(mrpData.excel_storage_path);
-                            const url = window.URL.createObjectURL(blob);
-                            const link = document.createElement('a');
-                            link.href = url;
-                            link.download = getStandardFilename('mrp_hasil_perhitungan', 'xlsx');
-                            document.body.appendChild(link);
-                            link.click();
-                            document.body.removeChild(link);
-                            window.URL.revokeObjectURL(url);
-                            toast.success('File Excel MRP dengan rumus berhasil diunduh!', { id: 'dl-excel' });
-                          } else {
-                            const link = document.createElement('a');
-                            link.href = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${mrpData.excel_base64}`;
-                            link.download = getStandardFilename('mrp_hasil_perhitungan', 'xlsx');
-                            link.click();
-                            toast.success('File Excel MRP dengan rumus berhasil diunduh!');
-                          }
-                        } catch (err: any) {
-                          toast.error('Gagal mengunduh file Excel: ' + (err?.message || 'Error tidak diketahui'), { id: 'dl-excel' });
+                  {/* Satu tombol gabungan: kalau workbook mentah tersedia (excel_storage_path
+                      di Supabase Storage, atau fallback excel_base64), sheet Ringkasan
+                      (Analisa Nilai Inventori/Shortage/Overstock -- dari data yang SUDAH
+                      difilter di layar) ditambahkan ke workbook YANG SAMA lalu diunduh
+                      sebagai satu file. Kalau workbook mentah TIDAK tersedia (lihat notice
+                      excel_download_unavailable di bawah), tombol ini tetap tampil dan
+                      jatuh ke ringkasan-saja, bukan hilang total tanpa penjelasan. */}
+                  <button
+                    onClick={async () => {
+                      const ringkasanPayload = {
+                        moduleName: 'Occupancy_Analisa',
+                        processedAt: results?.processed_at,
+                        inventoryValueRows: filteredInventoryValueRows.map((r: any) => ({
+                          cabang: r.cabang,
+                          grup: r.grup,
+                          category: r.category,
+                          week: r.week,
+                          balanceContainer: Number(r.balance_container || 0),
+                          qty: r.qty ?? null,
+                          hargaSatuan: r.harga_satuan ?? null,
+                        })),
+                        shortageAlerts: shortageTableFilters.filteredData.map((a: any) => ({
+                          cabang: a.cabang, category: a.category, date: a.date, amount: Number(a.deficit || 0),
+                        })),
+                        overstockAlerts: overstockTableFilters.filteredData.map((a: any) => ({
+                          cabang: a.cabang, category: a.category, date: a.date, amount: Number(a.excess || 0),
+                        })),
+                        capacityByCabang: Object.fromEntries(
+                          filteredData.map((d: any) => [d.cabang, Number(d.capacity || 0)])
+                        ),
+                      };
+
+                      try {
+                        if (mrpData.excel_storage_path || mrpData.excel_base64) {
+                          toast.loading('Menyiapkan Excel Lengkap...', { id: 'dl-excel' });
+                          const rawBytes = mrpData.excel_storage_path
+                            ? await (await downloadOccupancyExcelFromStorage(mrpData.excel_storage_path)).arrayBuffer()
+                            : base64ToArrayBuffer(mrpData.excel_base64);
+                          await exportCombinedWorkbook(rawBytes, ringkasanPayload);
+                          toast.success('Excel Lengkap (MRP + Ringkasan) berhasil diunduh!', { id: 'dl-excel' });
+                        } else {
+                          await exportOccupancyWorkbook(ringkasanPayload);
+                          toast.success('Workbook MRP mentah tidak tersedia -- hanya sheet Ringkasan yang diunduh.', { icon: '⚠️' });
                         }
-                      }}
-                      className="px-4 py-2.5 bg-orange-500 hover:bg-orange-400 text-black font-bold rounded-xl shadow-lg transition text-xs flex items-center gap-2"
-                    >
-                      <FileSpreadsheet className="w-4 h-4" /> Download Excel Hasil (Rumus &amp; Ratio)
-                    </button>
-                  )}
+                      } catch (err: any) {
+                        toast.error('Gagal mengunduh Excel: ' + (err?.message || 'Error tidak diketahui'), { id: 'dl-excel' });
+                      }
+                    }}
+                    className="px-4 py-2.5 bg-orange-500 hover:bg-orange-400 text-black font-bold rounded-xl shadow-lg transition text-xs flex items-center gap-2"
+                  >
+                    <FileSpreadsheet className="w-4 h-4" /> Download Excel Lengkap (MRP + Ringkasan)
+                  </button>
                   {mrpData.html_report && (
                     <button
                       onClick={() => {
@@ -1429,7 +1602,7 @@ export default function OccupancyPage() {
                         const url = URL.createObjectURL(blob);
                         const link = document.createElement('a');
                         link.href = url;
-                        link.download = getStandardFilename('mrp_analysis_report', 'html');
+                        link.download = getStandardFilename('mrp_analysis_report', results?.processed_at, 'html');
                         link.click();
                         toast.success('Laporan HTML Analisa MRP berhasil diunduh!');
                       }}
@@ -1440,6 +1613,32 @@ export default function OccupancyPage() {
                   )}
                 </div>
               </div>
+
+              {/* excel_download_unavailable/html_report_unavailable: backend men-strip
+                  field ini kalau payload masih kelewat besar SETELAH _offload_excel_to_storage
+                  gagal upload ke Supabase Storage (lihat _prepare_result_for_storage di
+                  routers/occupancy.py) -- sebelumnya kondisi ini membuat tombol download
+                  hilang total tanpa penjelasan; sekarang tetap ada notice-nya di sini. */}
+              {mrpData.excel_download_unavailable && (
+                <div className="mb-4 text-xs font-semibold text-black/70 bg-red-100 border border-red-300 rounded-lg px-3 py-2">
+                  File Excel mentah (Raw/WH/rumus) tidak tersedia untuk dataset ini -- terlalu besar untuk disinkronkan dan gagal diunggah ke Storage. Tombol di atas tetap bisa dipakai untuk mengunduh sheet Ringkasan (Analisa Nilai Inventori/Shortage/Overstock) saja. Cek log server untuk detail kegagalan upload Storage.
+                </div>
+              )}
+              {mrpData.html_report_unavailable && (
+                <div className="mb-4 text-xs font-semibold text-black/70 bg-orange-100 border border-orange-300 rounded-lg px-3 py-2">
+                  Laporan HTML tidak tersedia untuk dataset ini (dipangkas karena dataset terlalu besar untuk disinkronkan secara realtime).
+                </div>
+              )}
+
+              {/* inventory_value_rows dipangkas ke budget byte tetap di backend untuk
+                  dataset nasional besar (lihat INVENTORY_VALUE_ROWS_BYTE_BUDGET di
+                  routers/occupancy.py) -- Sheet 1 "Analisa Nilai Inventori" pada Excel
+                  Lengkap/Ringkasan jadi cuma berisi baris paling bernilai, bukan seluruhnya. */}
+              {results?.inventory_value_rows_truncated && (
+                <div className="mb-4 text-xs font-semibold text-black/70 bg-orange-100 border border-orange-300 rounded-lg px-3 py-2">
+                  Dataset sangat besar: Sheet &quot;Analisa Nilai Inventori&quot; pada Excel yang diunduh hanya berisi {(results.inventory_value_rows || []).length.toLocaleString('id-ID')} dari total {Number(results.inventory_value_rows_total_count || 0).toLocaleString('id-ID')} baris (nilai terbesar), agar hasil tetap bisa disinkronkan secara realtime.
+                </div>
+              )}
 
               {/* Komparasi Occupancy Mingguan Table */}
               {mrpData.occupancy_series_target && (
