@@ -102,10 +102,11 @@ function parseLinesSync(lines: any[][]): { headers: string[]; targetColumns: { i
     'item', 'nama barang', 'category', 'grup', 'group', 'divisi', 'category item', 'item category', 
     'sub item', 'sub item category', 'category dsp', 'status doi', 'doi', 'status insentif', 'category insentif', 'kategori insentif', 'insentif',
     'po no', 'pr no', 'no po', 'no pr', 'po', 'nopr', 'nomor po', 'nomor pr', 'vendor_no', 'vendor', 
+    'pi', 'no pi', 'no_pi', 'no. pi', 'nomor pi', 'pi no', 'invoice', 'no invoice', 'nomor invoice', 'proforma invoice', 'nomor proforma invoice',
     'no sku', 'sku', 'description', 'deskripsi', 'item description', 'nama produk',
     'status compile', 'status', 'state', 'urgency', 'keterangan', 'notes',
     'container', 'no container', 'no_container', 'nocontainer', 'nomor container', 'kontainer', 'no kontainer',
-    'bl', 'no bl', 'no_bl', 'no. bl', 'nomor bl', 'bill of lading', 'booking', 'no booking', 'no_booking', 'nomor booking', 'b/l', 'no b/l',
+    'bl', 'no bl', 'no_bl', 'no. bl', 'nomor bl', 'bill of lading', 'booking', 'no booking', 'no_booking', 'nomor booking', 'b/l', 'no b/l', 'bl no', 'bl_no',
     'shipping line', 'shipping_line', 'shippingline', 'shipping', 'pelayaran', 'carrier', 'maskapai', 'line',
     'eta fix', 'tanggal eta', 'week eta', 'cut off', 'cutoff', 'eta', 'etd', 'free time end', 'eta_port', 'last checked', 'tanggal', 'date'
   ];
@@ -127,10 +128,10 @@ function parseLinesSync(lines: any[][]): { headers: string[]; targetColumns: { i
     }
 
     if (!isMetadata) {
-      const dimWords = ['branch', 'cabang', 'regional', 'region', 'shipping', 'pelayaran', 'carrier', 'maskapai', 'booking', 'container', 'kontainer', 'category', 'kategori', 'grup', 'group', 'divisi', 'status', 'description', 'deskripsi', 'bill of lading', 'tanggal', 'date', 'week eta', 'vendor', 'lading'];
+      const dimWords = ['branch', 'cabang', 'regional', 'region', 'shipping', 'pelayaran', 'carrier', 'maskapai', 'booking', 'container', 'kontainer', 'category', 'kategori', 'grup', 'group', 'divisi', 'status', 'description', 'deskripsi', 'bill of lading', 'tanggal', 'date', 'week eta', 'vendor', 'lading', 'invoice', 'pi', 'proforma'];
       if (dimWords.some(dw => hLower.includes(dw) || hNorm.includes(dw.replace(/[^a-z0-9]/g, '')))) {
         isMetadata = true;
-      } else if (/\b(bl|po|pr|cab|sku|line)\b/i.test(hRaw.replace(/[._/-/]/g, ' '))) {
+      } else if (/\b(bl|po|pr|pi|cab|sku|line)\b/i.test(hRaw.replace(/[._/-/]/g, ' '))) {
         isMetadata = true;
       }
     }

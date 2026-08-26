@@ -141,7 +141,7 @@ export interface StockCondition {
 
 const calculateStockCondition = (onHand: number, totalTO: number, totalVessel: number, outstandingTarget: number, salesBerjalan: number): StockCondition => {
   const totalSupply = toExactFloat(onHand + totalTO + totalVessel, 4);
-  const effectiveTarget = Math.max(0, toExactFloat((outstandingTarget || 0) - (salesBerjalan || 0), 4));
+  const effectiveTarget = toExactFloat(Math.abs(outstandingTarget || 0), 4);
   if (!effectiveTarget || effectiveTarget <= 0) {
     return { ratio: 0, status: 'N/A (Target <= 0)', badge: '⚪ N/A (Target <= 0)', color: 'bg-slate-700/50 text-slate-700 border border-slate-600' };
   }
@@ -679,7 +679,7 @@ export default function SOHAnalysisPage() {
     return Object.values(map).map(item => {
       const totalInbound = (item['VESSEL'] || 0) + (item['TO'] || 0) + (item['PLAN LOADING'] || 0);
       const totalSupply = (item['On Hand'] || 0) + (item['TO'] || 0) + (item['VESSEL'] || 0);
-      const effectiveTarget = Math.max(0, (item['Outstanding Target'] || 0) - (item['Sales Berjalan'] || 0));
+      const effectiveTarget = Math.abs(item['Outstanding Target'] || 0);
       const cond = calculateStockCondition(item['On Hand'], item['TO'], item['VESSEL'], item['Outstanding Target'], item['Sales Berjalan']);
       return {
         ...item,
@@ -867,6 +867,7 @@ export default function SOHAnalysisPage() {
     let countAman = 0;
     let countHati = 0;
     let countBahaya = 0;
+    let totalAbsNegativeOutstanding = 0;
 
     for (const row of detailedTableData) {
       totalOH += (row['On Hand'] || 0);
@@ -875,6 +876,11 @@ export default function SOHAnalysisPage() {
       totalTargetSales += (row['Target Sales'] || 0);
       totalOutstanding += (row['Outstanding Target'] || 0);
       totalSalesBerjalan += (row['Sales Berjalan'] || 0);
+
+      if ((row['Outstanding Target'] || 0) < 0) {
+        totalAbsNegativeOutstanding += Math.abs(row['Outstanding Target'] || 0);
+      }
+
       if (row.status === 'Overstock') countOverstock++;
       else if (row.status === 'Aman') countAman++;
       else if (row.status === 'Hati-Hati') countHati++;
@@ -882,7 +888,7 @@ export default function SOHAnalysisPage() {
     }
 
     const totalSupply = totalOH + totalTO + totalVessel;
-    const totalEffectiveTarget = Math.max(0, totalOutstanding - totalSalesBerjalan);
+    const totalEffectiveTarget = totalAbsNegativeOutstanding;
     const globalRatio = totalEffectiveTarget > 0 ? Number((totalSupply / totalEffectiveTarget).toFixed(2)) : 0;
     
     let globalStatus = '⚪ N/A (Target <= 0)';

@@ -930,7 +930,11 @@ export default function PRUpdatePage() {
       (!colCabang || selectedCabang.includes('All') || selectedCabang.includes(d[colCabang])) &&
       (!colCategory || selectedCategory.includes('All') || (colCategory && selectedCategory.includes(d[colCategory])) || (colGrup && selectedCategory.includes(d[colGrup])))
     );
-    return ['All', ...Array.from(new Set(source.map(d => d[colEta]).filter(v => v && !String(v).includes('#N/A') && !String(v).includes('#REF!') && String(v).toLowerCase() !== 'semua eta'))).sort()];
+    return ['All', ...Array.from(new Set(source.map(d => {
+      const val = d[colEta];
+      if (!val || String(val).trim() === '' || String(val) === '-') return 'Unscheduled / Tanpa ETA';
+      return String(val);
+    }).filter(v => v && !String(v).includes('#N/A') && !String(v).includes('#REF!') && String(v).toLowerCase() !== 'semua eta'))).sort()];
   }, [parsed, colEta, selectedCabang, selectedCategory, colCabang, colCategory, colGrup]);
 
   const statusCompiles = useMemo(() => {
@@ -944,12 +948,14 @@ export default function PRUpdatePage() {
     const sc = SCENARIOS.find(s => s.id === activeScenario) || SCENARIOS[0];
     const colCatUse = colCategory || colGrup;
     return parsed.data
-      .filter(d =>
-        (!colCabang || selectedCabang.includes('All') || selectedCabang.includes(d[colCabang])) &&
+      .filter(d => {
+        const valEta = d[colEta!];
+        const etaLabel = (!valEta || String(valEta).trim() === '' || String(valEta) === '-') ? 'Unscheduled / Tanpa ETA' : String(valEta);
+        return (!colCabang || selectedCabang.includes('All') || selectedCabang.includes(d[colCabang])) &&
         (!colCatUse || selectedCategory.includes('All') || selectedCategory.includes(d[colCatUse])) &&
-        (!colEta || selectedEta.includes('All') || selectedEta.includes(d[colEta])) &&
-        (!colStatus || selectedStatusCompile.includes('All') || selectedStatusCompile.includes(String(d[colStatus] || '').trim()))
-      )
+        (!colEta || selectedEta.includes('All') || selectedEta.includes(etaLabel)) &&
+        (!colStatus || selectedStatusCompile.includes('All') || selectedStatusCompile.includes(String(d[colStatus] || '').trim()));
+      })
       .map(row => {
         const copy = { ...row };
         if (colQty && copy[colQty] != null && copy[colQty] !== '') {
@@ -1093,7 +1099,7 @@ export default function PRUpdatePage() {
     const s = String(v ?? '').trim();
     if (!s || s === '-' || s === '0') return true;
     const su = s.toUpperCase();
-    if (su === 'N/A' || su === '#N/A') return true;
+    if (su === 'N/A' || su === '#N/A' || su === 'NA' || su === 'NONE' || su === 'NULL' || su === 'TBA' || su === 'TBD') return true;
     // Real uploads showed two placeholder patterns typed directly INTO a
     // document-number cell instead of leaving it blank, which silently broke
     // every PR->PO->PI->BL gap count (they all read as "document already
@@ -1104,7 +1110,7 @@ export default function PRUpdatePage() {
     // only there never catches this). Treat both as empty everywhere a doc
     // column is checked, for any of the four doc types (PR/PO/PI/BL).
     if (/^\(?\s*BLANK\s*\)?$/.test(su)) return true;
-    if (/^(PR|PO|PI|BL)\s*(ON\s*PROCESS|SEDANG\s*PROSES|BELUM\s*RELEASE|BELUM\s*ADA|BELUM\s*TERBIT|PENDING)\b/.test(su)) return true;
+    if (/^(PR|PO|PI|BL)?\s*(ON\s*PROCESS|SEDANG\s*PROSES|BELUM\s*RELEASE|BELUM\s*ADA|BELUM\s*TERBIT|PENDING|PROSES)\b/.test(su)) return true;
     return false;
   }
 
@@ -1287,7 +1293,7 @@ export default function PRUpdatePage() {
 
   const documentChainGaps = useMemo(() => {
     const empty = { count: 0, topCabang: [] as { branch: string; count: number }[] };
-    if (filtered.length === 0) return { prNoPo: empty, poNoPi: empty, piNoBl: empty };
+    if (filtered.length === 0) return { prNoPo: empty, poNoPi: empty, piNoBl: empty, prBelumReleased: empty };
 
     const buildGap = (fromCol?: string, toCol?: string, extraStatusMatch?: (stat: string) => boolean) => {
       if (!fromCol) return empty;
@@ -1310,26 +1316,117 @@ export default function PRUpdatePage() {
       return { count, topCabang };
     };
 
+    // PO Belum Ada PI
+    const buildPoNoPi = () => {
+      const rows = filtered.filter(r => {
+        const poVal = String(colPo ? r[colPo] : '').trim().toUpperCase();
+        const hasPo = poVal.startsWith('PO') && !isEmptyDocVal(poVal);
+        const missingPi = isEmptyDocVal(colPi ? r[colPi] : undefined);
+        return hasPo && missingPi;
+      });
+      const count = countDistinctField(rows, colPo);
+      const byBranch: Record<string, Set<string>> = {};
+      rows.forEach(r => {
+        const b = colCabang ? String(r[colCabang] || 'Unknown') : 'Unknown';
+        const key = colPo ? String(r[colPo] ?? '').trim() : '';
+        if (isEmptyDocVal(key) || !key.toUpperCase().startsWith('PO')) return;
+        if (!byBranch[b]) byBranch[b] = new Set();
+        byBranch[b].add(key);
+      });
+      const topCabang = Object.entries(byBranch)
+        .map(([branch, set]) => ({ branch, count: set.size }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 3);
+      return { count, topCabang };
+    };
+
+    // PR Belum Released
+    const buildPrBelumReleased = () => {
+      const rows = filtered.filter(r => {
+        const poVal = String(colPo ? r[colPo] : '').trim().toUpperCase();
+        const statVal = String(colStatus ? r[colStatus] : '').trim().toUpperCase();
+        return poVal.includes('PR BELUM RELEASE') || statVal.includes('PR BELUM RELEASE');
+      });
+      const count = countDistinctField(rows, colPr);
+      const byBranch: Record<string, Set<string>> = {};
+      rows.forEach(r => {
+        const b = colCabang ? String(r[colCabang] || 'Unknown') : 'Unknown';
+        const key = colPr ? String(r[colPr] ?? '').trim() : '';
+        if (isEmptyDocVal(key)) return;
+        if (!byBranch[b]) byBranch[b] = new Set();
+        byBranch[b].add(key);
+      });
+      const topCabang = Object.entries(byBranch)
+        .map(([branch, set]) => ({ branch, count: set.size }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 3);
+      return { count, topCabang };
+    };
+
+    // PI Belum Ada BL
+    const buildPiNoBl = () => {
+      const rows = filtered.filter(r => {
+        const hasPi = !isEmptyDocVal(colPi ? r[colPi] : undefined);
+        const missingBl = isEmptyDocVal(colBl ? r[colBl] : undefined);
+        return hasPi && missingBl;
+      });
+      const count = countDistinctDocs(rows);
+      const byBranch: Record<string, Set<string>> = {};
+      rows.forEach((r, i) => {
+        const b = colCabang ? String(r[colCabang] || 'Unknown') : 'Unknown';
+        const key = getDocKey(r, i);
+        if (!byBranch[b]) byBranch[b] = new Set();
+        byBranch[b].add(key);
+      });
+      const topCabang = Object.entries(byBranch)
+        .map(([branch, set]) => ({ branch, count: set.size }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 3);
+      return { count, topCabang };
+    };
+
     return {
       prNoPo: buildGap(colPr, colPo, isPoNotYetReleasedStatus),
-      poNoPi: buildGap(colPo, colPi),
-      piNoBl: buildGap(colPi, colBl),
+      poNoPi: buildPoNoPi(),
+      piNoBl: buildPiNoBl(),
+      prBelumReleased: buildPrBelumReleased()
     };
   }, [filtered, colPr, colPo, colPi, colBl, colCabang, colStatus, colContainer]);
 
-  // Distinct count of PR still "IN PROCESS" whose Tanggal ETA has already passed.
-  const inProcessOverdueCount = useMemo(() => {
-    if (!colStatus || !colTanggalEta || filtered.length === 0) return 0;
+  // Distinct count of PR "ON PROCESS" whose Tanggal ETA is <= current date + 90 days, or empty.
+  const onProcessOverdueInsight = useMemo(() => {
+    const empty = { count: 0, topCabang: [] as { branch: string; count: number }[] };
+    if (!colStatus || filtered.length === 0) return empty;
+    
     const rows = filtered.filter(row => {
       const stat = String(row[colStatus] || '').trim().toUpperCase();
       if (!stat.includes('PROCESS')) return false;
+      
+      if (!colTanggalEta) return true;
       const etaDate = parseDateVal(row[colTanggalEta]);
-      if (!etaDate) return false;
-      const diffDays = Math.floor((rawDataProcessingDate.getTime() - etaDate.getTime()) / (1000 * 60 * 60 * 24));
-      return diffDays > 0;
+      if (!etaDate) return true;
+      
+      const diffDays = Math.floor((etaDate.getTime() - rawDataProcessingDate.getTime()) / (1000 * 60 * 60 * 24));
+      return diffDays <= 90;
     });
-    return countDistinctField(rows, colPr);
-  }, [filtered, colStatus, colTanggalEta, colPr, rawDataProcessingDate]);
+    
+    const count = countDistinctField(rows, colPr);
+    const byBranch: Record<string, Set<string>> = {};
+    rows.forEach(row => {
+      const b = colCabang ? String(row[colCabang] || 'Unknown') : 'Unknown';
+      const key = colPr ? String(row[colPr] ?? '').trim() : '';
+      if (isEmptyDocVal(key)) return;
+      if (!byBranch[b]) byBranch[b] = new Set();
+      byBranch[b].add(key);
+    });
+    
+    const topCabang = Object.entries(byBranch)
+      .map(([branch, set]) => ({ branch, count: set.size }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 3);
+
+    return { count, topCabang };
+  }, [filtered, colStatus, colTanggalEta, colPr, colCabang, rawDataProcessingDate]);
 
   // Distinct count of PR already at status READY, plus the top 3 branches
   // holding the most of them (i.e. where stock is ready to be picked up/unloaded).
@@ -2384,8 +2481,10 @@ export default function PRUpdatePage() {
           </div>
 
           {/* ─── INSIGHT: KELENGKAPAN DOKUMEN PR → PO → PI → BL ─── */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
             {[
+              { key: 'prBelumReleased', label: 'PR Belum Released', emoji: '📄', data: documentChainGaps.prBelumReleased,
+                box: 'bg-indigo-50 border-indigo-200', title: 'text-indigo-800', rank: 'text-indigo-700/80', num: 'text-indigo-600' },
               { key: 'prNoPo', label: 'PR Belum Ada PO', emoji: '📄', data: documentChainGaps.prNoPo,
                 box: 'bg-amber-50 border-amber-200', title: 'text-amber-800', rank: 'text-amber-700/80', num: 'text-amber-600' },
               { key: 'poNoPi', label: 'PO Belum Ada PI', emoji: '📋', data: documentChainGaps.poNoPi,
@@ -2394,38 +2493,28 @@ export default function PRUpdatePage() {
                 box: 'bg-rose-50 border-rose-200', title: 'text-rose-800', rank: 'text-rose-700/80', num: 'text-rose-600' },
               { key: 'prReady', label: 'PR Status READY', emoji: '✅', data: readyPrInsight,
                 box: 'bg-emerald-50 border-emerald-200', title: 'text-emerald-800', rank: 'text-emerald-700/80', num: 'text-emerald-600' },
+              { key: 'onProcessOverdue', label: 'PR "On Process" Overdue ETA', emoji: '⏱️', data: onProcessOverdueInsight,
+                box: 'bg-cyan-50 border-cyan-200', title: 'text-cyan-800', rank: 'text-cyan-700/80', num: 'text-cyan-600' },
             ].map(card => (
-              <div key={card.key} className={`p-4 rounded-2xl border shadow-sm ${card.box}`}>
-                <div className={`text-xs font-extrabold uppercase tracking-wider flex items-center gap-1.5 ${card.title}`}>
+              <div key={card.key} className={`p-4 rounded-2xl border shadow-sm flex flex-col h-full ${card.box}`}>
+                <div className={`text-[10px] sm:text-xs font-extrabold uppercase tracking-wider flex items-center gap-1.5 ${card.title}`}>
                   <span>{card.emoji} {card.label}</span>
                 </div>
-                <div className="text-xl sm:text-2xl font-black text-slate-900 mt-1.5">
-                  {card.data.count} <span className="text-xs font-semibold text-slate-600">Dokumen (Distinct)</span>
+                <div className="text-xl sm:text-2xl font-black text-slate-900 mt-1.5 mb-2">
+                  {card.data.count} <span className="text-[10px] sm:text-xs font-semibold text-slate-600">Dokumen</span>
                 </div>
                 {card.data.topCabang.length > 0 && (
-                  <div className="text-[11px] text-slate-700 font-semibold mt-2 space-y-0.5">
-                    <div className={`uppercase tracking-wider text-[10px] ${card.rank}`}>Top 3 Cabang:</div>
+                  <div className={`mt-auto pt-2 border-t border-black/5 text-[11px] text-slate-700 font-semibold space-y-0.5`}>
+                    <div className={`uppercase tracking-wider text-[9px] mb-1 ${card.rank}`}>Top 3 Cabang:</div>
                     {card.data.topCabang.map((b, i) => (
                       <div key={i} className="flex items-center gap-1">
-                        <span className={card.num}>{i + 1}.</span> {b.branch} <span className="font-mono text-slate-500">({b.count})</span>
+                        <span className={card.num}>{i + 1}.</span> <span className="truncate">{b.branch}</span> <span className="font-mono text-slate-500 ml-auto">({b.count})</span>
                       </div>
                     ))}
                   </div>
                 )}
               </div>
             ))}
-
-            <div className="p-4 rounded-2xl bg-indigo-50 border border-indigo-200 shadow-sm">
-              <div className="text-xs text-indigo-800 font-extrabold uppercase tracking-wider flex items-center gap-1.5">
-                <span>⏱️ PR &quot;In Process&quot; Overdue ETA</span>
-              </div>
-              <div className="text-xl sm:text-2xl font-black text-slate-900 mt-1.5">
-                {inProcessOverdueCount} <span className="text-xs font-semibold text-slate-600">PR (Distinct)</span>
-              </div>
-              <p className="text-[11px] text-slate-600 mt-2 leading-snug">
-                Jumlah PR berstatus IN PROCESS yang Tanggal ETA-nya sudah lewat dari tanggal olah data.
-              </p>
-            </div>
           </div>
 
           {/* Excel Filter Modal Popover */}
