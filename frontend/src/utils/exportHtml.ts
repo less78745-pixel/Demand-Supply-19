@@ -139,6 +139,11 @@ export function getHtmlExportString(elementId: string): string {
 
 export function downloadHtml(htmlContent: string, filename: string) {
   const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+  downloadBlob(blob, filename);
+}
+
+/** Trigger a browser download for any Blob (e.g. the .zip returned by the dual-export endpoint). */
+export function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;

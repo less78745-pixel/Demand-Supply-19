@@ -9,6 +9,7 @@ import { KPICard } from '@/components/ui/KPICard';
 import { MultiSelect } from '@/components/ui/MultiSelect';
 import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import { ExportHtmlButton } from '@/components/ui/ExportHtmlButton';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { ModuleExportConfig } from '@/utils/offlineExport';
 import {
   ClipboardList, Download, Info, Package, BarChart3,
@@ -1126,40 +1127,45 @@ export default function SOHAnalysisPage() {
     ],
   } : undefined;
 
+  // ── Dual-export (HTML + Excel raw data terfilter cabang) wiring ──
+  // Excel raw source diambil dari `currentData.data` (sheet Qty/Value yang
+  // sedang aktif, sebelum filter category/insentif/DOI, hanya cabang) supaya
+  // Excel berisi seluruh record cabang terpilih apa adanya, dan filter cabang
+  // benar-benar ditegakkan ulang di backend.
+  const dualExportRawRows = currentData?.data ?? undefined;
+
   return (
     <div id="export-container" className="space-y-8 pb-16 min-h-screen animate-fade-in text-foreground">
       {/* ─── HEADER SECTION ─── */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-emerald-950 to-slate-900 p-6 sm:p-8 border border-emerald-500/20 shadow-2xl">
-        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#10b981_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase tracking-widest">
-              <ClipboardList className="w-3.5 h-3.5" /> Dashboard Data Harian • SOH-TO-Vessel
-            </div>
-            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white flex items-center gap-3">
-              SOH-TO-Vessel <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-cyan-400 to-teal-300">(Weekly Grouping Analytics)</span>
-            </h1>
-            <p className="text-slate-300 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
-              Analisis persediaan terstruktur dengan pengelompokan mingguan: <b>On Hand ➔ TO Week 1-4 ➔ Vessel Week 1-4 ➔ Plan Loading</b>.
-              Dilengkapi evaluasi ketahanan stok dan grafik perbandingan TO vs Vessel.
-            </p>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+      <PageHeader
+        icon={ClipboardList}
+        eyebrow="Dashboard Data Harian • SOH-TO-Vessel"
+        title="SOH-TO-Vessel"
+        highlight="(Weekly Grouping Analytics)"
+        description={<>Analisis persediaan terstruktur dengan pengelompokan mingguan: <b>On Hand ➔ TO Week 1-4 ➔ Vessel Week 1-4 ➔ Plan Loading</b>. Dilengkapi evaluasi ketahanan stok dan grafik perbandingan TO vs Vessel.</>}
+        actions={
+          <>
             <TimestampBadge timestamp={parsed?.processed_at} label="Olah Terakhir:" />
             {exportConfig
-              ? <ExportHtmlButton config={exportConfig} moduleName="SOH_TO_Analysis" processedAt={parsed?.processed_at} />
+              ? <ExportHtmlButton
+                  config={exportConfig}
+                  moduleName="SOH_TO_Analysis"
+                  processedAt={parsed?.processed_at}
+                  cabang={selectedCabang}
+                  rawRows={dualExportRawRows}
+                  cabangField={colCabang}
+                />
               : <ExportHtmlButton elementId="export-container" moduleName="SOH_TO_Analysis" processedAt={parsed?.processed_at} />}
             <button
               onClick={() => setShowHowTo(!showHowTo)}
-              className="no-export w-full sm:w-auto px-4 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2"
+              className="no-export min-h-[44px] w-full sm:w-auto px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-xl text-xs sm:text-sm font-semibold transition-colors flex items-center justify-center gap-2"
             >
               <HelpCircle className="w-4 h-4" />
               {showHowTo ? 'Tutup Panduan' : 'Panduan & Template'}
             </button>
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {/* ─── PANDUAN, TEMPLATE & UPLOAD SECTION ─── */}
       {showHowTo && (
@@ -1904,32 +1910,37 @@ export default function SOHAnalysisPage() {
                   <div className="space-y-1.5 mt-2">
                     <div className="flex justify-between items-center text-slate-700">
                       <span>🟢 Aman (1.25 - 1.50x):</span>
-                      <strong className="text-emerald-400 font-mono">{ratioInsights.amanCount} Item</strong>
+                      <strong className="text-emerald-600 font-mono">{ratioInsights.amanCount} Item</strong>
                     </div>
                     <div className="flex justify-between items-center text-slate-700">
                       <span>🟡 Hati-Hati (1.00 - 1.25x):</span>
-                      <strong className="text-amber-400 font-mono">{ratioInsights.hatiCount} Item</strong>
+                      <strong className="text-amber-600 font-mono">{ratioInsights.hatiCount} Item</strong>
                     </div>
                     <div className="flex justify-between items-center text-slate-700">
                       <span>🟣 Overstock (&gt;1.50x):</span>
-                      <strong className="text-purple-300 font-mono">{ratioInsights.overstockCount} ({ratioInsights.overstockPct}%)</strong>
+                      <strong className="text-purple-600 font-mono">{ratioInsights.overstockCount} ({ratioInsights.overstockPct}%)</strong>
                     </div>
                     <div className="flex justify-between items-center text-slate-700">
                       <span>🔴 Bahaya (&lt;1.00x):</span>
-                      <strong className="text-rose-400 font-mono">{ratioInsights.bahayaCount} ({ratioInsights.bahayaPct}%)</strong>
+                      <strong className="text-rose-600 font-mono">{ratioInsights.bahayaCount} ({ratioInsights.bahayaPct}%)</strong>
                     </div>
                   </div>
                 </div>
                 <div className="mt-3 pt-2.5 border-t border-slate-200/80 text-[11px] text-slate-600">
-                  Total Surplus Qty: <strong className="text-purple-300">{ratioInsights.totalSurplusQty.toLocaleString('id-ID')}</strong> | Defisit: <strong className="text-rose-400">{ratioInsights.totalDefisitQty.toLocaleString('id-ID')}</strong>
+                  Total Surplus Qty: <strong className="text-purple-600">{ratioInsights.totalSurplusQty.toLocaleString('id-ID')}</strong> | Defisit: <strong className="text-rose-600">{ratioInsights.totalDefisitQty.toLocaleString('id-ID')}</strong>
                 </div>
               </div>
 
-              {/* Box 2: Sorotan Kritis (Bahaya / Defisit) */}
+              {/* Box 2: Sorotan Kritis (Bahaya / Defisit) -- dark card, so every
+                  label/footer text here needs a LIGHT shade (rose-300 etc), not
+                  the rose-700 meant for a light background - that combo used to
+                  render as near-invisible dark-red-on-near-black text. Only the
+                  ratio chip keeps a dark shade because it sits on its own light
+                  bg-rose-100 pill. */}
               <div className="p-4 rounded-xl bg-rose-950/20 border border-rose-500/30 flex flex-col justify-between">
                 <div>
-                  <span className="text-rose-700 font-bold uppercase tracking-wider text-[10px] sm:text-[11px] mb-2 flex items-center gap-1.5">
-                    <AlertTriangle className="w-3.5 h-3.5 text-rose-600" /> Cabang & Kategori Defisit Kritis (Rasio &lt; 1.0x)
+                  <span className="text-rose-300 font-bold uppercase tracking-wider text-[10px] sm:text-[11px] mb-2 flex items-center gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5 text-rose-400" /> Cabang & Kategori Defisit Kritis (Rasio &lt; 1.0x)
                   </span>
                   {ratioInsights.topCritical.length > 0 ? (
                     <div className="space-y-2 mt-2">
@@ -1952,17 +1963,19 @@ export default function SOHAnalysisPage() {
                   )}
                 </div>
                 {ratioInsights.topCritical.length > 0 && (
-                  <div className="mt-3 pt-2.5 border-t border-rose-500/20 text-[10px] sm:text-[11px] text-rose-700">
+                  <div className="mt-3 pt-2.5 border-t border-rose-500/20 text-[10px] sm:text-[11px] text-rose-300">
                     ⚠️ <strong>Action Required:</strong> Segera percepat jadwal Vessel & Plan Loading untuk item di atas!
                   </div>
                 )}
               </div>
 
-              {/* Box 3: Sorotan Overstock & Rekomendasi Rebalancing */}
+              {/* Box 3: Sorotan Overstock & Rekomendasi Rebalancing -- same fix
+                  as Box 2 (purple-700 -> purple-300 for text sitting directly on
+                  the dark purple-950/20 card). */}
               <div className="p-4 rounded-xl bg-purple-950/20 border border-purple-500/30 flex flex-col justify-between">
                 <div>
-                  <span className="text-purple-700 font-bold uppercase tracking-wider text-[10px] sm:text-[11px] mb-2 flex items-center gap-1.5">
-                    <TrendingUp className="w-3.5 h-3.5 text-purple-600" /> Potensi Rebalancing (Overstock &gt; 1.5x)
+                  <span className="text-purple-300 font-bold uppercase tracking-wider text-[10px] sm:text-[11px] mb-2 flex items-center gap-1.5">
+                    <TrendingUp className="w-3.5 h-3.5 text-purple-400" /> Potensi Rebalancing (Overstock &gt; 1.5x)
                   </span>
                   {ratioInsights.topOverstock.length > 0 ? (
                     <div className="space-y-2 mt-2">
@@ -1978,12 +1991,12 @@ export default function SOHAnalysisPage() {
                       ))}
                     </div>
                   ) : (
-                    <div className="py-6 text-center text-slate-600 font-semibold">
+                    <div className="py-6 text-center text-slate-400 font-semibold">
                       Tidak ditemukan penumpukan stok ekstrem.
                     </div>
                   )}
                 </div>
-                <div className="mt-3 pt-2.5 border-t border-purple-500/20 text-[10px] sm:text-[11px] text-purple-700">
+                <div className="mt-3 pt-2.5 border-t border-purple-500/20 text-[10px] sm:text-[11px] text-purple-300">
                   💡 <strong>Rekomendasi:</strong> Lakukan <b>Transfer Order (TO)</b> antar-cabang dari area surplus ke cabang yang defisit guna menekan holding cost.
                 </div>
               </div>

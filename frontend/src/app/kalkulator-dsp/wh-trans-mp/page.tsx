@@ -15,6 +15,7 @@ import { FileUploader } from '@/components/ui/FileUploader';
 import { supabase } from '@/lib/supabase';
 import { useEffect } from 'react';
 import { ExportHtmlButton } from '@/components/ui/ExportHtmlButton';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { ModuleExportConfig } from '@/utils/offlineExport';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer
@@ -221,25 +222,17 @@ export default function WHTransMPPage() {
 
   return (
     <div id="export-container" className="p-6 max-w-7xl mx-auto space-y-8 animate-in fade-in zoom-in duration-500">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-black text-foreground flex items-center gap-3">
-            <div className="p-2.5 bg-indigo-600 rounded-xl shadow-lg shadow-indigo-200">
-              <MapPin className="w-6 h-6 text-white" />
-            </div>
-            WH-TRANS-MP
-          </h1>
-          <p className="text-muted-foreground mt-2 flex items-center gap-2">
-            Decentralized Logistics Network Simulator
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          {exportConfig
+      <PageHeader
+        icon={MapPin}
+        eyebrow="Kalkulator DSP • Network Simulation"
+        title="WH-TRANS-MP"
+        description="Decentralized Logistics Network Simulator."
+        actions={
+          exportConfig
             ? <ExportHtmlButton config={exportConfig} moduleName="WH_Trans_MP" processedAt={simulationResult?.processed_at} />
-            : <ExportHtmlButton elementId="export-container" moduleName="WH_Trans_MP" processedAt={simulationResult?.processed_at} />}
-        </div>
-      </div>
+            : <ExportHtmlButton elementId="export-container" moduleName="WH_Trans_MP" processedAt={simulationResult?.processed_at} />
+        }
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         

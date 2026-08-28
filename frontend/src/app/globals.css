@@ -13,8 +13,15 @@
     --popover: 0 0% 100%;
     --popover-foreground: 240 19% 15%;
 
-    --primary: 24 85% 68%;
-    --primary-foreground: 240 19% 15%;
+    /* Primary di-tune ke L=40% (bukan L=68% bawaan lama) supaya `text-primary`
+       dan `bg-primary` + teks putih sama-sama lolos kontras WCAG AA (>=4.5:1)
+       di atas background terang -- versi lama (HSL 24 85% 68%) cuma ~2.1:1
+       saat dipakai sebagai warna teks/ikon (Sidebar, MultiSelect, dll).
+       Hue tetap sama (identitas warna jingga tidak berubah), hanya lightness
+       diturunkan. Mode gelap TIDAK ikut berubah -- warna lama sudah ~7:1
+       kontras di atas background gelapnya, jadi aman dan sengaja dibiarkan. */
+    --primary: 22 80% 40%;
+    --primary-foreground: 0 0% 100%;
 
     --secondary: 213 89% 59%;
     --secondary-foreground: 0 0% 100%;
@@ -30,7 +37,7 @@
 
     --border: 240 10% 85%;
     --input: 240 10% 85%;
-    --ring: 24 85% 68%;
+    --ring: 22 80% 45%;
 
     --chart-1: 24 85% 68%;
     --chart-2: 213 89% 59%;

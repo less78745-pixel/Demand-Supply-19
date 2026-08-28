@@ -23,6 +23,7 @@ import { parseDynamicCSV, findColumn, ParsedData } from '@/lib/csvParser';
 import { getStandardFilename } from '@/utils/export';
 import { formatNumberCompact } from '@/lib/utils';
 import { ExportHtmlButton } from '@/components/ui/ExportHtmlButton';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { ModuleExportConfig } from '@/utils/offlineExport';
 
 const COLORS = ['#3b82f6', '#f97316', '#22c55e', '#ef4444', '#a855f7', '#eab308', '#06b6d4', '#ec4899'];
@@ -1560,39 +1561,45 @@ export default function HistorySalesPage() {
     ],
   } : undefined;
 
+  // ── Dual-export (HTML + Excel raw data terfilter cabang) wiring ──
+  // Excel raw source diambil dari `parsed.data` (sebelum filter region/
+  // category/insentif/status DOI, hanya cabang) supaya Excel berisi seluruh
+  // record cabang terpilih apa adanya, dan filter cabang benar-benar
+  // ditegakkan ulang di backend.
+  const dualExportRawRows = parsed?.data ?? undefined;
+
   return (
     <div id="export-container" className="space-y-8 pb-16 min-h-screen animate-fade-in text-foreground">
       {/* ─── HERO BANNER HEADER ─── */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 p-6 sm:p-8 border border-blue-500/20 shadow-2xl">
-        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#3b82f6_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20 uppercase tracking-widest">
-              <TrendingUp className="w-3.5 h-3.5" /> Dashboard Data Harian • History Sales
-            </div>
-            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white flex items-center gap-3">
-              History Sales <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-sky-400 to-cyan-300">(Analytics Engine)</span>
-            </h1>
-            <p className="text-slate-300 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
-              Pemantauan performa penjualan historis. Menganalisa metrik otomatis dari sheet Data Compile secara aktual dan riil.
-            </p>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+      <PageHeader
+        icon={TrendingUp}
+        eyebrow="Dashboard Data Harian • History Sales"
+        title="History Sales"
+        highlight="(Analytics Engine)"
+        description="Pemantauan performa penjualan historis. Menganalisa metrik otomatis dari sheet Data Compile secara aktual dan riil."
+        actions={
+          <>
             <TimestampBadge timestamp={parsed?.processed_at} label="Olah Terakhir:" />
             {exportConfig
-              ? <ExportHtmlButton config={exportConfig} moduleName="History_Sales_Analytics" processedAt={parsed?.processed_at} />
+              ? <ExportHtmlButton
+                  config={exportConfig}
+                  moduleName="History_Sales_Analytics"
+                  processedAt={parsed?.processed_at}
+                  cabang={selectedCabang}
+                  rawRows={dualExportRawRows}
+                  cabangField={colCabang}
+                />
               : <ExportHtmlButton elementId="export-container" moduleName="History_Sales_Analytics" processedAt={parsed?.processed_at} />}
             <button
               onClick={() => setShowHowTo(!showHowTo)}
-              className="no-export w-full sm:w-auto px-4 py-2 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2"
+              className="no-export min-h-[44px] w-full sm:w-auto px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-xl text-xs sm:text-sm font-semibold transition-colors flex items-center justify-center gap-2"
             >
               <HelpCircle className="w-4 h-4" />
               {showHowTo ? 'Tutup Panduan' : 'Panduan & Template'}
             </button>
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {/* ─── PANDUAN, TEMPLATE & UPLOAD SECTION ─── */}
       {showHowTo && (

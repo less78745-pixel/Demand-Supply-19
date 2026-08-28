@@ -20,6 +20,7 @@ import { MultiSelect } from '@/components/ui/MultiSelect';
 import { exportToExcel } from '@/utils/export';
 import { supabase } from '@/lib/supabase';
 import { ExportHtmlButton } from '@/components/ui/ExportHtmlButton';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { ModuleExportConfig } from '@/utils/offlineExport';
 
 const RouteMapChart = dynamic(
@@ -524,36 +525,28 @@ export default function RouteOptimizationPage() {
   return (
     <div id="export-container" className="space-y-8 max-w-[1550px] mx-auto pb-16 animate-in fade-in duration-500 text-foreground">
       {/* ─── COMMAND TOWER HERO BANNER ─── */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#1E1E2C] via-teal-950 to-[#1E1E2C] p-6 sm:p-8 border border-teal-500/20 shadow-2xl">
-        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#14b8a6_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
-        <div className="relative z-10 flex flex-col xl:flex-row xl:items-center justify-between gap-6">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-teal-500/10 text-teal-400 border border-teal-500/20 uppercase tracking-widest">
-              <Route className="w-3.5 h-3.5" /> Kalkulator DSP • VRP Solver & Milk-Run
-            </div>
-            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-foreground flex items-center gap-3">
-              Route Optimization <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-400 via-emerald-300 to-cyan-300">(VRP Solver)</span>
-            </h1>
-            <p className="text-foreground text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
-              Vehicle Routing Problem solver memadukan jarak Haversine dengan algoritma Clarke-Wright Savings, Genetic Algorithm, dan Hybrid Ant Colony Optimization (ACO).
-            </p>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 shrink-0">
+      <PageHeader
+        icon={Route}
+        eyebrow="Kalkulator DSP • VRP Solver & Milk-Run"
+        title="Route Optimization"
+        highlight="(VRP Solver)"
+        description="Vehicle Routing Problem solver memadukan jarak Haversine dengan algoritma Clarke-Wright Savings, Genetic Algorithm, dan Hybrid Ant Colony Optimization (ACO)."
+        actions={
+          <>
             <TimestampBadge timestamp={results?.[0]?.processed_at} label="Olah Terakhir:" />
             {exportConfig
               ? <ExportHtmlButton config={exportConfig} moduleName="Route_Optimization" processedAt={results?.[0]?.processed_at} />
               : <ExportHtmlButton elementId="export-container" moduleName="Route_Optimization" processedAt={results?.[0]?.processed_at} />}
             <button
               onClick={() => setShowHowTo(!showHowTo)}
-              className="w-full sm:w-auto px-4 py-2 bg-teal-600/20 hover:bg-teal-600/30 text-teal-300 border border-teal-500/30 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2"
+              className="no-export min-h-[44px] w-full sm:w-auto px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-xl text-xs sm:text-sm font-semibold transition-colors flex items-center justify-center gap-2"
             >
               <Info className="w-4 h-4" />
               {showHowTo ? 'Tutup Panduan' : 'Panduan & Template'}
             </button>
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {/* ─── PANDUAN & DEMO DATA SECTION ─── */}
       {showHowTo && (

@@ -14,6 +14,7 @@ import { uploadSafetyStockFile } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { getStandardFilename } from '@/utils/export';
 import { ExportHtmlButton } from '@/components/ui/ExportHtmlButton';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { ModuleExportConfig } from '@/utils/offlineExport';
 import { supabase } from '@/lib/supabase';
 
@@ -429,40 +430,45 @@ export default function SafetyStockPage() {
     ],
   } : undefined;
 
+  // ── Dual-export (HTML + Excel raw data terfilter cabang) wiring ──
+  // Excel diambil dari `results.results` (raw, sebelum filter status/skenario)
+  // supaya backend yang menegakkan ulang filter cabang, bukan sekadar
+  // meneruskan subset yang sudah difilter di client.
+  const dualExportRawRows = results?.results;
+
   return (
     <div id="export-container" className="space-y-8 max-w-[1550px] mx-auto pb-16 animate-in fade-in duration-500 text-foreground">
 
       {/* ─── COMMAND TOWER HERO BANNER ─── */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-6 sm:p-8 border border-indigo-500/20 shadow-2xl">
-        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(hsl(var(--secondary))_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
-        <div className="relative z-10 flex flex-col xl:flex-row xl:items-center justify-between gap-6">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 uppercase tracking-widest">
-              <ShieldCheck className="w-3.5 h-3.5" /> SCM Analytic • Inventory Protection
-            </div>
-            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white flex items-center gap-3">
-              Dynamic <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-blue-300 to-cyan-300">Safety Stock & ROP</span>
-            </h1>
-            <p className="text-white/75 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
-              Kalkulasi cadangan pengaman (Safety Stock) dan titik pemesanan ulang (Reorder Point) secara dinamis memadukan variabilitas demand dan fluktuasi lead time pengiriman per SKU per Cabang.
-            </p>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 shrink-0">
+      <PageHeader
+        icon={ShieldCheck}
+        eyebrow="SCM Analytic • Inventory Protection"
+        title="Dynamic"
+        highlight="Safety Stock & ROP"
+        description="Kalkulasi cadangan pengaman (Safety Stock) dan titik pemesanan ulang (Reorder Point) secara dinamis memadukan variabilitas demand dan fluktuasi lead time pengiriman per SKU per Cabang."
+        actions={
+          <>
             <TimestampBadge timestamp={results?.processed_at} label="Olah Terakhir:" />
             {exportConfig
-              ? <ExportHtmlButton config={exportConfig} moduleName="Safety_Stock_ROP" processedAt={results?.processed_at} />
+              ? <ExportHtmlButton
+                  config={exportConfig}
+                  moduleName="Safety_Stock_ROP"
+                  processedAt={results?.processed_at}
+                  cabang={selectedCabang}
+                  rawRows={dualExportRawRows}
+                  cabangField="cabang"
+                />
               : <ExportHtmlButton elementId="export-container" moduleName="Safety_Stock_ROP" processedAt={results?.processed_at} />}
             <button
               onClick={() => setShowHowTo(!showHowTo)}
-              className="no-export w-full sm:w-auto px-4 py-2 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2"
+              className="no-export min-h-[44px] w-full sm:w-auto px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-xl text-xs sm:text-sm font-semibold transition-colors flex items-center justify-center gap-2"
             >
               <Info className="w-4 h-4" />
               {showHowTo ? 'Tutup Panduan' : 'Panduan & Template'}
             </button>
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {/* ─── PANDUAN & DEMO DATA SECTION ─── */}
       {showHowTo && (

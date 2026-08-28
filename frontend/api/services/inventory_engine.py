@@ -23,17 +23,22 @@ def run_inventory_from_mrp_bytes(file_bytes: bytes) -> dict:
     if "Raw" not in wb.sheetnames or "WH" not in wb.sheetnames:
         raise ValueError("File tidak memiliki sheet 'Raw' dan 'WH'")
     
-    from services.occupancy_engine import detect_week_count, read_raw_records, compute_balance_series, read_week_awal, build_period_labels
+    from services.occupancy_engine import (
+        detect_week_count, read_raw_records, compute_balance_series,
+        read_week_awal, build_period_labels, build_to_recommendations,
+    )
     ws_raw = wb["Raw"]
     ws_wh = wb["WH"]
     n_weeks = detect_week_count(ws_raw)
     week_awal = read_week_awal(ws_wh, default=1)
     period_labels = build_period_labels(week_awal, n_weeks)
     records = read_raw_records(ws_raw, n_weeks)
-    
+
     inv_rows = []
+    bal_t = {}
     for rec in records:
         bf = compute_balance_series(rec, n_weeks)
+        bal_t[id(rec)] = bf
         for w in range(n_weeks):
             synth_date = (datetime(2026, 1, 1) + timedelta(weeks=w)).strftime("%Y-%m-%d")
             inv_rows.append({
@@ -46,9 +51,15 @@ def run_inventory_from_mrp_bytes(file_bytes: bytes) -> dict:
                 "On Hand": bf[w],
                 "PeriodLabel": period_labels[w]
             })
-            
+
     df_inv = pd.DataFrame(inv_rows)
-    return run_inventory_analysis(df_inv)
+    result = run_inventory_analysis(df_inv)
+    # Rekomendasi TO (Transfer Order): sama persis logikanya dengan menu
+    # Occupancy (reuse build_to_recommendations) -- lihat docstring fungsi
+    # tsb di occupancy_engine.py untuk detail langkah agregasi/join & versi SQL.
+    if isinstance(result, dict) and "error" not in result:
+        result["to_recommendations"] = build_to_recommendations(records, bal_t, period_labels, n_weeks)
+    return result
 
 
 def run_inventory_analysis(df: pd.DataFrame) -> dict:

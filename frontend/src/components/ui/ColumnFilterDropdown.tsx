@@ -81,6 +81,9 @@ export function FilterableHeader({
   options,
   className = '',
   accentClassName = 'text-emerald-400',
+  width,
+  minWidth = 80,
+  onWidthChange,
 }: {
   label: string;
   columnKey: string;
@@ -92,9 +95,37 @@ export function FilterableHeader({
   className?: string;
   /** Override the active-filter icon color, e.g. for modules with a strict palette. */
   accentClassName?: string;
+  /** Current column width in px. Pass together with onWidthChange to get a
+   * drag handle on the right edge of the header so users can resize the
+   * column - omit both to keep the old fixed/percentage-width behavior. */
+  width?: number;
+  minWidth?: number;
+  onWidthChange?: (columnKey: string, width: number) => void;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const thRef = useRef<HTMLTableCellElement>(null);
+
+  const handleResizeStart = (e: React.MouseEvent) => {
+    if (!onWidthChange) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+    // Measure the header's CURRENT rendered width (not the `width` prop,
+    // which is only set once a column has been manually resized) so a drag
+    // starting from the default/auto-fit layout resizes smoothly from
+    // wherever the column actually is, instead of snapping first.
+    const startWidth = thRef.current?.getBoundingClientRect().width ?? width ?? minWidth;
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      onWidthChange(columnKey, Math.max(minWidth, startWidth + (moveEvent.clientX - startX)));
+    };
+    const handleMouseUp = () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
   const isActive = !!activeFilter && (
     (!!activeFilter.text && activeFilter.text.length > 0) ||
     (activeFilter.min !== undefined && activeFilter.min !== '') ||
@@ -115,9 +146,13 @@ export function FilterableHeader({
   const justifyClass = align === 'right' ? 'justify-end' : align === 'center' ? 'justify-center' : 'justify-start';
 
   return (
-    <th className={`relative py-2.5 px-3 select-none ${alignClass} ${className}`}>
+    <th
+      ref={thRef}
+      className={`relative py-2.5 px-3 select-none ${alignClass} ${className}`}
+      style={width !== undefined ? { width, minWidth: width, maxWidth: width } : undefined}
+    >
       <div className={`flex items-center gap-1.5 ${justifyClass}`}>
-        <span>{label}</span>
+        <span className="truncate">{label}</span>
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }}
@@ -200,6 +235,13 @@ export function FilterableHeader({
             </button>
           )}
         </div>
+      )}
+
+      {onWidthChange && (
+        <div
+          onMouseDown={handleResizeStart}
+          className="no-export absolute top-0 right-0 h-full w-1.5 cursor-col-resize select-none touch-none hover:bg-primary/40 active:bg-primary/60"
+        />
       )}
     </th>
   );

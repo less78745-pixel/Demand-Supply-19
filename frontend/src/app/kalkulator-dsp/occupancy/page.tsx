@@ -6,7 +6,7 @@ import dynamic from 'next/dynamic';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { FileUploader } from '@/components/ui/FileUploader';
 import { KPICard } from '@/components/ui/KPICard';
-import { Activity, AlertTriangle, Info, TrendingUp, TrendingDown, AlertOctagon, Layers, Download, Sparkles, HelpCircle, FileSpreadsheet, Zap, Cloud } from 'lucide-react';
+import { Activity, AlertTriangle, Info, TrendingUp, TrendingDown, AlertOctagon, Layers, Download, Sparkles, HelpCircle, FileSpreadsheet, Zap, Cloud, ArrowLeftRight } from 'lucide-react';
 import { uploadOccupancyFileAsync, downloadOccupancyTemplate, downloadOccupancyExcelFromStorage } from '@/lib/api';
 import { AsyncUploadStatus } from '@/components/ui/AsyncUploadStatus';
 import { MultiSelect } from '@/components/ui/MultiSelect';
@@ -15,6 +15,7 @@ import toast from 'react-hot-toast';
 import { getStandardFilename } from '@/utils/export';
 import { exportOccupancyWorkbook, exportCombinedWorkbook, base64ToArrayBuffer } from '@/utils/exportOccupancyWorkbook';
 import { ExportHtmlButton } from '@/components/ui/ExportHtmlButton';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { ModuleExportConfig } from '@/utils/offlineExport';
 import { supabase } from '@/lib/supabase';
 import { useColumnFilters, FilterableHeader } from '@/components/ui/ColumnFilterDropdown';
@@ -579,6 +580,20 @@ export default function OccupancyPage() {
     );
   }, [results, selectedCabang, selectedDate]);
 
+  // Rekomendasi TO (Transfer Order): sandingkan Shortage & Overstock Alerts
+  // pada kombinasi (Minggu, Cabang, Grup, Category) yang sama persis --
+  // sudah dihitung backend (build_to_recommendations), di sini cuma
+  // mengikuti filter Cabang & Tanggal aktif di layar, cermin
+  // filteredShortageAlerts/filteredOverstockAlerts di atas (field tanggal-nya
+  // bernama `week`, bukan `date`, sama seperti inventory_value_rows).
+  const filteredToRecommendations = useMemo(() => {
+    if (!results?.to_recommendations) return [];
+    return results.to_recommendations.filter((r: any) =>
+      (selectedCabang.includes('All') || selectedCabang.includes(r.cabang)) &&
+      (selectedDate.includes('All') || selectedDate.includes(r.week))
+    );
+  }, [results, selectedCabang, selectedDate]);
+
   // Sheet 1 "Analisa Nilai Inventori" (Download Excel Ringkasan): row per
   // Cabang+Grup+Category+Week, mengikuti filter Cabang & Tanggal aktif di
   // layar sama seperti filteredShortageAlerts/filteredOverstockAlerts.
@@ -741,6 +756,34 @@ export default function OccupancyPage() {
   ]), []);
   const overstockTableFilters = useColumnFilters(filteredOverstockAlerts, overstockColumnDefs);
 
+  // ── Column filters (Excel-like): "Rekomendasi TO" table (cermin Shortage/
+  // Overstock di atas, ditambah kolom Grup & Week karena granularitasnya
+  // per Minggu x Cabang x Grup x Category) ──
+  const toColumnDefs = useMemo(() => ([
+    { key: 'week', type: 'select' as const, getValue: (r: any) => r.week },
+    { key: 'cabang', type: 'select' as const, getValue: (r: any) => r.cabang },
+    { key: 'grup', type: 'text' as const, getValue: (r: any) => r.grup },
+    { key: 'category', type: 'text' as const, getValue: (r: any) => r.category },
+    { key: 'shortage_value', type: 'number' as const, getValue: (r: any) => Number(r.shortage_value || 0) },
+    { key: 'overstock_value', type: 'number' as const, getValue: (r: any) => Number(r.overstock_value || 0) },
+    { key: 'recommended_to', type: 'number' as const, getValue: (r: any) => Number(r.recommended_to || 0) },
+  ]), []);
+  const toTableFilters = useColumnFilters(filteredToRecommendations, toColumnDefs);
+
+  // Resizable columns for the Rekomendasi TO table. Starts EMPTY on purpose:
+  // each column falls back to its original percentage width (auto-fits the
+  // GlassCard's available area, exactly like before) until the user actually
+  // drags a column's edge, at which point only THAT column switches to a
+  // fixed px width - so header labels never get force-clipped by a guessed
+  // default that's narrower than the label itself.
+  const [toColWidths, setToColWidths] = useState<Record<string, number>>({});
+  const handleToColResize = (key: string, width: number) =>
+    setToColWidths((prev) => ({ ...prev, [key]: width }));
+  const TO_COL_DEFAULT_PCT: Record<string, string> = {
+    week: 'w-[12%]', cabang: 'w-[16%]', grup: 'w-[14%]', category: 'w-[20%]',
+    shortage_value: 'w-[13%]', overstock_value: 'w-[13%]', recommended_to: 'w-[12%]',
+  };
+
   // ── Offline HTML export config: full raw dataset (not the live-narrowed
   // filteredData) so the exported file's own filters can range over everything,
   // not just whatever cabang/date/scenario was selected at export time. ──
@@ -817,6 +860,22 @@ export default function OccupancyPage() {
         ],
       },
       {
+        id: 'to_recommendations',
+        title: 'Rekomendasi TO / Transfer Order (Mengikuti Filter & Kolom Aktif di Layar)',
+        filterFields: ['cabang', 'week'],
+        data: toTableFilters.filteredData,
+        emptyLabel: 'Tidak ada rekomendasi TO untuk filter yang dipilih.',
+        columns: [
+          { key: 'week', label: 'Minggu' },
+          { key: 'cabang', label: 'Cabang' },
+          { key: 'grup', label: 'Grup' },
+          { key: 'category', label: 'Category' },
+          { key: 'shortage_value', label: 'Nilai Shortage', align: 'right', format: 'number' },
+          { key: 'overstock_value', label: 'Nilai Overstock', align: 'right', format: 'number' },
+          { key: 'recommended_to', label: 'Rekomendasi TO', align: 'right', format: 'number' },
+        ],
+      },
+      {
         id: 'mos_data',
         title: 'Sheet Harga Container & Kalkulasi MOS (Mengikuti Filter Cabang di Layar)',
         filterFields: ['cabang'],
@@ -842,40 +901,50 @@ export default function OccupancyPage() {
       { id: 'min_occupancy', label: 'Min Occupancy', sourceTableId: 'daily_data', field: 'occupancy_pct', agg: 'min', suffix: '%' },
       { id: 'shortage_count', label: 'Shortage Alerts', sourceTableId: 'shortage_alerts', field: 'deficit', agg: 'count', decimals: 0, suffix: '' },
       { id: 'overstock_count', label: 'Overstock Alerts', sourceTableId: 'overstock_alerts', field: 'excess', agg: 'count', decimals: 0, suffix: '' },
+      { id: 'to_recommendation_count', label: 'Rekomendasi TO', sourceTableId: 'to_recommendations', field: 'recommended_to', agg: 'count', decimals: 0, suffix: '' },
     ],
   } : undefined;
+
+  // ── Dual-export (HTML + Excel raw data terfilter cabang) wiring ──
+  // `daily_data` dipakai sebagai raw source (bukan `filteredDailyData`) karena
+  // itu dataset per-cabang-per-hari paling lengkap yang tersedia (KPI Avg/Peak/
+  // Min Occupancy semuanya diturunkan darinya) - shortage/overstock alerts
+  // adalah daftar exception, bukan raw data. Filter cabang tetap ditegakkan
+  // ulang di backend memakai `selectedCabang` yang sama dengan tampilan layar.
+  const dualExportRawRows = mrpData?.daily_data ?? undefined;
 
   return (
     <div id="export-container" className="space-y-8 max-w-[1550px] mx-auto pb-16 animate-in fade-in duration-500 text-foreground">
 
-      {/* ─── COMMAND TOWER HERO BANNER ─── */}
-      <div className="relative overflow-hidden rounded-2xl bg-black p-6 sm:p-8 border border-orange-500/30 shadow-2xl">
-        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#f97316_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
-        <div className="relative z-10 flex flex-col xl:flex-row xl:items-center justify-between gap-6">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-orange-500/10 text-orange-400 border border-orange-500/30 uppercase tracking-widest">
-              <Activity className="w-3.5 h-3.5" /> Kalkulator DSP • Warehouse & Inventory Projector
-            </div>
-            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white flex items-center gap-3">
-              Occupancy & <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 via-orange-300 to-white">Inventory Projector</span>
-            </h1>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 shrink-0">
+      <PageHeader
+        icon={Activity}
+        eyebrow="Kalkulator DSP • Warehouse & Inventory Projector"
+        title="Occupancy &"
+        highlight="Inventory Projector"
+        description="Proyeksi utilisasi gudang dan risiko stok (shortage/overstock) harian per cabang, lengkap dengan rekomendasi Transfer Order (TO) lintas cabang."
+        actions={
+          <>
             <TimestampBadge timestamp={results?.processed_at} label="Olah Terakhir:" />
             {exportConfig
-              ? <ExportHtmlButton config={exportConfig} moduleName="Occupancy_Analisa" processedAt={results?.processed_at} />
+              ? <ExportHtmlButton
+                  config={exportConfig}
+                  moduleName="Occupancy_Analisa"
+                  processedAt={results?.processed_at}
+                  cabang={selectedCabang}
+                  rawRows={dualExportRawRows}
+                  cabangField="cabang"
+                />
               : <ExportHtmlButton elementId="export-container" moduleName="Occupancy_Analisa" processedAt={results?.processed_at} />}
             <button
               onClick={() => setShowHowTo(!showHowTo)}
-              className="no-export w-full sm:w-auto px-4 py-2 bg-orange-500/10 hover:bg-orange-500/20 text-orange-300 border border-orange-500/30 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2"
+              className="no-export min-h-[44px] w-full sm:w-auto px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-xl text-xs sm:text-sm font-semibold transition-colors flex items-center justify-center gap-2"
             >
               <HelpCircle className="w-4 h-4" />
               {showHowTo ? 'Tutup Panduan' : 'Panduan & Template'}
             </button>
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {/* ─── PANDUAN & DEMO DATA SECTION ─── */}
       {showHowTo && (
@@ -1504,6 +1573,149 @@ export default function OccupancyPage() {
                             <td className="px-4 py-3 font-medium text-foreground truncate">{a.category}</td>
                             <td className="px-4 py-3 truncate">{a.date}</td>
                             <td className="px-4 py-3 text-right text-amber-600 font-bold">{Number(a.excess).toFixed(0)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              />
+            </GlassCard>
+          )}
+
+          {/* Rekomendasi TO (Transfer Order): sandingkan Shortage & Overstock Alerts
+              pada kombinasi Minggu+Cabang+Grup+Category yang sama persis — lihat
+              build_to_recommendations di occupancy_engine.py untuk logikanya. */}
+          {filteredToRecommendations.length > 0 && (
+            <GlassCard className="no-export border-primary/30 bg-primary/5">
+              <h3 className="text-lg font-bold text-primary mb-4 flex items-center gap-2 uppercase tracking-wide">
+                <ArrowLeftRight className="w-5 h-5" /> Rekomendasi TO / Transfer Order (Mengikuti Filter)
+              </h3>
+              {results?.to_recommendations_truncated && (
+                <div className="mb-3 text-xs font-semibold text-primary/80 bg-primary/10 border border-primary/30 rounded-lg px-3 py-2">
+                  Dataset sangat besar: hanya {(results.to_recommendations || []).length.toLocaleString('id-ID')} dari total {Number(results.to_recommendations_total_count || 0).toLocaleString('id-ID')} rekomendasi TO (nilai terbesar) yang disimpan, agar hasil tetap bisa disinkronkan secara realtime.
+                </div>
+              )}
+              {toTableFilters.activeCount > 0 && (
+                <button
+                  onClick={toTableFilters.clearAll}
+                  className="no-export mb-3 text-xs font-semibold text-orange-500 hover:text-orange-400 underline"
+                >
+                  Hapus semua filter kolom ({toTableFilters.activeCount})
+                </button>
+              )}
+              <PaginatedTable
+                data={toTableFilters.filteredData}
+                pageSize={50}
+                renderTable={(slicedData) => (
+                  <div className="relative overflow-x-auto max-h-96 overflow-y-auto rounded-lg border border-border">
+                    <table className="w-full text-sm text-left text-muted-foreground table-fixed border-collapse">
+                      <colgroup>
+                        {Object.keys(TO_COL_DEFAULT_PCT).map((key) => (
+                          toColWidths[key] !== undefined
+                            ? <col key={key} style={{ width: toColWidths[key] }} />
+                            : <col key={key} className={TO_COL_DEFAULT_PCT[key]} />
+                        ))}
+                      </colgroup>
+                      <thead className="text-xs text-foreground uppercase bg-muted border-b border-border sticky top-0 z-10 font-bold tracking-wider">
+                        <tr>
+                          <FilterableHeader
+                            label="Minggu"
+                            columnKey="week"
+                            type="select"
+                            className="py-3 px-4"
+                            options={toTableFilters.uniqueValuesByKey['week']}
+                            activeFilter={toTableFilters.filters['week']}
+                            onChange={(v) => toTableFilters.setFilter('week', v)}
+                            width={toColWidths.week}
+                            onWidthChange={handleToColResize}
+                          />
+                          <FilterableHeader
+                            label="Cabang"
+                            columnKey="cabang"
+                            type="select"
+                            className="py-3 px-4"
+                            options={toTableFilters.uniqueValuesByKey['cabang']}
+                            activeFilter={toTableFilters.filters['cabang']}
+                            onChange={(v) => toTableFilters.setFilter('cabang', v)}
+                            width={toColWidths.cabang}
+                            onWidthChange={handleToColResize}
+                          />
+                          <FilterableHeader
+                            label="Grup"
+                            columnKey="grup"
+                            type="text"
+                            className="py-3 px-4"
+                            activeFilter={toTableFilters.filters['grup']}
+                            onChange={(v) => toTableFilters.setFilter('grup', v)}
+                            width={toColWidths.grup}
+                            onWidthChange={handleToColResize}
+                          />
+                          <FilterableHeader
+                            label="Category"
+                            columnKey="category"
+                            type="text"
+                            className="py-3 px-4"
+                            activeFilter={toTableFilters.filters['category']}
+                            onChange={(v) => toTableFilters.setFilter('category', v)}
+                            width={toColWidths.category}
+                            onWidthChange={handleToColResize}
+                          />
+                          <FilterableHeader
+                            label="Nilai Shortage"
+                            columnKey="shortage_value"
+                            type="number"
+                            align="right"
+                            className="py-3 px-4"
+                            activeFilter={toTableFilters.filters['shortage_value']}
+                            onChange={(v) => toTableFilters.setFilter('shortage_value', v)}
+                            width={toColWidths.shortage_value}
+                            onWidthChange={handleToColResize}
+                          />
+                          <FilterableHeader
+                            label="Nilai Overstock"
+                            columnKey="overstock_value"
+                            type="number"
+                            align="right"
+                            className="py-3 px-4"
+                            activeFilter={toTableFilters.filters['overstock_value']}
+                            onChange={(v) => toTableFilters.setFilter('overstock_value', v)}
+                            width={toColWidths.overstock_value}
+                            onWidthChange={handleToColResize}
+                          />
+                          <FilterableHeader
+                            label="Rekomendasi TO"
+                            columnKey="recommended_to"
+                            type="number"
+                            align="right"
+                            className="py-3 px-4"
+                            activeFilter={toTableFilters.filters['recommended_to']}
+                            onChange={(v) => toTableFilters.setFilter('recommended_to', v)}
+                            width={toColWidths.recommended_to}
+                            onWidthChange={handleToColResize}
+                          />
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border/60">
+                        {slicedData.map((r: any, i: number) => (
+                          <tr key={i} className="hover:bg-muted/30 transition-colors bg-background align-top">
+                            <td className="px-4 py-3 truncate" title={String(r.week ?? '')}>{r.week}</td>
+                            <td className="px-4 py-3 font-medium text-foreground truncate" title={String(r.cabang ?? '')}>{r.cabang}</td>
+                            <td className="px-4 py-3 truncate" title={String(r.grup ?? '')}>{r.grup}</td>
+                            <td className="px-4 py-3 font-medium text-foreground truncate" title={String(r.category ?? '')}>{r.category}</td>
+                            <td className="px-4 py-3 text-right text-destructive font-bold whitespace-nowrap">{Number(r.shortage_value).toFixed(0)}</td>
+                            <td className="px-4 py-3 text-right">
+                              <div className="text-amber-600 font-bold whitespace-nowrap">{Number(r.overstock_value).toFixed(0)}</div>
+                              {Array.isArray(r.overstock_sources) && r.overstock_sources.length > 0 && (
+                                <div
+                                  className="text-[11px] text-muted-foreground font-normal leading-snug line-clamp-2 break-words"
+                                  title={r.overstock_sources.map((s: any) => `${s.cabang} (${Number(s.value).toFixed(0)})`).join(', ')}
+                                >
+                                  dari {r.overstock_sources.map((s: any) => `${s.cabang} (${Number(s.value).toFixed(0)})`).join(', ')}
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-right text-primary font-bold whitespace-nowrap">{Number(r.recommended_to).toFixed(0)}</td>
                           </tr>
                         ))}
                       </tbody>

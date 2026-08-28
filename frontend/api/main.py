@@ -12,6 +12,19 @@ os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 os.environ.setdefault("OMP_NUM_THREADS", "1")
 os.environ.setdefault("MKL_NUM_THREADS", "1")
 
+# httpx (used to talk to Supabase Storage in routers/occupancy.py) verifies
+# TLS against certifi's bundled CA list by default. On machines where a
+# network/antivirus TLS-inspection proxy re-signs HTTPS traffic with a local
+# root cert (trusted by Windows, but absent from certifi's bundle), that
+# fails with "CERTIFICATE_VERIFY_FAILED: unable to get local issuer
+# certificate" -- which silently kills the async occupancy upload job (the
+# file download from Storage never completes, so the dashboard never gets a
+# new result). truststore makes ssl/httpx verify against the OS certificate
+# store instead, matching what the browser/OS already trusts. Must run before
+# any httpx client is constructed, so it's the first import-time side effect.
+import truststore
+truststore.inject_into_ssl()
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -35,7 +48,7 @@ os.makedirs(UPLOADS_DIR, exist_ok=True)
 
 from routers import occupancy, forecast, simulator, inventory, chat
 from routers import safety_stock, rebalancing, landed_cost, control_tower
-from routers import ddmrp, route_optimization, wh_trans_mp
+from routers import ddmrp, route_optimization, wh_trans_mp, export
 
 app = FastAPI(title="Demand Supply Planning API")
 
@@ -66,6 +79,7 @@ app.include_router(control_tower.router, prefix="/api/v1", tags=["SCM - Control 
 app.include_router(ddmrp.router, prefix="/api/v1", tags=["DDMRP"])
 app.include_router(route_optimization.router, prefix="/api/v1", tags=["Route Optimization"])
 app.include_router(wh_trans_mp.router, prefix="/api/v1", tags=["WH-TRANS-MP"])
+app.include_router(export.router, prefix="/api/v1", tags=["Export"])
 
 @app.get("/")
 def read_root():

@@ -14,6 +14,7 @@ import toast from 'react-hot-toast';
 import { getStandardFilename } from '@/utils/export';
 import { supabase } from '@/lib/supabase';
 import { ExportHtmlButton } from '@/components/ui/ExportHtmlButton';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { ModuleExportConfig } from '@/utils/offlineExport';
 
 const ForecastChart = dynamic(
@@ -210,6 +211,10 @@ export default function ForecastPage() {
           const row = data[0];
           const parsed = JSON.parse(row.result_json);
           parsed.processed_at = row.created_at;
+          // result_id tidak ikut tersimpan di dalam result_json (baru diisi backend
+          // SETELAH insert) - isi ulang dari id baris itu sendiri supaya dual-export
+          // (Export HTML+Excel) tetap bisa fetch raw data ini walau setelah reload.
+          parsed.result_id = row.id;
           setResults(parsed);
           if (parsed.best_model && parsed.available_methods) {
             setSelectedMethod(parsed.available_methods[0] || parsed.best_model);
@@ -237,7 +242,8 @@ export default function ForecastPage() {
           try {
             const newData = JSON.parse(payload.new.result_json);
             newData.processed_at = payload.new.created_at;
-            
+            newData.result_id = payload.new.id;
+
             const lastProcessedAt = sessionStorage.getItem('last_processed_at_forecast');
             if (lastProcessedAt === newData.processed_at) return;
 
@@ -586,36 +592,36 @@ export default function ForecastPage() {
     <div id="export-container" className="space-y-8 max-w-[1550px] mx-auto pb-16 animate-in fade-in duration-500 text-foreground">
 
       {/* ─── COMMAND TOWER HERO BANNER ─── */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#1E1E2C] via-purple-950 to-[#1E1E2C] p-6 sm:p-8 border border-purple-500/20 shadow-2xl">
-        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#a855f7_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
-        <div className="relative z-10 flex flex-col xl:flex-row xl:items-center justify-between gap-6">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-purple-500/10 text-purple-400 border border-purple-500/20 uppercase tracking-widest">
-              <BrainCircuit className="w-3.5 h-3.5" /> Kalkulator DSP • ML & AI Forecasting
-            </div>
-            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white flex items-center gap-3">
-              Advanced Causal <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-pink-300 to-indigo-300">Sales Forecasting</span>
-            </h1>
-            <p className="text-muted-foreground text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
-              Peramalan permintaan hierarkis memadukan tren historis dengan variabel eksogen (AO, RO, Drop Size, NOO) menggunakan 15 algoritma Machine Learning modern.
-            </p>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 shrink-0">
+      <PageHeader
+        icon={BrainCircuit}
+        eyebrow="Kalkulator DSP • ML & AI Forecasting"
+        title="Advanced Causal"
+        highlight="Sales Forecasting"
+        description="Peramalan permintaan hierarkis memadukan tren historis dengan variabel eksogen (AO, RO, Drop Size, NOO) menggunakan 15 algoritma Machine Learning modern."
+        actions={
+          <>
             <TimestampBadge timestamp={results?.processed_at} label="Olah Terakhir:" />
             {exportConfig
-              ? <ExportHtmlButton config={exportConfig} moduleName="Demand_Forecast_ML" processedAt={results?.processed_at} />
+              ? <ExportHtmlButton
+                  config={exportConfig}
+                  moduleName="Demand_Forecast_ML"
+                  processedAt={results?.processed_at}
+                  cabang={selectedCabang}
+                  resultId={results?.result_id}
+                  dataKey="forecast_data"
+                  cabangField="cabang"
+                />
               : <ExportHtmlButton elementId="export-container" moduleName="Demand_Forecast_ML" processedAt={results?.processed_at} />}
             <button
               onClick={() => setShowHowTo(!showHowTo)}
-              className="no-export w-full sm:w-auto px-4 py-2 bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2"
+              className="no-export min-h-[44px] w-full sm:w-auto px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-xl text-xs sm:text-sm font-semibold transition-colors flex items-center justify-center gap-2"
             >
               <HelpCircle className="w-4 h-4" />
               {showHowTo ? 'Tutup Panduan' : 'Panduan & Template'}
             </button>
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {/* ─── PANDUAN & DEMO DATA SECTION ─── */}
       {showHowTo && (

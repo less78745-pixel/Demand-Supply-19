@@ -23,6 +23,7 @@ import { supabase } from '@/lib/supabase';
 import { parseDynamicCSV, findColumn, parseIndonesianNumber, ParsedData } from '@/lib/csvParser';
 import { getStandardFilename } from '@/utils/export';
 import { ExportHtmlButton } from '@/components/ui/ExportHtmlButton';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { ModuleExportConfig } from '@/utils/offlineExport';
 
 // Validated categorical palette (dataviz skill, dark-surface steps) - chosen for
@@ -93,24 +94,24 @@ const CustomStackedTooltip = ({ active, payload, label }: any) => {
     const totalQty = validItems.reduce((sum: number, item: any) => sum + Number(item.value || 0), 0);
 
     return (
-      <div className="bg-[#090e1a] text-white p-3.5 rounded-xl border-2 border-purple-500 shadow-[0_15px_60px_rgba(0,0,0,1)] z-[999999] opacity-100 max-h-[300px] overflow-y-auto max-w-[340px] pointer-events-auto backdrop-blur-none" style={{ backgroundColor: '#090e1a', opacity: 1, zIndex: 999999 }}>
-        <div className="border-b border-slate-200/80 pb-2 mb-2 sticky -top-3.5 bg-[#090e1a] pt-1 z-10 flex items-center justify-between gap-3">
-          <span className="text-sky-400 font-extrabold text-sm tracking-wide">{label}</span>
-          <span className="text-xs px-2 py-0.5 bg-purple-950/90 border border-purple-500/50 rounded-md font-bold text-purple-300 shadow-sm">
+      <div className="bg-popover text-popover-foreground p-3.5 rounded-xl border border-border shadow-xl z-[999999] opacity-100 max-h-[300px] overflow-y-auto max-w-[340px] pointer-events-auto">
+        <div className="border-b border-border pb-2 mb-2 sticky -top-3.5 bg-popover pt-1 z-10 flex items-center justify-between gap-3">
+          <span className="text-primary font-extrabold text-sm tracking-wide">{label}</span>
+          <span className="text-xs px-2 py-0.5 bg-primary/10 border border-primary/20 rounded-md font-bold text-primary shadow-sm">
             Total: {totalQty.toLocaleString('id-ID')} Qty
           </span>
         </div>
         {validItems.length === 0 ? (
-          <div className="text-xs text-slate-400 font-medium py-2">Tidak ada data kuantitas (0 Qty)</div>
+          <div className="text-xs text-muted-foreground font-medium py-2">Tidak ada data kuantitas (0 Qty)</div>
         ) : (
           <div className="space-y-1.5 text-xs">
             {validItems.map((entry: any, index: number) => (
-              <div key={index} className="flex items-start justify-between gap-3 py-1 border-b border-slate-700/60 last:border-0 font-medium">
-                <span className="flex items-center gap-2 text-white flex-1 min-w-0">
-                  <span className="w-3 h-3 rounded-full inline-block shrink-0 border border-slate-600/50 shadow-sm mt-0.5" style={{ backgroundColor: entry.color }}></span>
-                  <span className="whitespace-normal leading-tight font-semibold text-white" title={entry.name}>{entry.name}</span>
+              <div key={index} className="flex items-start justify-between gap-3 py-1 border-b border-border/60 last:border-0 font-medium">
+                <span className="flex items-center gap-2 text-foreground flex-1 min-w-0">
+                  <span className="w-3 h-3 rounded-full inline-block shrink-0 border border-border shadow-sm mt-0.5" style={{ backgroundColor: entry.color }}></span>
+                  <span className="whitespace-normal leading-tight font-semibold text-foreground" title={entry.name}>{entry.name}</span>
                 </span>
-                <span className="font-extrabold text-slate-900 shrink-0 bg-white px-2 py-0.5 rounded border border-slate-200">
+                <span className="font-extrabold text-foreground shrink-0 bg-muted px-2 py-0.5 rounded border border-border">
                   {Number(entry.value).toLocaleString('id-ID')} Qty
                 </span>
               </div>
@@ -129,28 +130,28 @@ const CustomContainerTooltip = ({ active, payload, label }: any) => {
     const poList: string[] = data.poList || [];
     const statusBreakdown: { status: string; count: number }[] = data.statusBreakdown || [];
     return (
-      <div className="bg-[#090e1a] text-white p-4 rounded-xl border-2 border-cyan-500 shadow-[0_15px_60px_rgba(0,182,212,0.35)] z-[999999] max-h-[380px] overflow-y-auto max-w-[340px] pointer-events-auto">
-        <div className="border-b border-slate-200/80 pb-2 mb-2 sticky -top-4 bg-[#090e1a] pt-1 flex items-center justify-between gap-3">
-          <span className="text-cyan-400 font-extrabold text-sm tracking-wide">🏢 {label}</span>
-          <span className="text-xs px-2 py-0.5 bg-cyan-950/90 border border-cyan-500/50 rounded-md font-bold text-cyan-300 shadow-sm">
+      <div className="bg-popover text-popover-foreground p-4 rounded-xl border border-border shadow-xl z-[999999] max-h-[380px] overflow-y-auto max-w-[340px] pointer-events-auto">
+        <div className="border-b border-border pb-2 mb-2 sticky -top-4 bg-popover pt-1 flex items-center justify-between gap-3">
+          <span className="text-cyan-600 font-extrabold text-sm tracking-wide">🏢 {label}</span>
+          <span className="text-xs px-2 py-0.5 bg-cyan-50 border border-cyan-200 rounded-md font-bold text-cyan-700 shadow-sm">
             {data["Jumlah Container"]} Dokumen
           </span>
         </div>
-        <div className="text-xs text-slate-300 font-medium space-y-2">
-          <div className="flex items-center justify-between bg-slate-800/80 px-3 py-2 rounded-lg border border-slate-700">
-            <span className="text-slate-200 font-semibold">Total Dokumen (Distinct):</span>
-            <span className="font-extrabold text-cyan-300 text-sm bg-cyan-500/20 px-2.5 py-0.5 rounded border border-cyan-500/40">
+        <div className="text-xs text-muted-foreground font-medium space-y-2">
+          <div className="flex items-center justify-between bg-muted px-3 py-2 rounded-lg border border-border">
+            <span className="text-foreground font-semibold">Total Dokumen (Distinct):</span>
+            <span className="font-extrabold text-cyan-700 text-sm bg-cyan-50 px-2.5 py-0.5 rounded border border-cyan-200">
               {data["Jumlah Container"]} Unit
             </span>
           </div>
           {statusBreakdown.length > 0 && (
             <div>
-              <div className="text-[11px] font-bold text-slate-300 mb-1">Rincian per Status Compile:</div>
+              <div className="text-[11px] font-bold text-muted-foreground mb-1">Rincian per Status Compile:</div>
               <div className="space-y-1">
                 {statusBreakdown.map((s, i) => (
-                  <div key={i} className="flex items-center justify-between gap-2 bg-slate-800/60 px-2 py-1 rounded border border-slate-700/80">
-                    <span className="truncate font-semibold text-slate-200" title={s.status}>{s.status}</span>
-                    <span className="font-mono font-bold text-emerald-300 shrink-0">{s.count}</span>
+                  <div key={i} className="flex items-center justify-between gap-2 bg-muted/60 px-2 py-1 rounded border border-border">
+                    <span className="truncate font-semibold text-foreground" title={s.status}>{s.status}</span>
+                    <span className="font-mono font-bold text-emerald-600 shrink-0">{s.count}</span>
                   </div>
                 ))}
               </div>
@@ -158,13 +159,13 @@ const CustomContainerTooltip = ({ active, payload, label }: any) => {
           )}
           {poList.length > 0 && (
             <div>
-              <div className="text-[11px] font-bold text-slate-300 mb-1">Daftar No. Dokumen di Cabang Ini:</div>
-              <div className="max-h-[140px] overflow-y-auto bg-slate-800/80 p-2 rounded-lg border border-slate-700 space-y-1 font-mono text-[11px] text-amber-300">
+              <div className="text-[11px] font-bold text-muted-foreground mb-1">Daftar No. Dokumen di Cabang Ini:</div>
+              <div className="max-h-[140px] overflow-y-auto bg-muted/60 p-2 rounded-lg border border-border space-y-1 font-mono text-[11px] text-amber-700">
                 {poList.slice(0, 10).map((po, i) => (
                   <div key={i} className="truncate">• {po}</div>
                 ))}
                 {poList.length > 10 && (
-                  <div className="text-slate-400 font-sans italic text-[10px]">...+ {poList.length - 10} dokumen lainnya</div>
+                  <div className="text-muted-foreground font-sans italic text-[10px]">...+ {poList.length - 10} dokumen lainnya</div>
                 )}
               </div>
             </div>
@@ -184,9 +185,9 @@ const CustomContainerTooltip = ({ active, payload, label }: any) => {
 const ScrollableLegend = ({ payload }: any) => {
   if (!payload || payload.length === 0) return null;
   return (
-    <div className="mt-3 max-h-32 overflow-y-auto overflow-x-hidden rounded-lg border border-slate-700/60 bg-slate-900/40 px-3 py-2 flex flex-wrap gap-x-4 gap-y-1.5">
+    <div className="mt-3 max-h-32 overflow-y-auto overflow-x-hidden rounded-lg border border-border bg-muted/40 px-3 py-2 flex flex-wrap gap-x-4 gap-y-1.5">
       {payload.map((entry: any, idx: number) => (
-        <div key={idx} className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-200">
+        <div key={idx} className="flex items-center gap-1.5 text-[11px] font-semibold text-foreground">
           <span className="w-2.5 h-2.5 rounded-full inline-block shrink-0" style={{ backgroundColor: entry.color }} />
           <span className="truncate max-w-[180px]" title={entry.value}>{entry.value}</span>
         </div>
@@ -1745,41 +1746,49 @@ export default function PRUpdatePage() {
         ],
   } : undefined;
 
+  // ── Dual-export (HTML + Excel raw data terfilter cabang) wiring ──
+  // Excel raw source SENGAJA diambil dari data mentah (sebelum filter
+  // category/eta/status, hanya cabang) - bukan dari `normalizedFiltered`/
+  // `leadTimeRawNormalized` yang dipakai HTML export - supaya Excel berisi
+  // seluruh record cabang terpilih apa adanya, dan filter cabang benar-benar
+  // ditegakkan ulang di backend (bukan sekadar meneruskan data yang sudah
+  // difilter di client).
+  const dualExportCabang = activeTab === 'lead_time' ? selectedLtCabang : selectedCabang;
+  const dualExportRawRows = activeTab === 'lead_time' ? (leadTimeRawAll ?? undefined) : (parsed?.data ?? undefined);
+  const dualExportCabangField = activeTab === 'lead_time' ? 'BRANCH RCPT BRANCH' : colCabang;
+
   return (
     <div id="export-container" className="space-y-8 pb-16 min-h-screen animate-fade-in text-foreground">
       {/* ─── HERO BANNER HEADER ─── */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-purple-950 to-slate-900 p-6 sm:p-8 border border-purple-500/20 shadow-2xl">
-        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#a855f7_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-purple-500/10 text-purple-400 border border-purple-500/20 uppercase tracking-widest">
-              <FileBarChart className="w-3.5 h-3.5" /> Dashboard Data Harian • PR Update & Tracking Container
-            </div>
-            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white flex items-center gap-3">
-              PR Update & Tracking Container <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-pink-400 to-amber-300">(Integrated Tracker)</span>
-            </h1>
-            <p className="text-slate-700 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
-              <span className="bg-amber-100 text-amber-900 px-2 py-1 rounded font-medium shadow-sm inline-block">
-                Modul gabungan pemantauan Purchase Requisition dan Live Tracking Container kapal (On Vessel, SPJM, Hold).
-              </span>
-            </p>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+      <PageHeader
+        icon={FileBarChart}
+        eyebrow="Dashboard Data Harian • PR Update & Tracking Container"
+        title="PR Update & Tracking Container"
+        highlight="(Integrated Tracker)"
+        description="Modul gabungan pemantauan Purchase Requisition dan Live Tracking Container kapal (On Vessel, SPJM, Hold)."
+        actions={
+          <>
             <TimestampBadge timestamp={parsed?.processed_at} label="Olah Terakhir:" />
             {exportConfig
-              ? <ExportHtmlButton config={exportConfig} moduleName="PR_Update_Lead_Time" processedAt={parsed?.processed_at} />
+              ? <ExportHtmlButton
+                  config={exportConfig}
+                  moduleName="PR_Update_Lead_Time"
+                  processedAt={parsed?.processed_at}
+                  cabang={dualExportCabang}
+                  rawRows={dualExportRawRows}
+                  cabangField={dualExportCabangField}
+                />
               : <ExportHtmlButton elementId="export-container" moduleName="PR_Update_Lead_Time" processedAt={parsed?.processed_at} />}
             <button
               onClick={() => setShowHowTo(!showHowTo)}
-              className="no-export w-full sm:w-auto px-4 py-2 bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2"
+              className="no-export min-h-[44px] w-full sm:w-auto px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-xl text-xs sm:text-sm font-semibold transition-colors flex items-center justify-center gap-2"
             >
               <HelpCircle className="w-4 h-4" />
               {showHowTo ? 'Tutup Panduan' : 'Panduan & Template'}
             </button>
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {/* ─── PANDUAN, TEMPLATE & UPLOAD SECTION ─── */}
       {showHowTo && (
@@ -1839,16 +1848,16 @@ export default function PRUpdatePage() {
       )}
 
       {/* ─── MAIN MODULE TAB SWITCHER ─── */}
-      <div className="flex flex-wrap items-center gap-4 bg-slate-900/50 p-2 rounded-xl border border-slate-700/50">
+      <div className="flex flex-wrap items-center gap-4 bg-muted p-2 rounded-xl border border-border">
         <button
           onClick={() => setActiveTab('pr_update')}
-          className={`flex-1 py-3 px-6 rounded-lg font-bold text-sm transition-all duration-300 flex items-center justify-center gap-2 ${activeTab === 'pr_update' ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/25' : 'bg-transparent text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
+          className={`flex-1 py-3 px-6 rounded-lg font-bold text-sm transition-colors duration-200 flex items-center justify-center gap-2 ${activeTab === 'pr_update' ? 'bg-primary text-primary-foreground shadow-sm' : 'bg-transparent text-muted-foreground hover:bg-background hover:text-foreground'}`}
         >
           <FileBarChart className="w-4 h-4" /> Analisa PR & Status
         </button>
         <button
           onClick={() => setActiveTab('lead_time')}
-          className={`flex-1 py-3 px-6 rounded-lg font-bold text-sm transition-all duration-300 flex items-center justify-center gap-2 ${activeTab === 'lead_time' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/25' : 'bg-transparent text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
+          className={`flex-1 py-3 px-6 rounded-lg font-bold text-sm transition-colors duration-200 flex items-center justify-center gap-2 ${activeTab === 'lead_time' ? 'bg-primary text-primary-foreground shadow-sm' : 'bg-transparent text-muted-foreground hover:bg-background hover:text-foreground'}`}
         >
           <Timer className="w-4 h-4" /> Analisa Lead Time
         </button>
@@ -2056,28 +2065,28 @@ export default function PRUpdatePage() {
 
       {/* ─── VISUALIZATION CHART: TERPADU WEEK ETA & STACKED CATEGORY ─── */}
       {((chartViewMode === 'eta' && chartEtaData.length > 0) || (chartViewMode === 'cabang' && chartData.length > 0) || (chartViewMode === 'container' && chartContainerData.length > 0)) && (
-        <GlassCard className="p-6 border-purple-500/30 bg-gradient-to-b from-slate-900/90 to-slate-950/90 shadow-2xl">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between border-b border-slate-200 pb-4 mb-6 gap-4">
+        <GlassCard className="p-6">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between border-b border-border pb-4 mb-6 gap-4">
             <div>
-              <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
-                <BarChart3 className="w-5 h-5 text-purple-400" />
+              <h3 className="text-base sm:text-lg font-bold text-foreground flex items-center gap-2">
+                <BarChart3 className="w-5 h-5 text-primary" />
                 Grafik Distribusi Status Compile & Persebaran Category ({chartViewMode === 'eta' ? 'per Week ETA' : chartViewMode === 'cabang' ? 'per Cabang' : 'Jumlah Container per Cabang'})
               </h3>
-              <p className="text-xs text-slate-300 mt-1">
+              <p className="text-xs text-muted-foreground mt-1">
                 {chartViewMode === 'container' ? (
-                  <>Sumbu X: <b className="text-emerald-400">Cabang</b> • Sumbu Y: <b className="text-cyan-300">Jumlah Dokumen</b> (distinct count PO → PR → Container per cabang, termasuk dokumen yang belum punya No. PO).</>
+                  <>Sumbu X: <b className="text-emerald-600">Cabang</b> • Sumbu Y: <b className="text-cyan-700">Jumlah Dokumen</b> (distinct count PO → PR → Container per cabang, termasuk dokumen yang belum punya No. PO).</>
                 ) : (
-                  <>Sumbu X: <b className="text-emerald-400">{chartViewMode === 'eta' ? 'Week ETA' : 'Cabang'}</b> • Batang bertingkat (Stacked Bar): <b className="text-sky-300">Category Barang</b> sesuai filter terpilih • Nilai = SUM {colTotal ? `kolom "${colTotal}"` : 'Qty'}.</>
+                  <>Sumbu X: <b className="text-emerald-600">{chartViewMode === 'eta' ? 'Week ETA' : 'Cabang'}</b> • Batang bertingkat (Stacked Bar): <b className="text-primary">Category Barang</b> sesuai filter terpilih • Nilai = SUM {colTotal ? `kolom "${colTotal}"` : 'Qty'}.</>
                 )}
               </p>
             </div>
-            
+
             <div className="flex items-center gap-2.5 flex-wrap">
-              <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 shadow-md">
+              <div className="flex bg-muted p-1 rounded-xl border border-border shadow-sm">
                 <button
                   onClick={() => setChartViewMode('eta')}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
-                    chartViewMode === 'eta' ? 'bg-purple-600 text-white shadow-md ring-1 ring-purple-400' : 'text-slate-600 hover:text-slate-900'
+                    chartViewMode === 'eta' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   🗓️ Week ETA
@@ -2085,7 +2094,7 @@ export default function PRUpdatePage() {
                 <button
                   onClick={() => setChartViewMode('cabang')}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
-                    chartViewMode === 'cabang' ? 'bg-purple-600 text-white shadow-md ring-1 ring-purple-400' : 'text-slate-600 hover:text-slate-900'
+                    chartViewMode === 'cabang' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   🏢 Cabang
@@ -2093,19 +2102,19 @@ export default function PRUpdatePage() {
                 <button
                   onClick={() => setChartViewMode('container')}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
-                    chartViewMode === 'container' ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-md ring-1 ring-cyan-400' : 'text-slate-600 hover:text-slate-900'
+                    chartViewMode === 'container' ? 'bg-cyan-600 text-white shadow-sm' : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   📦 Jumlah Container
                 </button>
               </div>
-              
-              <div className="flex items-center gap-2 text-xs font-bold text-cyan-300 bg-cyan-950/60 px-3.5 py-2 rounded-xl border border-cyan-500/50 shadow-sm" title="Total dokumen dari distinct count PO → PR → Container per Cabang">
-                <Package className="w-4 h-4 text-cyan-400 shrink-0" />
+
+              <div className="flex items-center gap-2 text-xs font-bold text-cyan-700 bg-cyan-50 px-3.5 py-2 rounded-xl border border-cyan-200 shadow-sm" title="Total dokumen dari distinct count PO → PR → Container per Cabang">
+                <Package className="w-4 h-4 text-cyan-600 shrink-0" />
                 <span>Jumlah Dokumen: {totalContainers?.toLocaleString('id-ID') || 0} (Distinct)</span>
               </div>
 
-              <div className="flex items-center gap-2 text-xs text-slate-600 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted px-3 py-1.5 rounded-xl border border-border">
                 <span>🏷️ Menampilkan {chartViewMode === 'container' ? `${chartContainerData.length} cabang (Distinct Dokumen)` : `${categoryList.length} kategori pada ${chartViewMode === 'eta' ? `${chartEtaData.length} periode ETA` : `${chartData.length} cabang`}`}</span>
               </div>
             </div>
@@ -2120,13 +2129,13 @@ export default function PRUpdatePage() {
                     <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.8} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
-                <XAxis dataKey={chartViewMode === 'eta' ? 'eta' : 'cabang'} stroke="#94a3b8" tick={{ fill: '#e2e8f0', fontSize: 11, fontWeight: 600 }} angle={-35} textAnchor="end" height={90} />
-                <YAxis stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 12 }} width={100} tickFormatter={(val) => Number(val).toLocaleString('en-US')} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <XAxis dataKey={chartViewMode === 'eta' ? 'eta' : 'cabang'} stroke="#94a3b8" tick={{ fill: '#475569', fontSize: 11, fontWeight: 600 }} angle={-35} textAnchor="end" height={90} />
+                <YAxis stroke="#94a3b8" tick={{ fill: '#64748b', fontSize: 12 }} width={100} tickFormatter={(val) => Number(val).toLocaleString('en-US')} />
                 <Tooltip
                   content={chartViewMode === 'container' ? <CustomContainerTooltip /> : <CustomStackedTooltip />}
                   wrapperStyle={{ zIndex: 999999, pointerEvents: 'auto', outline: 'none' }}
-                  cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }}
+                  cursor={{ fill: 'rgba(15, 23, 42, 0.04)' }}
                 />
                 {chartViewMode === 'container' ? (
                   <Bar
@@ -2163,19 +2172,17 @@ export default function PRUpdatePage() {
       )}
 
       {/* ─── INSIGHT ALERT: PO OVERDUE ETA (SPJM, HOLD DELIVERY & ON VESSEL) ─── */}
-      <GlassCard className="p-6 border-rose-500/40 bg-gradient-to-br from-slate-900 via-rose-950/20 to-slate-900 shadow-2xl overflow-hidden relative">
-        <div className="absolute -top-12 -right-12 w-48 h-48 bg-rose-500/10 rounded-full blur-3xl pointer-events-none" />
-        
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200/80 pb-4 mb-6 gap-4">
+      <GlassCard className="p-6 overflow-hidden relative">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border pb-4 mb-6 gap-4">
           <div className="space-y-1.5">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[11px] font-extrabold bg-rose-500/20 text-rose-300 border border-rose-500/40 uppercase tracking-wider mb-1 shadow-sm">
-              <ShieldAlert className="w-3.5 h-3.5 text-rose-400 animate-pulse" /> Warning Supply Chain • Monitoring Keterlambatan Port & Vendor
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[11px] font-extrabold bg-rose-50 text-rose-700 border border-rose-200 uppercase tracking-wider mb-1">
+              <ShieldAlert className="w-3.5 h-3.5 text-rose-600" /> Warning Supply Chain • Monitoring Keterlambatan Port & Vendor
             </div>
-            <h3 className="text-lg sm:text-xl font-black text-white flex items-center gap-2.5">
+            <h3 className="text-lg sm:text-xl font-black text-foreground flex items-center gap-2.5">
               Insight PO Overdue: SPJM, Hold Delivery & On Vessel
             </h3>
-            <p className="text-xs sm:text-sm text-slate-300">
-              Mendeteksi dokumen dengan status krusial yang <b className="text-rose-400 underline">sudah melewati Tanggal ETA</b> dari tanggal pengolahan raw data (<b>{rawDataProcessingDate.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}</b>).
+            <p className="text-xs sm:text-sm text-muted-foreground">
+              Mendeteksi dokumen dengan status krusial yang <b className="text-rose-600 underline">sudah melewati Tanggal ETA</b> dari tanggal pengolahan raw data (<b>{rawDataProcessingDate.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}</b>).
             </p>
           </div>
 
@@ -2183,21 +2190,21 @@ export default function PRUpdatePage() {
             {Object.keys(overdueColFilters).some(k => overdueColFilters[k]?.search || overdueColFilters[k]?.selected?.length > 0) && (
               <button
                 onClick={() => { setOverdueColFilters({}); toast.success('Semua filter kolom overdue dibersihkan!'); }}
-                className="px-3 py-2 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+                className="min-h-[44px] px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5"
               >
                 <RefreshCw className="w-3.5 h-3.5" /> Reset Filter Kolom
               </button>
             )}
-            <span className="px-4 py-2 rounded-xl bg-amber-400 border-2 border-amber-300 font-black text-xs sm:text-sm text-slate-900 shadow-[0_0_15px_rgba(245,158,11,0.5)] flex items-center gap-2">
-              <Timer className="w-4 h-4 text-slate-900 animate-spin-slow" />
+            <span className="min-h-[44px] px-4 py-2 rounded-xl bg-amber-100 border border-amber-300 font-black text-xs sm:text-sm text-amber-900 shadow-sm flex items-center gap-2">
+              <Timer className="w-4 h-4 text-amber-700" />
               Total Overdue: {overdueDocCounts.total} PO
             </span>
           </div>
         </div>
 
         {overdueEtaDataIssues.length > 0 && (
-          <div className="mb-6 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/40 text-amber-300 text-xs font-semibold flex items-start gap-2.5">
-            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+          <div className="mb-6 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-semibold flex items-start gap-2.5">
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-700" />
             <span>
               {overdueEtaDataIssues.length} dokumen berstatus SPJM/Hold Delivery/On Vessel <b>tidak ikut dihitung</b> di insight ini karena kolom Tanggal ETA kosong atau formatnya tidak terbaca
               (contoh: {overdueEtaDataIssues.slice(0, 5).map((i: any) => `${i.po} [${i.status}, ETA: ${i.etaRaw}]`).join('; ')}
@@ -2209,118 +2216,118 @@ export default function PRUpdatePage() {
 
         {/* Mini KPI Cards for Overdue Insights */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-          <div className="p-4 rounded-2xl bg-gradient-to-br from-purple-950/80 to-slate-900 border border-purple-500/50 shadow-[0_0_20px_rgba(168,85,247,0.25)] flex items-center justify-between transition-all hover:scale-[1.02]">
+          <div className="p-4 rounded-2xl bg-purple-50 border border-purple-200 flex items-center justify-between transition-shadow hover:shadow-md">
             <div>
-              <div className="text-xs text-purple-300 font-extrabold uppercase tracking-wider flex items-center gap-1.5">
+              <div className="text-xs text-purple-700 font-extrabold uppercase tracking-wider flex items-center gap-1.5">
                 <span>🟣 SPJM</span>
               </div>
-              <div className="text-xl sm:text-2xl font-black text-white mt-1.5 drop-shadow-md">
-                {statusOverview.spjm.docs} <span className="text-xs font-semibold text-purple-300">Dokumen (Distinct PO)</span>
+              <div className="text-xl sm:text-2xl font-black text-foreground mt-1.5">
+                {statusOverview.spjm.docs} <span className="text-xs font-semibold text-purple-700">Dokumen (Distinct PO)</span>
               </div>
-              <div className="text-[11px] text-purple-100 font-mono font-bold mt-1 bg-purple-900/60 px-2 py-0.5 rounded border border-purple-500/50 inline-block shadow-sm">
+              <div className="text-[11px] text-purple-800 font-mono font-bold mt-1 bg-purple-100 px-2 py-0.5 rounded border border-purple-200 inline-block">
                 Total Qty: {statusOverview.spjm.qty.toLocaleString('id-ID')}
               </div>
-              <div className="text-[11px] text-purple-300/80 font-semibold mt-1">
+              <div className="text-[11px] text-purple-700/80 font-semibold mt-1">
                 Overdue (ETA lewat): {overdueDocCounts.spjm} dokumen
               </div>
               {topOverdueBranchesByStatus.spjm.length > 0 && (
-                <div className="text-[10px] text-purple-200/90 font-semibold mt-1.5 space-y-0.5">
-                  <div className="uppercase tracking-wider text-purple-400/80">Top 3 Cabang Overdue:</div>
+                <div className="text-[10px] text-purple-700/90 font-semibold mt-1.5 space-y-0.5">
+                  <div className="uppercase tracking-wider text-purple-600/80">Top 3 Cabang Overdue:</div>
                   {topOverdueBranchesByStatus.spjm.map((b, i) => (
                     <div key={i} className="flex items-center gap-1">
-                      <span className="text-purple-400">{i + 1}.</span> {b.branch} <span className="text-purple-300 font-mono">({b.count})</span>
+                      <span className="text-purple-600">{i + 1}.</span> {b.branch} <span className="text-purple-700 font-mono">({b.count})</span>
                     </div>
                   ))}
                 </div>
               )}
             </div>
-            <div className="w-12 h-12 rounded-2xl bg-purple-500/20 border border-purple-400/50 flex items-center justify-center text-purple-300 text-2xl font-black shadow-[0_0_15px_rgba(168,85,247,0.4)]">
+            <div className="w-12 h-12 rounded-2xl bg-purple-100 border border-purple-200 flex items-center justify-center text-purple-700 text-2xl font-black">
               🟣
             </div>
           </div>
 
-          <div className="p-4 rounded-2xl bg-gradient-to-br from-rose-950/80 to-slate-900 border border-rose-500/50 shadow-[0_0_20px_rgba(244,63,94,0.25)] flex items-center justify-between transition-all hover:scale-[1.02]">
+          <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 flex items-center justify-between transition-shadow hover:shadow-md">
             <div>
-              <div className="text-xs text-rose-300 font-extrabold uppercase tracking-wider flex items-center gap-1.5">
+              <div className="text-xs text-rose-700 font-extrabold uppercase tracking-wider flex items-center gap-1.5">
                 <span>🔴 Hold Delivery</span>
               </div>
-              <div className="text-xl sm:text-2xl font-black text-white mt-1.5 drop-shadow-md">
-                {statusOverview.hold.docs} <span className="text-xs font-semibold text-rose-300">Dokumen (Distinct PO)</span>
+              <div className="text-xl sm:text-2xl font-black text-foreground mt-1.5">
+                {statusOverview.hold.docs} <span className="text-xs font-semibold text-rose-700">Dokumen (Distinct PO)</span>
               </div>
-              <div className="text-[11px] text-rose-100 font-mono font-bold mt-1 bg-rose-900/60 px-2 py-0.5 rounded border border-rose-500/50 inline-block shadow-sm">
+              <div className="text-[11px] text-rose-800 font-mono font-bold mt-1 bg-rose-100 px-2 py-0.5 rounded border border-rose-200 inline-block">
                 Total Qty: {statusOverview.hold.qty.toLocaleString('id-ID')}
               </div>
-              <div className="text-[11px] text-rose-300/80 font-semibold mt-1">
+              <div className="text-[11px] text-rose-700/80 font-semibold mt-1">
                 Overdue (ETA lewat): {overdueDocCounts.hold} dokumen
               </div>
               {topOverdueBranchesByStatus.hold.length > 0 && (
-                <div className="text-[10px] text-rose-200/90 font-semibold mt-1.5 space-y-0.5">
-                  <div className="uppercase tracking-wider text-rose-400/80">Top 3 Cabang Overdue:</div>
+                <div className="text-[10px] text-rose-700/90 font-semibold mt-1.5 space-y-0.5">
+                  <div className="uppercase tracking-wider text-rose-600/80">Top 3 Cabang Overdue:</div>
                   {topOverdueBranchesByStatus.hold.map((b, i) => (
                     <div key={i} className="flex items-center gap-1">
-                      <span className="text-rose-400">{i + 1}.</span> {b.branch} <span className="text-rose-300 font-mono">({b.count})</span>
+                      <span className="text-rose-600">{i + 1}.</span> {b.branch} <span className="text-rose-700 font-mono">({b.count})</span>
                     </div>
                   ))}
                 </div>
               )}
             </div>
-            <div className="w-12 h-12 rounded-2xl bg-rose-500/20 border border-rose-400/50 flex items-center justify-center text-rose-300 text-2xl font-black shadow-[0_0_15px_rgba(244,63,94,0.4)]">
+            <div className="w-12 h-12 rounded-2xl bg-rose-100 border border-rose-200 flex items-center justify-center text-rose-700 text-2xl font-black">
               🔴
             </div>
           </div>
 
-          <div className="p-4 rounded-2xl bg-gradient-to-br from-blue-950/80 to-slate-900 border border-blue-500/50 shadow-[0_0_20px_rgba(59,130,246,0.25)] flex items-center justify-between transition-all hover:scale-[1.02]">
+          <div className="p-4 rounded-2xl bg-blue-50 border border-blue-200 flex items-center justify-between transition-shadow hover:shadow-md">
             <div>
-              <div className="text-xs text-blue-300 font-extrabold uppercase tracking-wider flex items-center gap-1.5">
+              <div className="text-xs text-blue-700 font-extrabold uppercase tracking-wider flex items-center gap-1.5">
                 <span>🔵 On Vessel</span>
               </div>
-              <div className="text-xl sm:text-2xl font-black text-white mt-1.5 drop-shadow-md">
-                {statusOverview.vessel.docs} <span className="text-xs font-semibold text-blue-300">Dokumen (Distinct PO)</span>
+              <div className="text-xl sm:text-2xl font-black text-foreground mt-1.5">
+                {statusOverview.vessel.docs} <span className="text-xs font-semibold text-blue-700">Dokumen (Distinct PO)</span>
               </div>
-              <div className="text-[11px] text-blue-100 font-mono font-bold mt-1 bg-blue-900/60 px-2 py-0.5 rounded border border-blue-500/50 inline-block shadow-sm">
+              <div className="text-[11px] text-blue-800 font-mono font-bold mt-1 bg-blue-100 px-2 py-0.5 rounded border border-blue-200 inline-block">
                 Total Qty: {statusOverview.vessel.qty.toLocaleString('id-ID')}
               </div>
-              <div className="text-[11px] text-blue-300/80 font-semibold mt-1">
+              <div className="text-[11px] text-blue-700/80 font-semibold mt-1">
                 Overdue (ETA lewat): {overdueDocCounts.vessel} dokumen
               </div>
               {topOverdueBranchesByStatus.vessel.length > 0 && (
-                <div className="text-[10px] text-blue-200/90 font-semibold mt-1.5 space-y-0.5">
-                  <div className="uppercase tracking-wider text-blue-400/80">Top 3 Cabang Overdue:</div>
+                <div className="text-[10px] text-blue-700/90 font-semibold mt-1.5 space-y-0.5">
+                  <div className="uppercase tracking-wider text-blue-600/80">Top 3 Cabang Overdue:</div>
                   {topOverdueBranchesByStatus.vessel.map((b, i) => (
                     <div key={i} className="flex items-center gap-1">
-                      <span className="text-blue-400">{i + 1}.</span> {b.branch} <span className="text-blue-300 font-mono">({b.count})</span>
+                      <span className="text-blue-600">{i + 1}.</span> {b.branch} <span className="text-blue-700 font-mono">({b.count})</span>
                     </div>
                   ))}
                 </div>
               )}
             </div>
-            <div className="w-12 h-12 rounded-2xl bg-blue-500/20 border border-blue-400/50 flex items-center justify-center text-blue-300 text-2xl font-black shadow-[0_0_15px_rgba(59,130,246,0.4)]">
+            <div className="w-12 h-12 rounded-2xl bg-blue-100 border border-blue-200 flex items-center justify-center text-blue-700 text-2xl font-black">
               🔵
             </div>
           </div>
         </div>
 
         {/* Table of Overdue POs */}
-        <p className="text-xs text-slate-400 mb-2">
+        <p className="text-xs text-muted-foreground mb-2">
           Menampilkan {displayedOverdueInsights.length} dari {overdueInsights.length} dokumen overdue
           {Object.keys(overdueColFilters).some(k => overdueColFilters[k]?.search || overdueColFilters[k]?.selected?.length > 0) ? ' (terfilter)' : ''}.
         </p>
-        <div className="overflow-x-auto rounded-xl border border-slate-200 max-h-[420px] overflow-y-auto shadow-inner">
+        <div className="overflow-x-auto rounded-xl border border-border max-h-[420px] overflow-y-auto shadow-inner">
           <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[1050px]">
-            <thead className="bg-slate-800/80 text-slate-200 uppercase font-bold sticky top-0 z-20 shadow-md text-center text-[11px] tracking-wider">
-              <tr className="border-b border-slate-700">
+            <thead className="bg-muted text-muted-foreground uppercase font-bold sticky top-0 z-20 shadow-sm text-center text-[11px] tracking-wider">
+              <tr className="border-b border-border">
                 {OVERDUE_FILTER_COLUMNS.map((col, idx) => {
                   const isFiltered = overdueColFilters[col.key]?.search || (overdueColFilters[col.key]?.selected && overdueColFilters[col.key]?.selected.length > 0);
                   return (
                     <th
                       key={col.key}
-                      className={`py-3.5 px-3 border-slate-700 align-middle ${idx === 0 ? 'text-left' : 'border-l'} ${
-                        col.key === 'po' ? 'text-amber-400' :
-                        col.key === 'status' ? 'text-purple-400' :
-                        col.key === 'etaFormatted' ? 'text-cyan-300' :
-                        col.key === 'overdueDays' ? 'text-rose-400 bg-rose-950/40 font-extrabold' :
+                      className={`py-3.5 px-3 border-border align-middle ${idx === 0 ? 'text-left' : 'border-l'} ${
+                        col.key === 'po' ? 'text-amber-700' :
+                        col.key === 'status' ? 'text-purple-700' :
+                        col.key === 'etaFormatted' ? 'text-cyan-700' :
+                        col.key === 'overdueDays' ? 'text-rose-700 bg-rose-100 font-extrabold' :
                         col.key === 'deskripsi' ? 'text-left' :
-                        col.key === 'qty' ? 'text-emerald-400' : ''
+                        col.key === 'qty' ? 'text-emerald-700' : ''
                       }`}
                     >
                       <div className="flex items-center justify-between gap-1.5">
@@ -2330,8 +2337,8 @@ export default function PRUpdatePage() {
                             setActiveOverdueFilterCol(col.key);
                             setOverdueModalSearchInput(overdueColFilters[col.key]?.search || '');
                           }}
-                          className={`p-1 rounded transition shrink-0 ${
-                            isFiltered ? 'bg-emerald-500 text-slate-900 shadow-sm ring-2 ring-emerald-400' : 'text-slate-400 hover:text-white hover:bg-slate-700'
+                          className={`p-1 rounded transition-colors shrink-0 ${
+                            isFiltered ? 'bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-300' : 'text-muted-foreground hover:text-foreground hover:bg-background'
                           }`}
                           title={`Filter Kolom ala Excel: ${col.label}`}
                         >
@@ -2341,69 +2348,69 @@ export default function PRUpdatePage() {
                     </th>
                   );
                 })}
-                <th className="py-3.5 px-4 border-l border-slate-700">Action & Rekomendasi</th>
+                <th className="py-3.5 px-4 border-l border-border">Action & Rekomendasi</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/80 text-slate-300 text-center font-medium">
+            <tbody className="divide-y divide-border text-foreground text-center font-medium">
               {overdueInsights.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-emerald-400 font-bold bg-slate-900/40 text-sm">
+                  <td colSpan={8} className="py-12 text-center text-emerald-700 font-bold bg-emerald-50 text-sm">
                     🎉 Tidak ada dokumen SPJM, Hold Delivery, atau On Vessel yang melewati Tanggal ETA! Seluruh rantai pasok tepat waktu.
                   </td>
                 </tr>
               ) : displayedOverdueInsights.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-slate-400 font-medium">
+                  <td colSpan={8} className="py-12 text-center text-muted-foreground font-medium">
                     Tidak ada baris yang cocok dengan filter kolom aktif.{' '}
-                    <span className="text-rose-400 underline cursor-pointer" onClick={() => setOverdueColFilters({})}>Klik di sini untuk mereset filter</span>.
+                    <span className="text-rose-600 underline cursor-pointer" onClick={() => setOverdueColFilters({})}>Klik di sini untuk mereset filter</span>.
                   </td>
                 </tr>
               ) : displayedOverdueInsights.map((item: any, idx: number) => {
                 const isSevere = item.overdueDays >= 14;
                 const isMod = item.overdueDays >= 7 && !isSevere;
                 return (
-                  <tr key={idx} className="hover:bg-slate-800/50 transition font-semibold">
+                  <tr key={idx} className="hover:bg-muted/60 transition-colors font-semibold">
                     <td className="py-3 px-3 text-left font-extrabold align-middle">
-                      <span className="bg-slate-800 text-slate-100 px-2 py-1 rounded-md">{item.cabang}</span>
+                      <span className="bg-muted text-foreground px-2 py-1 rounded-md">{item.cabang}</span>
                     </td>
-                    <td className="py-3 px-3 border-l border-slate-700 font-mono font-bold text-amber-300 align-middle text-sm">
+                    <td className="py-3 px-3 border-l border-border font-mono font-bold text-amber-700 align-middle text-sm">
                       {item.po}
                     </td>
-                    <td className="py-3 px-3 border-l border-slate-700 align-middle">
-                      <span className={`px-2.5 py-1 rounded-lg text-xs font-black inline-block shadow-sm ${
-                        item.statusCategory === 'SPJM' ? 'bg-purple-950/90 text-purple-300 border border-purple-500/50' :
-                        item.statusCategory === 'HOLD' ? 'bg-rose-950/90 text-rose-300 border border-rose-500/50' :
-                        'bg-blue-950/90 text-blue-300 border border-blue-500/50'
+                    <td className="py-3 px-3 border-l border-border align-middle">
+                      <span className={`px-2.5 py-1 rounded-lg text-xs font-black inline-block ${
+                        item.statusCategory === 'SPJM' ? 'bg-purple-100 text-purple-700 border border-purple-200' :
+                        item.statusCategory === 'HOLD' ? 'bg-rose-100 text-rose-700 border border-rose-200' :
+                        'bg-blue-100 text-blue-700 border border-blue-200'
                       }`}>
                         {item.status}
                       </span>
                     </td>
-                    <td className="py-3 px-3 border-l border-slate-700 font-mono text-cyan-300 align-middle font-bold">
+                    <td className="py-3 px-3 border-l border-border font-mono text-cyan-700 align-middle font-bold">
                       {item.etaFormatted}
                     </td>
-                    <td className="py-3 px-3 border-l border-slate-700 bg-rose-950/30 align-middle">
-                      <span className={`px-3 py-1 rounded-full text-xs font-black inline-flex items-center gap-1.5 shadow-md border ${
-                        isSevere ? 'bg-rose-600 text-white border-rose-400 animate-pulse' :
-                        isMod ? 'bg-orange-500 text-slate-900 border-orange-300' :
-                        'bg-amber-500/30 text-amber-300 border-amber-500/50'
+                    <td className="py-3 px-3 border-l border-border bg-rose-50/60 align-middle">
+                      <span className={`px-3 py-1 rounded-full text-xs font-black inline-flex items-center gap-1.5 shadow-sm border ${
+                        isSevere ? 'bg-rose-600 text-white border-rose-400' :
+                        isMod ? 'bg-orange-500 text-white border-orange-300' :
+                        'bg-amber-100 text-amber-800 border-amber-300'
                       }`}>
                         <Timer className="w-3.5 h-3.5 shrink-0" />
                         Terlewat {item.overdueDays} Hari
                       </span>
                     </td>
-                    <td className="py-3 px-3 border-l border-slate-700 text-left align-middle max-w-[240px]">
+                    <td className="py-3 px-3 border-l border-border text-left align-middle max-w-[240px]">
                       <div className="truncate text-xs" title={item.deskripsi}>
-                        <span className="font-bold text-slate-100 bg-slate-800 px-1.5 py-0.5 rounded">{item.deskripsi}</span>
+                        <span className="font-bold text-foreground bg-muted px-1.5 py-0.5 rounded">{item.deskripsi}</span>
                       </div>
                       <div className="mt-1 truncate">
-                        <span className="text-[11px] text-purple-200 bg-purple-900/60 px-1.5 py-0.5 rounded font-mono border border-purple-700/50">{item.grup} • {item.category}</span>
+                        <span className="text-[11px] text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded font-mono border border-purple-200">{item.grup} • {item.category}</span>
                       </div>
                     </td>
-                    <td className="py-3 px-3 border-l border-slate-700 font-mono font-black text-emerald-400 text-base align-middle">
+                    <td className="py-3 px-3 border-l border-border font-mono font-black text-emerald-700 text-base align-middle">
                       {item.qty.toLocaleString('id-ID')}
                     </td>
-                    <td className="py-3 px-3 border-l border-slate-700 align-middle">
-                      <div className="text-[11px] font-extrabold px-2.5 py-1 rounded-lg bg-slate-800 text-slate-200 border border-slate-700 shadow-sm inline-block">
+                    <td className="py-3 px-3 border-l border-border align-middle">
+                      <div className="text-[11px] font-extrabold px-2.5 py-1 rounded-lg bg-muted text-foreground border border-border inline-block">
                         {item.statusCategory === 'SPJM' ? '🚛 Desak Trucking Port' :
                          item.statusCategory === 'HOLD' ? '📞 Eskalasi Vendor/Port' :
                          '⚓ Cek Sandar / Bea Cukai'}
@@ -2562,7 +2569,7 @@ export default function PRUpdatePage() {
                       <th
                         key={h}
                         className={`py-3 px-3 border-l border-slate-200 whitespace-nowrap align-middle ${
-                          isShippingLine ? 'text-teal-300 bg-teal-950/30' : isContainer ? 'text-sky-300 bg-sky-950/30' : ''
+                          isShippingLine ? 'text-teal-700 bg-teal-50' : isContainer ? 'text-sky-700 bg-sky-50' : ''
                         }`}
                       >
                         <div className="flex items-center justify-between gap-2">
@@ -2588,10 +2595,10 @@ export default function PRUpdatePage() {
                       </th>
                     );
                   })}
-                  <th className="py-3 px-4 border-l border-slate-200 text-sky-400 bg-sky-950/50 align-middle">🛰️ Action Track</th>
+                  <th className="py-3 px-4 border-l border-slate-200 text-sky-700 bg-sky-50 align-middle">🛰️ Action Track</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/80 text-slate-700 text-center font-medium">
+              <tbody className="divide-y divide-slate-200 text-slate-700 text-center font-medium">
                 {displayedDetailRows.length === 0 ? (
                   <tr>
                     <td colSpan={parsed.headers.length + 1} className="py-12 text-center text-slate-600 font-medium">
@@ -2850,9 +2857,9 @@ export default function PRUpdatePage() {
       )}
       
       {activeTab === 'lead_time' && !leadTimeData && (
-        <div className="flex flex-col items-center justify-center min-h-[40vh] bg-slate-900/50 rounded-2xl border border-slate-700/50 text-slate-400 p-8 text-center">
-          <Timer className="w-12 h-12 text-slate-500 mb-4" />
-          <h3 className="text-lg font-bold text-slate-300">Data Lead Time Tidak Ditemukan</h3>
+        <div className="flex flex-col items-center justify-center min-h-[40vh] bg-muted/50 rounded-2xl border border-border text-muted-foreground p-8 text-center">
+          <Timer className="w-12 h-12 text-muted-foreground/70 mb-4" />
+          <h3 className="text-lg font-bold text-foreground">Data Lead Time Tidak Ditemukan</h3>
           <p className="text-sm mt-2 max-w-md">Sheet &quot;Lead Time&quot; tidak ditemukan di dalam file Excel yang diunggah. Pastikan Anda mengunggah file Excel terbaru menggunakan format template yang baru.</p>
         </div>
       )}

@@ -15,12 +15,21 @@ export const api = axios.create({
 // Intercept errors and surface backend detail messages
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
     if (!error.response) {
       error.message = 'Backend tidak tersedia. Pastikan backend server berjalan.';
       return Promise.reject(error);
     }
-    const detail = error?.response?.data?.detail;
+    let detail = error?.response?.data?.detail;
+    // responseType: 'blob' requests (file downloads) get their error body back as a
+    // Blob too, so `detail` above is never populated for them - read it out manually.
+    if (!detail && error.response.data instanceof Blob && error.response.data.type.includes('json')) {
+      try {
+        detail = JSON.parse(await error.response.data.text())?.detail;
+      } catch {
+        // Blob wasn't valid JSON after all - fall through to the generic message below.
+      }
+    }
     if (detail) {
       const msg = typeof detail === 'string' ? detail : JSON.stringify(detail);
       error.message = msg;
@@ -319,6 +328,44 @@ export const uploadRouteOptimizationFile = async (
   return response.data;
 };
 
+
+// ── Dual Export (HTML + Excel raw data terfilter cabang, dibundel .zip) ──
+
+export interface DualExportPayload {
+  moduleName: string;
+  processedAt?: string;
+  /** Filter cabang aktif di halaman saat ini. `['All']` = tanpa filter. */
+  cabang: string[];
+  htmlContent: string;
+  /** Nama file dasar tanpa ekstensi, biasanya dari getStandardFilename(). */
+  baseFilename: string;
+  /** Salah satu dari resultId atau rows wajib diisi sebagai sumber data Excel. */
+  resultId?: number;
+  rows?: Record<string, unknown>[];
+  /** Key di result_json yang berisi array baris data (hanya relevan bila pakai resultId). */
+  dataKey?: string;
+  /** Override nama kolom cabang pada rows, kalau auto-detect di backend tidak cocok. */
+  cabangField?: string;
+}
+
+export const exportDualFormat = async (payload: DualExportPayload): Promise<Blob> => {
+  const response = await api.post(
+    '/export/dual',
+    {
+      module_name: payload.moduleName,
+      processed_at: payload.processedAt,
+      cabang: payload.cabang,
+      html_content: payload.htmlContent,
+      base_filename: payload.baseFilename,
+      result_id: payload.resultId,
+      rows: payload.rows,
+      data_key: payload.dataKey,
+      cabang_field: payload.cabangField,
+    },
+    { responseType: 'blob' }
+  );
+  return response.data;
+};
 
 export const getWHTransDummyData = async (numCustomers: number = 100) => {
   const response = await api.get(`/wh-trans/dummy-data?num_customers=${numCustomers}`);

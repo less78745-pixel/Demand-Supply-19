@@ -19,6 +19,7 @@ import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import { exportToExcel } from '@/utils/export';
 import { supabase } from '@/lib/supabase';
 import { ExportHtmlButton } from '@/components/ui/ExportHtmlButton';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { ModuleExportConfig } from '@/utils/offlineExport';
 
 const DDMRPBufferChart = dynamic(
@@ -391,36 +392,35 @@ export default function DDMRPPage() {
     <div id="export-container" className="space-y-8 max-w-[1550px] mx-auto pb-16 animate-in fade-in duration-500 text-foreground">
 
       {/* ─── COMMAND TOWER HERO BANNER ─── */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#1E1E2C] via-blue-950 to-[#1E1E2C] p-6 sm:p-8 border border-blue-500/20 shadow-2xl">
-        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#3b82f6_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
-        <div className="relative z-10 flex flex-col xl:flex-row xl:items-center justify-between gap-6">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20 uppercase tracking-widest">
-              <Layers className="w-3.5 h-3.5" /> Kalkulator DSP • Demand Driven MRP (Phase 1)
-            </div>
-            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-foreground flex items-center gap-3">
-              DDMRP — <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-cyan-300 to-indigo-300">Demand Driven MRP</span>
-            </h1>
-            <p className="text-foreground text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
-              Buffer positioning & replenishment cerdas berbasis Net Flow Position. Mencegah bullwhip effect melalui penempatan buffer inventaris strategis (Red, Yellow, Green).
-            </p>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 shrink-0">
+      <PageHeader
+        icon={Layers}
+        eyebrow="Kalkulator DSP • Demand Driven MRP (Phase 1)"
+        title="DDMRP —"
+        highlight="Demand Driven MRP"
+        description="Buffer positioning & replenishment cerdas berbasis Net Flow Position. Mencegah bullwhip effect melalui penempatan buffer inventaris strategis (Red, Yellow, Green)."
+        actions={
+          <>
             <TimestampBadge timestamp={results?.processed_at} label="Olah Terakhir:" />
             {exportConfig
-              ? <ExportHtmlButton config={exportConfig} moduleName="DDMRP_Buffer" processedAt={results?.processed_at} />
+              ? <ExportHtmlButton
+                  config={exportConfig}
+                  moduleName="DDMRP_Buffer"
+                  processedAt={results?.processed_at}
+                  cabang={filterCabang}
+                  rawRows={skuRowsAll}
+                  cabangField="cabang"
+                />
               : <ExportHtmlButton elementId="export-container" moduleName="DDMRP_Buffer" processedAt={results?.processed_at} />}
             <button
               onClick={() => setShowHowTo(!showHowTo)}
-              className="no-export w-full sm:w-auto px-4 py-2 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2"
+              className="no-export min-h-[44px] w-full sm:w-auto px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-xl text-xs sm:text-sm font-semibold transition-colors flex items-center justify-center gap-2"
             >
               <Info className="w-4 h-4" />
               {showHowTo ? 'Tutup Panduan' : 'Panduan & Template'}
             </button>
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {/* ─── PANDUAN & DEMO DATA SECTION ─── */}
       {showHowTo && (

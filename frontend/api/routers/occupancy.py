@@ -65,6 +65,7 @@ DSP_RESULT_BUCKET = os.getenv("DSP_RESULT_BUCKET", "dsp-processed-files")
 PERSIST_SAFE_LIMIT_BYTES = 2 * 1024 * 1024
 MAX_STORED_SHORTAGE_ALERTS = 2000
 MAX_STORED_OVERSTOCK_ALERTS = 2000
+MAX_STORED_TO_RECOMMENDATIONS = 2000
 
 # inventory_value_rows punya SATU baris per (Cabang, Grup, Category, Week) --
 # beda dengan shortage/overstock_alerts yang cuma berisi pengecualian, field
@@ -174,6 +175,20 @@ def _prepare_result_for_storage(results: dict) -> dict:
         results["overstock_alerts_truncated"] = True
         results["overstock_alerts_total_count"] = total
         warnings.append(f"Overstock alerts (menampilkan {MAX_STORED_OVERSTOCK_ALERTS} dari {total} kelebihan stok terbesar)")
+
+    # Rekomendasi TO: trimming sama seperti shortage/overstock_alerts di atas,
+    # tapi diurutkan berdasarkan `recommended_to` terbesar. Baris ini sudah
+    # hasil agregasi (week x cabang x grup x category yang cuma punya KEDUA
+    # sisi shortage & overstock), jadi normalnya jauh lebih kecil dari
+    # shortage_alerts/overstock_alerts mentah -- cap ini murni jaring pengaman.
+    to_recs = results.get("to_recommendations") or []
+    if _size(results) > PERSIST_SAFE_LIMIT_BYTES and len(to_recs) > MAX_STORED_TO_RECOMMENDATIONS:
+        total = len(to_recs)
+        to_recs_sorted = sorted(to_recs, key=lambda r: r.get("recommended_to", 0), reverse=True)
+        results["to_recommendations"] = to_recs_sorted[:MAX_STORED_TO_RECOMMENDATIONS]
+        results["to_recommendations_truncated"] = True
+        results["to_recommendations_total_count"] = total
+        warnings.append(f"Rekomendasi TO (menampilkan {MAX_STORED_TO_RECOMMENDATIONS} dari {total} rekomendasi bernilai terbesar)")
 
     if warnings:
         results["warning"] = (

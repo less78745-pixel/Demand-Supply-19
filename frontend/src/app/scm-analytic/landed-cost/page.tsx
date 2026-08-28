@@ -12,6 +12,7 @@ import { uploadLandedCostFiles } from '@/lib/api';
 import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import { getStandardFilename } from '@/utils/export';
 import { ExportHtmlButton } from '@/components/ui/ExportHtmlButton';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { ModuleExportConfig } from '@/utils/offlineExport';
 import toast from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
@@ -394,40 +395,49 @@ export default function LandedCostPage() {
     ],
   } : undefined;
 
+  // ── Dual-export (HTML + Excel raw data terfilter cabang) wiring ──
+  // Halaman ini belum punya filter cabang di UI (hanya skenario kurs/demurrage),
+  // jadi `cabang` dikunci ke ['All'] -- tombol tetap mengaktifkan bundel
+  // HTML+Excel .zip, tapi baru benar-benar "memfilter cabang" kalau nanti
+  // ditambahkan MultiSelect cabang seperti modul lain. Raw source pakai
+  // `results.containers`, satu-satunya tabel yang punya kolom cabang tujuan
+  // (`cabang_tujuan`) -- `sku_costs` tidak punya kolom cabang sendiri.
+  const dualExportCabang = ['All'];
+  const dualExportRawRows = results?.containers;
+
   return (
     <div id="export-container" className="space-y-8 max-w-[1550px] mx-auto pb-16 animate-in fade-in duration-500 text-foreground">
 
       {/* ─── COMMAND TOWER HERO BANNER ─── */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-cyan-950 to-slate-900 p-6 sm:p-8 border border-cyan-500/20 shadow-2xl">
-        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(hsl(var(--accent))_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
-        <div className="relative z-10 flex flex-col xl:flex-row xl:items-center justify-between gap-6">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 uppercase tracking-widest">
-              <Ship className="w-3.5 h-3.5" /> SCM Analytic • Import Financial Intelligence
-            </div>
-            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white flex items-center gap-3">
-              Import Landed Cost <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-teal-300 to-blue-300">Tracker</span>
-            </h1>
-            <p className="text-white/75 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
-              Pantau posisi kontainer impor secara real-time, kalkulasi HPP per unit (Landed Cost) dengan alokasi bobot & kubikasi, serta simulasi dampak kurs valas dan risiko demurrage.
-            </p>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 shrink-0">
+      <PageHeader
+        icon={Ship}
+        eyebrow="SCM Analytic • Import Financial Intelligence"
+        title="Import Landed Cost"
+        highlight="Tracker"
+        description="Pantau posisi kontainer impor secara real-time, kalkulasi HPP per unit (Landed Cost) dengan alokasi bobot & kubikasi, serta simulasi dampak kurs valas dan risiko demurrage."
+        actions={
+          <>
             <TimestampBadge timestamp={results?.processed_at} label="Olah Terakhir:" />
             {exportConfig
-              ? <ExportHtmlButton config={exportConfig} moduleName="Landed_Cost_Intelligence" processedAt={results?.processed_at} />
+              ? <ExportHtmlButton
+                  config={exportConfig}
+                  moduleName="Landed_Cost_Intelligence"
+                  processedAt={results?.processed_at}
+                  cabang={dualExportCabang}
+                  rawRows={dualExportRawRows}
+                  cabangField="cabang_tujuan"
+                />
               : <ExportHtmlButton elementId="export-container" moduleName="Landed_Cost_Intelligence" processedAt={results?.processed_at} />}
             <button
               onClick={() => setShowHowTo(!showHowTo)}
-              className="no-export w-full sm:w-auto px-4 py-2 bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/30 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2"
+              className="no-export min-h-[44px] w-full sm:w-auto px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-xl text-xs sm:text-sm font-semibold transition-colors flex items-center justify-center gap-2"
             >
               <Info className="w-4 h-4" />
               {showHowTo ? 'Tutup Panduan & File' : 'Panduan & Upload File'}
             </button>
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {/* ─── PANDUAN & UPLOAD SECTION ─── */}
       {showHowTo && (

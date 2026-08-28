@@ -18,9 +18,10 @@ import {
 } from 'recharts';
 import { get, set } from 'idb-keyval';
 import { supabase } from '@/lib/supabase';
-import { parseDynamicCSV, ParsedData } from '@/lib/csvParser';
+import { parseDynamicCSV, ParsedData, sortBulans } from '@/lib/csvParser';
 import { getStandardFilename } from '@/utils/export';
 import { ExportHtmlButton } from '@/components/ui/ExportHtmlButton';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { ModuleExportConfig } from '@/utils/offlineExport';
 import { formatNumberCompact } from '@/lib/utils';
 
@@ -47,14 +48,17 @@ export default function SKUVelocityPage() {
   const [localStatus, setLocalStatus] = useState<string[]>(['All']);
 
   // Table & Chart Highlight state
-  const [activeHighlight, setActiveHighlight] = useState<'All' | 'DeadStock' | 'RisingStar'>('All');
+  // Sorotan Matrix - array (not a single value) so users can highlight Dead
+  // Stock and Rising Star together (excluding only Healthy), same multi-pick
+  // pattern as every other filter on this page (Cabang/Category/Status/Bulan).
+  const [activeHighlight, setActiveHighlight] = useState<string[]>(['All']);
 
   // Auto-select latest month when parsed data changes
   useEffect(() => {
     if (parsed && parsed.data) {
       const allBulans = Array.from(new Set(parsed.data.map(d => d['BULAN']))).filter(Boolean) as string[];
       if (allBulans.length > 0) {
-        const sorted = allBulans.sort();
+        const sorted = sortBulans(allBulans);
         const latest = sorted[sorted.length - 1];
         setSelectedBulan([latest]);
       } else {
@@ -254,9 +258,9 @@ export default function SKUVelocityPage() {
       const parsedData = await parseDynamicCSV(file);
       setParsed(parsedData);
       
-      const uniqueBulans = Array.from(new Set(parsedData.data.map((d: any) => d['BULAN']))).filter(Boolean).sort();
+      const uniqueBulans = sortBulans(Array.from(new Set(parsedData.data.map((d: any) => d['BULAN']))).filter(Boolean) as string[]);
       if (uniqueBulans.length > 0) {
-        setSelectedBulan([uniqueBulans[uniqueBulans.length - 1] as string]);
+        setSelectedBulan([uniqueBulans[uniqueBulans.length - 1]]);
       }
       
       try {
@@ -279,7 +283,7 @@ export default function SKUVelocityPage() {
   const cabangs = useMemo(() => parsed ? ['All', ...Array.from(new Set(parsed.data.map(d => d['Branch Name']))).filter(Boolean).sort()] : [], [parsed]);
   const categories = useMemo(() => parsed ? ['All', ...Array.from(new Set(parsed.data.map(d => d['Category']))).filter(Boolean).sort()] : [], [parsed]);
   const statuses = useMemo(() => parsed ? ['All', ...Array.from(new Set(parsed.data.map(d => d['Status Product']))).filter(Boolean).sort()] : [], [parsed]);
-  const bulans = useMemo(() => parsed ? ['All', ...Array.from(new Set(parsed.data.map(d => d['BULAN']))).filter(Boolean).sort()] : [], [parsed]);
+  const bulans = useMemo(() => parsed ? ['All', ...sortBulans(Array.from(new Set(parsed.data.map(d => d['BULAN']))).filter(Boolean) as string[])] : [], [parsed]);
 
   // Engine Classification Functions removed in favor of direct Status Product mapping
 
@@ -317,10 +321,11 @@ export default function SKUVelocityPage() {
       };
     });
 
-    if (activeHighlight === 'DeadStock') {
-      result = result.filter(r => r.analysisStatus.includes('Discontinue'));
-    } else if (activeHighlight === 'RisingStar') {
-      result = result.filter(r => r.analysisStatus.includes('Fast'));
+    if (!activeHighlight.includes('All')) {
+      result = result.filter(r =>
+        (activeHighlight.includes('Kandidat Discontinue (Dead Stock)') && r.analysisStatus.includes('Discontinue')) ||
+        (activeHighlight.includes('Fast Moving (Rising Star)') && r.analysisStatus.includes('Fast'))
+      );
     }
 
     return result;
@@ -329,7 +334,7 @@ export default function SKUVelocityPage() {
   // Executive Summaries (Filtered to LATEST MONTH ONLY)
   const executiveSummary = useMemo(() => {
     // 1. Determine the latest month
-    const uniqueMonths = Array.from(new Set(analyzedData.map(r => r['BULAN']))).filter(Boolean).sort();
+    const uniqueMonths = sortBulans(Array.from(new Set(analyzedData.map(r => r['BULAN']))).filter(Boolean) as string[]);
     const latestMonth = uniqueMonths.length > 0 ? uniqueMonths[uniqueMonths.length - 1] : null;
     
     // 2. Filter data for the latest month
@@ -464,7 +469,7 @@ export default function SKUVelocityPage() {
   const trendData = useMemo(() => {
     if (!parsed) return [];
     
-    const uniqueBulans = Array.from(new Set(parsed.data.map(d => d['BULAN']))).filter(Boolean).sort();
+    const uniqueBulans = sortBulans(Array.from(new Set(parsed.data.map(d => d['BULAN']))).filter(Boolean) as string[]);
     
     return uniqueBulans.map(bulan => {
       let deadVol = 0;
@@ -668,7 +673,7 @@ export default function SKUVelocityPage() {
 
 
 
-    const uniqueBulans = Array.from(new Set(parsed.data.map(d => d['BULAN']))).filter(Boolean).sort();
+    const uniqueBulans = sortBulans(Array.from(new Set(parsed.data.map(d => d['BULAN']))).filter(Boolean) as string[]);
 
     const result = uniqueBulans.map(b => monthMap[b]).filter(Boolean);
 
@@ -845,7 +850,7 @@ export default function SKUVelocityPage() {
   // full raw dataset, so the exported HTML's own filters never offer values
   // that aren't even present in the exported subset.
   const contextualBulanOptions = useMemo(
-    () => Array.from(new Set<string>(analyzedData.map((d: any) => d['BULAN']))).filter(Boolean).sort(),
+    () => sortBulans(Array.from(new Set<string>(analyzedData.map((d: any) => d['BULAN']))).filter(Boolean)),
     [analyzedData]
   );
   const contextualCabangOptions = useMemo(
@@ -928,67 +933,48 @@ export default function SKUVelocityPage() {
     ],
   } : undefined;
 
+  // ── Dual-export (HTML + Excel raw data terfilter cabang) wiring ──
+  // Excel raw source diambil dari `parsed.data` (sebelum filter bulan/
+  // kategori/status, hanya cabang) supaya Excel berisi seluruh record cabang
+  // terpilih apa adanya, dan filter cabang benar-benar ditegakkan ulang di
+  // backend. Kolom cabang di halaman ini fixed ('Branch Name'), bukan hasil
+  // deteksi dinamis seperti modul lain.
+  const dualExportRawRows = parsed?.data ?? undefined;
+
   return (
 
     <div id="export-container" className="space-y-8 pb-16 min-h-screen animate-fade-in text-foreground">
 
-      {/* HEADER SECTION */}
-
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-6 sm:p-8 border border-indigo-500/20 shadow-2xl">
-
-        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#6366f1_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
-
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-
-          <div className="space-y-2">
-
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 uppercase tracking-widest">
-
-              <Activity className="w-3.5 h-3.5" /> Dashboard Data Harian • SKU Velocity
-
-            </div>
-
-            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white flex items-center gap-3">
-
-              SKU Velocity Analysis <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-300">(Dead Stock vs Fast Moving)</span>
-
-            </h1>
-
-            <p className="text-slate-300 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
-
-              Modul analitik cerdas untuk membedah kinerja barang: mengidentifikasi item yang menyedot modal (Kandidat Discontinue) dan item yang berpotensi kehabisan stok di masa tren naik (Rising Star).
-
-            </p>
-
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-
+      {/* ─── HERO BANNER HEADER ─── */}
+      <PageHeader
+        icon={Activity}
+        eyebrow="Dashboard Data Harian • SKU Velocity"
+        title="SKU Velocity Analysis"
+        highlight="(Dead Stock vs Fast Moving)"
+        description="Modul analitik cerdas untuk membedah kinerja barang: mengidentifikasi item yang menyedot modal (Kandidat Discontinue) dan item yang berpotensi kehabisan stok di masa tren naik (Rising Star)."
+        actions={
+          <>
             <TimestampBadge timestamp={parsed?.processed_at} label="Olah Terakhir:" />
-
             {exportConfig
-              ? <ExportHtmlButton config={exportConfig} moduleName="SKU_Velocity_Insights" processedAt={parsed?.processed_at} />
+              ? <ExportHtmlButton
+                  config={exportConfig}
+                  moduleName="SKU_Velocity_Insights"
+                  processedAt={parsed?.processed_at}
+                  cabang={selectedCabang}
+                  rawRows={dualExportRawRows}
+                  cabangField="Branch Name"
+                />
               : <ExportHtmlButton elementId="export-container" moduleName="SKU_Velocity_Insights" processedAt={parsed?.processed_at} />}
             <button
-
               onClick={() => setShowHowTo(!showHowTo)}
-
-              className="no-export w-full sm:w-auto px-4 py-2 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2"
-
+              className="no-export min-h-[44px] w-full sm:w-auto px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-xl text-xs sm:text-sm font-semibold transition-colors flex items-center justify-center gap-2"
             >
-
               <HelpCircle className="w-4 h-4" />
-
               {showHowTo ? 'Tutup Panduan' : 'Panduan & Template'}
-
             </button>
-
-          </div>
-
-        </div>
-
-      </div>
-
+          </>
+        }
+      />
 
 
       {showHowTo && (
@@ -1308,23 +1294,13 @@ export default function SKUVelocityPage() {
 
             <label className="text-xs font-bold text-slate-700 block uppercase">🎯 Sorotan Matrix:</label>
 
-            <select
-
-              value={activeHighlight}
-
-              onChange={(e) => setActiveHighlight(e.target.value as any)}
-
-              className="w-full h-[42px] rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-bold focus:border-indigo-500 outline-none"
-
-            >
-
-              <option value="All">Lihat Semua SKU</option>
-
-              <option value="DeadStock">🔴 Hanya Kandidat Discontinue</option>
-
-              <option value="RisingStar">🟢 Hanya Fast Moving</option>
-
-            </select>
+            <MultiSelect
+              options={['All', 'Kandidat Discontinue (Dead Stock)', 'Fast Moving (Rising Star)']}
+              selected={activeHighlight}
+              onChange={setActiveHighlight}
+              selectAllLabel="Lihat Semua SKU"
+              placeholder="Pilih Sorotan..."
+            />
 
           </div>
 

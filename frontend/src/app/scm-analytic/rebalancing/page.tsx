@@ -15,6 +15,7 @@ import toast from 'react-hot-toast';
 import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import { getStandardFilename } from '@/utils/export';
 import { ExportHtmlButton } from '@/components/ui/ExportHtmlButton';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { ModuleExportConfig } from '@/utils/offlineExport';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -385,40 +386,44 @@ export default function RebalancingPage() {
     ],
   } : undefined;
 
+  // Dual-export Excel: sumber raw SEBELUM filter entity (bukan `filtered`) supaya
+  // filter entity/cabang benar-benar ditegakkan ulang di backend, bukan sekadar
+  // meneruskan subset yang sudah difilter di client.
+  const dualExportRawRows = results?.recommendations ?? undefined;
+
   return (
     <div id="export-container" className="space-y-8 max-w-[1550px] mx-auto pb-16 animate-in fade-in duration-500 text-foreground">
 
       {/* ─── COMMAND TOWER HERO BANNER ─── */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-emerald-950 to-slate-900 p-6 sm:p-8 border border-emerald-500/20 shadow-2xl">
-        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(hsl(var(--accent))_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
-        <div className="relative z-10 flex flex-col xl:flex-row xl:items-center justify-between gap-6">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase tracking-widest">
-              <ArrowLeftRight className="w-3.5 h-3.5" /> SCM Analytic • Multi-Echelon Logistics
-            </div>
-            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white flex items-center gap-3">
-              Stock Rebalancing <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-300">Optimizer</span>
-            </h1>
-            <p className="text-white/75 text-sm sm:text-base max-w-3xl font-normal leading-relaxed">
-              Optimasi pemindahan stok silang antar-cabang dengan biaya logistik terendah dan waktu kirim tercepat. Perhitungan dipartisi ketat per entitas perusahaan tujuan.
-            </p>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 shrink-0">
+      <PageHeader
+        icon={ArrowLeftRight}
+        eyebrow="SCM Analytic • Multi-Echelon Logistics"
+        title="Stock Rebalancing"
+        highlight="Optimizer"
+        description="Optimasi pemindahan stok silang antar-cabang dengan biaya logistik terendah dan waktu kirim tercepat. Perhitungan dipartisi ketat per entitas perusahaan tujuan."
+        actions={
+          <>
             <TimestampBadge timestamp={results?.processed_at} label="Olah Terakhir:" />
             {exportConfig
-              ? <ExportHtmlButton config={exportConfig} moduleName="Stock_Rebalancing_Optimizer" processedAt={results?.processed_at} />
+              ? <ExportHtmlButton
+                  config={exportConfig}
+                  moduleName="Stock_Rebalancing_Optimizer"
+                  processedAt={results?.processed_at}
+                  cabang={selectedEntity}
+                  rawRows={dualExportRawRows}
+                  cabangField="entity"
+                />
               : <ExportHtmlButton elementId="export-container" moduleName="Stock_Rebalancing_Optimizer" processedAt={results?.processed_at} />}
             <button
               onClick={() => setShowHowTo(!showHowTo)}
-              className="no-export w-full sm:w-auto px-4 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2"
+              className="no-export min-h-[44px] w-full sm:w-auto px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-xl text-xs sm:text-sm font-semibold transition-colors flex items-center justify-center gap-2"
             >
               <Info className="w-4 h-4" />
               {showHowTo ? 'Tutup Panduan & File' : 'Panduan & Upload File'}
             </button>
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {/* ─── PANDUAN & UPLOAD SECTION ─── */}
       {showHowTo && (

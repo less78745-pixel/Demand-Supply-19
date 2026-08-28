@@ -109,9 +109,19 @@ class RawRecord:
 
     def __init__(self, no, cabang, grup, category, onhand, to, vessel, target):
         self.no = no
-        self.cabang = str(cabang) if cabang is not None else "Unknown"
-        self.grup = str(grup) if grup is not None else "General"
-        self.category = str(category) if category is not None else "General"
+        # Stripped here (not just at lookup time like the CBM/Harga Product
+        # keys below) because cabang/grup/category are ALSO used directly as
+        # dict/group keys throughout this module (qty_series_by_branch,
+        # agg_bal_t, breakdown_by_cabang_week, ...). A stray trailing/leading
+        # space in the "Raw" sheet's Cabang cell (e.g. "Bengkulu ") used to
+        # silently split that branch into its own mismatched key - it would
+        # get computed, but then fail to match the trimmed cabang name coming
+        # from the "WH" sheet/filter list, so it disappeared specifically
+        # from cabang-keyed views like MOS/Value while still showing up in
+        # views driven by the WH capacity list.
+        self.cabang = str(cabang).strip() if cabang is not None else "Unknown"
+        self.grup = str(grup).strip() if grup is not None else "General"
+        self.category = str(category).strip() if category is not None else "General"
         self.onhand = _safe_float(onhand)
         self.to = [_safe_float(x) for x in to]
         self.vessel = [_safe_float(x) for x in vessel]
@@ -165,7 +175,7 @@ def read_wh_capacity(ws_wh: Worksheet):
             total_cap = float(existing) + float(tambahan)
         except (ValueError, TypeError):
             total_cap = 0.0
-        result.append((str(cabang), total_cap))
+        result.append((str(cabang).strip(), total_cap))
     return result
 
 def compute_balance_series(record: RawRecord, n_weeks: int):
@@ -629,6 +639,97 @@ def build_html_report_string(charts_data, insights, period_labels, week_awal):
 </body>
 </html>"""
 
+def build_to_recommendations(records, bal_t, period_labels, n_weeks) -> list:
+    """
+    Rekomendasi TO (Transfer Order): sandingkan Shortage & Overstock Alerts
+    pada kombinasi (Minggu, Grup, Category) yang SAMA PERSIS -- CABANG SENGAJA
+    TIDAK ikut jadi match key, karena tujuan TO justru memindah stok ANTAR
+    CABANG. Contoh nyata: Makassar shortage 6 unit "WARDROBE - OKELO S03FM" di
+    NOV-4, sementara Manado overstock 5 unit kombinasi Grup+Category yang SAMA
+    PERSIS di minggu yang SAMA -- itu kandidat TO yang valid walau cabang-nya
+    beda (mewajibkan cabang yang sama juga akan membuat tabel ini nyaris selalu
+    kosong: satu baris data tidak mungkin sekaligus minus DAN plus di minggu
+    yang sama, jadi match hanya bisa kejadian lintas-cabang).
+
+    Langkah:
+    1. AGREGASI (setara GROUP BY + SUM di SQL) -- untuk tiap record/SKU per
+       minggu, balance `bt[w]` dijumlah ke key (week, grup, category), DIPECAH
+       per cabang di masing-masing sisi: bt[w] < 0 -> shortage[cabang] += |bt[w]|,
+       bt[w] > 0 -> overstock[cabang] += bt[w]. Satu pass O(records x weeks),
+       reuse `bal_t` yang sudah dihitung shortage_alerts/overstock_alerts di
+       atas -- tidak ada perhitungan ganda.
+    2. INNER JOIN kedua sisi pada key (week, grup, category): key yang cuma
+       punya shortage TANPA overstock (atau sebaliknya) dibuang. Untuk key yang
+       lolos, SETIAP cabang yang shortage dipasangkan dengan TOTAL overstock
+       seluruh cabang lain pada key yang sama (satu baris output per cabang
+       yang shortage) -- daftar cabang sumber overstock-nya disertakan di
+       `overstock_sources` (diurutkan dari nilai terbesar) supaya rekomendasi
+       tetap bisa ditindaklanjuti (tahu harus tarik dari cabang mana).
+    3. Rekomendasi TO = MIN(shortage_value, overstock_value): jumlah yang
+       secara fisik BISA dipindah dibatasi oleh sisi yang lebih kecil (tidak
+       mungkin transfer melebihi defisit yang dibutuhkan penerima, atau
+       melebihi total kelebihan stok yang tersedia di jaringan cabang lain).
+       CATATAN: ini penjumlahan sederhana (bukan solver alokasi optimal) --
+       kalau ada BEBERAPA cabang yang sama-sama shortage pada key yang sama,
+       masing-masing dibandingkan ke total overstock yang sama (tidak saling
+       mengurangi "jatah" satu sama lain).
+
+    Setara SQL:
+        WITH shortage_agg AS (
+            SELECT week, grup, category, cabang, SUM(deficit) AS shortage_value
+            FROM shortage_alerts GROUP BY week, grup, category, cabang
+        ), overstock_agg AS (
+            SELECT week, grup, category, SUM(excess) AS overstock_value
+            FROM overstock_alerts GROUP BY week, grup, category
+        )
+        SELECT s.week, s.cabang, s.grup, s.category, s.shortage_value,
+               o.overstock_value, LEAST(s.shortage_value, o.overstock_value) AS recommended_to
+        FROM shortage_agg s
+        INNER JOIN overstock_agg o
+          ON s.week = o.week AND s.grup = o.grup AND s.category = o.category
+        ORDER BY recommended_to DESC;
+    """
+    agg = {}  # (week, grup, category) -> {"shortage": {cabang: value}, "overstock": {cabang: value}}
+    for rec in records:
+        bt = bal_t[id(rec)]
+        for w in range(n_weeks):
+            val = bt[w]
+            if val == 0:
+                continue
+            key = (period_labels[w], rec.grup, rec.category)
+            entry = agg.setdefault(key, {"shortage": {}, "overstock": {}})
+            side = entry["shortage"] if val < 0 else entry["overstock"]
+            side[rec.cabang] = side.get(rec.cabang, 0.0) + (abs(val) if val < 0 else val)
+
+    recommendations = []
+    for (week, grup, category), sides in agg.items():
+        shortage_by_cabang = sides["shortage"]
+        overstock_by_cabang = sides["overstock"]
+        total_overstock = sum(overstock_by_cabang.values())
+        # INNER JOIN: hanya key yang punya KEDUA sisi (shortage & overstock)
+        if not shortage_by_cabang or total_overstock <= 0:
+            continue
+
+        overstock_sources = sorted(
+            ({"cabang": c, "value": round(v, 2)} for c, v in overstock_by_cabang.items()),
+            key=lambda x: x["value"], reverse=True
+        )
+        for cabang, shortage_value in shortage_by_cabang.items():
+            recommendations.append({
+                "week": week,
+                "cabang": cabang,
+                "grup": grup,
+                "category": category,
+                "shortage_value": round(shortage_value, 2),
+                "overstock_value": round(total_overstock, 2),
+                "recommended_to": round(min(shortage_value, total_overstock), 2),
+                "overstock_sources": overstock_sources,
+            })
+
+    recommendations.sort(key=lambda r: r["recommended_to"], reverse=True)
+    return recommendations
+
+
 def calculate_mrp_occupancy_from_bytes(file_bytes: bytes) -> dict:
     wb_data = load_workbook(io.BytesIO(file_bytes), data_only=True)
     if "Raw" not in wb_data.sheetnames or "WH" not in wb_data.sheetnames:
@@ -848,6 +949,11 @@ def calculate_mrp_occupancy_from_bytes(file_bytes: bytes) -> dict:
                     "excess": round(bt[w], 2)
                 })
 
+    # Rekomendasi TO (Transfer Order): sandingkan shortage & overstock pada
+    # kombinasi (Minggu, Cabang, Grup, Category) yang sama persis -- lihat
+    # build_to_recommendations di atas untuk detail langkah & versi SQL-nya.
+    to_recommendations = build_to_recommendations(records, bal_t, period_labels, n_weeks)
+
     # Sheet 1 "Analisa Nilai Inventori": row per (Cabang, Grup, Category, Week)
     # dengan alur Container (balance) -> QTY (CBM) -> Value, memakai deret yang
     # SAMA dengan yang sudah dituliskan ke sheet "1. Running Balance" (lihat
@@ -887,12 +993,14 @@ def calculate_mrp_occupancy_from_bytes(file_bytes: bytes) -> dict:
         "daily_data": daily_data,
         "shortage_alerts": shortage_alerts,
         "overstock_alerts": overstock_alerts,
+        "to_recommendations": to_recommendations,
         "inventory_value_rows": inventory_value_rows,
         "kpi_summary": {
             "avg_occupancy": round(avg_occ, 1),
             "max_occupancy": round(max_occ, 1),
             "categories_at_risk": len(shortage_alerts),
-            "overstock_count": len(overstock_alerts)
+            "overstock_count": len(overstock_alerts),
+            "to_recommendation_count": len(to_recommendations)
         },
         "mos_data": df_mos.to_dict('records') if not df_mos.empty else [],
         "over_occupancy_insights": insights,

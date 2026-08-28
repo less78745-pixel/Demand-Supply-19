@@ -99,16 +99,20 @@ function parseLinesSync(lines: any[][]): { headers: string[]; targetColumns: { i
   
   const knownMetadata = [
     'cabang', 'region', 'regional', 'branch', 'branch_name', 'branch name', 'cab', 'lokasi',
-    'item', 'nama barang', 'category', 'grup', 'group', 'divisi', 'category item', 'item category', 
+    'item', 'nama barang', 'category', 'grup', 'group', 'divisi', 'category item', 'item category',
     'sub item', 'sub item category', 'category dsp', 'status doi', 'doi', 'status insentif', 'category insentif', 'kategori insentif', 'insentif',
-    'po no', 'pr no', 'no po', 'no pr', 'po', 'nopr', 'nomor po', 'nomor pr', 'vendor_no', 'vendor', 
+    'po no', 'pr no', 'no po', 'no pr', 'po', 'nopr', 'nomor po', 'nomor pr', 'vendor_no', 'vendor',
     'pi', 'no pi', 'no_pi', 'no. pi', 'nomor pi', 'pi no', 'invoice', 'no invoice', 'nomor invoice', 'proforma invoice', 'nomor proforma invoice',
     'no sku', 'sku', 'description', 'deskripsi', 'item description', 'nama produk',
     'status compile', 'status', 'state', 'urgency', 'keterangan', 'notes',
     'container', 'no container', 'no_container', 'nocontainer', 'nomor container', 'kontainer', 'no kontainer',
     'bl', 'no bl', 'no_bl', 'no. bl', 'nomor bl', 'bill of lading', 'booking', 'no booking', 'no_booking', 'nomor booking', 'b/l', 'no b/l', 'bl no', 'bl_no',
     'shipping line', 'shipping_line', 'shippingline', 'shipping', 'pelayaran', 'carrier', 'maskapai', 'line',
-    'eta fix', 'tanggal eta', 'week eta', 'cut off', 'cutoff', 'eta', 'etd', 'free time end', 'eta_port', 'last checked', 'tanggal', 'date'
+    'eta fix', 'tanggal eta', 'week eta', 'cut off', 'cutoff', 'eta', 'etd', 'free time end', 'eta_port', 'last checked', 'tanggal', 'date',
+    // Exact-match only (not substring) so this never catches a real numeric
+    // metric column whose name happens to contain "month", e.g. "AVG SALES
+    // MONTH" - that one must still be coerced to a number and stay that way.
+    'bulan', 'month', 'periode', 'period', 'tahun', 'year'
   ];
 
   for (let i = 0; i < headers.length; i++) {
@@ -169,6 +173,16 @@ function parseLinesSync(lines: any[][]): { headers: string[]; targetColumns: { i
           const month = months[d.getUTCMonth()];
           val = `${days} ${month} ${d.getUTCFullYear()}`;
         }
+      }
+
+      // Normalize whitespace on month/period label columns - a source file
+      // exported with inconsistent spacing ("Agustus  2026" vs "Agustus 2026")
+      // otherwise reads as two distinct categorical values, silently
+      // splitting one real month into multiple buckets downstream (the exact
+      // "9.037 vs 25.062" SKU Velocity bug: filters/KPIs that "pick the
+      // latest month" only ever see one of the fragments).
+      if ((hLower === 'bulan' || hLower === 'month' || hLower === 'periode' || hLower === 'period') && val) {
+        val = val.replace(/\s+/g, ' ').trim();
       }
 
       rowObj[headerName] = val;
@@ -255,6 +269,58 @@ export async function parseDynamicCSV(file: File): Promise<ParsedData> {
       });
     }
   });
+}
+
+const INDONESIAN_MONTH_NAMES: Record<string, number> = {
+  januari: 1, februari: 2, maret: 3, april: 4, mei: 5, juni: 6, juli: 7,
+  agustus: 8, september: 9, oktober: 10, november: 11, desember: 12,
+  jan: 1, feb: 2, mar: 3, apr: 4, jun: 6, jul: 7, agu: 8, agt: 8,
+  sep: 9, okt: 10, nov: 11, des: 12,
+};
+
+// Turns a "BULAN"/"Periode" label (free-text Indonesian month name, MM/YYYY,
+// YYYY-MM, or a bare number) into a single YYYYMM-shaped integer so callers
+// can sort chronologically instead of falling back to Array.sort()'s default
+// lexicographic order (which puts "Agustus" before "Juni" alphabetically,
+// even though August comes after June). Values that don't resolve to a
+// recognizable month sort last (Infinity) rather than silently as "smallest".
+export function getBulanSortKey(val: any): number {
+  if (val === null || val === undefined) return Infinity;
+  const str = String(val).trim();
+  if (!str) return Infinity;
+  const lower = str.toLowerCase();
+
+  const yearMatch = lower.match(/(\d{4})/);
+  const year = yearMatch ? Number(yearMatch[1]) : 0;
+
+  const monthName = Object.keys(INDONESIAN_MONTH_NAMES).find(m => new RegExp(`\\b${m}`).test(lower));
+  if (monthName) {
+    return year * 100 + INDONESIAN_MONTH_NAMES[monthName];
+  }
+
+  // "2026-08", "08/2026", "08-2026" - whichever side is a valid month (1-12)
+  // and the other side plausibly a year decides the order.
+  const numMatch = lower.match(/(\d{1,4})\s*[/\-.]\s*(\d{1,4})/);
+  if (numMatch) {
+    const a = Number(numMatch[1]);
+    const b = Number(numMatch[2]);
+    if (a > 31) return a * 100 + b;
+    if (b > 31) return b * 100 + a;
+    if (a >= 1 && a <= 12) return (year || 0) * 100 + a;
+  }
+
+  const plainNum = Number(lower.replace(/[^0-9]/g, ''));
+  if (!isNaN(plainNum) && plainNum > 0) {
+    return plainNum;
+  }
+
+  return Infinity;
+}
+
+// Sorts BULAN/Periode label arrays chronologically (see getBulanSortKey)
+// instead of the lexicographic default `.sort()` would otherwise apply.
+export function sortBulans(values: string[]): string[] {
+  return [...values].sort((a, b) => getBulanSortKey(a) - getBulanSortKey(b));
 }
 
 export function findColumn(headers: string[], possibleNames: string[]): string | undefined {
