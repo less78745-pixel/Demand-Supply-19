@@ -351,5 +351,34 @@ export function findColumn(headers: string[], possibleNames: string[]): string |
     if (idx !== -1) return headers[idx];
   }
 
-  return undefined; 
+  return undefined;
+}
+
+/**
+ * Copies whatever column actually resolves to "Grup"/"Region" (e.g. a source
+ * file using "GROUP", "Kelompok", "Regional", "Wilayah", different casing, or
+ * extra spacing) onto canonical `Grup`/`Region` keys on every row, so
+ * downstream code that reads `row['Grup']` / `row['Region']` works regardless
+ * of the exact header text in the uploaded file. A no-op if the file already
+ * uses the canonical names, and leaves rows untouched (returns them as-is,
+ * `Grup`/`Region` simply stay absent) if no matching column exists at all -
+ * callers should treat an empty `Grup`/`Region` value set as "column missing"
+ * and say so in the UI rather than silently showing a blank chart.
+ */
+export function normalizeGrupRegionColumns(parsed: ParsedData): ParsedData {
+  const grupCol = findColumn(parsed.headers, ['Grup', 'Group', 'Kelompok Barang', 'Kelompok', 'Divisi']);
+  const regionCol = findColumn(parsed.headers, ['Region', 'Regional', 'Wilayah', 'Area']);
+
+  const needsGrupCopy = grupCol && grupCol !== 'Grup';
+  const needsRegionCopy = regionCol && regionCol !== 'Region';
+  if (!needsGrupCopy && !needsRegionCopy) return parsed;
+
+  const data = parsed.data.map(row => {
+    const copy = { ...row };
+    if (needsGrupCopy && copy['Grup'] === undefined) copy['Grup'] = row[grupCol as string];
+    if (needsRegionCopy && copy['Region'] === undefined) copy['Region'] = row[regionCol as string];
+    return copy;
+  });
+
+  return { ...parsed, data };
 }

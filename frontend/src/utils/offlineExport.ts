@@ -44,6 +44,8 @@ export interface ExportTableSpec {
   /** Which of the module's filters (by field) apply to this table. Omit = unfiltered. */
   filterFields?: string[];
   emptyLabel?: string;
+  /** Kept in CONFIG for KPI aggregation but not rendered as a visible table section. */
+  hidden?: boolean;
 }
 
 export interface ExportKpiSpec {
@@ -415,7 +417,7 @@ export function buildOfflineExportHtml(config: ModuleExportConfig): string {
   const kpis = config.kpis || [];
   const filterBarHtml = renderFilterBarHtml(config.filters);
   const kpiGridHtml = kpis.length ? `<div class="wx-kpi-grid">${kpis.map((k) => renderKpiHtml(k, config.tables)).join('')}</div>` : '';
-  const tablesHtml = config.tables.map(renderTableHtml).join('');
+  const tablesHtml = config.tables.filter((t) => !t.hidden).map(renderTableHtml).join('');
   const runtimeScript = buildRuntimeScript({ filters: config.filters, tables: config.tables, kpis });
 
   const processedLabel = config.processedAt ? new Date(config.processedAt).toLocaleString('id-ID') : '-';

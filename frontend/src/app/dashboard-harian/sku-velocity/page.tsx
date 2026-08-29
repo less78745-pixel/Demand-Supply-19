@@ -2,7 +2,7 @@
 "use client";
 import LZString from 'lz-string';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { FileUploader } from '@/components/ui/FileUploader';
 import { KPICard } from '@/components/ui/KPICard';
@@ -14,16 +14,17 @@ import {
 import toast from 'react-hot-toast';
 import {
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip,
-  Legend, ResponsiveContainer, LineChart, Line, ComposedChart, BarChart, Bar, ZAxis, Cell
+  Legend, ResponsiveContainer, LineChart, Line, ComposedChart, ZAxis, Cell
 } from 'recharts';
 import { get, set } from 'idb-keyval';
 import { supabase } from '@/lib/supabase';
-import { parseDynamicCSV, ParsedData, sortBulans } from '@/lib/csvParser';
+import { parseDynamicCSV, ParsedData, sortBulans, normalizeGrupRegionColumns } from '@/lib/csvParser';
 import { getStandardFilename } from '@/utils/export';
 import { ExportHtmlButton } from '@/components/ui/ExportHtmlButton';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { ModuleExportConfig } from '@/utils/offlineExport';
 import { formatNumberCompact } from '@/lib/utils';
+import { buildMultiDimTrendData, MultiDimTrendChart, EMPTY_MULTI_DIM_TREND, TrendMetric } from '@/components/charts/MultiDimTrendChart';
 
 // Utility formatters
 const formatRp = (val: number) => `Rp ${val.toLocaleString('id-ID')}`;
@@ -34,18 +35,44 @@ export default function SKUVelocityPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [showHowTo, setShowHowTo] = useState<boolean>(false);
 
+  // True the instant the user has loaded data locally (upload or "Generate
+  // Demo"), synchronously — before any of that action's own async work runs.
+  // Guards against the mount-time background fetch (Supabase "global" row,
+  // then IndexedDB, then demo fallback) or a later realtime event resolving
+  // AFTER the user's own upload and silently overwriting it with stale data
+  // (the "upload Mei, dashboard shows Maret" bug: the background fetch was
+  // still in flight when the upload finished, then won the race and clobbered it).
+  const hasLocalDataRef = useRef(false);
+
   // Filter states
   const [selectedCabang, setSelectedCabang] = useState<string[]>(['All']);
   const [selectedCategory, setSelectedCategory] = useState<string[]>(['All']);
   const [selectedStatus, setSelectedStatus] = useState<string[]>(['All']);
   const [selectedBulan, setSelectedBulan] = useState<string[]>(['All']);
+  const [selectedGrup, setSelectedGrup] = useState<string[]>(['All']);
+  const [selectedRegion, setSelectedRegion] = useState<string[]>(['All']);
   const [trendGrouping, setTrendGrouping] = useState<'Category' | 'Branch Name' | 'Status Product'>('Category');
-  const [trendMetric, setTrendMetric] = useState<'Value' | 'CBM' | 'Qty'>('Value');
+  const [trendMetric, setTrendMetric] = useState<TrendMetric>('Value');
 
   // Local filter states for Trend Analysis
   const [localCabang, setLocalCabang] = useState<string[]>(['All']);
   const [localCategory, setLocalCategory] = useState<string[]>(['All']);
   const [localStatus, setLocalStatus] = useState<string[]>(['All']);
+  const [localBulan, setLocalBulan] = useState<string[]>(['All']);
+
+  // Local filter + metric states for "Analisa Grup" (stacked bar, X-axis
+  // toggle Grup/Cabang/Status Product, clustered by BULAN) — deliberately
+  // independent from the Trend Multidimensi chart above.
+  const [grupChartGrup, setGrupChartGrup] = useState<string[]>(['All']);
+  const [grupChartCabang, setGrupChartCabang] = useState<string[]>(['All']);
+  const [grupChartStatus, setGrupChartStatus] = useState<string[]>(['All']);
+  const [grupChartBulan, setGrupChartBulan] = useState<string[]>(['All']);
+  const [grupChartMetric, setGrupChartMetric] = useState<TrendMetric>('Value');
+  const [grupChartXAxis, setGrupChartXAxis] = useState<'Grup' | 'Branch Name' | 'Status Product'>('Grup');
+
+  // Filters for the "Kondisi Bulan Terakhir per Grup" table (Request 2).
+  const [groupStatusRegion, setGroupStatusRegion] = useState<string[]>(['All']);
+  const [groupStatusCabang, setGroupStatusCabang] = useState<string[]>(['All']);
 
   // Table & Chart Highlight state
   // Sorotan Matrix - array (not a single value) so users can highlight Dead
@@ -77,6 +104,11 @@ export default function SKUVelocityPage() {
         .limit(1)
         .single();
 
+      // The user may have uploaded their own file (or clicked "Generate Demo")
+      // while this request was in flight — that local action always wins over
+      // this background fetch, no matter which of it resolves last.
+      if (hasLocalDataRef.current) return;
+
       if (!error && data && data.result_json) {
         let parsedData = JSON.parse(data.result_json);
         if (parsedData.compressed && parsedData.data) {
@@ -86,12 +118,14 @@ export default function SKUVelocityPage() {
         setParsed(parsedData);
       } else {
         get('last_sku_velocity_data').then(saved => {
+          if (hasLocalDataRef.current) return;
           if (saved && saved.data && saved.data.length > 0) {
             setParsed(saved);
           } else {
             handleGenerateDemo();
           }
         }).catch(err => {
+          if (hasLocalDataRef.current) return;
           console.warn('Failed to load state from IndexDB', err);
           handleGenerateDemo();
         });
@@ -106,6 +140,9 @@ export default function SKUVelocityPage() {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'processed_results', filter: "module=eq.sku_velocity" },
         (payload) => {
+          // Don't let another user's save silently blow away this tab's own
+          // unsaved local upload/demo data — same guard as the mount fetch above.
+          if (hasLocalDataRef.current) return;
           const timestampStr = sessionStorage.getItem('last_processed_at_sku_velocity');
           if (payload.new && payload.new.result_json) {
             let parsedData = JSON.parse(payload.new.result_json);
@@ -148,14 +185,19 @@ export default function SKUVelocityPage() {
   };
 
   const handleGenerateDemo = () => {
+    hasLocalDataRef.current = true;
     const branches = ['Gudang JKT', 'Gudang SBY', 'Gudang MDN', 'Gudang BPN'];
+    const branchRegionMap: Record<string, string> = {
+      'Gudang JKT': 'Jabodetabek', 'Gudang SBY': 'Jawa Timur', 'Gudang MDN': 'Sumatera', 'Gudang BPN': 'Kalimantan'
+    };
     const categories = ['Home Care', 'Personal Care', 'Food & Beverage', 'Electronics', 'Apparel'];
+    const groups = ['Grup A', 'Grup B', 'Grup C'];
     const statuses = ['Active', 'Active', 'Active', 'Passive', 'New Item'];
 
     const headers = [
-      'ItemCode', 'NAMA BARANG', 'Category', 'On Hand', 'Value', 
+      'ItemCode', 'NAMA BARANG', 'Grup', 'Category', 'On Hand', 'Value',
       '4th', '3rd', '2nd', '1st', '0th', 'AVG SALES MONTH', 'DOI',
-      'Status Product', 'Branch Name', 'Last Income', 'Qty Receipt', 'CBM', 'BULAN'
+      'Status Product', 'Region', 'Branch Name', 'Last Income', 'Qty Receipt', 'CBM', 'BULAN'
     ];
 
     const data: any[] = [];
@@ -168,6 +210,8 @@ export default function SKUVelocityPage() {
           const itemCode = `ITM-${String(codeCounter).padStart(4, '0')}`;
           const name = `Produk ${cat} ${i + 1}`;
           const status = statuses[Math.floor(Math.random() * statuses.length)];
+          const grup = groups[Math.floor(Math.random() * groups.length)];
+          const region = branchRegionMap[branch] || 'Unknown';
           
           bulansList.forEach(bulanStr => {
             const rand = Math.random();
@@ -208,11 +252,11 @@ export default function SKUVelocityPage() {
             const doi = avgSales > 0 ? (onHand / avgSales) * 30 : 999;
             
             data.push({
-              ItemCode: itemCode, 'NAMA BARANG': name, Category: cat,
+              ItemCode: itemCode, 'NAMA BARANG': name, Grup: grup, Category: cat,
               'On Hand': Math.round(onHand), Value: Math.round(val),
               '4th': Math.round(m4), '3rd': Math.round(m3), '2nd': Math.round(m2), '1st': Math.round(m1), '0th': Math.round(m0),
               'AVG SALES MONTH': Math.round(avgSales), DOI: Math.round(doi),
-              'Status Product': status, 'Branch Name': branch, 'Last Income': '2026-08-01',
+              'Status Product': status, Region: region, 'Branch Name': branch, 'Last Income': '2026-08-01',
               'Qty Receipt': Math.round(receipt), CBM: Number(cbm.toFixed(2)), BULAN: bulanStr
             });
           });
@@ -252,15 +296,23 @@ export default function SKUVelocityPage() {
   };
 
   const handleFileUpload = async (file: File) => {
+    hasLocalDataRef.current = true;
     setIsProcessing(true);
     toast.loading('Membaca file data SKU Velocity...', { id: 'upload' });
     try {
-      const parsedData = await parseDynamicCSV(file);
+      const parsedData = normalizeGrupRegionColumns(await parseDynamicCSV(file));
       setParsed(parsedData);
-      
+
       const uniqueBulans = sortBulans(Array.from(new Set(parsedData.data.map((d: any) => d['BULAN']))).filter(Boolean) as string[]);
       if (uniqueBulans.length > 0) {
         setSelectedBulan([uniqueBulans[uniqueBulans.length - 1]]);
+      }
+
+      const hasGrup = parsedData.data.some((d: any) => d['Grup']);
+      const hasRegion = parsedData.data.some((d: any) => d['Region']);
+      if (!hasGrup || !hasRegion) {
+        const missing = [!hasGrup && 'Grup', !hasRegion && 'Region'].filter(Boolean).join(' & ');
+        toast(`Kolom "${missing}" tidak ditemukan di file ini — chart/tabel Analisa Grup akan kosong sampai kolom itu ditambahkan.`, { icon: '⚠️', duration: 6000 });
       }
       
       try {
@@ -284,6 +336,8 @@ export default function SKUVelocityPage() {
   const categories = useMemo(() => parsed ? ['All', ...Array.from(new Set(parsed.data.map(d => d['Category']))).filter(Boolean).sort()] : [], [parsed]);
   const statuses = useMemo(() => parsed ? ['All', ...Array.from(new Set(parsed.data.map(d => d['Status Product']))).filter(Boolean).sort()] : [], [parsed]);
   const bulans = useMemo(() => parsed ? ['All', ...sortBulans(Array.from(new Set(parsed.data.map(d => d['BULAN']))).filter(Boolean) as string[])] : [], [parsed]);
+  const groupsList = useMemo(() => parsed ? ['All', ...Array.from(new Set(parsed.data.map(d => d['Grup']))).filter(Boolean).sort()] : [], [parsed]);
+  const regionsList = useMemo(() => parsed ? ['All', ...Array.from(new Set(parsed.data.map(d => d['Region']))).filter(Boolean).sort()] : [], [parsed]);
 
   // Engine Classification Functions removed in favor of direct Status Product mapping
 
@@ -291,11 +345,13 @@ export default function SKUVelocityPage() {
   const analyzedData = useMemo(() => {
     if (!parsed) return [];
     
-    let result = parsed.data.filter(d => 
+    let result = parsed.data.filter(d =>
       (selectedBulan.includes('All') || selectedBulan.includes(d['BULAN'])) &&
       (selectedCabang.includes('All') || selectedCabang.includes(d['Branch Name'])) &&
       (selectedCategory.includes('All') || selectedCategory.includes(d['Category'])) &&
-      (selectedStatus.includes('All') || selectedStatus.includes(d['Status Product']))
+      (selectedStatus.includes('All') || selectedStatus.includes(d['Status Product'])) &&
+      (selectedGrup.includes('All') || selectedGrup.includes(d['Grup'])) &&
+      (selectedRegion.includes('All') || selectedRegion.includes(d['Region']))
     ).map(row => {
       let analysisStatus = '⚪ Healthy Stock';
       let action = 'Maintain Min/Max Level';
@@ -329,14 +385,31 @@ export default function SKUVelocityPage() {
     }
 
     return result;
-  }, [parsed, selectedBulan, selectedCabang, selectedCategory, selectedStatus, activeHighlight]);
+  }, [parsed, selectedBulan, selectedCabang, selectedCategory, selectedStatus, selectedGrup, selectedRegion, activeHighlight]);
 
-  // Executive Summaries (Filtered to LATEST MONTH ONLY)
+  // Total universe of SKU rows matching the dimensional filters (Cabang/Category/
+  // Status/Grup/Region), deliberately NOT scoped to a single BULAN. This is the
+  // fix for the "9.037 vs 25.062" bug: the auto-selected latest-month default
+  // (see the `useEffect` above) is a convenience for the month-scoped snapshot
+  // cards below, not an implicit population filter for "Total Evaluated SKU".
+  const totalEvaluatedData = useMemo(() => {
+    if (!parsed) return [];
+    return parsed.data.filter(d =>
+      (selectedCabang.includes('All') || selectedCabang.includes(d['Branch Name'])) &&
+      (selectedCategory.includes('All') || selectedCategory.includes(d['Category'])) &&
+      (selectedStatus.includes('All') || selectedStatus.includes(d['Status Product'])) &&
+      (selectedGrup.includes('All') || selectedGrup.includes(d['Grup'])) &&
+      (selectedRegion.includes('All') || selectedRegion.includes(d['Region']))
+    );
+  }, [parsed, selectedCabang, selectedCategory, selectedStatus, selectedGrup, selectedRegion]);
+
+  // Executive Summaries (Dead Stock / Rising Star snapshot filtered to LATEST MONTH ONLY;
+  // Total Evaluated SKU is NOT — see `totalEvaluatedData` above)
   const executiveSummary = useMemo(() => {
     // 1. Determine the latest month
     const uniqueMonths = sortBulans(Array.from(new Set(analyzedData.map(r => r['BULAN']))).filter(Boolean) as string[]);
     const latestMonth = uniqueMonths.length > 0 ? uniqueMonths[uniqueMonths.length - 1] : null;
-    
+
     // 2. Filter data for the latest month
     const latestData = latestMonth ? analyzedData.filter(r => r['BULAN'] === latestMonth) : analyzedData;
 
@@ -433,9 +506,9 @@ export default function SKUVelocityPage() {
       deadStockCount, deadStockValue, deadStockCBM,
       risingStarCount, risingStarLostSalesVal,
       topDeadCats, topRisingSKUs, topCrossBranchOpps,
-      totalItems: latestData.length
+      totalItems: totalEvaluatedData.length
     };
-  }, [analyzedData, parsed]);
+  }, [analyzedData, parsed, totalEvaluatedData]);
 
   // Scatter Plot Data (DOI vs AVG SALES)
   const scatterData = useMemo(() => {
@@ -479,7 +552,7 @@ export default function SKUVelocityPage() {
 
       
 
-      parsed.data.filter(d => 
+      parsed.data.filter(d =>
 
         d['BULAN'] === bulan &&
 
@@ -487,7 +560,11 @@ export default function SKUVelocityPage() {
 
         (selectedCategory.includes('All') || selectedCategory.includes(d['Category'])) &&
 
-        (selectedStatus.includes('All') || selectedStatus.includes(d['Status Product']))
+        (selectedStatus.includes('All') || selectedStatus.includes(d['Status Product'])) &&
+
+        (selectedGrup.includes('All') || selectedGrup.includes(d['Grup'])) &&
+
+        (selectedRegion.includes('All') || selectedRegion.includes(d['Region']))
 
       ).forEach(r => {
 
@@ -517,207 +594,116 @@ export default function SKUVelocityPage() {
 
     });
 
-  }, [parsed, selectedCabang, selectedCategory, selectedStatus]);
+  }, [parsed, selectedCabang, selectedCategory, selectedStatus, selectedGrup, selectedRegion]);
 
 
 
   // Aggregate Multi-Dimensional Trend Data
 
-  const multiDimensionalTrendData = useMemo(() => {
-
-    if (!parsed) return { data: [], series: [], uniqueStatuses: [], targetGroups: [], GROUP_COLORS: [], OPACITIES: [] };
-
-    
-
-    // Apply local filters
-
-    let filtered = parsed.data.filter(d => 
-
+  // Rows shared by every "Analisa Trend Multidimensi" chart on this page,
+  // after the local Bulan/Cabang/Category/Status filters (each chart then
+  // applies its own grouping dimension on top of this).
+  const multiDimLocalFiltered = useMemo(() => {
+    if (!parsed) return [];
+    return parsed.data.filter(d =>
+      (localBulan.includes('All') || localBulan.includes(d['BULAN'])) &&
       (localCabang.includes('All') || localCabang.includes(d['Branch Name'])) &&
-
       (localCategory.includes('All') || localCategory.includes(d['Category'])) &&
-
       (localStatus.includes('All') || localStatus.includes(d['Status Product']))
+    );
+  }, [parsed, localBulan, localCabang, localCategory, localStatus]);
 
+  // Full, unfiltered month list — used where "latest month" must stay a
+  // global concept (e.g. the "Kondisi Bulan Terakhir per Grup" table below),
+  // independent of any chart's own local Bulan filter.
+  const multiDimAllBulans = useMemo(
+    () => parsed ? sortBulans(Array.from(new Set(parsed.data.map(d => d['BULAN']))).filter(Boolean) as string[]) : [],
+    [parsed]
+  );
+
+  // X-axis ticks for "Analisa Trend Multidimensi" respect the local Bulan
+  // filter (a month absent after filtering simply doesn't show a tick).
+  const multiDimFilteredBulans = useMemo(
+    () => sortBulans(Array.from(new Set(multiDimLocalFiltered.map(d => d['BULAN']))).filter(Boolean) as string[]),
+    [multiDimLocalFiltered]
+  );
+
+  const multiDimensionalTrendData = useMemo(() => {
+    if (!parsed) return EMPTY_MULTI_DIM_TREND;
+    return buildMultiDimTrendData(multiDimLocalFiltered, trendGrouping, trendMetric, multiDimFilteredBulans, trendGrouping === 'Category');
+  }, [parsed, multiDimLocalFiltered, multiDimFilteredBulans, trendGrouping, trendMetric]);
+
+  // "Analisa Grup" — X-axis toggles between Grup / Cabang / Status Product
+  // (grupChartXAxis), always clustered by BULAN (so each X-axis category
+  // shows one stacked column per month), stacked by Status Product (Fast/
+  // Medium/Slow/Dead Moving, whatever values the data actually has). Own
+  // local filters (Grup/Cabang/Status Product/Bulan) + own metric toggle.
+  const grupChartFiltered = useMemo(() => {
+    if (!parsed) return [];
+    return parsed.data.filter(d =>
+      (grupChartBulan.includes('All') || grupChartBulan.includes(d['BULAN'])) &&
+      (grupChartGrup.includes('All') || grupChartGrup.includes(d['Grup'])) &&
+      (grupChartCabang.includes('All') || grupChartCabang.includes(d['Branch Name'])) &&
+      (grupChartStatus.includes('All') || grupChartStatus.includes(d['Status Product']))
+    );
+  }, [parsed, grupChartBulan, grupChartGrup, grupChartCabang, grupChartStatus]);
+
+  const allGrupNames = useMemo(() => groupsList.filter(g => g !== 'All'), [groupsList]);
+
+  const grupChartAllXValues = useMemo(() => {
+    if (grupChartXAxis === 'Branch Name') return cabangs.filter(c => c !== 'All');
+    if (grupChartXAxis === 'Status Product') return statuses.filter(s => s !== 'All');
+    return allGrupNames;
+  }, [grupChartXAxis, allGrupNames, cabangs, statuses]);
+
+  const groupTrendData = useMemo(() => {
+    if (!parsed) return EMPTY_MULTI_DIM_TREND;
+    return buildMultiDimTrendData(grupChartFiltered, 'BULAN', grupChartMetric, grupChartAllXValues, false, grupChartXAxis);
+  }, [parsed, grupChartFiltered, grupChartAllXValues, grupChartMetric, grupChartXAxis]);
+
+  // "Kondisi Bulan Terakhir per Grup" table — Grup x Status Product (Fast/
+  // Medium/Slow/Dead Moving) breakdown in Rupiah for the latest month only,
+  // each cell's % taken against the single grand total (all Grup x all
+  // Status in that month, after the Region/Cabang filters below).
+  const groupStatusLatestMonth = useMemo(
+    () => multiDimAllBulans.length > 0 ? multiDimAllBulans[multiDimAllBulans.length - 1] : null,
+    [multiDimAllBulans]
+  );
+
+  const groupStatusTable = useMemo(() => {
+    if (!parsed || !groupStatusLatestMonth) return { rows: [] as { grup: string; cells: Record<string, number>; rowTotal: number }[], statusCols: [] as string[], grandTotal: 0 };
+
+    const rows = parsed.data.filter(d =>
+      d['BULAN'] === groupStatusLatestMonth &&
+      (groupStatusRegion.includes('All') || groupStatusRegion.includes(d['Region'])) &&
+      (groupStatusCabang.includes('All') || groupStatusCabang.includes(d['Branch Name']))
     );
 
+    const map: Record<string, Record<string, number>> = {};
+    const statusSet = new Set<string>();
+    const groupSet = new Set<string>();
+    let grandTotal = 0;
 
-
-    // Find Target Groups
-
-    const overallGroupMap: Record<string, number> = {};
-
-    filtered.forEach(r => {
-
-      const key = r[trendGrouping] || 'Unknown';
-
-      overallGroupMap[key] = (overallGroupMap[key] || 0) + (r['Value'] || 0); 
-
+    rows.forEach(r => {
+      const g = r['Grup'] || 'Unknown';
+      const s = r['Status Product'] || 'Unknown';
+      const val = r['Value'] || 0;
+      groupSet.add(g);
+      statusSet.add(s);
+      if (!map[g]) map[g] = {};
+      map[g][s] = (map[g][s] || 0) + val;
+      grandTotal += val;
     });
 
-    
-
-    let targetGroups = Object.keys(overallGroupMap).sort((a, b) => overallGroupMap[b] - overallGroupMap[a]);
-
-    
-
-    // LIMIT TO TOP 5 ONLY IF CATEGORY
-
-    if (trendGrouping === 'Category') {
-
-      targetGroups = targetGroups.slice(0, 5);
-
-    }
-
-
-
-    // Keep only rows belonging to target groups
-
-    filtered = filtered.filter(r => targetGroups.includes(r[trendGrouping] || 'Unknown'));
-
-
-
-    // Determine the stack dimension (what makes up the blocks inside a bar)
-
-    let stackGrouping = 'Status Product';
-
-    if (trendGrouping === 'Status Product') {
-
-      stackGrouping = 'Category';
-
-    }
-
-
-
-    // Unique Stacks in this filtered data
-
-    let targetStacks: string[] = [];
-
-    if (stackGrouping === 'Status Product') {
-
-      targetStacks = Array.from(new Set(filtered.map(d => d['Status Product'] || 'Unknown'))).sort();
-
-    } else {
-
-      const stackMap: Record<string, number> = {};
-
-      filtered.forEach(r => {
-
-        const key = r[stackGrouping] || 'Unknown';
-
-        stackMap[key] = (stackMap[key] || 0) + (r['Value'] || 0);
-
-      });
-
-      targetStacks = Object.keys(stackMap).sort((a, b) => stackMap[b] - stackMap[a]).slice(0, 5);
-
-    }
-
-    
-
-    // Filter out rows that don't belong to the target stacks (if it was sliced to Top 5)
-
-    if (stackGrouping === 'Category') {
-
-      filtered = filtered.filter(r => targetStacks.includes(r[stackGrouping] || 'Unknown'));
-
-    }
-
-
-
-    // Group by BULAN
-
-    const monthMap: Record<string, any> = {};
-
-    
-
-    filtered.forEach(r => {
-
-      const bulan = r['BULAN'] || 'Unknown';
-
-      const groupKey = r[trendGrouping] || 'Unknown';
-
-      const stackKey = r[stackGrouping] || 'Unknown';
-
-      
-
-      if (!monthMap[bulan]) {
-
-        monthMap[bulan] = { name: bulan };
-
-      }
-
-      
-
-      const dataKey = `${groupKey}||${stackKey}`;
-
-      
-
-      if (!monthMap[bulan][dataKey]) monthMap[bulan][dataKey] = 0;
-
-      
-
-      let valToAdd = 0;
-
-      if (trendMetric === 'Value') valToAdd = r['Value'] || 0;
-
-      else if (trendMetric === 'CBM') valToAdd = r['CBM'] || 0;
-
-      else valToAdd = r['On Hand'] || 0;
-
-
-
-      monthMap[bulan][dataKey] += valToAdd;
-
+    const statusCols = Array.from(statusSet).sort();
+    const tableRows = Array.from(groupSet).sort().map(g => {
+      const cells = map[g] || {};
+      const rowTotal = statusCols.reduce((sum, s) => sum + (cells[s] || 0), 0);
+      return { grup: g, cells, rowTotal };
     });
 
-
-
-    const uniqueBulans = sortBulans(Array.from(new Set(parsed.data.map(d => d['BULAN']))).filter(Boolean) as string[]);
-
-    const result = uniqueBulans.map(b => monthMap[b]).filter(Boolean);
-
-
-
-    // Build series definition
-
-    const series: Array<{ dataKey: string, stackId: string, group: string, status: string, color: string, opacity: number }> = [];
-
-    const GROUP_COLORS = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#6366f1', '#84cc16'];
-
-    const OPACITIES = [1, 0.75, 0.5, 0.25, 0.1];
-
-
-
-    targetGroups.forEach((group, gIdx) => {
-
-      targetStacks.forEach((stack, sIdx) => {
-
-        series.push({
-
-          dataKey: `${group}||${stack}`,
-
-          stackId: group, // This makes it stack by group!
-
-          group: group,
-
-          status: stack, // 'status' is now used as the stack label
-
-          color: GROUP_COLORS[gIdx % GROUP_COLORS.length],
-
-          opacity: OPACITIES[sIdx % OPACITIES.length]
-
-        });
-
-      });
-
-    });
-
-
-
-    return { data: result, series, targetGroups, uniqueStatuses: targetStacks, GROUP_COLORS, OPACITIES };
-
-  }, [parsed, localCabang, localCategory, localStatus, trendGrouping, trendMetric]);
+    return { rows: tableRows, statusCols, grandTotal };
+  }, [parsed, groupStatusLatestMonth, groupStatusRegion, groupStatusCabang]);
 
 
 
@@ -795,7 +781,7 @@ export default function SKUVelocityPage() {
 
     if (analyzedData.length === 0) return;
 
-    const header = ['ItemCode', 'NAMA BARANG', 'Kategori', 'Cabang', 'Tren (4th->0th)', 'DOI (Hari)', 'Value Tertahan (Rp)', 'Utilisasi Gudang (CBM)', 'Status Analisis', 'Rekomendasi Action'].map(h => `"${h}"`).join(',');
+    const header = ['ItemCode', 'NAMA BARANG', 'Grup', 'Kategori', 'Cabang', 'Region', 'Tren (4th->0th)', 'DOI (Hari)', 'Value Tertahan (Rp)', 'Utilisasi Gudang (CBM)', 'Status Analisis', 'Rekomendasi Action'].map(h => `"${h}"`).join(',');
 
     const lines = [header];
 
@@ -805,7 +791,7 @@ export default function SKUVelocityPage() {
 
       const line = [
 
-        `"${row.ItemCode}"`, `"${row['NAMA BARANG']}"`, `"${row.Category}"`, `"${row['Branch Name']}"`,
+        `"${row.ItemCode}"`, `"${row['NAMA BARANG']}"`, `"${row.Grup || ''}"`, `"${row.Category}"`, `"${row['Branch Name']}"`, `"${row.Region || ''}"`,
 
         `"${row.trendStr}"`, row.DOI, row.Value, row.CBM,
 
@@ -865,7 +851,14 @@ export default function SKUVelocityPage() {
     () => Array.from(new Set<string>(analyzedData.map((d: any) => d['Status Product']))).filter(Boolean).sort(),
     [analyzedData]
   );
-
+  const contextualGrupOptions = useMemo(
+    () => Array.from(new Set<string>(analyzedData.map((d: any) => d['Grup']))).filter(Boolean).sort(),
+    [analyzedData]
+  );
+  const contextualRegionOptions = useMemo(
+    () => Array.from(new Set<string>(analyzedData.map((d: any) => d['Region']))).filter(Boolean).sort(),
+    [analyzedData]
+  );
   const exportConfig: ModuleExportConfig | undefined = parsed ? {
     moduleName: 'SKU_Velocity_Insights',
     processedAt: parsed.processed_at,
@@ -873,20 +866,24 @@ export default function SKUVelocityPage() {
     filters: [
       { field: 'BULAN', label: 'Filter Bulan', options: contextualBulanOptions },
       { field: 'Branch Name', label: 'Filter Cabang', options: contextualCabangOptions },
+      { field: 'Region', label: 'Filter Region', options: contextualRegionOptions },
       { field: 'Category', label: 'Filter Kategori', options: contextualCategoryOptions },
+      { field: 'Grup', label: 'Filter Grup', options: contextualGrupOptions },
       { field: 'Status Product', label: 'Filter Status Product', options: contextualStatusOptions },
     ],
     tables: [
       {
         id: 'action_plan',
         title: 'Tabel Action Plan & Drill-Down',
-        filterFields: ['BULAN', 'Branch Name', 'Category', 'Status Product'],
+        filterFields: ['BULAN', 'Branch Name', 'Region', 'Category', 'Grup', 'Status Product'],
         data: analyzedData,
         columns: [
           { key: 'ItemCode', label: 'Kode' },
           { key: 'NAMA BARANG', label: 'Nama Barang' },
+          { key: 'Grup', label: 'Grup' },
           { key: 'Category', label: 'Kategori' },
           { key: 'Branch Name', label: 'Cabang' },
+          { key: 'Region', label: 'Region' },
           { key: 'BULAN', label: 'Bulan' },
           { key: 'trendStr', label: 'Tren 4th→0th' },
           { key: 'DOI', label: 'DOI (Hari)', align: 'right', format: 'number' },
@@ -899,7 +896,7 @@ export default function SKUVelocityPage() {
       {
         id: 'dead_stock_items',
         title: 'Kandidat Discontinue (Dead Stock)',
-        filterFields: ['BULAN', 'Branch Name', 'Category', 'Status Product'],
+        filterFields: ['BULAN', 'Branch Name', 'Region', 'Category', 'Grup', 'Status Product'],
         data: deadStockItems,
         emptyLabel: 'Tidak ada kandidat discontinue untuk filter yang dipilih.',
         columns: [
@@ -913,7 +910,7 @@ export default function SKUVelocityPage() {
       {
         id: 'rising_star_items',
         title: 'Fast Moving / Rising Star',
-        filterFields: ['BULAN', 'Branch Name', 'Category', 'Status Product'],
+        filterFields: ['BULAN', 'Branch Name', 'Region', 'Category', 'Grup', 'Status Product'],
         data: risingStarItems,
         emptyLabel: 'Tidak ada item fast moving untuk filter yang dipilih.',
         columns: [
@@ -924,12 +921,20 @@ export default function SKUVelocityPage() {
           { key: 'Value', label: 'Value Tertahan', align: 'right', format: 'number' },
         ],
       },
+      {
+        id: 'total_evaluated_universe',
+        title: 'Total Evaluated SKU (Universe)',
+        hidden: true,
+        filterFields: ['Branch Name', 'Region', 'Category', 'Grup', 'Status Product'],
+        data: totalEvaluatedData,
+        columns: [{ key: 'ItemCode', label: 'Kode' }],
+      },
     ],
     kpis: [
       { id: 'dead_stock_value', label: 'Dead Stock Trapped Value', sourceTableId: 'dead_stock_items', field: 'Value', agg: 'sum', decimals: 0 },
       { id: 'dead_stock_count', label: 'Dead Stock SKU', sourceTableId: 'dead_stock_items', field: 'Value', agg: 'count', decimals: 0, suffix: ' SKU' },
       { id: 'rising_star_count', label: 'Fast Moving Opportunities', sourceTableId: 'rising_star_items', field: 'Value', agg: 'count', decimals: 0, suffix: ' SKU' },
-      { id: 'total_evaluated', label: 'Total Evaluated SKU', sourceTableId: 'action_plan', field: 'Value', agg: 'count', decimals: 0, suffix: ' SKU' },
+      { id: 'total_evaluated', label: 'Total Evaluated SKU', sourceTableId: 'total_evaluated_universe', field: 'Value', agg: 'count', decimals: 0, suffix: ' SKU' },
     ],
   } : undefined;
 
@@ -1256,7 +1261,7 @@ export default function SKUVelocityPage() {
 
       <GlassCard allowOverflow={true} className="p-6 border-slate-200 bg-white shadow-xl relative z-40 no-export">
 
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-4">
 
           <div className="space-y-2">
 
@@ -1276,9 +1281,25 @@ export default function SKUVelocityPage() {
 
           <div className="space-y-2">
 
+            <label className="text-xs font-bold text-slate-700 block uppercase">🌍 Region:</label>
+
+            <MultiSelect options={regionsList} selected={selectedRegion} onChange={setSelectedRegion} selectAllLabel="Semua Region" placeholder="Pilih Region..." />
+
+          </div>
+
+          <div className="space-y-2">
+
             <label className="text-xs font-bold text-slate-700 block uppercase">📦 Kategori:</label>
 
             <MultiSelect options={categories} selected={selectedCategory} onChange={setSelectedCategory} selectAllLabel="Semua Kategori" placeholder="Pilih Kategori..." />
+
+          </div>
+
+          <div className="space-y-2">
+
+            <label className="text-xs font-bold text-slate-700 block uppercase">🧩 Grup:</label>
+
+            <MultiSelect options={groupsList} selected={selectedGrup} onChange={setSelectedGrup} selectAllLabel="Semua Grup" placeholder="Pilih Grup..." />
 
           </div>
 
@@ -1474,7 +1495,8 @@ export default function SKUVelocityPage() {
             
             {/* Filter Lokal */}
             <div className="flex flex-wrap gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200 no-export">
-            
+
+              <MultiSelect options={bulans} selected={localBulan} onChange={setLocalBulan} placeholder="Semua Bulan" />
               <MultiSelect options={cabangs} selected={localCabang} onChange={setLocalCabang} placeholder="Semua Cabang" />
               <MultiSelect options={categories} selected={localCategory} onChange={setLocalCategory} placeholder="Semua Kategori" />
               <MultiSelect options={statuses} selected={localStatus} onChange={setLocalStatus} placeholder="Semua Status" />
@@ -1537,106 +1559,156 @@ export default function SKUVelocityPage() {
           </div>
         </div>
 
-        <div className="h-[450px] w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={multiDimensionalTrendData.data} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-              <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 12, fontWeight: 600 }} />
-              <YAxis tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={(val) => formatNumberCompact(val)} width={70} />
-              
-              <Tooltip
-                wrapperStyle={{ pointerEvents: 'auto' }}
-                content={({ active, payload, label }: any) => {
-                  if (active && payload && payload.length) {
-                    // Group payload by stackId (which is the group name)
-                    const groups: Record<string, any[]> = {};
-                    payload.forEach((entry: any) => {
-                       const grp = entry.dataKey.split('||')[0];
-                       if (!groups[grp]) groups[grp] = [];
-                       groups[grp].push(entry);
-                    });
+        <MultiDimTrendChart trendData={multiDimensionalTrendData} trendMetric={trendMetric} />
+      </GlassCard>
 
-                    return (
-                      <div className="bg-white/95 backdrop-blur-md p-4 border border-slate-200 rounded-xl shadow-xl z-50 min-w-[220px] max-h-[350px] overflow-y-auto pointer-events-auto custom-scrollbar">
-                        <p className="font-bold text-slate-800 mb-2 border-b pb-1.5 flex justify-between">
-                          <span>{label}</span>
-                          <span className="text-indigo-600 ml-2">{trendMetric}</span>
-                        </p>
-                        
-                        {Object.entries(groups).map(([grp, entries]) => {
-                           const total = entries.reduce((sum, e) => sum + e.value, 0);
-                           if (total === 0) return null; // hide empty groups
-                           
-                           return (
-                             <div key={grp} className="mb-3 last:mb-0">
-                               <p className="font-bold text-xs text-slate-700 mb-1 flex justify-between items-center bg-slate-100 p-1.5 rounded-md">
-                                 <span>{grp}</span>
-                                 <span className="text-indigo-600">{formatNum(total)}</span>
-                               </p>
-                               <div className="space-y-1">
-                                 {entries.map((entry, idx) => {
-                                   if (entry.value === 0) return null;
-                                   const percent = ((entry.value / total) * 100).toFixed(1) + '%';
-                                   return (
-                                     <div key={idx} className="flex justify-between items-center text-xs pl-2 border-l-2 mb-0.5" style={{ borderColor: entry.color, opacity: entry.payload.opacity }}>
-                                       <span className="text-slate-600 font-medium">{entry.name}</span>
-                                       <span className="font-semibold text-slate-700 ml-3">
-                                         {formatNum(entry.value)} <span className="text-[10px] text-slate-400 font-medium">({percent})</span>
-                                       </span>
-                                     </div>
-                                   );
-                                 })}
-                               </div>
-                             </div>
-                           );
-                        })}
-                      </div>
-                    );
-                  }
-                  return null;
-                }}
-              />
-              <Legend 
-                content={(props) => {
-                  const { targetGroups, uniqueStatuses, GROUP_COLORS, OPACITIES } = multiDimensionalTrendData;
-                  return (
-                    <div className="flex flex-col items-center gap-2 pt-6">
-                      <div className="flex flex-wrap justify-center gap-4">
-                        {targetGroups.map((grp, i) => (
-                          <div key={grp} className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
-                            <span className="w-3.5 h-3.5 rounded-sm shadow-sm" style={{ backgroundColor: GROUP_COLORS[i % GROUP_COLORS.length] }}></span>
-                            {grp}
-                          </div>
-                        ))}
-                      </div>
-                      <div className="flex flex-wrap justify-center gap-3">
-                        {uniqueStatuses.map((status, i) => (
-                          <div key={status} className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-1 rounded-md">
-                            <span className="w-3 h-3 rounded-sm bg-slate-800" style={{ opacity: OPACITIES[i % OPACITIES.length] }}></span>
-                            {status}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                }}
-              />
-              
-              {multiDimensionalTrendData.series.map((s) => (
-                <Bar 
-                  key={s.dataKey} 
-                  dataKey={s.dataKey} 
-                  name={s.status}
-                  stackId={s.stackId}
-                  fill={s.color} 
-                  fillOpacity={s.opacity}
-                  radius={[0, 0, 0, 0]} // removed radius to avoid rounded inner stacks
-                  maxBarSize={50}
-                />
+      {/* ANALISA GRUP — sumbu X toggle Grup/Cabang/Status Product, satu stacked column per bulan, distack oleh Status Product (Fast/Medium/Slow/Dead Moving) */}
+      <GlassCard className="p-6 border-slate-200 bg-white shadow-2xl overflow-hidden mt-8">
+        <div className="flex flex-col xl:flex-row xl:items-start justify-between border-b border-slate-200 pb-4 mb-6 gap-6">
+          <div className="flex-1">
+            <h3 className="text-lg sm:text-xl font-black text-slate-900 flex items-center gap-2">
+              <Layers className="w-6 h-6 text-indigo-500" />
+              Analisa Grup
+            </h3>
+            <p className="text-xs text-slate-500 mt-1 mb-4">
+              Sumbu X: <b>{grupChartXAxis === 'Branch Name' ? 'Cabang' : grupChartXAxis}</b>. Setiap kategori punya satu kolom stacked per bulan, menampilkan proporsi {grupChartMetric === 'Qty' ? 'Qty (On Hand)' : grupChartMetric} per Status Product (Fast/Medium/Slow/Dead Moving).
+            </p>
+
+            {/* Filter Lokal — independen dari filter "Analisa Trend Multidimensi" */}
+            <div className="flex flex-wrap gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200 no-export">
+              <MultiSelect options={bulans} selected={grupChartBulan} onChange={setGrupChartBulan} placeholder="Semua Bulan" />
+              <MultiSelect options={groupsList} selected={grupChartGrup} onChange={setGrupChartGrup} placeholder="Semua Grup" />
+              <MultiSelect options={cabangs} selected={grupChartCabang} onChange={setGrupChartCabang} placeholder="Semua Cabang" />
+              <MultiSelect options={statuses} selected={grupChartStatus} onChange={setGrupChartStatus} placeholder="Semua Status" />
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3 items-end">
+            <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200 self-stretch sm:self-auto justify-center">
+              {(['Value', 'CBM', 'Qty'] as TrendMetric[]).map(opt => (
+                <button
+                  key={opt}
+                  onClick={() => setGrupChartMetric(opt)}
+                  className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${grupChartMetric === opt ? 'bg-indigo-500 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  {opt === 'Qty' ? 'Qty (On Hand)' : opt}
+                </button>
               ))}
-            </BarChart>
-          </ResponsiveContainer>
+            </div>
+            <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200 self-stretch sm:self-auto justify-center">
+              {(['Grup', 'Branch Name', 'Status Product'] as const).map(opt => (
+                <button
+                  key={opt}
+                  onClick={() => setGrupChartXAxis(opt)}
+                  className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${grupChartXAxis === opt ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  {opt === 'Branch Name' ? 'Cabang' : opt}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
+
+        {grupChartAllXValues.length === 0 ? (
+          <div className="h-[200px] flex flex-col items-center justify-center text-center gap-1 border border-dashed border-amber-300 bg-amber-50 rounded-xl">
+            <p className="text-sm font-bold text-amber-700">Kolom &quot;{grupChartXAxis === 'Branch Name' ? 'Branch Name' : grupChartXAxis}&quot; tidak ditemukan di data yang diupload</p>
+            <p className="text-xs text-amber-600 max-w-md">Tambahkan kolom bernama <b>{grupChartXAxis === 'Branch Name' ? 'Branch Name' : grupChartXAxis}</b> pada file sumber Anda (Excel/CSV), lalu upload ulang agar chart ini terisi.</p>
+          </div>
+        ) : (
+          <MultiDimTrendChart trendData={groupTrendData} trendMetric={grupChartMetric} />
+        )}
+      </GlassCard>
+
+      {/* KONDISI BULAN TERAKHIR PER GRUP — Grup x Status Product breakdown (Rp + % grand total), filter Region/Cabang */}
+      <GlassCard className="p-6 border-slate-200 bg-white shadow-2xl overflow-hidden mt-8">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between border-b border-slate-200 pb-4 mb-6 gap-4">
+          <div className="flex-1">
+            <h3 className="text-lg sm:text-xl font-black text-slate-900 flex items-center gap-2">
+              <ClipboardList className="w-6 h-6 text-indigo-500" />
+              Kondisi Bulan Terakhir per Grup
+            </h3>
+            <p className="text-xs text-slate-500 mt-1 mb-4">
+              Value (Rp) per Grup × Status Product untuk bulan terakhir{groupStatusLatestMonth ? <> (<b>{groupStatusLatestMonth}</b>)</> : ''}. Persentase dihitung terhadap Grand Total keseluruhan (semua Grup, semua Status, sesuai filter di bawah).
+            </p>
+            <div className="flex flex-wrap gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200 no-export">
+              <MultiSelect options={regionsList} selected={groupStatusRegion} onChange={setGroupStatusRegion} placeholder="Semua Region" />
+              <MultiSelect options={cabangs} selected={groupStatusCabang} onChange={setGroupStatusCabang} placeholder="Semua Cabang" />
+            </div>
+          </div>
+        </div>
+
+        {allGrupNames.length === 0 ? (
+          <div className="py-10 flex flex-col items-center justify-center text-center gap-1 border border-dashed border-amber-300 bg-amber-50 rounded-xl">
+            <p className="text-sm font-bold text-amber-700">Kolom &quot;Grup&quot; tidak ditemukan di data yang diupload</p>
+            <p className="text-xs text-amber-600 max-w-md">Tambahkan kolom bernama <b>Grup</b> pada file sumber Anda (Excel/CSV), lalu upload ulang agar tabel ini terisi.</p>
+          </div>
+        ) : (
+        <div className="overflow-x-auto rounded-xl border border-slate-200">
+          <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[700px]">
+            <thead className="bg-slate-800 text-slate-200 uppercase font-bold">
+              <tr>
+                <th className="px-4 py-3 border-b border-slate-700">Grup</th>
+                {groupStatusTable.statusCols.map(s => (
+                  <th key={s} className="px-4 py-3 border-b border-slate-700 text-right">{s}</th>
+                ))}
+                <th className="px-4 py-3 border-b border-slate-700 text-right">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {groupStatusTable.rows.length === 0 ? (
+                <tr>
+                  <td colSpan={groupStatusTable.statusCols.length + 2} className="px-4 py-6 text-center text-slate-400 italic">
+                    Tidak ada data untuk bulan terakhir / filter yang dipilih.
+                  </td>
+                </tr>
+              ) : (
+                groupStatusTable.rows.map((row, idx) => (
+                  <tr key={row.grup} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
+                    <td className="px-4 py-3 font-bold text-slate-800 border-b border-slate-100">{row.grup}</td>
+                    {groupStatusTable.statusCols.map(s => {
+                      const val = row.cells[s] || 0;
+                      const pct = groupStatusTable.grandTotal > 0 ? (val / groupStatusTable.grandTotal) * 100 : 0;
+                      return (
+                        <td key={s} className="px-4 py-3 text-right border-b border-slate-100">
+                          <div className="font-semibold text-slate-700">{formatRp(val)}</div>
+                          <div className="text-[10px] text-slate-400">{pct.toFixed(1)}%</div>
+                        </td>
+                      );
+                    })}
+                    <td className="px-4 py-3 text-right border-b border-slate-100">
+                      <div className="font-black text-indigo-600">{formatRp(row.rowTotal)}</div>
+                      <div className="text-[10px] text-slate-400">
+                        {(groupStatusTable.grandTotal > 0 ? (row.rowTotal / groupStatusTable.grandTotal) * 100 : 0).toFixed(1)}%
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+            {groupStatusTable.rows.length > 0 && (
+              <tfoot>
+                <tr className="bg-slate-100 font-bold">
+                  <td className="px-4 py-3 text-slate-800">Grand Total</td>
+                  {groupStatusTable.statusCols.map(s => {
+                    const colTotal = groupStatusTable.rows.reduce((sum, r) => sum + (r.cells[s] || 0), 0);
+                    const pct = groupStatusTable.grandTotal > 0 ? (colTotal / groupStatusTable.grandTotal) * 100 : 0;
+                    return (
+                      <td key={s} className="px-4 py-3 text-right">
+                        <div className="text-slate-800">{formatRp(colTotal)}</div>
+                        <div className="text-[10px] text-slate-500 font-normal">{pct.toFixed(1)}%</div>
+                      </td>
+                    );
+                  })}
+                  <td className="px-4 py-3 text-right">
+                    <div className="text-indigo-700">{formatRp(groupStatusTable.grandTotal)}</div>
+                    <div className="text-[10px] text-slate-500 font-normal">100%</div>
+                  </td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
+        )}
       </GlassCard>
 
       {/* ACTION PLAN TABLE (replaced by the filterable "Action Plan" table in the offline export section) */}
