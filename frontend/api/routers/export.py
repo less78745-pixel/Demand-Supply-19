@@ -26,7 +26,16 @@ class DualExportRequest(BaseModel):
     # Filter cabang aktif di halaman (mis. dari MultiSelect). ["All"] = tanpa filter.
     cabang: List[str] = Field(default_factory=lambda: [ALL_BRANCHES])
     # HTML report yang sudah dirender di client (sama seperti mode "Export HTML" lama).
-    html_content: str
+    # Optional -- client sekarang SELALU minta excel_only=True (lihat ExportHtmlButton.tsx)
+    # dan menyusun .zip (HTML+Excel[+PPTX]) sendiri di browser, supaya HTML report yang
+    # bisa berukuran besar (menyertakan seluruh raw data untuk filter offline -- lihat
+    # offlineExport.ts) TIDAK PERNAH dikirim ke backend sama sekali. Ini yang sebelumnya
+    # jadi penyebab 413 Payload Too Large di platform hosting (mis. limit request body
+    # 4.5MB di Vercel Functions) -- raw data yang sama bahkan terkirim DUA KALI dalam satu
+    # request (sekali di dalam html_content yang di-JSON.stringify, sekali lagi di `rows`).
+    # Field ini & branch non-excel_only di bawah dipertahankan untuk backward-compatibility,
+    # bukan lagi jalur yang dipakai frontend.
+    html_content: Optional[str] = None
     # Nama file dasar (tanpa ekstensi), sudah mengikuti konvensi getStandardFilename().
     base_filename: str
 
@@ -200,6 +209,12 @@ def export_dual(payload: DualExportRequest, db: Session = Depends(get_db)):
                 excel_buffer,
                 media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 headers=headers,
+            )
+
+        if payload.html_content is None:
+            raise HTTPException(
+                status_code=400,
+                detail="'html_content' wajib diisi ketika 'excel_only' bukan True.",
             )
 
         zip_buffer = io.BytesIO()

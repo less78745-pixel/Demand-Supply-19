@@ -336,7 +336,17 @@ export interface DualExportPayload {
   processedAt?: string;
   /** Filter cabang aktif di halaman saat ini. `['All']` = tanpa filter. */
   cabang: string[];
-  htmlContent: string;
+  /**
+   * Optional -- SENGAJA tidak dikirim ke backend saat `excelOnly: true` (lihat
+   * di bawah), karena ExportHtmlButton.tsx sekarang selalu menyusun .zip
+   * (HTML+Excel[+PPTX]) di client dari data mentah, bukan minta backend
+   * membungkusnya. HTML report bisa sangat besar (menyertakan seluruh raw
+   * data untuk filter offline -- lihat offlineExport.ts), dan `rows` di bawah
+   * sudah membawa data yang SAMA -- mengirim keduanya sekaligus adalah
+   * penyebab 413 Payload Too Large (limit body request platform hosting,
+   * mis. 4.5MB di Vercel Functions) yang pernah terjadi di semua modul.
+   */
+  htmlContent?: string;
   /** Nama file dasar tanpa ekstensi, biasanya dari getStandardFilename(). */
   baseFilename: string;
   /** Salah satu dari resultId atau rows wajib diisi sebagai sumber data Excel. */
@@ -357,19 +367,24 @@ export interface DualExportPayload {
 }
 
 export const exportDualFormat = async (payload: DualExportPayload): Promise<Blob> => {
+  const excelOnly = payload.excelOnly ?? false;
   const response = await api.post(
     '/export/dual',
     {
       module_name: payload.moduleName,
       processed_at: payload.processedAt,
       cabang: payload.cabang,
-      html_content: payload.htmlContent,
+      // Dihilangkan (bukan cuma undefined) saat excelOnly, bukan sekadar
+      // "kalau ada" -- caller pun sudah tidak pernah mengisinya di jalur itu,
+      // ini jaring pengaman terakhir supaya body request tidak pernah
+      // menyertakan HTML report yang besar saat backend tidak membutuhkannya.
+      ...(excelOnly ? {} : { html_content: payload.htmlContent }),
       base_filename: payload.baseFilename,
       result_id: payload.resultId,
       rows: payload.rows,
       data_key: payload.dataKey,
       cabang_field: payload.cabangField,
-      excel_only: payload.excelOnly ?? false,
+      excel_only: excelOnly,
     },
     { responseType: 'blob' }
   );

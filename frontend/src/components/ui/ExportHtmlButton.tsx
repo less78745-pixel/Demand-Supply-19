@@ -129,11 +129,15 @@ export function ExportHtmlButton({
         // ("Bug : uncompressed data size mismatch") untuk entry yang
         // seharusnya cukup di-passthrough apa adanya. Membangun sekali dari
         // data mentah menghindari masalah itu sepenuhnya.
+        // htmlContent SENGAJA TIDAK dikirim -- backend tidak membacanya sama
+        // sekali di jalur excelOnly, dan HTML report ini bisa sangat besar
+        // (menyertakan seluruh raw data untuk filter offline, lihat
+        // offlineExport.ts), jadi mengirimnya ke sini cuma memperbesar body
+        // request tanpa manfaat (penyebab 413 Payload Too Large sebelumnya).
         const excelBlob = await exportDualFormat({
           moduleName,
           processedAt,
           cabang: cabang && cabang.length > 0 ? cabang : ['All'],
-          htmlContent: htmlString,
           baseFilename,
           resultId,
           rows: rawRows,
@@ -155,20 +159,34 @@ export function ExportHtmlButton({
         downloadBlob(finalBlob, `${baseFilename}.zip`);
         toast.success('File Export (HTML + Excel + PowerPoint) berhasil diunduh!', { id: 'export-html' });
       } else {
-        // Mode dual tanpa PPTX (perilaku lama, tidak berubah): backend sudah
-        // membangun .zip berisi HTML + Excel, cukup diunduh apa adanya.
-        const zipBlob = await exportDualFormat({
+        // Mode dual tanpa PPTX: sama seperti cabang PPTX di atas -- minta
+        // backend HANYA raw bytes .xlsx (excelOnly:true, htmlContent TIDAK
+        // dikirim sama sekali) lalu susun .zip (HTML+Excel) sendiri di client.
+        // Sebelumnya backend yang membungkus .zip dan menerima htmlContent
+        // (yang bisa berukuran besar) di request body -- itu penyebab 413
+        // Payload Too Large di semua modul yang pakai mode dual export
+        // (limit ukuran body platform hosting, mis. 4.5MB di Vercel
+        // Functions), apalagi `rows` sudah membawa data yang SAMA sehingga
+        // data yang sama terkirim dua kali dalam satu request.
+        const excelBlob = await exportDualFormat({
           moduleName,
           processedAt,
           cabang: cabang && cabang.length > 0 ? cabang : ['All'],
-          htmlContent: htmlString,
           baseFilename,
           resultId,
           rows: rawRows,
           dataKey,
           cabangField,
+          excelOnly: true,
         });
-        downloadBlob(zipBlob, `${baseFilename}.zip`);
+
+        const { default: JSZip } = await import('jszip');
+        const excelArrayBuffer = await excelBlob.arrayBuffer();
+        const zip = new JSZip();
+        zip.file(`${baseFilename}.html`, htmlString);
+        zip.file(`${baseFilename}.xlsx`, excelArrayBuffer);
+        const finalBlob = await zip.generateAsync({ type: 'blob' });
+        downloadBlob(finalBlob, `${baseFilename}.zip`);
         toast.success('File Export (HTML + Excel) berhasil diunduh!', { id: 'export-html' });
       }
     } catch (err: any) {
