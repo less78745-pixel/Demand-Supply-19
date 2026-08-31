@@ -20,6 +20,8 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { ModuleExportConfig } from '@/utils/offlineExport';
 import { supabase } from '@/lib/supabase';
 import { useColumnFilters, FilterableHeader } from '@/components/ui/ColumnFilterDropdown';
+import { NationalInventoryValueCard } from '@/components/occupancy/NationalInventoryValueCard';
+import { RegionalInventoryValueTable } from '@/components/occupancy/RegionalInventoryValueTable';
 
 // recharts pulls in ~150KB of d3 submodules; this chart only ever renders
 // after a file has been processed, so defer it out of the initial route bundle.
@@ -429,6 +431,7 @@ export default function OccupancyPage() {
   }, []);
 
   const [selectedCabang,   setSelectedCabang]   = useState<string[]>(['All']);
+  const [selectedRegion,   setSelectedRegion]   = useState<string[]>(['All']);
   const [selectedDate,     setSelectedDate]     = useState<string[]>(['All']);
   const [asyncJobId, setAsyncJobId] = useState<string | null>(null);
 
@@ -1946,6 +1949,7 @@ export default function OccupancyPage() {
                           balanceContainer: Number(r.balance_container || 0),
                           qty: r.qty ?? null,
                           hargaSatuan: r.harga_satuan ?? null,
+                          region: r.region ?? null,
                         })),
                         shortageAlerts: shortageTableFilters.filteredData.map((a: any) => ({
                           cabang: a.cabang, category: a.category, date: a.date, amount: Number(a.deficit || 0),
@@ -2191,6 +2195,55 @@ export default function OccupancyPage() {
                         periodLabels={mrpData.period_labels || []}
                         seriesByBranch={mrpData.mos_value_series_by_branch}
                         branches={qtyValueTableFilters.filteredData}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Analisa Nilai Inventori: Level Nasional & Regional (Group By kolom
+                  Region, baru) -- lihat qty_series_by_region/national_summary di
+                  backend (occupancy_engine.py). Ditempatkan tepat di bawah blok
+                  per-cabang di atas, dengan filter Region sendiri (tidak
+                  mempengaruhi filter Cabang/Tanggal chart occupancy di atas). */}
+              {mrpData.national_summary && (
+                <NationalInventoryValueCard
+                  periodLabels={mrpData.period_labels || []}
+                  qtySeries={mrpData.national_summary.qty_series || []}
+                  valueSeries={mrpData.national_summary.value_series || []}
+                  mosValueSeries={mrpData.national_summary.mos_value_series || []}
+                />
+              )}
+
+              {mrpData.regions_list && mrpData.regions_list.length > 0 && (
+                <div className="mb-8">
+                  <div className="max-w-xs mb-4">
+                    <label className="text-xs font-bold text-foreground uppercase tracking-wider block mb-1.5">🌍 Filter Region:</label>
+                    <MultiSelect
+                      options={mrpData.regions_list}
+                      selected={selectedRegion}
+                      onChange={setSelectedRegion}
+                      selectAllLabel="Semua Region"
+                      placeholder="Pilih Region..."
+                    />
+                  </div>
+                  <RegionalInventoryValueTable
+                    periodLabels={mrpData.period_labels || []}
+                    regions={mrpData.regions_list}
+                    qtySeriesByRegion={mrpData.qty_series_by_region || {}}
+                    valueSeriesByRegion={mrpData.value_series_by_region || {}}
+                    mosValueSeriesByRegion={mrpData.mos_value_series_by_region || {}}
+                    selectedRegions={selectedRegion}
+                  />
+                  {mrpData.mos_value_series_by_region && Object.keys(mrpData.mos_value_series_by_region).length > 0 && (
+                    <div className="mt-4">
+                      <h5 className="text-xs font-extrabold text-black/70 uppercase tracking-wider mb-2">
+                        Grafik Tren MOS (Value) per Region
+                      </h5>
+                      <MosValueChart
+                        periodLabels={mrpData.period_labels || []}
+                        seriesByBranch={mrpData.mos_value_series_by_region}
+                        branches={mrpData.regions_list.filter((r: string) => selectedRegion.includes('All') || selectedRegion.includes(r))}
                       />
                     </div>
                   )}

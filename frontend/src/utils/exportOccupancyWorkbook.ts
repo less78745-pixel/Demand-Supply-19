@@ -22,6 +22,10 @@ export interface InventoryValueRow {
   balanceContainer: number;
   qty: number | null;
   hargaSatuan: number | null;
+  /** Optional: absent for rows from files still using the pre-Region "Raw"
+   * template. Appended as a trailing column (not inserted before the
+   * existing A-I columns) so none of the lettered formulas below shift. */
+  region?: string | null;
 }
 
 export interface AlertRow {
@@ -58,7 +62,7 @@ async function appendRingkasanSheets(wb: import('exceljs').Workbook, payload: Oc
   const ws1 = wb.addWorksheet('Analisa Nilai Inventori');
   const header1 = ws1.addRow([
     'Cabang', 'Grup', 'Category', 'Week', 'Balance (Container)', 'QTY (CBM)',
-    'Harga Satuan', 'Value (Rp)', 'Utilisasi Ruang (%)',
+    'Harga Satuan', 'Value (Rp)', 'Utilisasi Ruang (%)', 'Region',
   ]);
   header1.eachCell((cell) => {
     cell.font = { bold: true };
@@ -80,7 +84,7 @@ async function appendRingkasanSheets(wb: import('exceljs').Workbook, payload: Oc
 
   payload.inventoryValueRows.forEach((r, i) => {
     const row = i + 2; // header occupies row 1
-    ws1.addRow([r.cabang, r.grup, r.category, r.week, r.balanceContainer, r.qty, r.hargaSatuan, null, null]);
+    ws1.addRow([r.cabang, r.grup, r.category, r.week, r.balanceContainer, r.qty, r.hargaSatuan, null, null, r.region ?? null]);
     // Native formula: Value = QTY * Harga Satuan
     ws1.getCell(`H${row}`).value = { formula: `F${row}*G${row}` };
     ws1.getCell(`H${row}`).numFmt = '#,##0';

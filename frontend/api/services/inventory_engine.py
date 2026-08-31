@@ -26,13 +26,15 @@ def run_inventory_from_mrp_bytes(file_bytes: bytes) -> dict:
     from services.occupancy_engine import (
         detect_week_count, read_raw_records, compute_balance_series,
         read_week_awal, build_period_labels, build_to_recommendations,
+        resolve_raw_columns,
     )
     ws_raw = wb["Raw"]
     ws_wh = wb["WH"]
-    n_weeks = detect_week_count(ws_raw)
+    raw_cols = resolve_raw_columns(ws_raw)
+    n_weeks = detect_week_count(ws_raw, raw_cols)
     week_awal = read_week_awal(ws_wh, default=1)
     period_labels = build_period_labels(week_awal, n_weeks)
-    records = read_raw_records(ws_raw, n_weeks)
+    records = read_raw_records(ws_raw, n_weeks, raw_cols)
 
     inv_rows = []
     bal_t = {}

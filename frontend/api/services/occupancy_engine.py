@@ -32,6 +32,33 @@ ONHAND_COL = 5
 FIRST_WEEK_BLOCK_COL = 6
 COLS_PER_WEEK = 4
 
+# Header row of the "Raw" sheet (see generate_mrp_template_bytes) -- used only
+# to detect whether the newer template's "Region" column (inserted between
+# No and Cabang) is present, so old uploads keep working untouched.
+RAW_HEADER_ROW = 2
+
+def _normalize_header(v) -> str:
+    return str(v or "").strip().lower()
+
+def resolve_raw_columns(ws_raw: Worksheet) -> dict:
+    """Resolve 1-based column indices for the 'Raw' sheet's fixed columns
+    (No, [Region], Cabang, Grup, Category, On Hand).
+
+    This is a POSITION CHECK, not full header-driven parsing: it only peeks
+    at column B of the header row (row 2) to see if it says "Region". If not,
+    it returns the exact legacy layout (No,Cabang,Grup,Category,On Hand =
+    columns 1-5) that every existing upload already relies on -- so files
+    built from the old template are completely unaffected. Only when "Region"
+    is actually found there does everything shift one column to the right."""
+    header_row = list(next(
+        ws_raw.iter_rows(min_row=RAW_HEADER_ROW, max_row=RAW_HEADER_ROW, values_only=True), []
+    ))
+    region_header = _normalize_header(header_row[1]) if len(header_row) > 1 else ""
+    has_region = region_header in ("region", "regional", "area")
+    if has_region:
+        return {"no": 1, "region": 2, "cabang": 3, "grup": 4, "category": 5, "onhand": 6}
+    return {"no": 1, "cabang": 2, "grup": 3, "category": 4, "onhand": 5}
+
 MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN",
           "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
 WEEKS_PER_MONTH = 4
@@ -72,21 +99,26 @@ def read_week_awal(ws_wh: Worksheet, default: int = 1) -> int:
                     return int(row[i + 1])
     return default
 
-def detect_week_count(ws_raw: Worksheet) -> int:
+def detect_week_count(ws_raw: Worksheet, cols: dict = None) -> int:
+    cols = cols or resolve_raw_columns(ws_raw)
+    first_week_col = cols["onhand"] + 1
     max_col = ws_raw.max_column
-    remaining = max_col - (FIRST_WEEK_BLOCK_COL - 1)
+    remaining = max_col - (first_week_col - 1)
     n_weeks = remaining // COLS_PER_WEEK
     return max(1, n_weeks)
 
-def raw_week_cols(w: int):
-    base = FIRST_WEEK_BLOCK_COL + COLS_PER_WEEK * w
+def raw_week_cols(w: int, first_week_col: int = FIRST_WEEK_BLOCK_COL):
+    base = first_week_col + COLS_PER_WEEK * w
     return base, base + 1, base + 2, base + 3
 
-def get_raw_rows(ws_raw: Worksheet):
+def get_raw_rows(ws_raw: Worksheet, cols: dict = None):
+    cols = cols or resolve_raw_columns(ws_raw)
+    no_col, cabang_col = cols["no"], cols["cabang"]
+    max_col = max(no_col, cabang_col)
     rows = []
-    for idx, row in enumerate(ws_raw.iter_rows(min_row=3, max_col=2, values_only=True), start=3):
-        val1 = row[0] if len(row) > 0 else None
-        val2 = row[1] if len(row) > 1 else None
+    for idx, row in enumerate(ws_raw.iter_rows(min_row=3, max_col=max_col, values_only=True), start=3):
+        val1 = row[no_col - 1] if len(row) >= no_col else None
+        val2 = row[cabang_col - 1] if len(row) >= cabang_col else None
         if val1 in (None, "") and val2 in (None, ""):
             continue
         if str(val2).strip().lower() in ("cabang", "branch", "grup"):
@@ -105,10 +137,14 @@ def get_wh_rows(ws_wh: Worksheet):
     return rows
 
 class RawRecord:
-    __slots__ = ("no", "cabang", "grup", "category", "onhand", "to", "vessel", "target")
+    __slots__ = ("no", "region", "cabang", "grup", "category", "onhand", "to", "vessel", "target")
 
-    def __init__(self, no, cabang, grup, category, onhand, to, vessel, target):
+    def __init__(self, no, cabang, grup, category, onhand, to, vessel, target, region=None):
         self.no = no
+        # Absent on files built from the pre-Region template (see
+        # resolve_raw_columns) -- defaults to "Unknown" rather than raising,
+        # same fallback already used below for cabang/grup/category.
+        self.region = str(region).strip() if region not in (None, "") else "Unknown"
         # Stripped here (not just at lookup time like the CBM/Harga Product
         # keys below) because cabang/grup/category are ALSO used directly as
         # dict/group keys throughout this module (qty_series_by_branch,
@@ -131,33 +167,44 @@ class RawRecord:
     def label(self):
         return f"{self.cabang}-{self.grup}-{self.category}"
 
-def read_raw_records(ws_raw: Worksheet, n_weeks: int):
+def read_raw_records(ws_raw: Worksheet, n_weeks: int, cols: dict = None):
+    cols = cols or resolve_raw_columns(ws_raw)
+    no_col = cols["no"]
+    region_col = cols.get("region")
+    cabang_col, grup_col, cat_col, onhand_col = cols["cabang"], cols["grup"], cols["category"], cols["onhand"]
+    first_week_col = onhand_col + 1
+
+    def col_val(row_vals, col_idx_1_based):
+        idx = col_idx_1_based - 1
+        return row_vals[idx] if idx < len(row_vals) else None
+
     records = []
     for row_vals in ws_raw.iter_rows(min_row=3, values_only=True):
-        val1 = row_vals[0] if len(row_vals) > 0 else None
-        val2 = row_vals[1] if len(row_vals) > 1 else None
-        if val1 in (None, "") and val2 in (None, ""):
+        val_no = col_val(row_vals, no_col)
+        val_cabang = col_val(row_vals, cabang_col)
+        if val_no in (None, "") and val_cabang in (None, ""):
             continue
-        if str(val2).strip().lower() in ("cabang", "branch", "grup"):
+        if str(val_cabang).strip().lower() in ("cabang", "branch", "grup"):
             continue
 
         def get_val(col_idx_1_based):
-            idx = col_idx_1_based - 1
-            return row_vals[idx] if idx < len(row_vals) and row_vals[idx] is not None else 0
+            v = col_val(row_vals, col_idx_1_based)
+            return v if v is not None else 0
 
-        onhand = get_val(ONHAND_COL)
+        onhand = get_val(onhand_col)
         to, vessel, target = [], [], []
         for w in range(n_weeks):
-            c_to, c_vessel, c_buffer, c_target = raw_week_cols(w)
+            c_to, c_vessel, c_buffer, c_target = raw_week_cols(w, first_week_col)
             to.append(get_val(c_to))
             vessel.append(get_val(c_vessel))
             target.append(get_val(c_target))
 
         records.append(RawRecord(
-            no=val1,
-            cabang=val2,
-            grup=row_vals[2] if len(row_vals) > 2 else None,
-            category=row_vals[3] if len(row_vals) > 3 else None,
+            no=val_no,
+            region=col_val(row_vals, region_col) if region_col else None,
+            cabang=val_cabang,
+            grup=col_val(row_vals, grup_col),
+            category=col_val(row_vals, cat_col),
             onhand=onhand, to=to, vessel=vessel, target=target,
         ))
     return records
@@ -296,6 +343,55 @@ def compute_mos_value_series_by_branch(records, n_weeks, cbm_dict, harga_product
         mos_value_series_by_branch[cabang] = series
     return mos_value_series_by_branch
 
+NATIONAL_KEY = "NASIONAL"
+
+def aggregate_qty_value_by_group(records, n_weeks, qty_rupiah_by_record, group_key_fn):
+    """Generalisasi dari loop qty_series_by_branch/value_series_by_branch di
+    calculate_mrp_occupancy_from_bytes: agregasi QTY & Value per kelompok
+    arbitrary (per cabang, per region, atau satu key NATIONAL_KEY untuk total
+    nasional), reuse qty_series/rupiah_series yang SUDAH dihitung per-record
+    (qty_rupiah_by_record) supaya rumus konversi Container->QTY->Value persis
+    sama di semua level agregasi -- tidak dihitung ulang dengan cara lain."""
+    qty_by_group, value_by_group = {}, {}
+    for rec in records:
+        key = group_key_fn(rec)
+        qty_series, rupiah_series = qty_rupiah_by_record[id(rec)]
+        qty_acc = qty_by_group.setdefault(key, [0.0] * n_weeks)
+        value_acc = value_by_group.setdefault(key, [0.0] * n_weeks)
+        for w in range(n_weeks):
+            if qty_series[w] is not None:
+                qty_acc[w] += qty_series[w]
+            if rupiah_series[w] is not None:
+                value_acc[w] += rupiah_series[w]
+    return qty_by_group, value_by_group
+
+def compute_mos_value_series_by_group(records, n_weeks, cbm_dict, harga_product_dict,
+                                        value_series_by_group, group_key_fn):
+    """Generalisasi compute_mos_value_series_by_branch di atas -- logika AA
+    (Target QTY x Harga Product x 4) & pembagian identik, group key-nya
+    parametrized supaya bisa dipakai untuk level Cabang, Region, atau
+    Nasional dengan SATU implementasi (lihat docstring fungsi di atas untuk
+    penjelasan lengkap langkah 1-3)."""
+    aa_sum_by_group = {}
+    for rec in records:
+        key = group_key_fn(rec)
+        lookup_key = (str(rec.cabang).strip(), str(rec.category).strip())
+        cbm_val = cbm_dict.get(lookup_key)
+        harga = harga_product_dict.get(lookup_key, 0.0)
+        acc = aa_sum_by_group.setdefault(key, [0.0] * n_weeks)
+        for w in range(n_weeks):
+            target_qty = (rec.target[w] * FAKTOR_QTY / cbm_val) if cbm_val else 0.0
+            acc[w] += target_qty * harga * 4
+
+    mos_by_group = {}
+    for key, value_series in value_series_by_group.items():
+        aa_sum = aa_sum_by_group.get(key, [0.0] * n_weeks)
+        mos_by_group[key] = [
+            round(value_series[w] / aa_sum[w], 4) if aa_sum[w] != 0 else 0.0
+            for w in range(n_weeks)
+        ]
+    return mos_by_group
+
 BOLD = Font(bold=True)
 CENTER = Alignment(horizontal="center", vertical="center", wrap_text=True)
 THIN = Side(style="thin", color="BFBFBF")
@@ -310,7 +406,11 @@ def style_header_cell(ws, row, col, text, fill=None):
         c.fill = fill
     return c
 
-def build_step1_sheet(wb, ws_raw, raw_rows, n_weeks, period_labels):
+def build_step1_sheet(wb, ws_raw, raw_rows, n_weeks, period_labels, cols: dict = None):
+    cols = cols or resolve_raw_columns(ws_raw)
+    # Output sheet layout (No, Cabang, Grup, Category) is unchanged regardless
+    # of whether the source "Raw" sheet has a Region column -- only the source
+    # cell references below need to follow the resolved columns.
     sheet_name = "1. Running Balance"
     if sheet_name in wb.sheetnames:
         del wb[sheet_name]
@@ -329,10 +429,17 @@ def build_step1_sheet(wb, ws_raw, raw_rows, n_weeks, period_labels):
     for w in range(n_weeks):
         style_header_cell(ws, 2, col_perhitungan_start + w, period_labels[w], FILL_HEADER2)
 
+    L_no = get_column_letter(cols["no"])
+    L_cabang = get_column_letter(cols["cabang"])
+    L_grup = get_column_letter(cols["grup"])
+    L_category = get_column_letter(cols["category"])
+    L_onhand = get_column_letter(cols["onhand"])
+    first_week_col = cols["onhand"] + 1
+
     perhitungan_col_letters = [get_column_letter(col_perhitungan_start + w) for w in range(n_weeks)]
     raw_col_letters = []
     for w in range(n_weeks):
-        col_to, col_vessel, col_buffer, col_target = raw_week_cols(w)
+        col_to, col_vessel, col_buffer, col_target = raw_week_cols(w, first_week_col)
         raw_col_letters.append({
             "to": get_column_letter(col_to),
             "vessel": get_column_letter(col_vessel),
@@ -341,13 +448,13 @@ def build_step1_sheet(wb, ws_raw, raw_rows, n_weeks, period_labels):
 
     out_row = 3
     for raw_row in raw_rows:
-        row_vals = [f"=Raw!A{raw_row}", f"=Raw!B{raw_row}", f"=Raw!C{raw_row}", f"=Raw!D{raw_row}"]
+        row_vals = [f"=Raw!{L_no}{raw_row}", f"=Raw!{L_cabang}{raw_row}", f"=Raw!{L_grup}{raw_row}", f"=Raw!{L_category}{raw_row}"]
         for w in range(n_weeks):
             L_to = raw_col_letters[w]["to"]
             L_vessel = raw_col_letters[w]["vessel"]
             L_demand = raw_col_letters[w]["demand"]
             if w == 0:
-                formula = f"=SUM(Raw!E{raw_row},Raw!{L_to}{raw_row},Raw!{L_vessel}{raw_row})-Raw!{L_demand}{raw_row}"
+                formula = f"=SUM(Raw!{L_onhand}{raw_row},Raw!{L_to}{raw_row},Raw!{L_vessel}{raw_row})-Raw!{L_demand}{raw_row}"
             else:
                 prev_letter = perhitungan_col_letters[w - 1]
                 formula = f"=SUM({prev_letter}{out_row},Raw!{L_to}{raw_row},Raw!{L_vessel}{raw_row})-Raw!{L_demand}{raw_row}"
@@ -458,7 +565,8 @@ def build_step2_sheet(wb, ws_wh, wh_rows, n_weeks, period_labels, perhitungan_co
     ws.views.sheetView[0].showGridLines = True
     return ws
 
-def build_step3_sheet(wb, ws_raw, raw_rows, n_weeks, period_labels, perhitungan_col_start):
+def build_step3_sheet(wb, ws_raw, raw_rows, n_weeks, period_labels, perhitungan_col_start, cols: dict = None):
+    cols = cols or resolve_raw_columns(ws_raw)
     sheet_name = "3. Harga & MOS"
     if sheet_name in wb.sheetnames:
         del wb[sheet_name]
@@ -466,22 +574,25 @@ def build_step3_sheet(wb, ws_raw, raw_rows, n_weeks, period_labels, perhitungan_
     headers = ["No", "Cabang", "Grup", "Week", "Balance", "Target", "Harga", "Value_per_Week", "MOS"]
     for i, h in enumerate(headers, start=1):
         style_header_cell(ws, 1, i, h, FILL_HEADER2)
-        
+
     unique_groups = []
     seen = set()
     for r in raw_rows:
-        cab = ws_raw.cell(row=r, column=2).value
-        grp = ws_raw.cell(row=r, column=3).value
+        cab = ws_raw.cell(row=r, column=cols["cabang"]).value
+        grp = ws_raw.cell(row=r, column=cols["grup"]).value
         key = (str(cab).strip() if cab else "", str(grp).strip() if grp else "")
         if key not in seen and key[0]:
             seen.add(key)
             unique_groups.append(key)
-            
+
     out_row = 2
     perhitungan_col_letters = [get_column_letter(perhitungan_col_start + w) for w in range(n_weeks)]
+    first_week_col = cols["onhand"] + 1
+    L_raw_cabang = get_column_letter(cols["cabang"])
+    L_raw_grup = get_column_letter(cols["grup"])
     raw_col_letters = []
     for w in range(n_weeks):
-        _, _, _, col_target = raw_week_cols(w)
+        _, _, _, col_target = raw_week_cols(w, first_week_col)
         raw_col_letters.append(get_column_letter(col_target))
 
     idx = 1
@@ -490,9 +601,9 @@ def build_step3_sheet(wb, ws_raw, raw_rows, n_weeks, period_labels, perhitungan_
             week_label = period_labels[w]
             ht_col = perhitungan_col_letters[w]
             raw_col = raw_col_letters[w]
-            
+
             f_balance = f"=SUMIFS('1. Running Balance'!${ht_col}:${ht_col}, '1. Running Balance'!$B:$B, B{out_row}, '1. Running Balance'!$C:$C, C{out_row})"
-            f_target = f"=SUMIFS('Raw'!${raw_col}:${raw_col}, 'Raw'!$B:$B, B{out_row}, 'Raw'!$C:$C, C{out_row})"
+            f_target = f"=SUMIFS('Raw'!${raw_col}:${raw_col}, 'Raw'!${L_raw_cabang}:${L_raw_cabang}, B{out_row}, 'Raw'!${L_raw_grup}:${L_raw_grup}, C{out_row})"
             f_harga = f"=SUMIFS('Harga Container'!$D:$D, 'Harga Container'!$B:$B, B{out_row}, 'Harga Container'!$C:$C, C{out_row})"
             f_val = f"=E{out_row} * G{out_row}"
             # MOS = Balance / (Target * 4) -- lihat mos_rows di
@@ -512,21 +623,22 @@ def build_step3_sheet(wb, ws_raw, raw_rows, n_weeks, period_labels, perhitungan_
 
 def generate_excel_workbook(wb: Workbook, records=None, qty_rupiah_by_record=None):
     ws_raw, ws_wh = wb["Raw"], wb["WH"]
-    n_weeks = detect_week_count(ws_raw)
-    raw_rows, wh_rows = get_raw_rows(ws_raw), get_wh_rows(ws_wh)
+    cols = resolve_raw_columns(ws_raw)
+    n_weeks = detect_week_count(ws_raw, cols)
+    raw_rows, wh_rows = get_raw_rows(ws_raw, cols), get_wh_rows(ws_wh)
     week_awal = read_week_awal(ws_wh, default=1)
     period_labels = build_period_labels(week_awal, n_weeks)
 
     for r in wh_rows:
         ws_wh.cell(row=r, column=5, value=f"=C{r}+D{r}")
 
-    ws_step1, ht_start, ht_last = build_step1_sheet(wb, ws_raw, raw_rows, n_weeks, period_labels)
+    ws_step1, ht_start, ht_last = build_step1_sheet(wb, ws_raw, raw_rows, n_weeks, period_labels, cols)
 
     if records is not None and qty_rupiah_by_record is not None and len(records) == len(raw_rows):
         append_qty_rupiah_blocks(ws_step1, raw_rows, n_weeks, period_labels, ht_start, records, qty_rupiah_by_record)
 
     build_step2_sheet(wb, ws_wh, wh_rows, n_weeks, period_labels, ht_start, ht_last)
-    build_step3_sheet(wb, ws_raw, raw_rows, n_weeks, period_labels, ht_start)
+    build_step3_sheet(wb, ws_raw, raw_rows, n_weeks, period_labels, ht_start, cols)
 
     order = ["Raw", "WH", "Harga Container", "CBM", "Harga Product", "1. Running Balance", "2. Occupancy", "3. Harga & MOS"]
     wb._sheets.sort(key=lambda s: order.index(s.title) if s.title in order else 999)
@@ -736,11 +848,12 @@ def calculate_mrp_occupancy_from_bytes(file_bytes: bytes) -> dict:
         raise ValueError("File Excel harus memiliki sheet 'Raw' dan 'WH' untuk pemrosesan MRP.")
 
     ws_raw, ws_wh = wb_data["Raw"], wb_data["WH"]
-    n_weeks = detect_week_count(ws_raw)
+    raw_cols = resolve_raw_columns(ws_raw)
+    n_weeks = detect_week_count(ws_raw, raw_cols)
     week_awal = read_week_awal(ws_wh, default=1)
     period_labels = build_period_labels(week_awal, n_weeks)
 
-    records = read_raw_records(ws_raw, n_weeks)
+    records = read_raw_records(ws_raw, n_weeks, raw_cols)
     wh_capacity = read_wh_capacity(ws_wh)
 
     # B.4: Sheet Harga Container
@@ -804,6 +917,25 @@ def calculate_mrp_occupancy_from_bytes(file_bytes: bytes) -> dict:
     # Fitur 3: MOS berbasis Value (AA = Target QTY x Harga Product x 4, SUM per
     # cabang per minggu, lalu Value(Rp) / SUM(AA)) -- lihat compute_mos_value_series_by_branch.
     mos_value_series_by_branch = compute_mos_value_series_by_branch(records, n_weeks, cbm_dict, harga_product_dict, value_series_by_branch)
+
+    # Analisa Nilai Inventori -- level Regional (Group By kolom Region) &
+    # Nasional (satu key NATIONAL_KEY, jadi total gabungan semua cabang/region).
+    # Reuse qty_rupiah_by_record yang sama dengan level Cabang di atas supaya
+    # SUM(Regional) == SUM(Cabang) == Nasional persis cocok (lihat
+    # aggregate_qty_value_by_group/compute_mos_value_series_by_group).
+    qty_series_by_region, value_series_by_region = aggregate_qty_value_by_group(
+        records, n_weeks, qty_rupiah_by_record, group_key_fn=lambda rec: rec.region)
+    mos_value_series_by_region = compute_mos_value_series_by_group(
+        records, n_weeks, cbm_dict, harga_product_dict, value_series_by_region,
+        group_key_fn=lambda rec: rec.region)
+
+    qty_series_by_national, value_series_by_national = aggregate_qty_value_by_group(
+        records, n_weeks, qty_rupiah_by_record, group_key_fn=lambda rec: NATIONAL_KEY)
+    mos_value_series_by_national = compute_mos_value_series_by_group(
+        records, n_weeks, cbm_dict, harga_product_dict, value_series_by_national,
+        group_key_fn=lambda rec: NATIONAL_KEY)
+
+    regions_list = sorted({rec.region for rec in records})
 
     # B.5: Implementasi MOS
     # TAHAP 5.a: Agregasi Hasil Target
@@ -966,6 +1098,7 @@ def calculate_mrp_occupancy_from_bytes(file_bytes: bytes) -> dict:
         harga_satuan = harga_product_dict.get((rec.cabang, rec.category))
         for w in range(n_weeks):
             inventory_value_rows.append({
+                "region": rec.region,
                 "cabang": rec.cabang,
                 "grup": rec.grup,
                 "category": rec.category,
@@ -1020,6 +1153,18 @@ def calculate_mrp_occupancy_from_bytes(file_bytes: bytes) -> dict:
             # Fitur 3: MOS berbasis Value, per cabang per minggu -- ditampilkan
             # tepat di bawah baris "Value (Rp)" pada tabel Analisa Nilai Inventori.
             "mos_value_series_by_branch": {str(k): v for k, v in mos_value_series_by_branch.items()},
+            # Analisa Nilai Inventori -- level Regional & Nasional (lihat
+            # aggregate_qty_value_by_group/compute_mos_value_series_by_group).
+            # Field baru, additive-only: tidak mengganti/menghapus field di atas.
+            "regions_list": regions_list,
+            "qty_series_by_region": {str(k): [round(v, 2) for v in val] for k, val in qty_series_by_region.items()},
+            "value_series_by_region": {str(k): [round(v, 2) for v in val] for k, val in value_series_by_region.items()},
+            "mos_value_series_by_region": {str(k): v for k, v in mos_value_series_by_region.items()},
+            "national_summary": {
+                "qty_series": [round(v, 2) for v in qty_series_by_national.get(NATIONAL_KEY, [0.0] * n_weeks)],
+                "value_series": [round(v, 2) for v in value_series_by_national.get(NATIONAL_KEY, [0.0] * n_weeks)],
+                "mos_value_series": mos_value_series_by_national.get(NATIONAL_KEY, [0.0] * n_weeks),
+            },
         },
     }
 
@@ -1027,8 +1172,11 @@ def calculate_mrp_occupancy_from_bytes(file_bytes: bytes) -> dict:
 def generate_mrp_template_bytes() -> bytes:
     """
     Menghasilkan file Excel template resmi MRP Occupancy & Inventory Projector
-    lengkap dengan sheet 'Raw' (blok 4 kolom per minggu [TO, Vessel, Buffer, Target])
-    dan sheet 'WH' (Kapasitas & Week Awal).
+    lengkap dengan sheet 'Raw' (No, Region, Cabang, Grup, Category, On Hand,
+    lalu blok 4 kolom per minggu [TO, Vessel, Buffer, Target]) dan sheet 'WH'
+    (Kapasitas & Week Awal). Kolom "Region" di posisi B ini yang dideteksi
+    resolve_raw_columns() -- lihat docstring fungsi itu untuk kompatibilitas
+    mundur dengan file yang masih pakai template lama (tanpa kolom Region).
     """
     wb = Workbook()
     ws_raw = wb.active
@@ -1039,8 +1187,8 @@ def generate_mrp_template_bytes() -> bytes:
     ws_harga_product = wb.create_sheet("Harga Product")
 
     n_weeks = 6
-    col_start_week = 6  # Kolom F (1-indexed = 6)
-    
+    col_start_week = 7  # Kolom G (1-indexed = 7) -- geser 1 kolom dari sebelumnya karena Region disisipkan di B
+
     for c in range(1, col_start_week):
         style_header_cell(ws_raw, 1, c, "Judul", FILL_JUDUL)
     for w in range(n_weeks):
@@ -1048,7 +1196,7 @@ def generate_mrp_template_bytes() -> bytes:
         for sub_c in range(4):
             style_header_cell(ws_raw, 1, base_c + sub_c, f"Week {w + 1}", FILL_PERHITUNGAN if w % 2 == 0 else FILL_RATIO)
 
-    fixed_headers = ["No", "Cabang", "Grup", "Category", "On Hand"]
+    fixed_headers = ["No", "Region", "Cabang", "Grup", "Category", "On Hand"]
     for i, h in enumerate(fixed_headers, start=1):
         style_header_cell(ws_raw, 2, i, h, FILL_HEADER2)
 
@@ -1060,10 +1208,10 @@ def generate_mrp_template_bytes() -> bytes:
         style_header_cell(ws_raw, 2, base_c + 3, "Target", FILL_HEADER2)
 
     sample_raw = [
-        [1, "DC Jakarta", "FMCG", "Beverages", 15000],
-        [2, "DC Surabaya", "Electronics", "Gadgets", 8500],
-        [3, "DC Medan", "Apparel", "Fashion Casual", 4200],
-        [4, "DC Makassar", "Automotive", "Spareparts", 6300]
+        [1, "Jawa", "DC Jakarta", "FMCG", "Beverages", 15000],
+        [2, "Jawa", "DC Surabaya", "Electronics", "Gadgets", 8500],
+        [3, "Sumatera", "DC Medan", "Apparel", "Fashion Casual", 4200],
+        [4, "Sulawesi", "DC Makassar", "Automotive", "Spareparts", 6300]
     ]
     sample_weeks_data = [
         [[1200, 2000, 3000, 3200], [1500, 1000, 3200, 3500], [1000, 2500, 3100, 3400], [2000, 1500, 3500, 3800], [1800, 2000, 3300, 3600], [1500, 1800, 3400, 3700]],
@@ -1084,13 +1232,14 @@ def generate_mrp_template_bytes() -> bytes:
                 cell.border = BORDER
 
     ws_raw.column_dimensions["A"].width = 6
-    ws_raw.column_dimensions["B"].width = 15
-    ws_raw.column_dimensions["C"].width = 14
-    ws_raw.column_dimensions["D"].width = 16
-    ws_raw.column_dimensions["E"].width = 12
+    ws_raw.column_dimensions["B"].width = 14
+    ws_raw.column_dimensions["C"].width = 15
+    ws_raw.column_dimensions["D"].width = 14
+    ws_raw.column_dimensions["E"].width = 16
+    ws_raw.column_dimensions["F"].width = 12
     for c in range(col_start_week, col_start_week + (n_weeks * 4)):
         ws_raw.column_dimensions[get_column_letter(c)].width = 11
-    ws_raw.freeze_panes = "F3"
+    ws_raw.freeze_panes = "G3"
 
     wh_headers = ["No", "Cabang", "Kapasitas Existing", "Tambahan", "Total Kapasitas"]
     for i, h in enumerate(wh_headers, start=1):

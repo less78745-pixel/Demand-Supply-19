@@ -23,6 +23,7 @@ import {
 import { get, set } from 'idb-keyval';
 import { supabase } from '@/lib/supabase';
 import { parseDynamicCSV, findColumn, parseIndonesianNumber, ParsedData } from '@/lib/csvParser';
+import { SupplyRatioBreakdownTable } from '@/components/soh-to-analysis/SupplyRatioBreakdownTable';
 import { getStandardFilename } from '@/utils/export';
 import { formatNumberCompact } from '@/lib/utils';
 import type { PptxSlideSpec } from '@/utils/exportPptx';
@@ -161,6 +162,17 @@ const calculateStockCondition = (onHand: number, totalTO: number, totalVessel: n
   return { ratio, status: 'Bahaya', badge: '🔴 BAHAYA', color: 'bg-rose-100 text-rose-800 border border-rose-300 animate-pulse' };
 };
 
+// Cabang -> Region, dipakai hanya oleh generator data demo/template supaya
+// contoh unggahan sudah punya kolom Region terisi -- file upload sungguhan
+// membaca Region langsung dari kolomnya sendiri (lihat colRegion), tidak
+// bergantung pada mapping ini sama sekali.
+const DEMO_CABANG_REGION: Record<string, string> = {
+  Surabaya: 'Jawa', Jakarta: 'Jawa', Bandung: 'Jawa', Semarang: 'Jawa',
+  Medan: 'Sumatera', Palembang: 'Sumatera',
+  Makassar: 'Sulawesi',
+  Denpasar: 'Bali & Nusa Tenggara',
+};
+
 function generateDemoSOH(): ParsedData {
   const cabangs = ['Surabaya', 'Jakarta', 'Bandung', 'Medan', 'Semarang', 'Makassar', 'Palembang', 'Denpasar'];
   const grups = ['Food & Beverage', 'Home Care', 'Personal Care'];
@@ -169,7 +181,7 @@ function generateDemoSOH(): ParsedData {
   const doiStatuses = ['ACTIVE', 'FAST MOVING', 'SLOW MOVING', 'NEW ITEM'];
 
   const headers = [
-    'cabang', 'Grup', 'Category', 'Description', 'Status Insentif', 'Status DOI',
+    'Region', 'cabang', 'Grup', 'Category', 'Description', 'Status Insentif', 'Status DOI',
     'On Hand', 'TO Week 1', 'TO Week 2', 'TO Week 3', 'TO Week 4',
     'Vessel Week 1', 'Vessel Week 2', 'Vessel Week 3', 'Vessel Week 4',
     'Plan Loading', 'Target Sales', 'Outstanding Target', 'Sales Berjalan'
@@ -220,6 +232,7 @@ function generateDemoSOH(): ParsedData {
       const unitPrice = (Math.floor(Math.random() * 25) + 10) * 10000; // Rp 100rb - 350rb
 
       qtyData.push({
+        Region: DEMO_CABANG_REGION[cab] || 'Unknown',
         cabang: cab,
         Grup: grup,
         Category: cat,
@@ -242,6 +255,7 @@ function generateDemoSOH(): ParsedData {
       });
 
       valueData.push({
+        Region: DEMO_CABANG_REGION[cab] || 'Unknown',
         cabang: cab,
         Grup: grup,
         Category: cat,
@@ -485,6 +499,12 @@ export default function SOHAnalysisPage() {
 
   // Identify column names dynamically using currentData
   const colCabang = useMemo(() => currentData ? findColumn(currentData.headers, ['cabang', 'branch_name', 'branch', 'cab', 'regional', 'region']) : undefined, [currentData]);
+  // Kolom Region berdiri sendiri (resolusi independen dari colCabang di atas --
+  // 'regional'/'region' di alias colCabang cuma fallback lama kalau file TIDAK
+  // punya kolom Cabang sama sekali, tidak diubah supaya file lama tetap jalan).
+  // File lama tanpa kolom Region: colRegion jadi undefined, semua baris default
+  // ke 'Unknown' di detailedTableData (lihat baris region di bawah).
+  const colRegion = useMemo(() => currentData ? findColumn(currentData.headers, ['region', 'regional', 'wilayah']) : undefined, [currentData]);
   const colGrup = useMemo(() => currentData ? findColumn(currentData.headers, ['grup', 'group']) : undefined, [currentData]);
   const colCategory = useMemo(() => currentData ? findColumn(currentData.headers, ['category', 'kategori item', 'kategori', 'item category']) : undefined, [currentData]);
   const colDescription = useMemo(() => currentData ? findColumn(currentData.headers, ['description', 'desc', 'nama barang', 'deskripsi']) : undefined, [currentData]);
@@ -638,6 +658,10 @@ export default function SOHAnalysisPage() {
 
     for (const row of filtered) {
       const cbg = colCabang ? (row[colCabang] || 'Unknown') : 'Unknown';
+      // Region tidak ikut dedup key (di bawah) -- secara logis 1 cabang cuma
+      // masuk 1 region, jadi key existing (cabang/grup/category/insentif/doi)
+      // sudah cukup; region hanya atribut tambahan yang ikut di setiap baris.
+      const reg = colRegion ? (row[colRegion] || 'Unknown') : 'Unknown';
       const grp = colGrup ? (row[colGrup] || 'Umum') : 'Umum';
       const cat = colCategory ? (row[colCategory] || 'Umum') : 'Umum';
       const desc = colDescription ? (row[colDescription] || '-') : '-';
@@ -648,6 +672,7 @@ export default function SOHAnalysisPage() {
       if (!map[key]) {
         map[key] = {
           key,
+          region: reg,
           cabang: cbg,
           grup: grp,
           category: cat,
@@ -690,6 +715,12 @@ export default function SOHAnalysisPage() {
       const totalSupply = (item['On Hand'] || 0) + (item['TO'] || 0) + (item['VESSEL'] || 0);
       const effectiveTarget = Math.abs(item['Outstanding Target'] || 0);
       const cond = calculateStockCondition(item['On Hand'], item['TO'], item['VESSEL'], item['Outstanding Target'], item['Sales Berjalan']);
+      // Hasil Hitungan (Rasio Pasokan vs Target Sales) -- metrik BARU, terpisah
+      // dari `cond.ratio` di atas (yang membaginya dengan Outstanding Target,
+      // bukan Target Sales). null (bukan 0) saat Target Sales kosong/<=0, supaya
+      // "tidak ada target sales" bisa dibedakan dari "rasio memang nol".
+      const targetSales = item['Target Sales'] || 0;
+      const supplyToTargetSalesRatio = targetSales > 0 ? toExactFloat(totalSupply / targetSales, 2) : null;
       return {
         ...item,
         totalInbound,
@@ -698,7 +729,8 @@ export default function SOHAnalysisPage() {
         ratio: cond.ratio,
         status: cond.status,
         badge: cond.badge,
-        badgeColor: cond.color
+        badgeColor: cond.color,
+        supplyToTargetSalesRatio,
       };
     }).sort((a, b) => {
       if (a.cabang === b.cabang) {
@@ -706,7 +738,7 @@ export default function SOHAnalysisPage() {
       }
       return a.cabang.localeCompare(b.cabang);
     });
-  }, [currentData, filtered, colCabang, colGrup, colCategory, colDescription, colInsentif, colDoi, colTargetSales, colOutstandingTarget, colSalesBerjalan]);
+  }, [currentData, filtered, colCabang, colRegion, colGrup, colCategory, colDescription, colInsentif, colDoi, colTargetSales, colOutstandingTarget, colSalesBerjalan]);
 
   const getSohColVal = (row: any, colKey: string): string => {
     if (colKey === 'cabang') return String(row.cabang || '');
@@ -864,7 +896,7 @@ export default function SOHAnalysisPage() {
   // Executive Calculation Summary & Condition Breakdown
   const calculationSummary = useMemo(() => {
     if (!detailedTableData || detailedTableData.length === 0) {
-      return { totalOH: 0, totalTO: 0, totalVessel: 0, totalSupply: 0, totalTargetSales: 0, totalOutstanding: 0, totalSalesBerjalan: 0, totalEffectiveTarget: 0, globalRatio: 0, globalStatus: 'N/A', badgeColor: 'bg-slate-700/50 text-slate-700 border-slate-600', countOverstock: 0, countAman: 0, countHati: 0, countBahaya: 0, totalItems: 0 };
+      return { totalOH: 0, totalTO: 0, totalVessel: 0, totalSupply: 0, totalTargetSales: 0, totalOutstanding: 0, totalSalesBerjalan: 0, totalEffectiveTarget: 0, globalRatio: 0, globalStatus: 'N/A', badgeColor: 'bg-slate-700/50 text-slate-700 border-slate-600', countOverstock: 0, countAman: 0, countHati: 0, countBahaya: 0, totalItems: 0, globalSupplyToTargetSalesRatio: null as number | null };
     }
     let totalOH = 0;
     let totalTO = 0;
@@ -899,7 +931,12 @@ export default function SOHAnalysisPage() {
     const totalSupply = totalOH + totalTO + totalVessel;
     const totalEffectiveTarget = totalAbsNegativeOutstanding;
     const globalRatio = totalEffectiveTarget > 0 ? Number((totalSupply / totalEffectiveTarget).toFixed(2)) : 0;
-    
+    // Level Nasional -- Hasil Hitungan (Rasio Pasokan vs Target Sales): SUM
+    // seluruh Total Pasokan dibagi SUM seluruh Target Sales (bukan rata-rata
+    // dari rasio per-baris, supaya cabang bervolume besar & kecil tidak
+    // disamaratakan bobotnya). null saat Target Sales nasional <= 0.
+    const globalSupplyToTargetSalesRatio = totalTargetSales > 0 ? Number((totalSupply / totalTargetSales).toFixed(2)) : null;
+
     let globalStatus = '⚪ N/A (Target <= 0)';
     let badgeColor = 'bg-slate-100 text-slate-800 border border-slate-300';
     if (globalRatio > 1.5) {
@@ -932,8 +969,41 @@ export default function SOHAnalysisPage() {
       countAman,
       countHati,
       countBahaya,
-      totalItems: detailedTableData.length
+      totalItems: detailedTableData.length,
+      globalSupplyToTargetSalesRatio,
     };
+  }, [detailedTableData]);
+
+  // Level Regional -- Group By kolom Region (baru): SUM Total Pasokan & Target
+  // Sales per region dari detailedTableData (SUM-lalu-bagi, sama seperti
+  // calculationSummary di atas, bukan rata-rata rasio per-baris), diurutkan
+  // rasio terkecil (paling berisiko) lebih dulu.
+  const regionalSupplyRatioData = useMemo(() => {
+    const map: Record<string, { region: string; totalSupply: number; totalTargetSales: number }> = {};
+    for (const row of detailedTableData) {
+      const reg = row.region || 'Unknown';
+      if (!map[reg]) map[reg] = { region: reg, totalSupply: 0, totalTargetSales: 0 };
+      map[reg].totalSupply += row.totalSupply || 0;
+      map[reg].totalTargetSales += row['Target Sales'] || 0;
+    }
+    return Object.values(map)
+      .map(m => ({ ...m, ratio: m.totalTargetSales > 0 ? toExactFloat(m.totalSupply / m.totalTargetSales, 2) : null }))
+      .sort((a, b) => (a.ratio ?? Infinity) - (b.ratio ?? Infinity));
+  }, [detailedTableData]);
+
+  // Level Detail Status DOI -- Group By kolom Status DOI (statusDoi sudah
+  // dinormalisasi lewat normalizeDoiStatus saat detailedTableData dibangun).
+  const doiStatusSupplyRatioData = useMemo(() => {
+    const map: Record<string, { statusDoi: string; totalSupply: number; totalTargetSales: number }> = {};
+    for (const row of detailedTableData) {
+      const doi = row.statusDoi || 'undefined';
+      if (!map[doi]) map[doi] = { statusDoi: doi, totalSupply: 0, totalTargetSales: 0 };
+      map[doi].totalSupply += row.totalSupply || 0;
+      map[doi].totalTargetSales += row['Target Sales'] || 0;
+    }
+    return Object.values(map)
+      .map(m => ({ ...m, ratio: m.totalTargetSales > 0 ? toExactFloat(m.totalSupply / m.totalTargetSales, 2) : null }))
+      .sort((a, b) => (a.ratio ?? Infinity) - (b.ratio ?? Infinity));
   }, [detailedTableData]);
 
   // Calculation Insights for Ratio from detailedTableData
@@ -1124,6 +1194,7 @@ export default function SOHAnalysisPage() {
   const handleExport = () => {
     if (!currentData || !currentData.data || displayedSohTableData.length === 0) return;
     const header = [
+      'Region',
       'Cabang',
       'Grup',
       'Kategori Item',
@@ -1139,12 +1210,14 @@ export default function SOHAnalysisPage() {
       'Sales Berjalan',
       'Target Efektif (Outstanding - Sales Berjalan)',
       'Hasil Hitungan (Rasio Pasokan vs Target Efektif)',
+      'Hasil Hitungan (Rasio Pasokan vs Target Sales)',
       'Kesimpulan Kondisi'
     ].map(h => `"${h}"`).join(',');
     const lines = [header];
 
     displayedSohTableData.forEach(row => {
       const line = [
+        `"${String(row.region || '').replace(/"/g, '""')}"`,
         `"${String(row.cabang || '').replace(/"/g, '""')}"`,
         `"${String(row.grup || '').replace(/"/g, '""')}"`,
         `"${String(row.category || '').replace(/"/g, '""')}"`,
@@ -1160,6 +1233,7 @@ export default function SOHAnalysisPage() {
         Math.round(row['Sales Berjalan'] || 0),
         Math.round(row.effectiveTarget || 0),
         row.ratio || 0,
+        row.supplyToTargetSalesRatio ?? '',
         `"${row.status}"`
       ].join(',');
       lines.push(line);
@@ -1901,6 +1975,49 @@ export default function SOHAnalysisPage() {
             <span><b>Logika Evaluasi Kondisi:</b> 🟣 <b>Overstock</b> = Rasio &gt; 1.50 | 🟢 <b>Aman</b> = Rasio 1.25 s/d 1.50 | 🟡 <b>Hati-Hati</b> = Rasio 1.00 s/d 1.25 | 🔴 <b>Bahaya</b> = Rasio &lt; 1.00 (Pasokan Tidak Mencukupi Sisa Target)</span>
           </span>
         </div>
+      </GlassCard>
+
+      {/* ─── HASIL HITUNGAN (RASIO PASOKAN VS TARGET SALES) -- Nasional/Regional/Status DOI ───
+          Metrik BARU, terpisah dari "Rasio vs Target Efektif" di atas (denominator
+          Target Sales, bukan Outstanding Target) -- lihat detailedTableData.supplyToTargetSalesRatio. */}
+      <GlassCard className="p-6 border-cyan-500/40 bg-gradient-to-r from-slate-900 via-slate-950 to-slate-900 shadow-2xl">
+        <div className="border-b border-slate-700 pb-4 mb-6">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 mb-2.5">
+            <BarChart3 className="w-3.5 h-3.5" /> Hasil Hitungan (Rasio Pasokan vs Target Sales)
+          </div>
+          <h3 className="text-lg sm:text-xl font-black text-white flex items-center gap-2">
+            Level Nasional, Regional &amp; Detail Status DOI
+          </h3>
+          <p className="text-xs text-slate-400 mt-1">
+            Rumus Hitungan: <code className="px-2 py-0.5 bg-slate-800 text-cyan-300 font-mono rounded font-bold">(On Hand + Semua TO + Semua Vessel) ÷ Target Sales</code> — berbeda dari &quot;Rasio vs Target Efektif&quot; di atas yang membagi dengan Outstanding Target, bukan Target Sales.
+          </p>
+        </div>
+
+        <div className="p-4 rounded-xl bg-slate-100 border border-slate-200/60 shadow-inner inline-flex flex-col mb-2">
+          <span className="text-xs font-bold text-slate-600 block mb-1">🌏 Rasio Pasokan Nasional vs Target Sales</span>
+          <span className="text-xl sm:text-2xl font-black font-mono text-slate-900">
+            {calculationSummary.globalSupplyToTargetSalesRatio !== null ? `${calculationSummary.globalSupplyToTargetSalesRatio}x` : 'N/A'}
+          </span>
+          <span className="text-[11px] text-slate-600 block mt-1">
+            Total Pasokan {calculationSummary.totalSupply.toLocaleString('id-ID')} {unitLabel} ÷ Target Sales {calculationSummary.totalTargetSales.toLocaleString('id-ID')} {unitLabel}
+          </span>
+        </div>
+
+        <SupplyRatioBreakdownTable
+          title="Rasio Pasokan vs Target Sales — Per Region"
+          labelHeader="Region"
+          icon={<Layers className="w-4 h-4 text-cyan-400" />}
+          unitLabel={unitLabel}
+          rows={regionalSupplyRatioData.map(r => ({ label: r.region, totalSupply: r.totalSupply, totalTargetSales: r.totalTargetSales, ratio: r.ratio }))}
+        />
+
+        <SupplyRatioBreakdownTable
+          title="Rasio Pasokan vs Target Sales — Detail Status DOI"
+          labelHeader="Status DOI"
+          icon={<ClipboardList className="w-4 h-4 text-cyan-400" />}
+          unitLabel={unitLabel}
+          rows={doiStatusSupplyRatioData.map(r => ({ label: r.statusDoi, totalSupply: r.totalSupply, totalTargetSales: r.totalTargetSales, ratio: r.ratio }))}
+        />
       </GlassCard>
 
       {/* ─── TABEL ANALISIS KOMPARATIF SOH & TO — DETAIL CABANG PER KATEGORI ─── */}
