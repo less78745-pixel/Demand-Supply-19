@@ -510,21 +510,29 @@ def append_qty_rupiah_blocks(ws, raw_rows, n_weeks, period_labels, perhitungan_c
         style_header_cell(ws, 2, qty_start_col + w, period_labels[w], FILL_HEADER2)
         style_header_cell(ws, 2, rupiah_start_col + w, period_labels[w], FILL_HEADER2)
 
+    # Tulis nilai TANPA border/number_format per-sel: untuk upload nasional
+    # (puluhan ribu `records` x banyak minggu) mengeset .border/.number_format
+    # pada tiap sel satu-per-satu adalah bottleneck openpyxl yang nyata --
+    # tiap assignment style memicu lookup/rebuild style-array internal, jadi
+    # untuk records x n_weeks x 2 sel biayanya berlipat ganda dengan cepat.
+    # Gridlines sheet tetap ON (lihat showGridLines di bawah) jadi kehilangan
+    # border tipis per-sel tidak mengorbankan keterbacaan. number_format untuk
+    # kolom Rupiah cukup diset SEKALI di level kolom (bukan per-sel) --
+    # openpyxl/Excel memakainya sebagai default untuk sel tanpa format eksplisit.
     for out_row, rec in enumerate(records, start=3):
         qty_series, rupiah_series = qty_rupiah_by_record.get(id(rec), ([None] * n_weeks, [None] * n_weeks))
         for w in range(n_weeks):
             qty_val = qty_series[w]
             rupiah_val = rupiah_series[w]
-            qty_cell = ws.cell(row=out_row, column=qty_start_col + w, value=round(qty_val, 2) if qty_val is not None else None)
-            qty_cell.border = BORDER
-            rupiah_cell = ws.cell(row=out_row, column=rupiah_start_col + w, value=round(rupiah_val, 2) if rupiah_val is not None else None)
-            rupiah_cell.border = BORDER
-            rupiah_cell.number_format = "#,##0"
+            ws.cell(row=out_row, column=qty_start_col + w, value=round(qty_val, 2) if qty_val is not None else None)
+            ws.cell(row=out_row, column=rupiah_start_col + w, value=round(rupiah_val, 2) if rupiah_val is not None else None)
 
     for c in range(qty_start_col, qty_start_col + n_weeks):
         ws.column_dimensions[get_column_letter(c)].width = 12
     for c in range(rupiah_start_col, rupiah_start_col + n_weeks):
-        ws.column_dimensions[get_column_letter(c)].width = 16
+        col_letter = get_column_letter(c)
+        ws.column_dimensions[col_letter].width = 16
+        ws.column_dimensions[col_letter].number_format = "#,##0"
 
 def build_step2_sheet(wb, ws_wh, wh_rows, n_weeks, period_labels, perhitungan_col_start, hasil_last_row):
     sheet_name = "2. Occupancy"
@@ -843,7 +851,14 @@ def build_to_recommendations(records, bal_t, period_labels, n_weeks) -> list:
 
 
 def calculate_mrp_occupancy_from_bytes(file_bytes: bytes) -> dict:
-    wb_data = load_workbook(io.BytesIO(file_bytes), data_only=True)
+    # read_only=True: pass ini cuma pernah memanggil iter_rows()/sheetnames pada
+    # wb_data (nilai terhitung, bukan formula) -- tidak pernah menulis atau
+    # mengakses style, jadi read_only aman dipakai dan JAUH lebih cepat/hemat
+    # memori untuk file besar (openpyxl tidak membangun model penuh per-sel
+    # dengan style di RAM). wb_form di bawah (dipakai untuk MENULIS sheet hasil)
+    # sengaja TETAP di-load ulang non-read_only karena butuh mempertahankan
+    # formula/format asli sheet Raw/WH dan harus bisa di-save().
+    wb_data = load_workbook(io.BytesIO(file_bytes), data_only=True, read_only=True)
     if "Raw" not in wb_data.sheetnames or "WH" not in wb_data.sheetnames:
         raise ValueError("File Excel harus memiliki sheet 'Raw' dan 'WH' untuk pemrosesan MRP.")
 
@@ -951,6 +966,7 @@ def calculate_mrp_occupancy_from_bytes(file_bytes: bytes) -> dict:
             agg_bal_t[key][w] += bt[w]
             agg_target[key][w] += rec.target[w]
 
+    print("AGG_BAL_T:", agg_bal_t)
     mos_rows = []
     for (cab, grp), bals in agg_bal_t.items():
         harga = harga_dict.get((cab, grp), 0.0)

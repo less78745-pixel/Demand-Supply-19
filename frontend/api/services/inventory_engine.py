@@ -19,7 +19,10 @@ def run_inventory_from_mrp_bytes(file_bytes: bytes) -> dict:
     """
     Ekstrak data mingguan dari sheet Raw & WH MRP untuk diolah ke dalam ABC-XYZ Inventory Intelligence.
     """
-    wb = load_workbook(io.BytesIO(file_bytes), data_only=True)
+    # read_only=True: hanya iter_rows()/sheetnames dipakai di bawah, tidak ada
+    # write -- jauh lebih cepat untuk file MRP nasional besar. Lihat komentar
+    # yang sama di calculate_mrp_occupancy_from_bytes (occupancy_engine.py).
+    wb = load_workbook(io.BytesIO(file_bytes), data_only=True, read_only=True)
     if "Raw" not in wb.sheetnames or "WH" not in wb.sheetnames:
         raise ValueError("File tidak memiliki sheet 'Raw' dan 'WH'")
     
