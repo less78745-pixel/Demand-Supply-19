@@ -1,18 +1,19 @@
 "use client";
 import LZString from 'lz-string';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { FileUploader } from '@/components/ui/FileUploader';
 import { KPICard } from '@/components/ui/KPICard';
 import { MultiSelect } from '@/components/ui/MultiSelect';
 import {
   Radar, Download, AlertTriangle, Activity, Shield,
-  Package, XCircle, CheckCircle, Info, TrendingUp, Zap, HelpCircle, FileSpreadsheet, ShieldAlert, Cloud } from 'lucide-react';
+  Package, XCircle, CheckCircle, Info, TrendingUp, Zap, HelpCircle, FileSpreadsheet, ShieldAlert, Cloud, Presentation } from 'lucide-react';
 import { uploadControlTowerFile } from '@/lib/api';
 import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import toast from 'react-hot-toast';
 import { getStandardFilename } from '@/utils/export';
+import type { PptxSlideSpec } from '@/utils/exportPptx';
 import { ExportHtmlButton } from '@/components/ui/ExportHtmlButton';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { ModuleExportConfig } from '@/utils/offlineExport';
@@ -163,6 +164,13 @@ export default function ControlTowerPage() {
   const [selectedZone, setSelectedZone] = useState<string[]>(['All']);
   const [activeScenario, setActiveScenario] = useState<ScenarioType>('normal');
   const [showHowTo, setShowHowTo] = useState(false);
+
+  // "Export to PowerPoint" targets — every chart in this module (DDMRP zone
+  // distribution, region performance, heatmap DOS), each paired with its own
+  // insight so the deck carries the full module, not just one chart.
+  const ddmrpChartRef = useRef<HTMLDivElement>(null);
+  const regionChartRef = useRef<HTMLDivElement>(null);
+  const heatmapChartRef = useRef<HTMLDivElement>(null);
 
   const handleSaveToGlobal = async () => {
     if (!results) {
@@ -329,6 +337,68 @@ export default function ControlTowerPage() {
     toast.success('Control Tower report exported!');
   };
 
+  // PPTX slide builder — snapshots every chart in the module (DDMRP zone
+  // distribution, region performance, heatmap DOS), each paired with its own
+  // text insight built from results.kpi / filtered data / weekly_actions
+  // already computed above, so the deck always reflects the active
+  // region/zone/scenario filters. Tables are intentionally excluded. Passed
+  // to <ExportHtmlButton pptxSlides=.../> below so the single Export button
+  // downloads HTML(+Excel) and this .pptx deck together.
+  const buildPptxSlides = (): PptxSlideSpec[] => {
+    if (!results) return [];
+
+    const scenarioTitle = SCENARIOS.find(s => s.id === activeScenario)?.title || 'Normal';
+    const filterLabel = [
+      !selectedRegion.includes('All') ? `Region: ${selectedRegion.join(', ')}` : null,
+      !selectedZone.includes('All') ? `Zone: ${selectedZone.join(', ')}` : null,
+      `Skenario: ${scenarioTitle}`,
+    ].filter(Boolean).join(' | ');
+
+    const redBranches = filtered.filter((b: any) => b.zone === 'RED');
+
+    const ddmrpInsight = (results.ddmrp_distribution || []).map((d: any) => {
+      const pct = results.kpi?.total_branches > 0 ? Math.round((d.count / results.kpi.total_branches) * 100) : 0;
+      return `Zona ${d.zone}: ${d.count} cabang (${pct}% dari total ${results.kpi?.total_branches || 0} cabang).`;
+    }).join('\n');
+
+    const sortedRegions = [...(results.region_summary || [])].sort((a: any, b: any) => b.health_score - a.health_score);
+    const topRegion = sortedRegions[0];
+    const bottomRegion = sortedRegions[sortedRegions.length - 1];
+    const regionInsight = [
+      topRegion ? `Wilayah dengan Health Score tertinggi: ${topRegion.region} (${topRegion.health_score}%, In-Stock ${topRegion.avg_in_stock}%, OTIF ${topRegion.avg_otif}%).` : null,
+      bottomRegion && bottomRegion !== topRegion ? `Wilayah dengan Health Score terendah: ${bottomRegion.region} (${bottomRegion.health_score}%) — prioritas perhatian.` : null,
+      `Rata-rata nasional: In-Stock ${results.kpi.avg_in_stock}% | OTIF ${results.kpi.avg_otif}% | Health Score ${results.kpi.avg_health}%.`,
+    ].filter(Boolean).join('\n');
+
+    const heatmapInsight = [
+      `Avg Health Score: ${results.kpi.avg_health}% | Avg In-Stock: ${results.kpi.avg_in_stock}% | Avg OTIF: ${results.kpi.avg_otif}% | Avg Days of Supply: ${results.kpi.avg_dos} hari.`,
+      `${results.kpi.critical_count} dari ${results.kpi.total_branches} cabang berstatus CRITICAL (Zone RED) pada filter saat ini.`,
+      redBranches.length > 0
+        ? `Cabang paling kritis: ${redBranches.map((b: any) => `${b.cabang} (${b.days_of_supply} hari, Health ${b.health_score}%)`).join('; ')}.`
+        : null,
+      ...(results.weekly_actions || []).slice(0, 3).map((a: string) => `Rekomendasi: ${a}`),
+    ].filter(Boolean).join('\n');
+
+    const candidateSlides: Array<PptxSlideSpec | null> = [
+      ddmrpChartRef.current ? {
+        chartElement: ddmrpChartRef.current,
+        insightText: ddmrpInsight,
+        slideTitle: `SCM Control Tower - Distribusi Zona DDMRP (${filterLabel})`,
+      } : null,
+      regionChartRef.current ? {
+        chartElement: regionChartRef.current,
+        insightText: regionInsight,
+        slideTitle: `SCM Control Tower - Performa per Wilayah (${filterLabel})`,
+      } : null,
+      heatmapChartRef.current ? {
+        chartElement: heatmapChartRef.current,
+        insightText: heatmapInsight,
+        slideTitle: `SCM Control Tower - Heatmap Days of Supply (${filterLabel})`,
+      } : null,
+    ];
+    return candidateSlides.filter((s): s is PptxSlideSpec => s !== null);
+  };
+
   // ── Offline HTML export config: sources from the same filtered
   // (region/zone/scenario-adjusted) data that drives the on-screen
   // tables/chart, so the exported HTML matches what's visible on screen. ──
@@ -390,14 +460,16 @@ export default function ControlTowerPage() {
     ],
   } : undefined;
 
-  // ── Dual-export (HTML + Excel raw data terfilter cabang) wiring ──
+  // ── Dual-export (HTML + Excel raw data terfilter Region/Zone) wiring ──
   // Halaman ini memfilter tampilan per Region/Zone (bukan per Cabang), tapi
   // tiap baris tetap punya nama cabang sendiri -- jadi filter cabang untuk
   // Excel diturunkan dari cabang-cabang yang lolos filter Region/Zone yang
-  // sedang aktif (`filtered`), sementara raw source (`results.branches`)
-  // tetap dikirim utuh supaya backend yang menegakkan ulang filternya.
+  // sedang aktif (`filtered`). `filtered` (bukan `results.branches` mentah)
+  // juga dipakai sebagai raw source supaya nilai skenario yang sedang aktif
+  // (otif_score/in_stock_rate/health_score/zone hasil simulasi) ikut cocok
+  // dengan yang tampil di layar, bukan angka asli sebelum skenario.
   const dualExportCabang = Array.from(new Set<string>(filtered.map((b: any) => b.cabang)));
-  const dualExportRawRows = results?.branches;
+  const dualExportRawRows = filtered.length > 0 ? filtered : undefined;
 
   return (
     <div id="export-container" className="space-y-8 max-w-[1550px] mx-auto pb-16 animate-in fade-in duration-500 text-foreground">
@@ -420,8 +492,16 @@ export default function ControlTowerPage() {
                   cabang={dualExportCabang}
                   rawRows={dualExportRawRows}
                   cabangField="cabang"
+                  pptxSlides={buildPptxSlides}
+                  pptxModuleName="Control_Tower"
                 />
-              : <ExportHtmlButton elementId="export-container" moduleName="SCM_Control_Tower" processedAt={results?.processed_at} />}
+              : <ExportHtmlButton
+                  elementId="export-container"
+                  moduleName="SCM_Control_Tower"
+                  processedAt={results?.processed_at}
+                  pptxSlides={buildPptxSlides}
+                  pptxModuleName="Control_Tower"
+                />}
             <button
               onClick={() => setShowHowTo(!showHowTo)}
               className="no-export min-h-[44px] w-full sm:w-auto px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-xl text-xs sm:text-sm font-semibold transition-colors flex items-center justify-center gap-2"
@@ -608,7 +688,7 @@ export default function ControlTowerPage() {
           <div className="grid lg:grid-cols-3 gap-6">
             <GlassCard className="lg:col-span-1">
               <h3 className="text-sm font-bold text-foreground mb-4 uppercase tracking-wide">Distribusi Zona DDMRP</h3>
-              <div className="space-y-3">
+              <div ref={ddmrpChartRef} className="space-y-3">
                 {(results.ddmrp_distribution || []).map((d: any) => {
                   const pct = results.kpi?.total_branches > 0 ? (d.count / results.kpi.total_branches * 100) : 0;
                   return (
@@ -632,7 +712,7 @@ export default function ControlTowerPage() {
             {/* Region Performance */}
             <GlassCard className="lg:col-span-2">
               <h3 className="text-sm font-bold text-foreground mb-4 uppercase tracking-wide">Performa per Wilayah</h3>
-              <div className="h-[280px]">
+              <div ref={regionChartRef} className="h-[280px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={results.region_summary || []} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
@@ -651,41 +731,45 @@ export default function ControlTowerPage() {
 
           {/* Heatmap — Stok Indonesia */}
           <GlassCard>
-            <h3 className="text-sm font-bold text-foreground mb-4 uppercase tracking-wide">
-              Heatmap Stok Indonesia — Days of Supply per Cabang
-            </h3>
-            <div className="h-[500px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={filtered} layout="vertical" margin={{ top: 10, right: 20, left: 90, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
-                  <XAxis type="number" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} tickLine={false} axisLine={false} unit=" hari" />
-                  <YAxis type="category" dataKey="cabang" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} tickLine={false} axisLine={false} width={85} />
-                  <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--popover))', borderColor: 'hsl(var(--border))', color: 'hsl(var(--popover-foreground))' }}
-                    formatter={(value: any) => [`${value} hari`, 'Days of Supply']}
-                    labelFormatter={(label: any) => {
-                      const b = filtered.find((x: any) => x.cabang === label);
-                      return b ? `${label} (${b.region}) — ${b.zone_label}` : String(label);
-                    }} />
-                  <Bar dataKey="days_of_supply" name="Days of Supply" radius={[0, 4, 4, 0]}>
-                    {filtered.map((entry: any, idx: number) => (
-                      <Cell key={idx} fill={ZONE_COLORS[entry.zone] || '#888'} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <h3 className="text-sm font-bold text-foreground uppercase tracking-wide">
+                Heatmap Stok Indonesia — Days of Supply per Cabang
+              </h3>
             </div>
-            <div className="flex justify-center gap-6 mt-4">
-              {[
-                { label: 'Stockout Risk (<3 hari)', color: 'hsl(var(--destructive))' },
-                { label: 'Warning (3-7 hari)', color: 'hsl(var(--chart-4))' },
-                { label: 'Safe (7-30 hari)', color: 'hsl(var(--accent))' },
-                { label: 'Overstock (>30 hari)', color: 'hsl(var(--secondary))' },
-              ].map((l) => (
-                <div key={l.label} className="flex items-center gap-1.5">
-                  <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: l.color }} />
-                  <span className="text-xs text-muted-foreground">{l.label}</span>
-                </div>
-              ))}
+            <div ref={heatmapChartRef}>
+              <div className="h-[500px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={filtered} layout="vertical" margin={{ top: 10, right: 20, left: 90, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
+                    <XAxis type="number" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} tickLine={false} axisLine={false} unit=" hari" />
+                    <YAxis type="category" dataKey="cabang" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} tickLine={false} axisLine={false} width={85} />
+                    <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--popover))', borderColor: 'hsl(var(--border))', color: 'hsl(var(--popover-foreground))' }}
+                      formatter={(value: any) => [`${value} hari`, 'Days of Supply']}
+                      labelFormatter={(label: any) => {
+                        const b = filtered.find((x: any) => x.cabang === label);
+                        return b ? `${label} (${b.region}) — ${b.zone_label}` : String(label);
+                      }} />
+                    <Bar dataKey="days_of_supply" name="Days of Supply" radius={[0, 4, 4, 0]}>
+                      {filtered.map((entry: any, idx: number) => (
+                        <Cell key={idx} fill={ZONE_COLORS[entry.zone] || '#888'} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="flex justify-center gap-6 mt-4">
+                {[
+                  { label: 'Stockout Risk (<3 hari)', color: 'hsl(var(--destructive))' },
+                  { label: 'Warning (3-7 hari)', color: 'hsl(var(--chart-4))' },
+                  { label: 'Safe (7-30 hari)', color: 'hsl(var(--accent))' },
+                  { label: 'Overstock (>30 hari)', color: 'hsl(var(--secondary))' },
+                ].map((l) => (
+                  <div key={l.label} className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: l.color }} />
+                    <span className="text-xs text-muted-foreground">{l.label}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </GlassCard>
 

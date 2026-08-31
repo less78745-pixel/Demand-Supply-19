@@ -346,6 +346,14 @@ export interface DualExportPayload {
   dataKey?: string;
   /** Override nama kolom cabang pada rows, kalau auto-detect di backend tidak cocok. */
   cabangField?: string;
+  /**
+   * Kalau true, backend mengembalikan raw bytes .xlsx saja (tanpa dibungkus
+   * .zip). Dipakai saat client akan membundel file lain (mis. PPTX) dan ingin
+   * menyusun .zip final-nya sendiri dari data mentah, bukan unzip-lalu-rezip
+   * .zip yang backend hasilkan (JSZip bisa gagal re-generate zip yang di-load
+   * dari sumber lain — lihat catatan di ExportHtmlButton.tsx).
+   */
+  excelOnly?: boolean;
 }
 
 export const exportDualFormat = async (payload: DualExportPayload): Promise<Blob> => {
@@ -361,6 +369,7 @@ export const exportDualFormat = async (payload: DualExportPayload): Promise<Blob
       rows: payload.rows,
       data_key: payload.dataKey,
       cabang_field: payload.cabangField,
+      excel_only: payload.excelOnly ?? false,
     },
     { responseType: 'blob' }
   );

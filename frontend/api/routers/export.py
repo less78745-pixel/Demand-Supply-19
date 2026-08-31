@@ -44,6 +44,15 @@ class DualExportRequest(BaseModel):
     data_key: Optional[str] = None
     # Opsional: override nama kolom cabang di rows (kalau tidak diisi, auto-detect).
     cabang_field: Optional[str] = None
+    # Opsional: kalau True, backend TIDAK membungkus HTML+Excel jadi .zip -- hanya
+    # mengembalikan raw bytes .xlsx. Dipakai saat client juga akan membundel PPTX:
+    # client menyusun SATU .zip sendiri dari html_content (string), xlsx (bytes ini),
+    # dan pptx (blob) sekaligus, supaya tidak perlu mem-parse ulang zip yang sudah
+    # jadi (JSZip mem-verifikasi ulang ukuran hasil dekompresi tiap entry saat
+    # generate ulang, dan itu bisa gagal -- "uncompressed data size mismatch" --
+    # untuk entry yang cuma perlu di-passthrough, jadi lebih aman membangun sekali
+    # dari data mentah daripada unzip-lalu-rezip).
+    excel_only: bool = False
 
 
 def _sanitize_filename(name: str) -> str:
@@ -183,6 +192,15 @@ def export_dual(payload: DualExportRequest, db: Session = Depends(get_db)):
 
         excel_bytes = _build_excel_bytes(filtered_rows)
         base_filename = _sanitize_filename(payload.base_filename)
+
+        if payload.excel_only:
+            excel_buffer = io.BytesIO(excel_bytes)
+            headers = {"Content-Disposition": f'attachment; filename="{base_filename}.xlsx"'}
+            return StreamingResponse(
+                excel_buffer,
+                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                headers=headers,
+            )
 
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:

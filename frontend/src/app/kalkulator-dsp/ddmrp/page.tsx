@@ -407,7 +407,7 @@ export default function DDMRPPage() {
                   moduleName="DDMRP_Buffer"
                   processedAt={results?.processed_at}
                   cabang={filterCabang}
-                  rawRows={skuRowsAll}
+                  rawRows={filteredSkuRows}
                   cabangField="cabang"
                 />
               : <ExportHtmlButton elementId="export-container" moduleName="DDMRP_Buffer" processedAt={results?.processed_at} />}

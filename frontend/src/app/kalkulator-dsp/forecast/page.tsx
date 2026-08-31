@@ -1,7 +1,7 @@
 "use client";
 import LZString from 'lz-string';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { FileUploader } from '@/components/ui/FileUploader';
@@ -12,6 +12,7 @@ import { MultiSelect } from '@/components/ui/MultiSelect';
 import { TimestampBadge } from '@/components/ui/TimestampBadge';
 import toast from 'react-hot-toast';
 import { getStandardFilename } from '@/utils/export';
+import { PptxSlideSpec } from '@/utils/exportPptx';
 import { supabase } from '@/lib/supabase';
 import { ExportHtmlButton } from '@/components/ui/ExportHtmlButton';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -169,6 +170,12 @@ export default function ForecastPage() {
   const [selectedCategory, setSelectedCategory] = useState<string[]>(["All"]);
   const [selectedMethod, setSelectedMethod] = useState<string>("");
 
+  // "Export to PowerPoint" POC target — the "Actual vs Forecast" chart card
+  // (module's headline visualization). html2canvas snapshots exactly this
+  // node, so the export always matches whatever scenario/filters/method are
+  // currently applied.
+  const forecastChartRef = useRef<HTMLDivElement>(null);
+
   const handleSaveToGlobal = async () => {
     if (!results) {
       toast.error("Tidak ada data untuk disimpan.");
@@ -309,6 +316,37 @@ export default function ForecastPage() {
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  // Slide manifest for the merged Export button (HTML + Excel + PPTX in one
+  // click, via ExportHtmlButton's `pptxSlides` prop) — builds live off
+  // whatever scenario/filters/results are on screen right now.
+  const buildPptxSlides = (): PptxSlideSpec[] => {
+    if (!forecastChartRef.current) return [];
+
+    const scenario = SCENARIOS.find(s => s.id === activeScenario);
+    const filterLabel = [
+      !selectedCabang.includes('All') ? `Cabang: ${selectedCabang.join(', ')}` : null,
+      !selectedCategory.includes('All') ? `Kategori: ${selectedCategory.join(', ')}` : null,
+      selectedMethod ? `Metode: ${selectedMethod}` : null,
+    ].filter(Boolean).join(' | ');
+
+    const slideTitle = filterLabel
+      ? `Sales Forecasting - Actual vs Forecast (${scenario?.title || activeScenario}) - ${filterLabel}`
+      : `Sales Forecasting - Actual vs Forecast (${scenario?.title || activeScenario})`;
+
+    const insightLines = [
+      `Model dominan (Best Model): ${results?.best_model || 'N/A'}.`,
+      `Rata-rata Reorder Point (ROP): ${Math.round(results?.inventory_kpis?.avg_reorder_point || 0).toLocaleString('id-ID')}.`,
+      `Rata-rata Safety Stock: ${Math.round(results?.inventory_kpis?.avg_safety_stock || 0).toLocaleString('id-ID')}.`,
+      `Total datapoint pada filter saat ini: ${filteredData.length.toLocaleString('id-ID')}.`,
+      scenario ? `Skenario aktif: ${scenario.desc}` : null,
+      ...(results?.ai_insights || []),
+    ].filter(Boolean).join('\n');
+
+    return [
+      { chartElement: forecastChartRef.current, insightText: insightLines, slideTitle },
+    ];
   };
 
   const handleExport = async () => {
@@ -610,8 +648,16 @@ export default function ForecastPage() {
                   resultId={results?.result_id}
                   dataKey="forecast_data"
                   cabangField="cabang"
+                  pptxSlides={buildPptxSlides}
+                  pptxModuleName="Sales_Forecasting_Actual_vs_Forecast"
                 />
-              : <ExportHtmlButton elementId="export-container" moduleName="Demand_Forecast_ML" processedAt={results?.processed_at} />}
+              : <ExportHtmlButton
+                  elementId="export-container"
+                  moduleName="Demand_Forecast_ML"
+                  processedAt={results?.processed_at}
+                  pptxSlides={buildPptxSlides}
+                  pptxModuleName="Sales_Forecasting_Actual_vs_Forecast"
+                />}
             <button
               onClick={() => setShowHowTo(!showHowTo)}
               className="no-export min-h-[44px] w-full sm:w-auto px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-xl text-xs sm:text-sm font-semibold transition-colors flex items-center justify-center gap-2"
@@ -848,13 +894,15 @@ export default function ForecastPage() {
                 </button>
               </div>
             </div>
-            
-            {filteredData.length > 0
-              ? <ForecastChart data={filteredData} activeMethod={selectedMethod} />
-              : <div className="h-40 flex items-center justify-center text-muted-foreground text-sm font-medium">
-                  Tidak ada data untuk filter yang dipilih.
-                </div>
-            }
+
+            <div ref={forecastChartRef}>
+              {filteredData.length > 0
+                ? <ForecastChart data={filteredData} activeMethod={selectedMethod} />
+                : <div className="h-40 flex items-center justify-center text-muted-foreground text-sm font-medium">
+                    Tidak ada data untuk filter yang dipilih.
+                  </div>
+              }
+            </div>
           </GlassCard>
 
           {/* Model Comparison Table rendering based on current selection */}

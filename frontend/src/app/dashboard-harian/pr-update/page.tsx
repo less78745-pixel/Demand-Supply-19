@@ -2,7 +2,7 @@
 "use client";
 import LZString from 'lz-string';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { FileUploader } from '@/components/ui/FileUploader';
 import { KPICard } from '@/components/ui/KPICard';
@@ -25,6 +25,7 @@ import { getStandardFilename } from '@/utils/export';
 import { ExportHtmlButton } from '@/components/ui/ExportHtmlButton';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { ModuleExportConfig } from '@/utils/offlineExport';
+import type { PptxSlideSpec } from '@/utils/exportPptx';
 
 // Validated categorical palette (dataviz skill, dark-surface steps) - chosen for
 // max adjacent contrast so stacked-bar categories stay distinguishable, unlike
@@ -596,6 +597,22 @@ export default function PRUpdatePage() {
   const [activeTab, setActiveTab] = useState<'pr_update' | 'lead_time'>('pr_update');
   const [activeScenario, setActiveScenario] = useState<ScenarioType>('current');
   const [selectedCabangForChart, setSelectedCabangForChart] = useState<string>('All');
+
+  // PPTX export targets on the PR Update tab: the main Distribusi Status
+  // Compile chart plus the two mini "Dokumen per Status Compile" / "Sebaran
+  // ETA" cards, so the full-deck export (via the header ExportHtmlButton's
+  // `pptxSlides` prop) carries every chart on this tab, not just the big
+  // one. SnapDOM snapshots exactly these nodes, so the export always matches
+  // whatever chartViewMode/filter is on screen right now.
+  const prUpdateChartRef = useRef<HTMLDivElement>(null);
+  const docStatusCardRef = useRef<HTMLDivElement>(null);
+  const docEtaCardRef = useRef<HTMLDivElement>(null);
+
+  // Lead Time tab charts — captured together into one multi-slide deck since
+  // both live under the same 'lead_time' tab and are only in the DOM while
+  // that tab is active.
+  const leadTimeTrendChartRef = useRef<HTMLDivElement>(null);
+  const leadTimeBranchChartRef = useRef<HTMLDivElement>(null);
 
   // Filter states
   const [selectedCabang, setSelectedCabang] = useState<string[]>(['All']);
@@ -1746,16 +1763,167 @@ export default function PRUpdatePage() {
         ],
   } : undefined;
 
-  // ── Dual-export (HTML + Excel raw data terfilter cabang) wiring ──
-  // Excel raw source SENGAJA diambil dari data mentah (sebelum filter
-  // category/eta/status, hanya cabang) - bukan dari `normalizedFiltered`/
-  // `leadTimeRawNormalized` yang dipakai HTML export - supaya Excel berisi
-  // seluruh record cabang terpilih apa adanya, dan filter cabang benar-benar
-  // ditegakkan ulang di backend (bukan sekadar meneruskan data yang sudah
-  // difilter di client).
+  // ── Dual-export (HTML + Excel raw data terfilter) wiring ──
+  // Excel raw source diambil dari `filtered` (tab PR Update) / `leadTimeData.raw`
+  // (tab Lead Time) - bukan data mentah - supaya Excel benar-benar mencerminkan
+  // SEMUA filter yang aktif di layar saat ini (cabang, category/eta/status untuk
+  // tab PR Update; region/cabang/month ETA untuk tab Lead Time), bukan cuma
+  // cabang. Keduanya tetap punya bentuk kolom yang sama dengan raw data (spread
+  // `{...row}` / hasil `.filter()` murni tanpa reshape), jadi tetap valid
+  // sebagai sumber Excel "raw data".
   const dualExportCabang = activeTab === 'lead_time' ? selectedLtCabang : selectedCabang;
-  const dualExportRawRows = activeTab === 'lead_time' ? (leadTimeRawAll ?? undefined) : (parsed?.data ?? undefined);
+  const dualExportRawRows = activeTab === 'lead_time'
+    ? (leadTimeData?.raw && leadTimeData.raw.length > 0 ? leadTimeData.raw : undefined)
+    : (filtered.length > 0 ? filtered : undefined);
   const dualExportCabangField = activeTab === 'lead_time' ? 'BRANCH RCPT BRANCH' : colCabang;
+
+  // PPTX slide builder for the PR Update tab — a 5-slide deck, in the exact
+  // order requested: (1) Dokumen per Status Compile card, (2) Sebaran ETA
+  // card, (3) the big Distribusi Status Compile & Persebaran Category chart,
+  // (4) Insight PO Overdue as a text-only conclusion (no chart/table image),
+  // (5) Tabel Detail PR & Live Tracking Container as a text-only summary
+  // (raw rows stay out of the deck, Excel-only). Called from the single
+  // header `ExportHtmlButton`'s `pptxSlides` prop, which also owns the
+  // toast/loading state and the actual `generateMultiSlidePptx` call.
+  const buildPrUpdateSlides = (): PptxSlideSpec[] => {
+    const chartModeLabel = chartViewMode === 'eta' ? 'per Week ETA' : chartViewMode === 'cabang' ? 'per Cabang' : 'Jumlah Container per Cabang';
+
+    const filterLabel = [
+      !selectedCabang.includes('All') ? `Cabang: ${selectedCabang.join(', ')}` : null,
+      !selectedCategory.includes('All') ? `Kategori: ${selectedCategory.join(', ')}` : null,
+      !selectedEta.includes('All') ? `Week ETA: ${selectedEta.join(', ')}` : null,
+      !selectedStatusCompile.includes('All') ? `Status: ${selectedStatusCompile.join(', ')}` : null,
+    ].filter(Boolean).join(' | ');
+
+    const topBranchLine = (label: string, list: { branch: string; count: number }[]) =>
+      list.length > 0 ? `Top cabang overdue ${label}: ${list.map(b => `${b.branch} (${b.count})`).join(', ')}.` : null;
+
+    const slides: PptxSlideSpec[] = [];
+
+    if (docStatusCardRef.current && docCountByStatus.length > 0) {
+      slides.push({
+        chartElement: docStatusCardRef.current,
+        slideTitle: 'PR Update - Dokumen per Status Compile (Distinct)',
+        insightText: [
+          `Total dokumen (distinct PO/PR/Container): ${distinctPoCountFiltered.toLocaleString('id-ID')} dokumen.`,
+          `Status terbanyak: ${docCountByStatus[0].status} (${docCountByStatus[0].count.toLocaleString('id-ID')} dokumen).`,
+          `Jumlah status compile berbeda yang terdeteksi: ${docCountByStatus.length}.`,
+        ].join('\n'),
+      });
+    }
+
+    if (docEtaCardRef.current && docCountByEta.length > 0) {
+      const totalEtaDocs = docCountByEta.reduce((s, d) => s + d.count, 0);
+      slides.push({
+        chartElement: docEtaCardRef.current,
+        slideTitle: 'PR Update - Sebaran ETA (Dokumen per Week ETA)',
+        insightText: [
+          `Total dokumen dengan Week ETA tercatat: ${totalEtaDocs.toLocaleString('id-ID')} dokumen dari ${docCountByEta.length} periode ETA.`,
+          `Periode ETA dengan dokumen terbanyak: ${[...docCountByEta].sort((a, b) => b.count - a.count)[0].eta} (${[...docCountByEta].sort((a, b) => b.count - a.count)[0].count.toLocaleString('id-ID')} dokumen).`,
+        ].join('\n'),
+      });
+    }
+
+    if (prUpdateChartRef.current) {
+      slides.push({
+        chartElement: prUpdateChartRef.current,
+        slideTitle: filterLabel
+          ? `PR Update - Distribusi Status Compile (${chartModeLabel}) - ${filterLabel}`
+          : `PR Update - Distribusi Status Compile (${chartModeLabel})`,
+        insightText: [
+          `Total dokumen PO/PR/Container overdue (ETA sudah lewat): ${overdueDocCounts.total} dokumen.`,
+          `SPJM: ${statusOverview.spjm.docs} dokumen (Qty ${statusOverview.spjm.qty.toLocaleString('id-ID')}), ${overdueDocCounts.spjm} di antaranya overdue.`,
+          `Hold Delivery: ${statusOverview.hold.docs} dokumen (Qty ${statusOverview.hold.qty.toLocaleString('id-ID')}), ${overdueDocCounts.hold} di antaranya overdue.`,
+          `On Vessel: ${statusOverview.vessel.docs} dokumen (Qty ${statusOverview.vessel.qty.toLocaleString('id-ID')}), ${overdueDocCounts.vessel} di antaranya overdue.`,
+        ].join('\n'),
+      });
+    }
+
+    slides.push({
+      slideTitle: 'PR Update - Insight PO Overdue: SPJM, Hold Delivery & On Vessel',
+      insightText: [
+        `Total dokumen PO/PR/Container overdue (ETA sudah lewat): ${overdueDocCounts.total} dokumen.`,
+        `SPJM: ${overdueDocCounts.spjm} dokumen overdue dari total ${statusOverview.spjm.docs} dokumen (Qty ${statusOverview.spjm.qty.toLocaleString('id-ID')}).`,
+        `Hold Delivery: ${overdueDocCounts.hold} dokumen overdue dari total ${statusOverview.hold.docs} dokumen (Qty ${statusOverview.hold.qty.toLocaleString('id-ID')}).`,
+        `On Vessel: ${overdueDocCounts.vessel} dokumen overdue dari total ${statusOverview.vessel.docs} dokumen (Qty ${statusOverview.vessel.qty.toLocaleString('id-ID')}).`,
+        topBranchLine('SPJM', topOverdueBranchesByStatus.spjm),
+        topBranchLine('Hold Delivery', topOverdueBranchesByStatus.hold),
+        topBranchLine('On Vessel', topOverdueBranchesByStatus.vessel),
+        'Rekomendasi: prioritaskan follow-up ke cabang dengan jumlah overdue terbanyak untuk tiap status, terutama Hold Delivery yang berisiko langsung ke keterlambatan gudang.',
+      ].filter(Boolean).join('\n'),
+    });
+
+    const distinctContainers = colContainer ? new Set(filtered.map(r => String(r[colContainer] || '').trim()).filter(Boolean)).size : 0;
+    const distinctCarriers = colCarrier ? new Set(filtered.map(r => String(r[colCarrier] || '').trim()).filter(Boolean)).size : 0;
+    slides.push({
+      slideTitle: 'PR Update - Tabel Detail PR & Live Tracking Container',
+      insightText: [
+        `Total baris tracking pada filter aktif: ${filtered.length.toLocaleString('id-ID')} baris, ${displayedDetailRows.length.toLocaleString('id-ID')} baris setelah filter kolom Excel-style.`,
+        `Total dokumen distinct (PO/PR/Container): ${distinctPoCountFiltered.toLocaleString('id-ID')} dokumen.`,
+        distinctContainers > 0 ? `Jumlah nomor container unik yang terlacak: ${distinctContainers.toLocaleString('id-ID')}.` : null,
+        distinctCarriers > 0 ? `Jumlah shipping line/carrier unik: ${distinctCarriers.toLocaleString('id-ID')}.` : null,
+        'Rekomendasi: gunakan tabel detail di aplikasi untuk drill-down per PO/container, terutama pada status Hold Delivery dan On Vessel yang overdue.',
+      ].filter(Boolean).join('\n'),
+    });
+
+    return slides;
+  };
+
+  // PPTX slide builder for the Lead Time tab — a 2-slide deck covering both
+  // charts on this tab (trend + branch comparison), each paired with an
+  // insight built from the same leadTimeData numbers shown in the KPI cards
+  // and chart titles above. Raw-data tables (Top 10 Cabang) are excluded.
+  const buildLeadTimeSlides = (): PptxSlideSpec[] => {
+    if (!leadTimeData) return [];
+
+    const filterLabel = [
+      !selectedLtRegion.includes('All') ? `Region: ${selectedLtRegion.join(', ')}` : null,
+      !selectedLtCabang.includes('All') ? `Cabang: ${selectedLtCabang.join(', ')}` : null,
+      !selectedLtMonth.includes('All') ? `Month ETA: ${selectedLtMonth.join(', ')}` : null,
+    ].filter(Boolean).join(' | ');
+
+    const branchData = leadTimeData.branchData as { branch: string; avgDays: number }[];
+    const slowest = branchData.slice(0, 3);
+    const fastest = [...branchData].reverse().slice(0, 3);
+
+    const baseInsight = [
+      `Avg Total Days (SPPB to Bongkar): ${leadTimeData.avgTotalDays} hari.`,
+      `Avg Days SPPB to ETA: ${leadTimeData.avgSppbEtaDays} hari.`,
+      `Avg Days ETA to Bongkar: ${leadTimeData.avgBongkarDays} hari.`,
+    ];
+
+    const slides: PptxSlideSpec[] = [];
+
+    if (leadTimeTrendChartRef.current) {
+      slides.push({
+        chartElement: leadTimeTrendChartRef.current,
+        slideTitle: filterLabel
+          ? `PR Update - Lead Time - Tren History per Bulan - ${filterLabel}`
+          : 'PR Update - Lead Time - Tren History per Bulan',
+        insightText: [
+          ...baseInsight,
+          'Rekomendasi: waspadai bulan dengan Avg Total Days meningkat tajam — indikasi bottleneck di proses SPPB-ETA atau ETA-Bongkar.',
+        ].join('\n'),
+      });
+    }
+
+    if (leadTimeBranchChartRef.current) {
+      slides.push({
+        chartElement: leadTimeBranchChartRef.current,
+        slideTitle: filterLabel
+          ? `PR Update - Lead Time - Perbandingan Cabang - ${filterLabel}`
+          : 'PR Update - Lead Time - Perbandingan Cabang',
+        insightText: [
+          ...baseInsight,
+          slowest.length > 0 ? `Cabang dengan Total Days tertinggi (terlama): ${slowest.map(b => `${b.branch} (${b.avgDays} hari)`).join(', ')}.` : null,
+          fastest.length > 0 ? `Cabang dengan Total Days terendah (tercepat): ${fastest.map(b => `${b.branch} (${b.avgDays} hari)`).join(', ')}.` : null,
+          'Rekomendasi: gunakan cabang tercepat sebagai benchmark proses untuk cabang dengan Total Days terlama.',
+        ].filter(Boolean).join('\n'),
+      });
+    }
+
+    return slides;
+  };
 
   return (
     <div id="export-container" className="space-y-8 pb-16 min-h-screen animate-fade-in text-foreground">
@@ -1777,8 +1945,16 @@ export default function PRUpdatePage() {
                   cabang={dualExportCabang}
                   rawRows={dualExportRawRows}
                   cabangField={dualExportCabangField}
+                  pptxSlides={() => activeTab === 'lead_time' ? buildLeadTimeSlides() : buildPrUpdateSlides()}
+                  pptxModuleName={activeTab === 'lead_time' ? 'PR_Update_Lead_Time' : 'PR_Update_Distribusi_Status'}
                 />
-              : <ExportHtmlButton elementId="export-container" moduleName="PR_Update_Lead_Time" processedAt={parsed?.processed_at} />}
+              : <ExportHtmlButton
+                  elementId="export-container"
+                  moduleName="PR_Update_Lead_Time"
+                  processedAt={parsed?.processed_at}
+                  pptxSlides={() => activeTab === 'lead_time' ? buildLeadTimeSlides() : buildPrUpdateSlides()}
+                  pptxModuleName={activeTab === 'lead_time' ? 'PR_Update_Lead_Time' : 'PR_Update_Distribusi_Status'}
+                />}
             <button
               onClick={() => setShowHowTo(!showHowTo)}
               className="no-export min-h-[44px] w-full sm:w-auto px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-xl text-xs sm:text-sm font-semibold transition-colors flex items-center justify-center gap-2"
@@ -1968,39 +2144,43 @@ export default function PRUpdatePage() {
         </GlassCard>
 
         <GlassCard className="p-5 border-blue-500/20 bg-white shadow-md">
-          <h4 className="text-xs font-extrabold uppercase tracking-wider text-blue-700 flex items-center gap-1.5 mb-3">
-            <FileBarChart className="w-4 h-4" /> Dokumen per Status Compile (Distinct)
-          </h4>
-          {docCountByStatus.length === 0 ? (
-            <p className="text-xs text-slate-500">Tidak ada data status untuk filter aktif.</p>
-          ) : (
-            <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
-              {docCountByStatus.map((s) => (
-                <div key={s.status} className="flex items-center justify-between gap-2 text-xs">
-                  <span className="truncate font-semibold text-slate-800" title={s.status}>{s.status}</span>
-                  <span className="font-mono font-bold text-blue-700 shrink-0">{s.count.toLocaleString('id-ID')}</span>
-                </div>
-              ))}
-            </div>
-          )}
+          <div ref={docStatusCardRef} className="bg-white">
+            <h4 className="text-xs font-extrabold uppercase tracking-wider text-blue-700 flex items-center gap-1.5 mb-3">
+              <FileBarChart className="w-4 h-4" /> Dokumen per Status Compile (Distinct)
+            </h4>
+            {docCountByStatus.length === 0 ? (
+              <p className="text-xs text-slate-500">Tidak ada data status untuk filter aktif.</p>
+            ) : (
+              <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                {docCountByStatus.map((s) => (
+                  <div key={s.status} className="flex items-center justify-between gap-2 text-xs">
+                    <span className="truncate font-semibold text-slate-800" title={s.status}>{s.status}</span>
+                    <span className="font-mono font-bold text-blue-700 shrink-0">{s.count.toLocaleString('id-ID')}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </GlassCard>
 
         <GlassCard className="p-5 border-emerald-500/20 bg-white shadow-md">
-          <h4 className="text-xs font-extrabold uppercase tracking-wider text-emerald-700 flex items-center gap-1.5 mb-3">
-            <Calendar className="w-4 h-4" /> Sebaran ETA (Dokumen per Week ETA)
-          </h4>
-          {docCountByEta.length === 0 ? (
-            <p className="text-xs text-slate-500">Tidak ada data Week ETA untuk filter aktif.</p>
-          ) : (
-            <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
-              {docCountByEta.map((e) => (
-                <div key={e.eta} className="flex items-center justify-between gap-2 text-xs">
-                  <span className="truncate font-semibold text-slate-800" title={e.eta}>{e.eta}</span>
-                  <span className="font-mono font-bold text-emerald-700 shrink-0">{e.count.toLocaleString('id-ID')}</span>
-                </div>
-              ))}
-            </div>
-          )}
+          <div ref={docEtaCardRef} className="bg-white">
+            <h4 className="text-xs font-extrabold uppercase tracking-wider text-emerald-700 flex items-center gap-1.5 mb-3">
+              <Calendar className="w-4 h-4" /> Sebaran ETA (Dokumen per Week ETA)
+            </h4>
+            {docCountByEta.length === 0 ? (
+              <p className="text-xs text-slate-500">Tidak ada data Week ETA untuk filter aktif.</p>
+            ) : (
+              <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                {docCountByEta.map((e) => (
+                  <div key={e.eta} className="flex items-center justify-between gap-2 text-xs">
+                    <span className="truncate font-semibold text-slate-800" title={e.eta}>{e.eta}</span>
+                    <span className="font-mono font-bold text-emerald-700 shrink-0">{e.count.toLocaleString('id-ID')}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </GlassCard>
       </div>
 
@@ -2120,7 +2300,7 @@ export default function PRUpdatePage() {
             </div>
           </div>
 
-          <div className="w-full pb-4" style={{ minHeight: '520px' }}>
+          <div ref={prUpdateChartRef} className="w-full pb-4 bg-white" style={{ minHeight: '520px' }}>
             <ResponsiveContainer width="100%" height={460}>
               <BarChart data={chartViewMode === 'eta' ? chartEtaData : chartViewMode === 'container' ? chartContainerData : chartData} margin={{ top: 20, right: 60, left: 40, bottom: 60 }}>
                 <defs>
@@ -2688,8 +2868,10 @@ export default function PRUpdatePage() {
       {activeTab === 'lead_time' && leadTimeData && (
         <div className="space-y-8 animate-fade-in">
           <GlassCard className="p-6 border-slate-200 bg-white shadow-2xl">
-            <h2 className="text-xl font-black text-slate-900 flex items-center gap-2 mb-4 border-b border-slate-200 pb-3">
-              <Timer className="w-6 h-6 text-indigo-600" /> Analisa Lead Time Aktual
+            <h2 className="text-xl font-black text-slate-900 flex items-center justify-between gap-2 mb-4 border-b border-slate-200 pb-3">
+              <span className="flex items-center gap-2">
+                <Timer className="w-6 h-6 text-indigo-600" /> Analisa Lead Time Aktual
+              </span>
             </h2>
 
             {/* Filters: Region, Cabang, Month ETA */}
@@ -2755,7 +2937,7 @@ export default function PRUpdatePage() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-md">
                 <h3 className="text-sm font-bold text-slate-800 mb-4">Tren History Lead Time (per Bulan)</h3>
-                <div className="h-[300px]">
+                <div ref={leadTimeTrendChartRef} className="h-[300px] bg-white">
                   <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart data={leadTimeData.trendData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
@@ -2773,7 +2955,7 @@ export default function PRUpdatePage() {
               
               <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-md">
                 <h3 className="text-sm font-bold text-slate-800 mb-4">Perbandingan Cabang (Avg Total Days)</h3>
-                <div className="h-[300px]">
+                <div ref={leadTimeBranchChartRef} className="h-[300px] bg-white">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={leadTimeData.branchData} layout="vertical">
                       <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />

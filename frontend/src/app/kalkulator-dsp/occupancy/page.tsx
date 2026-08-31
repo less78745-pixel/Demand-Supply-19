@@ -1,12 +1,13 @@
 "use client";
 import LZString from 'lz-string';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { FileUploader } from '@/components/ui/FileUploader';
 import { KPICard } from '@/components/ui/KPICard';
 import { Activity, AlertTriangle, Info, TrendingUp, TrendingDown, AlertOctagon, Layers, Download, Sparkles, HelpCircle, FileSpreadsheet, Zap, Cloud, ArrowLeftRight } from 'lucide-react';
+import { type PptxSlideSpec } from '@/utils/exportPptx';
 import { uploadOccupancyFileAsync, downloadOccupancyTemplate, downloadOccupancyExcelFromStorage } from '@/lib/api';
 import { AsyncUploadStatus } from '@/components/ui/AsyncUploadStatus';
 import { MultiSelect } from '@/components/ui/MultiSelect';
@@ -431,6 +432,15 @@ export default function OccupancyPage() {
   const [selectedDate,     setSelectedDate]     = useState<string[]>(['All']);
   const [asyncJobId, setAsyncJobId] = useState<string | null>(null);
 
+  // Export target — the "Occupancy per Cabang per Tanggal" chart card
+  // (module's main visualization). SnapDOM snapshots exactly this node, so
+  // the PPTX export always matches whatever Cabang/Tanggal filters are
+  // currently applied.
+  const occupancyChartRef = useRef<HTMLDivElement>(null);
+  // Fitur 3: grafik tren MOS (Value) per cabang -- kedua chart di modul ini
+  // ikut diekspor ke deck PPTX (lihat buildPptxSlides).
+  const mosValueChartRef = useRef<HTMLDivElement>(null);
+
   // ── Upload handler (async: Supabase Storage -> FastAPI BackgroundTasks) ──
   // File tidak lagi dikirim langsung ke FastAPI (yang kena limit payload 4.5MB
   // Vercel), melainkan ke Supabase Storage. Hasil olahannya tetap diterima lewat
@@ -450,6 +460,156 @@ export default function OccupancyPage() {
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  // PPTX slide builder — full-deck export for this module, in the fixed
+  // order requested: (1) Hasil Analisa Occupancy & Shortage [text-only KPI
+  // summary], (2) Occupancy per Cabang per Tanggal [chart], (3) Rekomendasi
+  // TO / Transfer Order [text-only summary -- underlying section is a table,
+  // not a chart], (4) Analisa & Grafik MRP i.e. Komparasi Occupancy Mingguan
+  // terhadap Target [text-only summary -- also a table despite the "Grafik"
+  // in its heading], (5) Analisa Nilai Inventori QTY/Value [text-only
+  // summary], (6) Grafik Tren MOS (Value) per Cabang [chart]. Raw tables stay
+  // Excel-only; a table's own conclusion is fine as a text-only slide.
+  //
+  // Only builds the slide list — passed to <ExportHtmlButton pptxSlides=.../>
+  // so one click downloads HTML(+Excel) and this .pptx deck together.
+  const buildPptxSlides = (): PptxSlideSpec[] => {
+    const filterLabel = [
+      !selectedCabang.includes('All') ? `Cabang: ${selectedCabang.join(', ')}` : null,
+      !selectedDate.includes('All') ? `Tanggal: ${selectedDate.join(', ')}` : null,
+    ].filter(Boolean).join(' | ');
+    const withFilter = (base: string) => (filterLabel ? `${base} - ${filterLabel}` : `${base} - Semua Data`);
+
+    const slides: PptxSlideSpec[] = [];
+
+    // 1. Hasil Analisa Occupancy & Shortage (KPI summary -- text-only, no single chart of its own)
+    if (filteredData.length > 0) {
+      const topPeak = kpiMetrics.top3Peak[0];
+      const bottomMin = kpiMetrics.bottom3Min[0];
+      const topRisk = kpiMetrics.top5RiskCategories[0];
+      const insightLines = [
+        `Rata-rata Occupancy: ${kpiMetrics.avg}% | Peak: ${kpiMetrics.peak}% | Minimum: ${kpiMetrics.min}%.`,
+        topPeak ? `Occupancy tertinggi: ${topPeak.cabang} pada ${topPeak.date} (${topPeak.val}%).` : null,
+        bottomMin ? `Occupancy terendah: ${bottomMin.cabang} pada ${bottomMin.date} (${bottomMin.val}%).` : null,
+        `Categories at Risk (overload/shortage): ${kpiMetrics.riskCount} kejadian.`,
+        `Overstock Alerts (> 8 minggu coverage): ${kpiMetrics.overstockCount} kejadian.`,
+        topRisk ? `Kategori paling rawan: ${topRisk.category} di ${topRisk.cabang} (${topRisk.reason}).` : null,
+      ].filter(Boolean).join('\n');
+      slides.push({ insightText: insightLines, slideTitle: withFilter('Hasil Analisa Occupancy & Shortage') });
+    }
+
+    // 2. Occupancy per Cabang per Tanggal (chart)
+    if (occupancyChartRef.current) {
+      const insightLines = [
+        `Rata-rata Occupancy: ${kpiMetrics.avg}% | Peak: ${kpiMetrics.peak}% | Minimum: ${kpiMetrics.min}%.`,
+        `Cabang berisiko overload (Occupancy > 100%): ${kpiMetrics.riskCount} kejadian.`,
+        `Cabang berisiko overstock: ${kpiMetrics.overstockCount} kejadian.`,
+        'Rekomendasi: prioritaskan rebalancing stok pada cabang dengan occupancy di atas 100% dan evaluasi kapasitas tambahan bila tren peak terus naik.',
+      ].filter(Boolean).join('\n');
+      slides.push({
+        chartElement: occupancyChartRef.current,
+        insightText: insightLines,
+        slideTitle: withFilter('Occupancy per Cabang per Tanggal'),
+      });
+    }
+
+    // 3. Rekomendasi TO / Transfer Order (text-only summary -- underlying section is a table)
+    const toRows = toTableFilters.filteredData || [];
+    if (toRows.length > 0) {
+      const totalTo = toRows.reduce((sum: number, r: any) => sum + Number(r.recommended_to || 0), 0);
+      const totalShortageValue = toRows.reduce((sum: number, r: any) => sum + Number(r.shortage_value || 0), 0);
+      const byCabang = new Map<string, number>();
+      toRows.forEach((r: any) => byCabang.set(r.cabang, (byCabang.get(r.cabang) || 0) + Number(r.recommended_to || 0)));
+      const topCabang = Array.from(byCabang.entries()).sort((a, b) => b[1] - a[1])[0];
+      const insightLines = [
+        `${toRows.length.toLocaleString('id-ID')} kombinasi Minggu/Cabang/Grup/Category dengan rekomendasi Transfer Order aktif.`,
+        `Total unit direkomendasikan untuk dipindahkan: ${totalTo.toLocaleString('id-ID', { maximumFractionDigits: 0 })}.`,
+        `Total nilai shortage yang coba ditutup: ${totalShortageValue.toLocaleString('id-ID', { maximumFractionDigits: 0 })}.`,
+        topCabang ? `Cabang tujuan TO terbesar: ${topCabang[0]} (${topCabang[1].toLocaleString('id-ID', { maximumFractionDigits: 0 })} unit).` : null,
+        'Rekomendasi TO menyandingkan Shortage & Overstock Alerts pada kombinasi Minggu+Cabang+Grup+Category yang sama persis.',
+      ].filter(Boolean).join('\n');
+      slides.push({ insightText: insightLines, slideTitle: withFilter('Rekomendasi TO / Transfer Order') });
+    }
+
+    // 4. Analisa & Grafik MRP -- Komparasi Occupancy Mingguan terhadap Target (text-only summary; this section is a table, not a chart)
+    const mrpCabangs = mrpTableFilters.filteredData || [];
+    if (mrpData?.occupancy_series_target && mrpCabangs.length > 0) {
+      const critical: { cabang: string; maxVal: number }[] = [];
+      let sum = 0;
+      let count = 0;
+      mrpCabangs.forEach((cabang: string) => {
+        const vals = displayOccupancySeriesTarget?.[cabang] || [];
+        vals.forEach((v: number) => { sum += v; count += 1; });
+        const maxVal = vals.length ? Math.max(...vals) : 0;
+        if (maxVal > 80) critical.push({ cabang, maxVal });
+      });
+      critical.sort((a, b) => b.maxVal - a.maxVal);
+      const avgTarget = count > 0 ? (sum / count) : 0;
+      const insightLines = [
+        `Rata-rata Occupancy vs Target seluruh cabang/periode: ${avgTarget.toFixed(1)}%.`,
+        `${critical.length} dari ${mrpCabangs.length} cabang punya minimal 1 periode di atas 80% (waspada/over capacity).`,
+        critical[0] ? `Paling kritis: ${critical[0].cabang} (${critical[0].maxVal.toFixed(1)}%).` : null,
+        salesRealizationActive ? `Ditampilkan dengan skenario Realisasi Sales (faktor ${salesRealizationFactor}).` : null,
+      ].filter(Boolean).join('\n');
+      slides.push({ insightText: insightLines, slideTitle: withFilter('Analisa & Grafik MRP - Komparasi Occupancy Mingguan terhadap Target') });
+    }
+
+    // 5. Analisa Nilai Inventori - Konversi Container -> QTY (CBM) -> Value (text-only summary; this section is a table, not a chart)
+    const qtyValueCabangs = qtyValueTableFilters.filteredData || [];
+    if (mrpData?.qty_series_by_branch && qtyValueCabangs.length > 0) {
+      const latestValueByCabang = qtyValueCabangs
+        .map((cabang: string) => {
+          const vals: number[] = mrpData.value_series_by_branch?.[cabang] || [];
+          return { cabang, latest: vals.length ? vals[vals.length - 1] : 0 };
+        })
+        .filter((r: any) => r.latest !== 0);
+      const totalLatestValue = latestValueByCabang.reduce((sum: number, r: any) => sum + r.latest, 0);
+      const topValue = [...latestValueByCabang].sort((a: any, b: any) => b.latest - a.latest)[0];
+      const insightLines = [
+        `Total Value (Rp) inventori periode terakhir dari ${latestValueByCabang.length} cabang: Rp ${totalLatestValue.toLocaleString('id-ID', { maximumFractionDigits: 0 })}.`,
+        topValue ? `Cabang dengan Value inventori tertinggi: ${topValue.cabang} (Rp ${topValue.latest.toLocaleString('id-ID', { maximumFractionDigits: 0 })}).` : null,
+        'Value = QTY (konversi Container -> CBM) x Harga Product per Cabang+Category.',
+      ].filter(Boolean).join('\n');
+      slides.push({ insightText: insightLines, slideTitle: withFilter('Analisa Nilai Inventori - Konversi Container -> QTY (CBM) -> Value') });
+    }
+
+    // 6. Grafik Tren MOS (Value) per Cabang (chart)
+    if (mosValueChartRef.current && mrpData?.mos_value_series_by_branch) {
+      const branches: string[] = qtyValueTableFilters.filteredData || [];
+      const mosSeries = mrpData.mos_value_series_by_branch as Record<string, number[]>;
+      const latestByBranch = branches
+        .map((b) => {
+          const series = mosSeries[b] || [];
+          return { cabang: b, latest: series.length ? series[series.length - 1] : null };
+        })
+        .filter((r) => r.latest !== null) as { cabang: string; latest: number }[];
+
+      const avgLatest = latestByBranch.length
+        ? latestByBranch.reduce((sum, r) => sum + r.latest, 0) / latestByBranch.length
+        : null;
+      const lowest = latestByBranch.length
+        ? latestByBranch.reduce((min, r) => (r.latest < min.latest ? r : min))
+        : null;
+      const highest = latestByBranch.length
+        ? latestByBranch.reduce((max, r) => (r.latest > max.latest ? r : max))
+        : null;
+
+      const insightLines = [
+        avgLatest !== null ? `Rata-rata MOS (Value) periode terakhir: ${avgLatest.toFixed(2)}x dari ${latestByBranch.length} cabang.` : null,
+        lowest ? `MOS (Value) terendah: ${lowest.cabang} (${lowest.latest.toFixed(2)}x) -- prioritas evaluasi kekurangan stok.` : null,
+        highest ? `MOS (Value) tertinggi: ${highest.cabang} (${highest.latest.toFixed(2)}x).` : null,
+        'MOS (Value) = Value (Rp) dibagi kebutuhan Value per periode -- makin rendah, makin dekat risiko kehabisan stok.',
+      ].filter(Boolean).join('\n');
+
+      slides.push({
+        chartElement: mosValueChartRef.current,
+        insightText: insightLines,
+        slideTitle: withFilter('Grafik Tren MOS (Value) per Cabang'),
+      });
+    }
+
+    return slides;
   };
 
   // ── CSV export step-by-step complete data ──
@@ -905,13 +1065,14 @@ export default function OccupancyPage() {
     ],
   } : undefined;
 
-  // ── Dual-export (HTML + Excel raw data terfilter cabang) wiring ──
-  // `daily_data` dipakai sebagai raw source (bukan `filteredDailyData`) karena
-  // itu dataset per-cabang-per-hari paling lengkap yang tersedia (KPI Avg/Peak/
-  // Min Occupancy semuanya diturunkan darinya) - shortage/overstock alerts
-  // adalah daftar exception, bukan raw data. Filter cabang tetap ditegakkan
-  // ulang di backend memakai `selectedCabang` yang sama dengan tampilan layar.
-  const dualExportRawRows = mrpData?.daily_data ?? undefined;
+  // ── Dual-export (HTML + Excel raw data terfilter cabang+tanggal) wiring ──
+  // Pakai `filteredData` (bukan `mrpData?.daily_data` mentah) supaya Excel
+  // yang diekspor benar-benar mencerminkan SEMUA filter aktif di layar
+  // (Cabang + Tanggal + skenario), bukan cuma cabang yang ditegakkan ulang di
+  // backend. `filteredData` tetap dataset per-cabang-per-hari paling lengkap
+  // (KPI Avg/Peak/Min Occupancy semuanya diturunkan darinya) - shortage/
+  // overstock alerts adalah daftar exception, bukan raw data.
+  const dualExportRawRows = filteredData.length > 0 ? filteredData : undefined;
 
   return (
     <div id="export-container" className="space-y-8 max-w-[1550px] mx-auto pb-16 animate-in fade-in duration-500 text-foreground">
@@ -933,8 +1094,16 @@ export default function OccupancyPage() {
                   cabang={selectedCabang}
                   rawRows={dualExportRawRows}
                   cabangField="cabang"
+                  pptxSlides={buildPptxSlides}
+                  pptxModuleName="Occupancy_Per_Cabang"
                 />
-              : <ExportHtmlButton elementId="export-container" moduleName="Occupancy_Analisa" processedAt={results?.processed_at} />}
+              : <ExportHtmlButton
+                  elementId="export-container"
+                  moduleName="Occupancy_Analisa"
+                  processedAt={results?.processed_at}
+                  pptxSlides={buildPptxSlides}
+                  pptxModuleName="Occupancy_Per_Cabang"
+                />}
             <button
               onClick={() => setShowHowTo(!showHowTo)}
               className="no-export min-h-[44px] w-full sm:w-auto px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-xl text-xs sm:text-sm font-semibold transition-colors flex items-center justify-center gap-2"
@@ -1401,12 +1570,14 @@ export default function OccupancyPage() {
               </div>
             </div>
 
-            {filteredData.length > 0
-              ? <OccupancyChart data={filteredData} />
-              : <div className="h-40 flex items-center justify-center text-muted-foreground text-sm font-medium">
-                  Tidak ada data untuk filter yang dipilih.
-                </div>
-            }
+            <div ref={occupancyChartRef}>
+              {filteredData.length > 0
+                ? <OccupancyChart data={filteredData} />
+                : <div className="h-40 flex items-center justify-center text-muted-foreground text-sm font-medium">
+                    Tidak ada data untuk filter yang dipilih.
+                  </div>
+              }
+            </div>
           </GlassCard>
 
           {/* Shortage Alerts (frozen snapshot — replaced by the filterable table in the offline export section) */}
@@ -2012,7 +2183,7 @@ export default function OccupancyPage() {
                   {/* Fitur 3: grafik tren MOS (Value) per cabang, diposisikan tepat
                       di bawah tabel metrik Value (Rp) / MOS (Value) di atas. */}
                   {mrpData.mos_value_series_by_branch && Object.keys(mrpData.mos_value_series_by_branch).length > 0 && (
-                    <div className="mt-4">
+                    <div className="mt-4" ref={mosValueChartRef}>
                       <h5 className="text-xs font-extrabold text-black/70 uppercase tracking-wider mb-2">
                         Grafik Tren MOS (Value) per Cabang
                       </h5>

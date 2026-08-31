@@ -25,6 +25,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { ModuleExportConfig } from '@/utils/offlineExport';
 import { formatNumberCompact } from '@/lib/utils';
 import { buildMultiDimTrendData, MultiDimTrendChart, EMPTY_MULTI_DIM_TREND, TrendMetric } from '@/components/charts/MultiDimTrendChart';
+import { PptxSlideSpec } from '@/utils/exportPptx';
 
 // Utility formatters
 const formatRp = (val: number) => `Rp ${val.toLocaleString('id-ID')}`;
@@ -43,6 +44,13 @@ export default function SKUVelocityPage() {
   // (the "upload Mei, dashboard shows Maret" bug: the background fetch was
   // still in flight when the upload finished, then won the race and clobbered it).
   const hasLocalDataRef = useRef(false);
+
+  // "Export to PowerPoint" targets — every chart card on this page gets its
+  // own ref so html2canvas can snapshot each one into its own deck slide.
+  const scatterChartRef = useRef<HTMLDivElement>(null);
+  const trendChartRef = useRef<HTMLDivElement>(null);
+  const multiDimTrendRef = useRef<HTMLDivElement>(null);
+  const groupTrendRef = useRef<HTMLDivElement>(null);
 
   // Filter states
   const [selectedCabang, setSelectedCabang] = useState<string[]>(['All']);
@@ -529,6 +537,8 @@ export default function SKUVelocityPage() {
     return targetData.map(r => ({
       id: r.ItemCode,
       name: r['NAMA BARANG'],
+      category: r['Category'] || '-',
+      cabang: r['Branch Name'] || '-',
       avgSales: r['AVG SALES MONTH'] || 0,
       doi: Math.min(r['DOI'] || 0, 365), // cap at 365 for visual clarity
       value: r['Value'] || 0,
@@ -777,6 +787,128 @@ export default function SKUVelocityPage() {
 
 
 
+  // Builds the PPTX deck's slide list for this module: every chart/insight on
+  // this page (Supply Chain Automated Insights, Cross-Branch Rebalancing,
+  // scatter quadrant, trend line, both multi-dimensional trend charts, and
+  // Kondisi Bulan Terakhir per Grup as a text-only conclusion), each paired
+  // with a text insight built from the same executiveSummary/trendInsights
+  // numbers already shown on screen. Raw-data tables stay Excel-only. Called
+  // by the shared `ExportHtmlButton` (see `pptxSlides` prop below) so one
+  // click downloads HTML/Excel and this .pptx deck together.
+  const buildPptxSlides = (): PptxSlideSpec[] => {
+    const filterLabel = [
+      !selectedCabang.includes('All') ? `Cabang: ${selectedCabang.join(', ')}` : null,
+      !selectedCategory.includes('All') ? `Kategori: ${selectedCategory.join(', ')}` : null,
+      !selectedStatus.includes('All') ? `Status: ${selectedStatus.join(', ')}` : null,
+      !selectedGrup.includes('All') ? `Grup: ${selectedGrup.join(', ')}` : null,
+      !selectedRegion.includes('All') ? `Region: ${selectedRegion.join(', ')}` : null,
+    ].filter(Boolean).join(' | ');
+    const filterSuffix = filterLabel ? ` (${filterLabel})` : ' (Semua Data)';
+
+    const trendInsightLines = [
+      `Dead Stock Trapped Value: Rp ${executiveSummary.deadStockValue.toLocaleString('id-ID')} pada ${executiveSummary.deadStockCount} SKU, menyita ${executiveSummary.deadStockCBM.toFixed(1)} m3 kapasitas gudang.`,
+      `Fast Moving Opportunities: ${executiveSummary.risingStarCount} SKU berpotensi kehilangan penjualan senilai Rp ${Math.round(executiveSummary.risingStarLostSalesVal).toLocaleString('id-ID')} bila stok habis (OOS).`,
+      trendInsights?.worstBranch ? `Cabang perhatian ekstra: ${trendInsights.worstBranch.name} (Dead/Slow Value Rp ${trendInsights.worstBranch.val.toLocaleString('id-ID')}).` : null,
+      trendInsights?.worstCat ? `Kategori rawan (dead stock terbesar): ${trendInsights.worstCat.name}.` : null,
+      trendInsights?.bestCat ? `Top kategori fast moving: ${trendInsights.bestCat.name}.` : null,
+      'Rekomendasi: prioritaskan rasionalisasi dead stock di cabang/kategori rawan, dan expedite replenishment untuk kategori fast moving agar tidak OOS.',
+    ].filter(Boolean).join('\n');
+
+    const scatterInsightLines = [
+      `Dead Stock Trapped Value: Rp ${executiveSummary.deadStockValue.toLocaleString('id-ID')} pada ${executiveSummary.deadStockCount} SKU (kuadran merah, Kandidat Discontinue).`,
+      `Fast Moving Opportunities: ${executiveSummary.risingStarCount} SKU pada kuadran hijau (Rising Star) berpotensi kehilangan penjualan senilai Rp ${Math.round(executiveSummary.risingStarLostSalesVal).toLocaleString('id-ID')} bila stok habis (OOS).`,
+      'Sumbu X = rata-rata penjualan/bulan, sumbu Y = DOI (hari), ukuran gelembung = value tertahan.',
+      'Rekomendasi: prioritaskan SKU di kuadran DOI tinggi & penjualan rendah untuk rasionalisasi stok.',
+    ].filter(Boolean).join('\n');
+
+    const multiDimInsightLines = [
+      trendInsights?.worstBranch ? `Cabang perhatian ekstra: ${trendInsights.worstBranch.name} (Dead/Slow Value Rp ${trendInsights.worstBranch.val.toLocaleString('id-ID')}).` : null,
+      trendInsights?.worstCat ? `Kategori rawan (dead stock terbesar): ${trendInsights.worstCat.name}.` : null,
+      trendInsights?.bestCat ? `Top kategori fast moving: ${trendInsights.bestCat.name}.` : null,
+      `Grafik menampilkan Top 5 ${trendGrouping} otomatis berdasarkan metrik ${trendMetric}.`,
+      'Rekomendasi: gunakan tren per bulan ini untuk memantau pergeseran status produk antar kelompok dari waktu ke waktu.',
+    ].filter(Boolean).join('\n');
+
+    const groupInsightLines = [
+      `Grafik menampilkan distribusi ${grupChartMetric === 'Qty' ? 'Qty (On Hand)' : grupChartMetric} per Status Product (Fast/Medium/Slow/Dead Moving), dikelompokkan berdasarkan ${grupChartXAxis === 'Branch Name' ? 'Cabang' : grupChartXAxis}.`,
+      'Rekomendasi: bandingkan proporsi Dead/Slow Moving antar kelompok untuk menentukan prioritas rasionalisasi stok.',
+    ].join('\n');
+
+    // Text-only slide: "Supply Chain Automated Insights" card — Critical Dead
+    // Stock + Peluang Cuan (Fast Moving) sub-panels have no chart of their own.
+    const automatedInsightLines = [
+      `Critical Dead Stock: ${formatRp(executiveSummary.deadStockValue)} modal kerja dan ${executiveSummary.deadStockCBM.toFixed(1)} m3 kapasitas gudang terperangkap pada ${executiveSummary.deadStockCount} SKU Dead Stock.`,
+      ...executiveSummary.topDeadCats.slice(0, 5).map((c) => `Kategori mendesak: ${c.cat} (Tertahan: ${formatNumberCompact(c.val)} | Rata-rata DOI: >${c.doiAvg} Hari).`),
+      'Saran Tindakan: pertimbangkan bundling promo atau diskon khusus untuk membebaskan modal dan ruang.',
+      `Peluang Cuan (Fast Moving): ${executiveSummary.risingStarCount} SKU tren kenaikan penjualan ekstrem beruntun, stok (DOI) kritis di bawah 30 hari dan minim jadwal Receipt.`,
+      ...executiveSummary.topRisingSKUs.slice(0, 5).map((s) => `SKU butuh percepatan replenishment: ${s.name} (Value: ${formatNumberCompact(s.value)}).`),
+      'Saran Tindakan: expedite PO saat ini, amankan ketersediaan barang.',
+    ].join('\n');
+
+    // Text-only slide: "Cross-Branch Rebalancing Insight" sub-panel — pure
+    // text/insight cards, no chart backs this section either.
+    const rebalancingInsightLines = executiveSummary.topCrossBranchOpps.length > 0 ? [
+      `Terdapat ${executiveSummary.topCrossBranchOpps.length} rekomendasi pemindahan stok (rebalancing) untuk SKU berstatus mati/lambat di satu cabang, namun Fast Moving di cabang lainnya.`,
+      ...executiveSummary.topCrossBranchOpps.slice(0, 10).map((s) =>
+        `${s.name} — Value Tertahan: ${formatNumberCompact(s.trappedValue)} | Dead/Slow di: ${s.badBranches.join(', ')} | Fast Moving di: ${s.goodBranches.join(', ')}.`
+      ),
+    ].join('\n') : null;
+
+    // Text-only slide: "Kondisi Bulan Terakhir per Grup" — only the table's
+    // conclusion goes into the deck, not the raw Grup x Status Product grid.
+    const groupStatusInsightLines = groupStatusTable.rows.length > 0 ? (() => {
+      const topGrup = [...groupStatusTable.rows].sort((a, b) => b.rowTotal - a.rowTotal)[0];
+      const colTotals = groupStatusTable.statusCols.map((s) => ({
+        status: s,
+        total: groupStatusTable.rows.reduce((sum, r) => sum + (r.cells[s] || 0), 0),
+      }));
+      const topStatus = [...colTotals].sort((a, b) => b.total - a.total)[0];
+      return [
+        `Value (Rp) per Grup x Status Product untuk bulan terakhir${groupStatusLatestMonth ? ` (${groupStatusLatestMonth})` : ''}.`,
+        `Grand Total seluruh Grup & Status: ${formatRp(groupStatusTable.grandTotal)}.`,
+        topGrup ? `Grup dengan Value tertinggi: ${topGrup.grup} (${formatRp(topGrup.rowTotal)}, ${groupStatusTable.grandTotal > 0 ? ((topGrup.rowTotal / groupStatusTable.grandTotal) * 100).toFixed(1) : '0'}% dari Grand Total).` : null,
+        topStatus ? `Status Product dengan kontribusi terbesar: ${topStatus.status} (${formatRp(topStatus.total)}, ${groupStatusTable.grandTotal > 0 ? ((topStatus.total / groupStatusTable.grandTotal) * 100).toFixed(1) : '0'}% dari Grand Total).` : null,
+        'Rekomendasi: gunakan Grup dan Status Product dominan di atas sebagai prioritas rasionalisasi/replenishment bulan berjalan.',
+      ].filter(Boolean).join('\n');
+    })() : null;
+
+    const slides: (PptxSlideSpec | null)[] = [
+      {
+        insightText: automatedInsightLines,
+        slideTitle: `SKU Velocity - Supply Chain Automated Insights${filterSuffix}`,
+      },
+      rebalancingInsightLines ? {
+        insightText: rebalancingInsightLines,
+        slideTitle: `SKU Velocity - Cross-Branch Rebalancing Insight${filterSuffix}`,
+      } : null,
+      scatterChartRef.current ? {
+        chartElement: scatterChartRef.current,
+        insightText: scatterInsightLines,
+        slideTitle: `SKU Velocity - Kuadran Analisis DOI vs Volume${filterSuffix}`,
+      } : null,
+      trendChartRef.current ? {
+        chartElement: trendChartRef.current,
+        insightText: trendInsightLines,
+        slideTitle: `SKU Velocity - Tren Value${filterSuffix}`,
+      } : null,
+      multiDimTrendRef.current ? {
+        chartElement: multiDimTrendRef.current,
+        insightText: multiDimInsightLines,
+        slideTitle: 'SKU Velocity - Analisa Trend Multidimensi',
+      } : null,
+      groupTrendRef.current ? {
+        chartElement: groupTrendRef.current,
+        insightText: groupInsightLines,
+        slideTitle: 'SKU Velocity - Analisa Grup',
+      } : null,
+      groupStatusInsightLines ? {
+        insightText: groupStatusInsightLines,
+        slideTitle: 'SKU Velocity - Kondisi Bulan Terakhir per Grup',
+      } : null,
+    ];
+    return slides.filter((s): s is PptxSlideSpec => s !== null);
+  };
+
   const handleExport = () => {
 
     if (analyzedData.length === 0) return;
@@ -938,13 +1070,20 @@ export default function SKUVelocityPage() {
     ],
   } : undefined;
 
-  // ── Dual-export (HTML + Excel raw data terfilter cabang) wiring ──
-  // Excel raw source diambil dari `parsed.data` (sebelum filter bulan/
-  // kategori/status, hanya cabang) supaya Excel berisi seluruh record cabang
-  // terpilih apa adanya, dan filter cabang benar-benar ditegakkan ulang di
-  // backend. Kolom cabang di halaman ini fixed ('Branch Name'), bukan hasil
-  // deteksi dinamis seperti modul lain.
-  const dualExportRawRows = parsed?.data ?? undefined;
+  // ── Dual-export (HTML + Excel raw data terfilter) wiring ──
+  // Excel raw source dari `analyzedData` (bukan `parsed.data` mentah) supaya
+  // baris yang diekspor persis sama dengan yang sedang ditampilkan di layar —
+  // sudah tunduk pada SEMUA filter aktif (bulan, cabang, category, status,
+  // grup, region) DAN filter "Highlight" (Kandidat Discontinue / Fast
+  // Moving), karena itu juga benar-benar menyembunyikan baris dari tampilan,
+  // bukan cuma penekanan visual. Kolom hasil enrichment untuk analisis di
+  // layar (analysisStatus, action, colorClass, trendStr) dibuang lagi supaya
+  // Excel-nya berisi kolom mentah asli saja. Kolom cabang di halaman ini
+  // fixed ('Branch Name'), bukan hasil deteksi dinamis seperti modul lain.
+  const dualExportRawRows = useMemo(() => {
+    if (analyzedData.length === 0) return undefined;
+    return analyzedData.map(({ analysisStatus, action, colorClass, trendStr, ...rawRow }) => rawRow);
+  }, [analyzedData]);
 
   return (
 
@@ -968,8 +1107,10 @@ export default function SKUVelocityPage() {
                   cabang={selectedCabang}
                   rawRows={dualExportRawRows}
                   cabangField="Branch Name"
+                  pptxSlides={buildPptxSlides}
+                  pptxModuleName="SKU_Velocity_Insights"
                 />
-              : <ExportHtmlButton elementId="export-container" moduleName="SKU_Velocity_Insights" processedAt={parsed?.processed_at} />}
+              : <ExportHtmlButton elementId="export-container" moduleName="SKU_Velocity_Insights" processedAt={parsed?.processed_at} pptxSlides={buildPptxSlides} pptxModuleName="SKU_Velocity_Insights" />}
             <button
               onClick={() => setShowHowTo(!showHowTo)}
               className="no-export min-h-[44px] w-full sm:w-auto px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-xl text-xs sm:text-sm font-semibold transition-colors flex items-center justify-center gap-2"
@@ -1337,31 +1478,31 @@ export default function SKUVelocityPage() {
 
         {/* Scatter Plot */}
 
-        <GlassCard className="p-6 border-indigo-500/30 bg-slate-900 shadow-2xl">
+        <GlassCard className="p-6 border-indigo-200 bg-white shadow-2xl">
 
-          <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
+          <h3 className="text-lg font-bold text-slate-900 mb-2 flex items-center gap-2">
 
-            <BarChart3 className="w-5 h-5 text-indigo-400" /> Kuadran Analisis (DOI vs Volume Penjualan)
+            <BarChart3 className="w-5 h-5 text-indigo-500" /> Kuadran Analisis (DOI vs Volume Penjualan)
 
           </h3>
 
-          <p className="text-xs text-slate-400 mb-4">
+          <p className="text-xs text-slate-600 mb-4">
 
             Ukuran gelembung mewakili <b>Total Value Tertahan</b>. Merah = Discontinue, Hijau = Fast Moving.
 
           </p>
 
-          <div className="h-[400px] w-full bg-slate-950/50 rounded-xl p-2 border border-slate-800">
+          <div ref={scatterChartRef} className="h-[400px] w-full bg-slate-50 rounded-xl p-2 border border-slate-200">
 
             <ResponsiveContainer width="100%" height="100%">
 
               <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
 
-                <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#cbd5e1" opacity={0.6} />
 
-                <XAxis type="number" dataKey="avgSales" name="Rata-rata Penjualan" stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 11 }} tickFormatter={formatNum} label={{ value: 'Rata-rata Penjualan/Bulan', position: 'insideBottom', fill: '#94a3b8', fontSize: 11, offset: -10 }} />
+                <XAxis type="number" dataKey="avgSales" name="Rata-rata Penjualan" stroke="#475569" tick={{ fill: '#1e293b', fontSize: 11 }} tickFormatter={formatNum} label={{ value: 'Rata-rata Penjualan/Bulan', position: 'insideBottom', fill: '#334155', fontSize: 11, offset: -10 }} />
 
-                <YAxis type="number" dataKey="doi" name="DOI (Hari)" stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 11 }} label={{ value: 'Days of Inventory (DOI)', angle: -90, position: 'insideLeft', fill: '#94a3b8', fontSize: 11 }} />
+                <YAxis type="number" dataKey="doi" name="DOI (Hari)" stroke="#475569" tick={{ fill: '#1e293b', fontSize: 11 }} label={{ value: 'Days of Inventory (DOI)', angle: -90, position: 'insideLeft', fill: '#334155', fontSize: 11 }} />
 
                 <ZAxis type="number" dataKey="value" range={[50, 600]} name="Value Tertahan" />
 
@@ -1369,7 +1510,7 @@ export default function SKUVelocityPage() {
 
                   cursor={{ strokeDasharray: '3 3' }}
 
-                  contentStyle={{ backgroundColor: '#0f172a', borderColor: '#3b82f6', borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}
+                  contentStyle={{ backgroundColor: '#ffffff', borderColor: '#3b82f6', borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)' }}
 
                   formatter={(value: any, name: any) => name === 'Value Tertahan' ? formatRp(value) : formatNum(value)}
 
@@ -1383,17 +1524,21 @@ export default function SKUVelocityPage() {
 
                       return (
 
-                        <div className="bg-slate-900 border border-slate-700 p-3 rounded-xl shadow-xl">
+                        <div className="bg-white border border-slate-200 p-3 rounded-xl shadow-xl">
 
-                          <p className="text-white font-bold mb-1 border-b border-slate-700 pb-1">{data.name}</p>
+                          <p className="text-slate-900 font-bold mb-1 border-b border-slate-200 pb-1">{data.name}</p>
 
-                          <p className="text-xs text-slate-300">Status: <span style={{color: data.fill}} className="font-bold">{data.status}</span></p>
+                          <p className="text-xs text-slate-700">Status: <span style={{color: data.fill}} className="font-bold">{data.status}</span></p>
 
-                          <p className="text-xs text-slate-300">Avg Sales: {formatNum(data.avgSales)}</p>
+                          <p className="text-xs text-slate-700">Category: <span className="font-semibold">{data.category}</span></p>
 
-                          <p className="text-xs text-slate-300">DOI: {data.doi} Hari</p>
+                          <p className="text-xs text-slate-700">Cabang: <span className="font-semibold">{data.cabang}</span></p>
 
-                          <p className="text-xs text-slate-300">Value: {formatRp(data.value)}</p>
+                          <p className="text-xs text-slate-700">Avg Sales: {formatNum(data.avgSales)}</p>
+
+                          <p className="text-xs text-slate-700">DOI: {data.doi} Hari</p>
+
+                          <p className="text-xs text-slate-700">Value: {formatRp(data.value)}</p>
 
                         </div>
 
@@ -1429,41 +1574,41 @@ export default function SKUVelocityPage() {
 
         {/* Trend Line Chart */}
 
-        <GlassCard className="p-6 border-indigo-500/30 bg-slate-900 shadow-2xl">
+        <GlassCard className="p-6 border-indigo-200 bg-white shadow-2xl">
 
-          <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
+          <div className="flex items-start justify-between gap-3 mb-2">
+            <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-purple-500" /> Tren Nilai Persediaan
+            </h3>
+          </div>
 
-            <TrendingUp className="w-5 h-5 text-purple-400" /> Tren Nilai Penjualan Berdasarkan Bulan (Agregat SKU)
-
-          </h3>
-
-          <p className="text-xs text-slate-400 mb-4">
+          <p className="text-xs text-slate-600 mb-4">
 
             Perbandingan total nilai (Value) pergerakan antar klasifikasi matriks berdasar kelompok bulan.
 
           </p>
 
-          <div className="h-[400px] w-full bg-slate-950/50 rounded-xl p-2 border border-slate-800">
+          <div ref={trendChartRef} className="h-[400px] w-full bg-slate-50 rounded-xl p-2 border border-slate-200">
 
             <ResponsiveContainer width="100%" height="100%">
 
               <LineChart data={trendData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
 
-                <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#cbd5e1" opacity={0.6} />
 
-                <XAxis dataKey="name" stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 12, fontWeight: 600 }} />
+                <XAxis dataKey="name" stroke="#475569" tick={{ fill: '#1e293b', fontSize: 12, fontWeight: 600 }} />
 
-                <YAxis stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 11 }} tickFormatter={(val) => formatNumberCompact(val)} width={60} />
+                <YAxis stroke="#475569" tick={{ fill: '#1e293b', fontSize: 11 }} tickFormatter={(val) => formatNumberCompact(val)} width={60} />
 
                 <Tooltip
 
-                  contentStyle={{ backgroundColor: '#0f172a', borderColor: '#6366f1', borderRadius: '12px' }}
+                  contentStyle={{ backgroundColor: '#ffffff', borderColor: '#6366f1', borderRadius: '12px' }}
 
                   formatter={(val: any) => [formatRp(val), undefined]}
 
                 />
 
-                <Legend wrapperStyle={{ paddingTop: '10px' }} />
+                <Legend wrapperStyle={{ paddingTop: '10px', color: '#1e293b' }} />
 
                 <Line type="monotone" dataKey="Dead Stock Value" stroke="#f43f5e" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
 
@@ -1559,7 +1704,9 @@ export default function SKUVelocityPage() {
           </div>
         </div>
 
-        <MultiDimTrendChart trendData={multiDimensionalTrendData} trendMetric={trendMetric} />
+        <div ref={multiDimTrendRef}>
+          <MultiDimTrendChart trendData={multiDimensionalTrendData} trendMetric={trendMetric} />
+        </div>
       </GlassCard>
 
       {/* ANALISA GRUP — sumbu X toggle Grup/Cabang/Status Product, satu stacked column per bulan, distack oleh Status Product (Fast/Medium/Slow/Dead Moving) */}
@@ -1609,14 +1756,16 @@ export default function SKUVelocityPage() {
           </div>
         </div>
 
-        {grupChartAllXValues.length === 0 ? (
-          <div className="h-[200px] flex flex-col items-center justify-center text-center gap-1 border border-dashed border-amber-300 bg-amber-50 rounded-xl">
-            <p className="text-sm font-bold text-amber-700">Kolom &quot;{grupChartXAxis === 'Branch Name' ? 'Branch Name' : grupChartXAxis}&quot; tidak ditemukan di data yang diupload</p>
-            <p className="text-xs text-amber-600 max-w-md">Tambahkan kolom bernama <b>{grupChartXAxis === 'Branch Name' ? 'Branch Name' : grupChartXAxis}</b> pada file sumber Anda (Excel/CSV), lalu upload ulang agar chart ini terisi.</p>
-          </div>
-        ) : (
-          <MultiDimTrendChart trendData={groupTrendData} trendMetric={grupChartMetric} />
-        )}
+        <div ref={groupTrendRef}>
+          {grupChartAllXValues.length === 0 ? (
+            <div className="h-[200px] flex flex-col items-center justify-center text-center gap-1 border border-dashed border-amber-300 bg-amber-50 rounded-xl">
+              <p className="text-sm font-bold text-amber-700">Kolom &quot;{grupChartXAxis === 'Branch Name' ? 'Branch Name' : grupChartXAxis}&quot; tidak ditemukan di data yang diupload</p>
+              <p className="text-xs text-amber-600 max-w-md">Tambahkan kolom bernama <b>{grupChartXAxis === 'Branch Name' ? 'Branch Name' : grupChartXAxis}</b> pada file sumber Anda (Excel/CSV), lalu upload ulang agar chart ini terisi.</p>
+            </div>
+          ) : (
+            <MultiDimTrendChart trendData={groupTrendData} trendMetric={grupChartMetric} />
+          )}
+        </div>
       </GlassCard>
 
       {/* KONDISI BULAN TERAKHIR PER GRUP — Grup x Status Product breakdown (Rp + % grand total), filter Region/Cabang */}

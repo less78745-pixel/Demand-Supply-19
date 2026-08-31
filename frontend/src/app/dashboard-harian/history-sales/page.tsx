@@ -2,7 +2,7 @@
 "use client";
 import LZString from 'lz-string';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { FileUploader } from '@/components/ui/FileUploader';
 import { KPICard } from '@/components/ui/KPICard';
@@ -25,6 +25,7 @@ import { formatNumberCompact } from '@/lib/utils';
 import { ExportHtmlButton } from '@/components/ui/ExportHtmlButton';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { ModuleExportConfig } from '@/utils/offlineExport';
+import { type PptxSlideSpec } from '@/utils/exportPptx';
 
 const COLORS = ['#3b82f6', '#f97316', '#22c55e', '#ef4444', '#a855f7', '#eab308', '#06b6d4', '#ec4899'];
 
@@ -332,6 +333,16 @@ export default function HistorySalesPage() {
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [chartGrouping, setChartGrouping] = useState<'cabang' | 'grup' | 'category'>('cabang');
+
+  // PPTX export target nodes — each chart card in this module gets its own
+  // ref so the full-deck export (buildPptxSlides, via ExportHtmlButton) can
+  // snapshot every chart, not just the main "Komparasi Volume Sales per
+  // Cabang" one.
+  const abcXyzChartRef = useRef<HTMLDivElement>(null);
+  const salesChartRef = useRef<HTMLDivElement>(null);
+  const cabangOnlySupplyChartRef = useRef<HTMLDivElement>(null);
+  const supplyVsMonthlyChartRef = useRef<HTMLDivElement>(null);
+  const insentifChartRef = useRef<HTMLDivElement>(null);
   const [showHowTo, setShowHowTo] = useState<boolean>(false);
   const [selectedCabangForChart, setSelectedCabangForChart] = useState<string>('All');
 
@@ -1324,6 +1335,118 @@ export default function HistorySalesPage() {
     });
   }, [insentifAnalysis, table2ColFilters]);
 
+  // PPTX slide builder for this module — one slide per chart (ABC-XYZ matrix,
+  // Komparasi Volume Sales, Supply vs AVG3, Komparasi Total Pasokan vs AVG3
+  // (text-only — that section has no chart of its own), Stok vs History
+  // Penjualan, Performa Insentif), each paired with its own data-driven
+  // insight text. Raw-data tables are intentionally excluded — they belong in
+  // the Excel export only. Passed to <ExportHtmlButton pptxSlides={...} />
+  // below, which downloads HTML(+Excel) and this .pptx deck in one click.
+  const buildPptxSlides = (): PptxSlideSpec[] => {
+    const filterLabel = [
+      !selectedCabang.includes('All') ? `Cabang: ${selectedCabang.join(', ')}` : null,
+      !selectedRegion.includes('All') ? `Region: ${selectedRegion.join(', ')}` : null,
+      !selectedCategory.includes('All') ? `Kategori: ${selectedCategory.join(', ')}` : null,
+      !selectedMonths.includes('All') ? `Bulan: ${selectedMonths.join(', ')}` : null,
+      selectedCabangForChart !== 'All' ? `Sorotan: ${selectedCabangForChart}` : null,
+    ].filter(Boolean).join(' | ');
+
+    const groupingLabel = chartGrouping === 'cabang' ? 'Fokus Cabang' : chartGrouping === 'grup' ? 'Fokus Grup' : 'Fokus Category Item';
+
+    const slides: PptxSlideSpec[] = [];
+
+    if (abcXyzChartRef.current && abcXyzAnalysis) {
+      const topQuadrant = [...abcXyzAnalysis.activeQuadrants].sort((a: any, b: any) => b.items.length - a.items.length)[0];
+      const insightLines = [
+        `Total item dianalisis: ${abcXyzAnalysis.classifiedItems.length.toLocaleString('id-ID')} item/kombinasi.`,
+        topQuadrant ? `Kuadran terbesar: ${topQuadrant.matrix} dengan ${topQuadrant.items.length} item.` : null,
+        'Klasifikasi ABC (kontribusi volume) x XYZ (fluktuasi permintaan) dipakai untuk menentukan strategi stok per item.',
+      ].filter(Boolean).join('\n');
+      slides.push({
+        chartElement: abcXyzChartRef.current,
+        insightText: insightLines,
+        slideTitle: `History Sales - Matriks ABC-XYZ (${dynamicMonthLabels.M5} s/d ${dynamicMonthLabels.M})`,
+      });
+    }
+
+    if (salesChartRef.current) {
+      const topCabang = executiveSummary?.topCabang;
+      const insightLines = [
+        executiveSummary ? `Total volume sales seluruh cabang: ${executiveSummary.totalSales.toLocaleString('id-ID')} unit dari ${executiveSummary.totalRows.toLocaleString('id-ID')} baris data.` : null,
+        topCabang ? `Cabang dengan volume tertinggi: ${topCabang.name} (${topCabang.total.toLocaleString('id-ID')} unit).` : null,
+        `Grafik ditampilkan dengan grouping "${groupingLabel}".`,
+        'Rekomendasi: gunakan cabang/grup dengan volume tertinggi sebagai acuan alokasi stok dan target penjualan cabang lain.',
+      ].filter(Boolean).join('\n');
+      slides.push({
+        chartElement: salesChartRef.current,
+        insightText: insightLines,
+        slideTitle: filterLabel
+          ? `History Sales - Komparasi Volume (${groupingLabel}) - ${filterLabel}`
+          : `History Sales - Komparasi Volume (${groupingLabel})`,
+      });
+    }
+
+    if (cabangOnlySupplyChartRef.current && cabangOnlySupplyVsAvg3 && cabangOnlySupplyVsAvg3.length > 0) {
+      const insightLines = [
+        `${cabangOnlySupplyVsAvg3.length} cabang dibandingkan total pasokan (SOH+TO+Vessel+Hold+SPJM) terhadap rata-rata sales 3 bulan.`,
+        cabangSupplyVsAvg3 ? `${cabangSupplyVsAvg3.underAvg.length} cabang berpasokan di bawah AVG 3 Bln (berisiko stockout).` : null,
+        cabangSupplyVsAvg3 ? `${cabangSupplyVsAvg3.over125.length} cabang berpasokan di atas 125% AVG 3 Bln (surplus/buffer aman).` : null,
+        'Rekomendasi: prioritaskan Transfer Order dari cabang surplus ke cabang defisit.',
+      ].filter(Boolean).join('\n');
+      slides.push({
+        chartElement: cabangOnlySupplyChartRef.current,
+        insightText: insightLines,
+        slideTitle: 'History Sales - Total Pasokan vs Rata-Rata Sales 3 Bulan per Cabang',
+      });
+    }
+
+    if (cabangSupplyVsAvg3) {
+      const topUnderAvg = cabangSupplyVsAvg3.underAvg.slice(0, 5).map((i: any) => i.name);
+      const topOver125 = cabangSupplyVsAvg3.over125.slice(0, 5).map((i: any) => i.name);
+      const insightLines = [
+        `${cabangSupplyVsAvg3.underAvg.length} cabang berpasokan (SOH+TO+Vessel+Hold Delivery+SPJM) di bawah 100% AVG 3 Bln — berisiko stockout.`,
+        topUnderAvg.length > 0 ? `Cabang kritis: ${topUnderAvg.join(', ')}${cabangSupplyVsAvg3.underAvg.length > 5 ? ', dll.' : '.'}` : null,
+        `${cabangSupplyVsAvg3.over125.length} cabang berpasokan di atas 125% AVG 3 Bln — surplus/buffer sangat aman.`,
+        topOver125.length > 0 ? `Cabang surplus: ${topOver125.join(', ')}${cabangSupplyVsAvg3.over125.length > 5 ? ', dll.' : '.'}` : null,
+        'Rekomendasi: alokasikan TO tambahan/percepat kapal untuk cabang kritis; jadikan cabang surplus sumber redistribusi Transfer Order.',
+      ].filter(Boolean).join('\n');
+      slides.push({
+        insightText: insightLines,
+        slideTitle: 'History Sales - Komparasi Total Pasokan (SOH+TO+Vessel+Hold Delivery+SPJM) vs Rata-Rata Sales 3 Bulan',
+      });
+    }
+
+    if (supplyVsMonthlyChartRef.current && supplyVsMonthlySales) {
+      const insightLines = [
+        `Total pasokan gabungan (SOH+TO+Vessel): ${supplyVsMonthlySales.totalSupply.toLocaleString('id-ID')} unit.`,
+        `Rincian: SOH ${supplyVsMonthlySales.totalSOH.toLocaleString('id-ID')} + TO ${supplyVsMonthlySales.totalTO.toLocaleString('id-ID')} + Vessel ${supplyVsMonthlySales.totalVessel.toLocaleString('id-ID')}.`,
+        `Dibandingkan dengan history penjualan bulanan ${dynamicMonthLabels.M} s/d ${dynamicMonthLabels.M5}.`,
+      ].filter(Boolean).join('\n');
+      slides.push({
+        chartElement: supplyVsMonthlyChartRef.current,
+        insightText: insightLines,
+        slideTitle: `History Sales - Stok (SOH+TO+Vessel) vs Penjualan Bulanan (${dynamicMonthLabels.M} s/d ${dynamicMonthLabels.M5})`,
+      });
+    }
+
+    if (insentifChartRef.current && insentifInsights) {
+      const insightLines = [
+        insentifInsights.topTier ? `Kontributor insentif utama: ${insentifInsights.topTier.categoryInsentif} (${insentifInsights.topTier.name}) - ${Math.round(insentifInsights.topTier.totalSales).toLocaleString('id-ID')} unit.` : null,
+        ...insentifInsights.topContributorsPerTier.slice(0, 3).map((tierData: any) =>
+          `Tier ${tierData.tier}: ${tierData.contributors.map((c: any) => c.name).join(', ')}.`
+        ),
+        'Rekomendasi: prioritaskan stok kategori insentif dominan agar ritme pencapaian insentif tim sales terjaga.',
+      ].filter(Boolean).join('\n');
+      slides.push({
+        chartElement: insentifChartRef.current,
+        insightText: insightLines,
+        slideTitle: `History Sales - Performa Volume Sales per Category Insentif (${dynamicMonthLabels.M} s/d ${dynamicMonthLabels.M5})`,
+      });
+    }
+
+    return slides;
+  };
+
   const handleExport = async () => {
     if (!tableData || tableData.length === 0) return;
 
@@ -1561,12 +1684,12 @@ export default function HistorySalesPage() {
     ],
   } : undefined;
 
-  // ── Dual-export (HTML + Excel raw data terfilter cabang) wiring ──
-  // Excel raw source diambil dari `parsed.data` (sebelum filter region/
-  // category/insentif/status DOI, hanya cabang) supaya Excel berisi seluruh
-  // record cabang terpilih apa adanya, dan filter cabang benar-benar
-  // ditegakkan ulang di backend.
-  const dualExportRawRows = parsed?.data ?? undefined;
+  // ── Dual-export (HTML + Excel raw data terfilter) wiring ──
+  // Excel raw source dari `filtered` (bukan `parsed.data` mentah) supaya
+  // baris yang diekspor persis sama dengan yang sedang ditampilkan di layar
+  // — sudah tunduk pada SEMUA filter aktif (region, cabang, category,
+  // category insentif, status DOI), bukan cabang saja.
+  const dualExportRawRows = filtered.length > 0 ? filtered : undefined;
 
   return (
     <div id="export-container" className="space-y-8 pb-16 min-h-screen animate-fade-in text-foreground">
@@ -1588,8 +1711,16 @@ export default function HistorySalesPage() {
                   cabang={selectedCabang}
                   rawRows={dualExportRawRows}
                   cabangField={colCabang}
+                  pptxSlides={buildPptxSlides}
+                  pptxModuleName="History_Sales_Full_Export"
                 />
-              : <ExportHtmlButton elementId="export-container" moduleName="History_Sales_Analytics" processedAt={parsed?.processed_at} />}
+              : <ExportHtmlButton
+                  elementId="export-container"
+                  moduleName="History_Sales_Analytics"
+                  processedAt={parsed?.processed_at}
+                  pptxSlides={buildPptxSlides}
+                  pptxModuleName="History_Sales_Full_Export"
+                />}
             <button
               onClick={() => setShowHowTo(!showHowTo)}
               className="no-export min-h-[44px] w-full sm:w-auto px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-xl text-xs sm:text-sm font-semibold transition-colors flex items-center justify-center gap-2"
@@ -1786,7 +1917,7 @@ export default function HistorySalesPage() {
               <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-300 mb-4 text-center flex items-center justify-center gap-1.5">
                 📊 Jumlah Item dalam 9 Kuadran Matriks ABC-XYZ
               </h4>
-              <div className="h-[280px] w-full flex-1">
+              <div ref={abcXyzChartRef} className="h-[280px] w-full flex-1">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={abcXyzAnalysis.chartData} margin={{ top: 15, right: 15, left: 20, bottom: 20 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.4} />
@@ -1906,7 +2037,7 @@ export default function HistorySalesPage() {
             </div>
           </div>
 
-          <div className="h-[360px] w-full">
+          <div ref={salesChartRef} className="h-[360px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={chartData} margin={{ top: 20, right: 30, left: 30, bottom: 60 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
@@ -1998,7 +2129,7 @@ export default function HistorySalesPage() {
                   </p>
                 </div>
               </div>
-              <div className="h-[350px] w-full mt-2">
+              <div ref={cabangOnlySupplyChartRef} className="h-[350px] w-full mt-2">
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart data={cabangOnlySupplyVsAvg3} margin={{ top: 20, right: 20, left: 30, bottom: 60 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
@@ -2188,7 +2319,7 @@ export default function HistorySalesPage() {
             </div>
           </div>
 
-          <div className="h-[420px] w-full mt-4">
+          <div ref={supplyVsMonthlyChartRef} className="h-[420px] w-full mt-4">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={supplyVsMonthlySales.chartData} margin={{ top: 25, right: 75, left: 75, bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.4} />
@@ -2503,7 +2634,7 @@ export default function HistorySalesPage() {
               <h4 className="text-xs font-bold uppercase tracking-wider text-purple-700 mb-2 text-center flex items-center justify-center gap-2">
                 📊 Proporsi Volume Penjualan per Category Insentif (100% Stacked • Sumbu X: {dynamicMonthLabels.M} s/d {dynamicMonthLabels.M5})
               </h4>
-              <div className="flex-1 w-full">
+              <div ref={insentifChartRef} className="flex-1 w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={insentifChartData.data} margin={{ top: 15, right: 20, left: 10, bottom: 25 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.4} />

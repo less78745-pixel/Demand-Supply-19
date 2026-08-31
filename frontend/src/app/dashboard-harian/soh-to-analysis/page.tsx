@@ -2,7 +2,7 @@
 "use client";
 import LZString from 'lz-string';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { FileUploader } from '@/components/ui/FileUploader';
 import { KPICard } from '@/components/ui/KPICard';
@@ -25,6 +25,7 @@ import { supabase } from '@/lib/supabase';
 import { parseDynamicCSV, findColumn, parseIndonesianNumber, ParsedData } from '@/lib/csvParser';
 import { getStandardFilename } from '@/utils/export';
 import { formatNumberCompact } from '@/lib/utils';
+import type { PptxSlideSpec } from '@/utils/exportPptx';
 
 const COLORS = ['#f97316', '#3b82f6', '#22c55e', '#ef4444', '#a855f7', '#eab308', '#06b6d4', '#ec4899', '#14b8a6', '#6366f1', '#f43f5e', '#84cc16'];
 const TO_COLORS = ['#f97316', '#ef4444', '#eab308', '#ec4899', '#f43f5e', '#d946ef', '#fb923c', '#fde047']; // Warm tones
@@ -288,6 +289,13 @@ export default function SOHAnalysisPage() {
   const [showHowTo, setShowHowTo] = useState<boolean>(false);
   const [activeScenario, setActiveScenario] = useState<ScenarioType>('base');
   const [selectedCabangForChart, setSelectedCabangForChart] = useState<string>('All');
+
+  // "Export to PowerPoint" targets — one ref per chart card so the deck can
+  // carry every chart in the module, not just one slide.
+  const trendChartRef = useRef<HTMLDivElement>(null);
+  const pieCategoryChartRef = useRef<HTMLDivElement>(null);
+  const pieDoiChartRef = useRef<HTMLDivElement>(null);
+  const pieInsentifChartRef = useRef<HTMLDivElement>(null);
 
   // Filter states
   const [selectedCabang, setSelectedCabang] = useState<string[]>(['All']);
@@ -982,6 +990,137 @@ export default function SOHAnalysisPage() {
     };
   }, [detailedTableData]);
 
+  // PPTX deck builder — passed to the shared ExportHtmlButton as `pptxSlides`
+  // so the one Export button downloads HTML(+Excel) and this .pptx together.
+  // Order: 1) trend chart in whichever mode is active ("Grafik Grouping
+  // Mingguan: TO vs Vessel per Group" when in weekly mode), 2) the 3
+  // "Analisis Kontribusi & Proporsi Pasokan" pie charts (grup item/status
+  // DOI/status insentif), 3) a text-only slide for "Kesimpulan Rasio Pasokan
+  // vs Target Efektif", 4) a text-only slide with just the conclusion of the
+  // big SOH & TO comparison table (never its raw rows — those stay in the
+  // Excel export).
+  const buildPptxSlides = (): PptxSlideSpec[] => {
+    if (!trendChartRef.current) return [];
+
+    const filterLabel = [
+      !selectedCabang.includes('All') ? `Cabang: ${selectedCabang.join(', ')}` : null,
+      !selectedCategory.includes('All') ? `Kategori: ${selectedCategory.join(', ')}` : null,
+      !selectedInsentif.includes('All') ? `Insentif: ${selectedInsentif.join(', ')}` : null,
+      !selectedDoi.includes('All') ? `Status DOI: ${selectedDoi.join(', ')}` : null,
+      selectedCabangForChart !== 'All' ? `Sorotan Chart: ${selectedCabangForChart}` : null,
+      `Skenario: ${activeScenario.toUpperCase()}`,
+    ].filter(Boolean).join(' | ');
+
+    const chartModeLabel = chartMode === 'weekly'
+      ? 'Grouping Mingguan TO vs Vessel'
+      : chartMode === 'stock'
+        ? 'On Hand per Kategori'
+        : 'Komparasi Pilar SOH & Inbound per Cabang';
+
+    const trendInsightLines = [
+      `Total Pasokan (On Hand + TO + Vessel): ${calculationSummary.totalSupply.toLocaleString('id-ID')} ${unitLabel} vs Target Efektif ${calculationSummary.totalEffectiveTarget.toLocaleString('id-ID')} ${unitLabel}.`,
+      `Rasio Global: ${calculationSummary.globalRatio}x — Status: ${calculationSummary.globalStatus}.`,
+      ratioInsights ? `Distribusi kondisi dari ${ratioInsights.totalItems} item: ${ratioInsights.bahayaCount} Bahaya (${ratioInsights.bahayaPct}%), ${ratioInsights.hatiCount} Hati-Hati, ${ratioInsights.amanCount} Aman, ${ratioInsights.overstockCount} Overstock (${ratioInsights.overstockPct}%).` : null,
+      ratioInsights?.topCritical?.[0] ? `Item paling kritis: ${ratioInsights.topCritical[0].description} (${ratioInsights.topCritical[0].cabang}), rasio ${ratioInsights.topCritical[0].ratio}x, defisit ${Math.round(ratioInsights.topCritical[0].defisit).toLocaleString('id-ID')} ${unitLabel}.` : null,
+      ratioInsights?.topOverstock?.[0] ? `Item overstock terbesar: ${ratioInsights.topOverstock[0].description} (${ratioInsights.topOverstock[0].cabang}), rasio ${ratioInsights.topOverstock[0].ratio}x, surplus ${Math.round(ratioInsights.topOverstock[0].surplus).toLocaleString('id-ID')} ${unitLabel}.` : null,
+      'Rekomendasi: prioritaskan replenishment/relokasi untuk item Bahaya, dan evaluasi rebalancing untuk item Overstock agar kapasitas gudang tidak tertahan.',
+    ].filter(Boolean).join('\n');
+
+    const slides: PptxSlideSpec[] = [
+      {
+        chartElement: trendChartRef.current,
+        insightText: trendInsightLines,
+        slideTitle: `SOH to Analysis - ${chartModeLabel} (${filterLabel})`,
+      },
+    ];
+
+    if (pieCategoryChartRef.current && pieCategoryData.length > 0) {
+      const top = pieCategoryData[0];
+      const insightText = [
+        `Grup item dengan porsi pasokan terbesar: ${top.name} (${top.percentage}% dari total ${unitLabel}).`,
+        pieCategoryData[1] ? `Grup terbesar kedua: ${pieCategoryData[1].name} (${pieCategoryData[1].percentage}%).` : null,
+        `Total ${pieCategoryData.length} grup item terdata di ${selectedCabangForChart === 'All' ? 'seluruh cabang' : selectedCabangForChart}.`,
+      ].filter(Boolean).join('\n');
+      slides.push({
+        chartElement: pieCategoryChartRef.current,
+        insightText,
+        slideTitle: `SOH to Analysis - Porsi per Grup Item (${filterLabel})`,
+      });
+    }
+
+    if (pieDoiChartRef.current && pieDoiData.length > 0) {
+      const top = pieDoiData[0];
+      const insightText = [
+        `Status DOI dengan porsi pasokan terbesar: ${top.name} (${top.percentage}% dari total ${unitLabel}).`,
+        pieDoiData[1] ? `Status terbesar kedua: ${pieDoiData[1].name} (${pieDoiData[1].percentage}%).` : null,
+        'Rekomendasi: evaluasi item Slow Moving/undefined untuk potensi rebalancing atau likuidasi stok.',
+      ].filter(Boolean).join('\n');
+      slides.push({
+        chartElement: pieDoiChartRef.current,
+        insightText,
+        slideTitle: `SOH to Analysis - Porsi per Status DOI (${filterLabel})`,
+      });
+    }
+
+    if (pieInsentifChartRef.current && pieInsentifData.length > 0) {
+      const top = pieInsentifData[0];
+      const insightText = [
+        `Status Insentif dengan porsi pasokan terbesar: ${top.name} (${top.percentage}% dari total ${unitLabel}).`,
+        pieInsentifData[1] ? `Status terbesar kedua: ${pieInsentifData[1].name} (${pieInsentifData[1].percentage}%).` : null,
+        `Total ${pieInsentifData.length} kategori status insentif terdata di ${selectedCabangForChart === 'All' ? 'seluruh cabang' : selectedCabangForChart}.`,
+      ].filter(Boolean).join('\n');
+      slides.push({
+        chartElement: pieInsentifChartRef.current,
+        insightText,
+        slideTitle: `SOH to Analysis - Porsi per Status Insentif (${filterLabel})`,
+      });
+    }
+
+    // "Kesimpulan Rasio Pasokan vs Target Efektif" — this section is a
+    // written conclusion, not a chart, so it exports as a text-only slide.
+    const kesimpulanRasioLines = [
+      `Total Pasokan (SOH + TO + Vessel): ${calculationSummary.totalSupply.toLocaleString('id-ID')} ${unitLabel}.`,
+      `Outstanding Target: ${calculationSummary.totalOutstanding.toLocaleString('id-ID')} ${unitLabel} | Sales Berjalan: ${calculationSummary.totalSalesBerjalan.toLocaleString('id-ID')} ${unitLabel}.`,
+      `Target Efektif (Outstanding - Sales Berjalan): ${calculationSummary.totalEffectiveTarget.toLocaleString('id-ID')} ${unitLabel}.`,
+      `Hasil Rasio vs Target Efektif: ${calculationSummary.globalRatio}x — Kesimpulan Kondisi Keseluruhan: ${calculationSummary.globalStatus}.`,
+      `Rincian baris (${calculationSummary.totalItems.toLocaleString('id-ID')} kombinasi cabang/kategori): 🟣 Overstock ${calculationSummary.countOverstock} | 🟢 Aman ${calculationSummary.countAman} | 🟡 Hati-Hati ${calculationSummary.countHati} | 🔴 Bahaya ${calculationSummary.countBahaya}.`,
+      'Logika evaluasi: Overstock = rasio > 1.50 | Aman = 1.25-1.50 | Hati-Hati = 1.00-1.25 | Bahaya = rasio < 1.00 (pasokan tidak mencukupi sisa target).',
+    ].filter(Boolean).join('\n');
+    slides.push({
+      insightText: kesimpulanRasioLines,
+      slideTitle: `SOH to Analysis - Kesimpulan Rasio Pasokan vs Target Efektif (${filterLabel})`,
+    });
+
+    // "Tabel Analisis Komparatif SOH & TO — Detail Cabang per Kategori" —
+    // the user wants only this table's conclusion in the deck, never the raw
+    // rows themselves (those stay in the Excel export).
+    if (ratioInsights) {
+      const topCriticalLines = ratioInsights.topCritical.map((item: any, i: number) =>
+        `  ${i + 1}. ${item.description} (${item.cabang}) — rasio ${item.ratio}x, defisit ${Math.round(item.defisit).toLocaleString('id-ID')} ${unitLabel}.`
+      );
+      const topOverstockLines = ratioInsights.topOverstock.map((item: any, i: number) =>
+        `  ${i + 1}. ${item.description} (${item.cabang}) — rasio ${item.ratio}x, surplus ${Math.round(item.surplus).toLocaleString('id-ID')} ${unitLabel}.`
+      );
+      const tableConclusionLines = [
+        `Total baris dianalisis: ${ratioInsights.totalItems.toLocaleString('id-ID')} kombinasi cabang/kategori.`,
+        `Distribusi kondisi: 🔴 Bahaya ${ratioInsights.bahayaCount} (${ratioInsights.bahayaPct}%) | 🟡 Hati-Hati ${ratioInsights.hatiCount} | 🟢 Aman ${ratioInsights.amanCount} | 🟣 Overstock ${ratioInsights.overstockCount} (${ratioInsights.overstockPct}%).`,
+        `Total defisit dari item Bahaya: ${Math.round(ratioInsights.totalDefisitQty).toLocaleString('id-ID')} ${unitLabel}.`,
+        `Total surplus dari item Overstock: ${Math.round(ratioInsights.totalSurplusQty).toLocaleString('id-ID')} ${unitLabel}.`,
+        topCriticalLines.length ? 'Top item paling kritis (Bahaya):' : null,
+        ...topCriticalLines,
+        topOverstockLines.length ? 'Top item overstock terbesar:' : null,
+        ...topOverstockLines,
+        'Rekomendasi: prioritaskan replenishment/relokasi untuk item Bahaya, dan evaluasi rebalancing untuk item Overstock agar kapasitas gudang tidak tertahan.',
+      ].filter(Boolean).join('\n');
+      slides.push({
+        insightText: tableConclusionLines,
+        slideTitle: `SOH to Analysis - Kesimpulan Tabel Komparatif SOH & TO (${ratioInsights.totalItems.toLocaleString('id-ID')} baris)`,
+      });
+    }
+
+    return slides;
+  };
+
   const handleExport = () => {
     if (!currentData || !currentData.data || displayedSohTableData.length === 0) return;
     const header = [
@@ -1127,12 +1266,14 @@ export default function SOHAnalysisPage() {
     ],
   } : undefined;
 
-  // ── Dual-export (HTML + Excel raw data terfilter cabang) wiring ──
-  // Excel raw source diambil dari `currentData.data` (sheet Qty/Value yang
-  // sedang aktif, sebelum filter category/insentif/DOI, hanya cabang) supaya
-  // Excel berisi seluruh record cabang terpilih apa adanya, dan filter cabang
-  // benar-benar ditegakkan ulang di backend.
-  const dualExportRawRows = currentData?.data ?? undefined;
+  // ── Dual-export (HTML + Excel raw data terfilter) wiring ──
+  // Excel raw source diambil dari `filtered` (bukan `currentData.data`) supaya
+  // Excel benar-benar mencerminkan SEMUA filter yang aktif di layar saat ini
+  // (cabang, category, status insentif, status DOI, plus multiplier skenario
+  // yang sudah diterapkan) - bukan cuma cabang. `filtered` tetap punya bentuk
+  // kolom yang sama dengan raw data (spread `{...row}` per baris di useMemo
+  // `filtered`), jadi tetap valid sebagai sumber Excel "raw data".
+  const dualExportRawRows = filtered.length > 0 ? filtered : undefined;
 
   return (
     <div id="export-container" className="space-y-8 pb-16 min-h-screen animate-fade-in text-foreground">
@@ -1154,8 +1295,16 @@ export default function SOHAnalysisPage() {
                   cabang={selectedCabang}
                   rawRows={dualExportRawRows}
                   cabangField={colCabang}
+                  pptxSlides={buildPptxSlides}
+                  pptxModuleName={`SOH_to_Analysis_${selectedSheetName}`}
                 />
-              : <ExportHtmlButton elementId="export-container" moduleName="SOH_TO_Analysis" processedAt={parsed?.processed_at} />}
+              : <ExportHtmlButton
+                  elementId="export-container"
+                  moduleName="SOH_TO_Analysis"
+                  processedAt={parsed?.processed_at}
+                  pptxSlides={buildPptxSlides}
+                  pptxModuleName={`SOH_to_Analysis_${selectedSheetName}`}
+                />}
             <button
               onClick={() => setShowHowTo(!showHowTo)}
               className="no-export min-h-[44px] w-full sm:w-auto px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-xl text-xs sm:text-sm font-semibold transition-colors flex items-center justify-center gap-2"
@@ -1442,7 +1591,7 @@ export default function SOHAnalysisPage() {
             </div>
           )}
 
-          <div className="h-[400px] w-full">
+          <div ref={trendChartRef} className="h-[400px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               {chartMode === 'weekly' ? (
                 <BarChart data={weeklyGroupedData} margin={{ top: 20, right: 30, left: 10, bottom: 20 }}>
@@ -1525,6 +1674,7 @@ export default function SOHAnalysisPage() {
           {/* PIE 1: KATEGORI */}
           {pieCategoryData && pieCategoryData.length > 0 && (
             <GlassCard className="p-5 border-purple-500/30 bg-gradient-to-b from-slate-900/95 to-slate-950/95 shadow-2xl flex flex-col">
+              <div ref={pieCategoryChartRef} className="flex flex-col flex-1">
               <h3 className="text-sm font-black text-purple-300 border-b border-slate-200 pb-3 mb-3 flex items-center gap-2">
                 🏷️ Porsi per Grup Item
               </h3>
@@ -1570,12 +1720,14 @@ export default function SOHAnalysisPage() {
                   </div>
                 ))}
               </div>
+              </div>
             </GlassCard>
           )}
 
           {/* PIE 2: STATUS DOI */}
           {pieDoiData && pieDoiData.length > 0 && (
             <GlassCard className="p-5 border-blue-500/30 bg-gradient-to-b from-slate-900/95 to-slate-950/95 shadow-2xl flex flex-col">
+              <div ref={pieDoiChartRef} className="flex flex-col flex-1">
               <h3 className="text-sm font-black text-blue-300 border-b border-slate-200 pb-3 mb-3 flex items-center gap-2">
                 🔖 Porsi per Status DOI
               </h3>
@@ -1621,12 +1773,14 @@ export default function SOHAnalysisPage() {
                   </div>
                 ))}
               </div>
+              </div>
             </GlassCard>
           )}
 
           {/* PIE 3: STATUS INSENTIF */}
           {pieInsentifData && pieInsentifData.length > 0 && (
             <GlassCard className="p-5 border-emerald-500/30 bg-gradient-to-b from-slate-900/95 to-slate-950/95 shadow-2xl flex flex-col">
+              <div ref={pieInsentifChartRef} className="flex flex-col flex-1">
               <h3 className="text-sm font-black text-emerald-300 border-b border-slate-200 pb-3 mb-3 flex items-center gap-2">
                 🏆 Porsi per Status Insentif
               </h3>
@@ -1671,6 +1825,7 @@ export default function SOHAnalysisPage() {
                     </div>
                   </div>
                 ))}
+              </div>
               </div>
             </GlassCard>
           )}

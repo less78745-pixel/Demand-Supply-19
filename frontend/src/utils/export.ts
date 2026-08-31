@@ -8,7 +8,7 @@ import { useAuthStore } from '@/stores/useAuthStore';
 export function getStandardFilename(
   moduleName: string,
   processedAt?: string | null,
-  extension?: 'csv' | 'xlsx' | 'json' | 'html'
+  extension?: 'csv' | 'xlsx' | 'json' | 'html' | 'pptx'
 ): string {
   // 1. Bersihkan Nama Modul
   const cleanModule = moduleName.trim().replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '');

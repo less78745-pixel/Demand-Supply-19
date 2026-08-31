@@ -6,6 +6,7 @@ import { getHtmlExportString, downloadHtml, downloadBlob } from '@/utils/exportH
 import { buildOfflineExportHtml, ModuleExportConfig } from '@/utils/offlineExport';
 import { getStandardFilename } from '@/utils/export';
 import { exportDualFormat } from '@/lib/api';
+import { generateMultiSlidePptxBlob, type PptxSlideSpec } from '@/utils/exportPptx';
 import toast from 'react-hot-toast';
 
 interface ExportHtmlButtonProps {
@@ -32,6 +33,16 @@ interface ExportHtmlButtonProps {
   dataKey?: string;
   /** Override nama kolom cabang pada rawRows, kalau auto-detect di backend tidak cocok. */
   cabangField?: string;
+  /**
+   * Opsional: builder slide PPTX modul ini. Dipanggil saat tombol diklik
+   * (bukan saat render) supaya selalu memakai ref chart & filter yang aktif
+   * saat itu, bukan closure lama. Kembalikan array kosong/null untuk skip
+   * (mis. chart belum ter-mount). Saat prop ini diisi, satu klik tombol akan
+   * membundel HTML(+Excel) DAN file .pptx ke dalam SATU file .zip.
+   */
+  pptxSlides?: () => PptxSlideSpec[] | null | undefined | Promise<PptxSlideSpec[] | null | undefined>;
+  /** Nama modul untuk nama file .pptx — default ke `moduleName` bila tidak diisi. */
+  pptxModuleName?: string;
 }
 
 export function ExportHtmlButton({
@@ -46,15 +57,21 @@ export function ExportHtmlButton({
   rawRows,
   dataKey,
   cabangField,
+  pptxSlides,
+  pptxModuleName,
 }: ExportHtmlButtonProps) {
   const [isExporting, setIsExporting] = useState(false);
   const isDualMode = resultId !== undefined || (rawRows?.length ?? 0) > 0;
+  const hasPptx = !!pptxSlides;
+  const isZipMode = isDualMode || hasPptx;
 
   const handleExport = async () => {
     try {
       setIsExporting(true);
       toast.loading(
-        isDualMode ? 'Menyiapkan file Export (HTML + Excel)...' : 'Menyiapkan file HTML...',
+        hasPptx
+          ? `Menyiapkan file Export (HTML${isDualMode ? ' + Excel' : ''} + PowerPoint)...`
+          : (isDualMode ? 'Menyiapkan file Export (HTML + Excel)...' : 'Menyiapkan file HTML...'),
         { id: 'export-html' }
       );
 
@@ -62,28 +79,98 @@ export function ExportHtmlButton({
       await new Promise(r => setTimeout(r, 500));
 
       const htmlString = config ? buildOfflineExportHtml(config) : getHtmlExportString(elementId!);
+      const baseFilename = getStandardFilename(moduleName, processedAt);
 
-      if (!isDualMode) {
+      // Bangun PPTX-nya (bila diminta) lebih dulu, sebelum memutuskan strategi
+      // unduh — supaya modul dengan pptxSlides selalu berakhir sebagai SATU
+      // .zip (HTML + Excel-bila-dual + PPTX), bukan file .pptx terpisah.
+      // Kegagalan di sini ditangkap sendiri supaya HTML/Excel yang sudah siap
+      // tetap terunduh walau pembuatan PPTX gagal.
+      let pptxBlob: Blob | null = null;
+      if (pptxSlides) {
+        try {
+          const slides = await pptxSlides();
+          if (slides && slides.length > 0) {
+            pptxBlob = await generateMultiSlidePptxBlob({ slides });
+          }
+        } catch (pptxErr: any) {
+          console.error('PPTX Export Error (melanjutkan tanpa PPTX)', pptxErr);
+          toast.error('Gagal membuat PowerPoint, melanjutkan tanpa PPTX: ' + (pptxErr.message || 'Error tidak diketahui'));
+        }
+      }
+      const pptxFilename = pptxBlob ? getStandardFilename(pptxModuleName || moduleName, processedAt, 'pptx') : null;
+
+      if (!isDualMode && !pptxBlob) {
+        // Mode paling sederhana: HTML polos, tanpa zip (perilaku lama, tidak berubah).
         const filename = getStandardFilename(moduleName, processedAt, 'html');
         downloadHtml(htmlString, filename);
         toast.success('File HTML berhasil diunduh!', { id: 'export-html' });
-        return;
-      }
+      } else if (!isDualMode && pptxBlob) {
+        // HTML + PPTX saja (tanpa Excel) — bundel jadi satu .zip di client.
+        // Konversi ke ArrayBuffer dulu: JSZip mendeteksi dukungan Blob lewat
+        // FileReader, dan itu pernah gagal ("Can't read the data...") untuk
+        // Blob dari sumber lain (mis. hasil pptxgenjs) — ArrayBuffer selalu
+        // didukung tanpa syarat.
+        const { default: JSZip } = await import('jszip');
+        const pptxArrayBuffer = await pptxBlob.arrayBuffer();
+        const zip = new JSZip();
+        zip.file(getStandardFilename(moduleName, processedAt, 'html'), htmlString);
+        zip.file(pptxFilename!, pptxArrayBuffer);
+        const finalBlob = await zip.generateAsync({ type: 'blob' });
+        downloadBlob(finalBlob, `${baseFilename}.zip`);
+        toast.success('File Export (HTML + PowerPoint) berhasil diunduh!', { id: 'export-html' });
+      } else if (pptxBlob) {
+        // Dual mode + PPTX: minta backend HANYA raw bytes .xlsx (bukan .zip
+        // siap-pakai), lalu susun .zip-nya sendiri di client dari data mentah
+        // (html string + xlsx arraybuffer + pptx arraybuffer). Sengaja TIDAK
+        // memakai zip .zip bawaan backend lalu di-unzip+rezip di sini — JSZip
+        // memverifikasi ulang ukuran hasil dekompresi tiap entry saat
+        // meng-generate ulang sebuah zip yang di-load, dan itu bisa gagal
+        // ("Bug : uncompressed data size mismatch") untuk entry yang
+        // seharusnya cukup di-passthrough apa adanya. Membangun sekali dari
+        // data mentah menghindari masalah itu sepenuhnya.
+        const excelBlob = await exportDualFormat({
+          moduleName,
+          processedAt,
+          cabang: cabang && cabang.length > 0 ? cabang : ['All'],
+          htmlContent: htmlString,
+          baseFilename,
+          resultId,
+          rows: rawRows,
+          dataKey,
+          cabangField,
+          excelOnly: true,
+        });
 
-      const baseFilename = getStandardFilename(moduleName, processedAt);
-      const zipBlob = await exportDualFormat({
-        moduleName,
-        processedAt,
-        cabang: cabang && cabang.length > 0 ? cabang : ['All'],
-        htmlContent: htmlString,
-        baseFilename,
-        resultId,
-        rows: rawRows,
-        dataKey,
-        cabangField,
-      });
-      downloadBlob(zipBlob, `${baseFilename}.zip`);
-      toast.success('File Export (HTML + Excel) berhasil diunduh!', { id: 'export-html' });
+        const { default: JSZip } = await import('jszip');
+        const [excelArrayBuffer, pptxArrayBuffer] = await Promise.all([
+          excelBlob.arrayBuffer(),
+          pptxBlob.arrayBuffer(),
+        ]);
+        const zip = new JSZip();
+        zip.file(`${baseFilename}.html`, htmlString);
+        zip.file(`${baseFilename}.xlsx`, excelArrayBuffer);
+        zip.file(pptxFilename!, pptxArrayBuffer);
+        const finalBlob = await zip.generateAsync({ type: 'blob' });
+        downloadBlob(finalBlob, `${baseFilename}.zip`);
+        toast.success('File Export (HTML + Excel + PowerPoint) berhasil diunduh!', { id: 'export-html' });
+      } else {
+        // Mode dual tanpa PPTX (perilaku lama, tidak berubah): backend sudah
+        // membangun .zip berisi HTML + Excel, cukup diunduh apa adanya.
+        const zipBlob = await exportDualFormat({
+          moduleName,
+          processedAt,
+          cabang: cabang && cabang.length > 0 ? cabang : ['All'],
+          htmlContent: htmlString,
+          baseFilename,
+          resultId,
+          rows: rawRows,
+          dataKey,
+          cabangField,
+        });
+        downloadBlob(zipBlob, `${baseFilename}.zip`);
+        toast.success('File Export (HTML + Excel) berhasil diunduh!', { id: 'export-html' });
+      }
     } catch (err: any) {
       toast.error('Gagal mengekspor: ' + (err.message || 'Error tidak diketahui'), { id: 'export-html' });
       console.error("Export Error", err);
@@ -102,12 +189,16 @@ export function ExportHtmlButton({
           : 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white hover:-translate-y-0.5 border border-emerald-400'
         } ${className}`}
       title={
-        isDualMode
-          ? 'Unduh HTML laporan + Excel raw data (terfilter cabang) dalam satu file .zip'
-          : 'Unduh seluruh halaman ini ke dalam bentuk file HTML interaktif statis'
+        hasPptx
+          ? (isDualMode
+              ? 'Unduh HTML laporan + Excel raw data + slide PowerPoint (grafik & insight) dalam satu file .zip'
+              : 'Unduh HTML laporan + slide PowerPoint (grafik & insight) dalam satu file .zip')
+          : (isDualMode
+              ? 'Unduh HTML laporan + Excel raw data (terfilter cabang) dalam satu file .zip'
+              : 'Unduh seluruh halaman ini ke dalam bentuk file HTML interaktif statis')
       }
     >
-      {isDualMode ? <FileArchive className="w-4 h-4" /> : <FileCode className="w-4 h-4" />}
+      {isZipMode ? <FileArchive className="w-4 h-4" /> : <FileCode className="w-4 h-4" />}
       {isExporting ? 'Memproses...' : label}
     </button>
   );

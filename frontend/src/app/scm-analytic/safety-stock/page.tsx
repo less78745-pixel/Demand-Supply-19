@@ -430,11 +430,11 @@ export default function SafetyStockPage() {
     ],
   } : undefined;
 
-  // ── Dual-export (HTML + Excel raw data terfilter cabang) wiring ──
-  // Excel diambil dari `results.results` (raw, sebelum filter status/skenario)
-  // supaya backend yang menegakkan ulang filter cabang, bukan sekadar
-  // meneruskan subset yang sudah difilter di client.
-  const dualExportRawRows = results?.results;
+  // ── Dual-export (HTML + Excel raw data terfilter cabang+status) wiring ──
+  // Pakai `filtered` (bukan `results.results` mentah) supaya Excel yang
+  // diekspor mencerminkan SEMUA filter aktif di layar (Cabang + Status +
+  // skenario), bukan cuma cabang yang ditegakkan ulang di backend.
+  const dualExportRawRows = filtered.length > 0 ? filtered : undefined;
 
   return (
     <div id="export-container" className="space-y-8 max-w-[1550px] mx-auto pb-16 animate-in fade-in duration-500 text-foreground">
