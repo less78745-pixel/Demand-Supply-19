@@ -6,6 +6,30 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  webpack: (config, { isServer, webpack }) => {
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        net: false,
+        tls: false,
+        crypto: false,
+        https: false,
+        http: false,
+        stream: false,
+        child_process: false,
+      };
+      
+      // Handle node: protocol imports by stripping the prefix
+      // so the fallback above catches them
+      config.plugins.push(
+        new webpack.NormalModuleReplacementPlugin(/^node:/, (resource) => {
+          resource.request = resource.request.replace(/^node:/, '');
+        })
+      );
+    }
+    return config;
+  },
   // Increase proxy timeout for heavy ML computation endpoints
   serverRuntimeConfig: {
     proxyTimeout: 300000, // 5 minutes
