@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import math
 from datetime import datetime
+from sklearn.cluster import KMeans
 
 # ── 28 Cabang Reference ──
 CABANG_LIST = [
@@ -45,6 +46,59 @@ def _get_z_score(service_level: float) -> float:
     # Find closest key
     closest = min(Z_SCORE_TABLE.keys(), key=lambda k: abs(k - service_level))
     return Z_SCORE_TABLE[closest]
+
+
+_TIER_NAMES = ['A', 'B', 'C', 'D', 'E']
+
+
+def _segment_service_levels(adu: np.ndarray, cov: np.ndarray, base_service_level: float, n_segments: int = 3):
+    """
+    Segment SKUs by (volume, variability) via KMeans and assign each segment
+    its own service-level target, instead of one static level for every SKU.
+
+    High-volume / low-variability SKUs (Tier A) get pushed above the base
+    service level; low-volume / high-variability SKUs (lower tiers) get
+    pulled below it, since stocking them to the same 95%+ target as a
+    fast-mover mostly just ties up working capital. The underlying Safety
+    Stock formula (Z x sigma x sqrt(LT)) is unchanged - only the Z that goes
+    into it now depends on which cluster a SKU falls in.
+
+    Cluster boundaries are learned per-dataset (KMeans), not fixed volume/CoV
+    thresholds, so the segmentation adapts to whatever mix of SKUs is
+    actually uploaded rather than a hardcoded ABC/XYZ cutoff.
+
+    Returns (segment_label, assigned_service_level) arrays aligned to input.
+    """
+    n = len(adu)
+    if n < n_segments * 2:
+        # Too few distinct SKUs to cluster meaningfully - keep the base level.
+        return np.array(['-'] * n, dtype=object), np.full(n, base_service_level)
+
+    log_adu = np.log1p(np.clip(adu, a_min=0, a_max=None))
+    features = np.column_stack([log_adu, cov])
+    mu, sigma = features.mean(axis=0), features.std(axis=0)
+    sigma[sigma == 0] = 1.0
+    X = (features - mu) / sigma
+
+    k = min(n_segments, n)
+    km = KMeans(n_clusters=k, random_state=42, n_init=10).fit(X)
+    labels = km.labels_
+
+    # Rank clusters by priority = high volume, low variability -> highest tier.
+    centroids = km.cluster_centers_
+    priority_score = centroids[:, 0] - centroids[:, 1]
+    order = np.argsort(-priority_score)
+
+    spread = np.linspace(0.04, -0.05, k)  # top tier +4pp, bottom tier -5pp vs base
+    level_by_cluster = {}
+    tier_by_cluster = {}
+    for rank, cluster_id in enumerate(order):
+        level_by_cluster[cluster_id] = float(min(0.99, max(0.90, base_service_level + spread[rank])))
+        tier_by_cluster[cluster_id] = _TIER_NAMES[rank] if rank < len(_TIER_NAMES) else str(rank)
+
+    assigned_level = np.array([level_by_cluster[c] for c in labels])
+    segment_label  = np.array([tier_by_cluster[c] for c in labels], dtype=object)
+    return segment_label, assigned_level
 
 
 def analyze_safety_stock(df: pd.DataFrame, service_level: float = 0.95) -> dict:
@@ -110,8 +164,8 @@ def analyze_safety_stock(df: pd.DataFrame, service_level: float = 0.95) -> dict:
         else:
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
     
-    z_score = _get_z_score(service_level)
-    
+    z_score = _get_z_score(service_level)  # kept as the "base" level segmentation spreads around
+
     # ── Aggregate per Cabang-SKU ──
     grouped = df.groupby(['Cabang', 'SKU']).agg(
         ADU=('Daily_Usage', 'mean'),
@@ -144,8 +198,17 @@ def analyze_safety_stock(df: pd.DataFrame, service_level: float = 0.95) -> dict:
     moq           = grouped['MOQ'].astype(float).clip(lower=0)
     order_cycle   = grouped['Order_Cycle'].astype(float).clip(lower=7)  # default 7 days
 
-    # SS = Z × σ_demand × √Lead_Time
-    safety_stock_v = z_score * std_usage * np.sqrt(lt)
+    # ── SKU segmentation (ABC-XYZ via KMeans clustering on volume x variability) ──
+    # Every SKU used to get the same z_score regardless of how much it moves or how
+    # erratic its demand is. Segmenting by (ADU, CoV) lets fast/stable movers run a
+    # leaner buffer than slow/erratic ones instead of over-stocking everything to
+    # one flat service level.
+    cov_for_segmentation = (std_usage / (adu + 0.001)).values
+    segment_v, assigned_service_level_v = _segment_service_levels(adu.values, cov_for_segmentation, service_level)
+    z_score_v = np.array([_get_z_score(lvl) for lvl in assigned_service_level_v])
+
+    # SS = Z × σ_demand × √Lead_Time (Z is now per-SKU-segment, not one global constant)
+    safety_stock_v = z_score_v * std_usage * np.sqrt(lt)
     # ROP = (ADU × LT) + SS
     rop_v = (adu * lt) + safety_stock_v
     # Lead Time Factor: based on variability (higher = more buffer)
@@ -213,7 +276,9 @@ def analyze_safety_stock(df: pd.DataFrame, service_level: float = 0.95) -> dict:
             "adu": _safe_float(adu_i),
             "std_usage": _safe_float(std_usage.iat[i]),
             "lead_time": _safe_float(lt.iat[i]),
-            "z_score": _safe_float(z_score),
+            "segment": segment_v[i],
+            "assigned_service_level": _safe_float(assigned_service_level_v[i]),
+            "z_score": _safe_float(z_score_v[i]),
             "safety_stock": _safe_float(safety_stock_v.iat[i]),
             "rop": _safe_float(rop),
             "current_stock": _safe_float(current_stock.iat[i]),
@@ -263,7 +328,12 @@ def analyze_safety_stock(df: pd.DataFrame, service_level: float = 0.95) -> dict:
     avg_dos = np.mean([r['dos'] for r in results]) if results else 0
     avg_ss = np.mean([r['safety_stock'] for r in results]) if results else 0
     reorder_count = sum(1 for r in results if r['needs_reorder'])
-    
+
+    # ── Segment distribution (from the KMeans-based ABC-XYZ segmentation above) ──
+    segment_counts: dict = {}
+    for r in results:
+        segment_counts[r['segment']] = segment_counts.get(r['segment'], 0) + 1
+
     # ── Service Level Simulation ──
     # Was recomputing `grouped.iterrows()` from scratch for each of the 6
     # service levels; `std_usage`/`lt` above are the same (non-negative,
@@ -295,6 +365,7 @@ def analyze_safety_stock(df: pd.DataFrame, service_level: float = 0.95) -> dict:
             "avg_dos": _safe_float(avg_dos),
             "avg_safety_stock": _safe_float(avg_ss),
             "service_level": f"{int(service_level*100)}%",
+            "segment_distribution": segment_counts,
         },
         "analysis_date": datetime.now().strftime("%Y-%m-%d %H:%M"),
     }

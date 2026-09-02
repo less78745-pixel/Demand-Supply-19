@@ -33,7 +33,7 @@ const SCENARIOS = [
   {
     id: 'actual' as ScenarioType,
     title: 'Jalur 1: Prediksi Baseline ML & Aktual (Standard)',
-    desc: 'Prospeki peramalan permintaan berbasis 15 Algoritma ML (XGBoost, Hybrid Ensemble, Prophet) berdasarkan historis murni.',
+    desc: 'Prospeki peramalan permintaan berbasis 9 Model Time-Series & ML (XGBoost, LightGBM, SARIMAX, Holt-Winters, Hybrid Ensemble) berdasarkan historis murni.',
     color: 'from-purple-600 to-indigo-500',
     icon: LineChart,
     modifier: 1.0
@@ -60,7 +60,7 @@ function generateDemoForecast() {
   const dates = ['2026-01-01', '2026-02-01', '2026-03-01', '2026-04-01', '2026-05-01', '2026-06-01', '2026-07-01 (Future)', '2026-08-01 (Future)'];
   const cabangs = ['Bali', 'Jakarta', 'Surabaya'];
   const categories = ['Apparel', 'Automotive', 'Electronics'];
-  const available_methods = ['Hybrid Ensemble', 'XGBoost', 'SARIMAX', 'Fb Prophet', 'SMA-3'];
+  const available_methods = ['Hybrid Ensemble', 'XGBoost', 'LightGBM', 'SARIMAX', 'SMA-3'];
 
   const forecast_data: any[] = [];
   cabangs.forEach(c => {
@@ -96,7 +96,7 @@ function generateDemoForecast() {
 
   return {
     processed_at: new Date().toISOString(),
-    best_model: 'Hybrid Ensemble (BiLSTM + XGBoost)',
+    best_model: 'Hybrid Ensemble (XGBoost + LightGBM)',
     available_methods,
     forecast_data,
     inventory_kpis: { avg_reorder_point: 58400, avg_safety_stock: 18200 },
@@ -104,7 +104,7 @@ function generateDemoForecast() {
       'Model Hybrid Ensemble unggul dengan akurasi 95.8% pada kategori Electronics di Jakarta & Bali.',
       'Variabel eksogen (AO dan New Outlet/NOO) memiliki korelasi kuat (+0.84) terhadap kenaikan sales di pertengahan tahun.'
     ],
-    model_tally: { 'Hybrid Ensemble': 14, 'XGBoost': 8, 'Fb Prophet': 5 }
+    model_tally: { 'Hybrid Ensemble': 14, 'XGBoost': 8, 'SARIMAX': 5 }
   };
 }
 
@@ -353,7 +353,7 @@ export default function ForecastPage() {
     if (!results) return;
     const XLSX = await import('xlsx');
 
-    const methods = results.available_methods || ['SMA-3', 'SES', 'Trend', 'SARIMAX', 'XGBoost', 'SAMAI', 'BiLSTM', 'Hybrid Ensemble', 'Fb Prophet', 'ARIMAX', 'GNN', 'LightGBM', 'GARCH', 'Wavelet', 'LSTM-GRU'];
+    const methods = results.available_methods || ['SMA-3', 'SES', 'Trend', 'SAMAI', 'Holt-Winters', 'SARIMAX', 'XGBoost', 'LightGBM', 'Hybrid Ensemble'];
 
     const getBestModelValue = (r: any): number | null => {
       const bestModel = String(r.best_model || results.best_model || '').trim().toLowerCase();
@@ -635,7 +635,7 @@ export default function ForecastPage() {
         eyebrow="Kalkulator DSP • ML & AI Forecasting"
         title="Advanced Causal"
         highlight="Sales Forecasting"
-        description="Peramalan permintaan hierarkis memadukan tren historis dengan variabel eksogen (AO, RO, Drop Size, NOO) menggunakan 15 algoritma Machine Learning modern."
+        description="Peramalan permintaan hierarkis memadukan tren historis dengan variabel eksogen (AO, RO, Drop Size, NOO) menggunakan 9 model Time-Series & Machine Learning asli (XGBoost, LightGBM, SARIMAX, Holt-Winters)."
         actions={
           <>
             <TimestampBadge timestamp={results?.processed_at} label="Olah Terakhir:" />
@@ -707,7 +707,7 @@ export default function ForecastPage() {
             <div className="space-y-3">
               <h4 className="font-semibold text-foreground">⚙️ Auto-ML Pipeline & Covariates Optimization:</h4>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                Sistem mengevaluasi model stabil (SMA, SES) hingga model Machine Learning & Deep Learning (XGBoost, ARIMAX, Prophet, BiLSTM-Hybrid). Variabel eksogen (AO, RO, NOO) digunakan sebagai *causal booster* untuk akurasi optimal.
+                Sistem mengevaluasi model statistik dasar (SMA, SES, Trend) hingga model Machine Learning asli (XGBoost, LightGBM, SARIMAX, Holt-Winters). Variabel eksogen (AO, RO, NOO) digunakan sebagai fitur tambahan pada model boosting untuk akurasi optimal.
               </p>
               <div className="p-3 bg-purple-500/10 border border-purple-500/20 rounded-xl text-xs text-purple-300 flex items-center gap-2">
                 <Info className="w-4 h-4 shrink-0 text-purple-400" />

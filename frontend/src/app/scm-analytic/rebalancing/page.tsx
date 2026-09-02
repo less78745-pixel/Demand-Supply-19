@@ -171,6 +171,7 @@ const normalizeData = (data: any) => {
     ...data,
     recommendations: Array.isArray(data.recommendations) ? data.recommendations : [],
     infeasible: Array.isArray(data.infeasible) ? data.infeasible : [],
+    low_value_skipped: Array.isArray(data.low_value_skipped) ? data.low_value_skipped : [],
     route_summary: Array.isArray(data.route_summary) ? data.route_summary : [],
     kpi: data.kpi || { total_transfers: 0, total_cost: 0, savings: 0, savings_pct: 0, infeasible_count: 0, total_cost_central: 0 },
     processed_at: data.processed_at || new Date().toISOString()
@@ -599,6 +600,15 @@ export default function RebalancingPage() {
             </GlassCard>
           )}
 
+          {/* Advisory note — every recommendation below is a draft, not an executed transfer */}
+          <div className="no-export flex items-start gap-3 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3">
+            <Info className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+            <p className="text-xs text-foreground">
+              <strong>Draft — perlu persetujuan manual.</strong> Baris di bawah adalah usulan transfer, bukan perintah eksekusi.
+              Stok baru berpindah setelah planner meninjau dan menerbitkan STO (gunakan tombol "Download Draft STO").
+            </p>
+          </div>
+
           {/* Recommendations Table (frozen snapshot — replaced by the filterable table in the offline export section) */}
           <GlassCard className="no-export">
             <h3 className="text-sm font-bold text-foreground mb-4 uppercase tracking-wide">
@@ -670,6 +680,39 @@ export default function RebalancingPage() {
                         <td className="px-4 py-3">{inf.sku}</td>
                         <td className="px-4 py-3 text-right text-destructive font-bold">{inf.qty_unfulfilled}</td>
                         <td className="px-4 py-3 text-xs">{inf.reason}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </GlassCard>
+          )}
+
+          {/* Low Value Skipped — demand too small to ship on its own (hysteresis threshold) */}
+          {(results.low_value_skipped || []).length > 0 && (
+            <GlassCard className="no-export border-amber-400/30 bg-amber-400/5">
+              <h3 className="text-sm font-bold text-amber-500 mb-4 uppercase tracking-wide flex items-center gap-2">
+                <Info className="w-4 h-4" /> Di Bawah Ambang Transfer Ekonomis — Gabungkan Manual
+              </h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left text-muted-foreground">
+                  <thead className="text-xs text-foreground uppercase bg-amber-400/10 border-b border-amber-400/20 font-bold">
+                    <tr>
+                      <th className="px-4 py-3">Entity</th>
+                      <th className="px-4 py-3">Destination</th>
+                      <th className="px-4 py-3">SKU</th>
+                      <th className="px-4 py-3 text-right">Qty</th>
+                      <th className="px-4 py-3">Alasan</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(results.low_value_skipped || []).map((s: any, i: number) => (
+                      <tr key={i} className="border-b border-border/50">
+                        <td className="px-4 py-3 font-medium text-primary">{s.entity}</td>
+                        <td className="px-4 py-3 font-semibold text-foreground">{s.destination}</td>
+                        <td className="px-4 py-3">{s.sku}</td>
+                        <td className="px-4 py-3 text-right text-amber-500 font-bold">{s.qty_unfulfilled}</td>
+                        <td className="px-4 py-3 text-xs">{s.reason}</td>
                       </tr>
                     ))}
                   </tbody>

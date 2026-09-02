@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 import pandas as pd
@@ -22,6 +22,7 @@ async def analyze_rebalancing_endpoint(
     stock_file: UploadFile = File(...),
     demand_file: UploadFile = File(...),
     freight_file: UploadFile = File(...),
+    min_transfer_qty: float = Query(1.0, ge=0),
     db: Session = Depends(get_db)
 ):
     """
@@ -68,7 +69,7 @@ async def analyze_rebalancing_endpoint(
         db.refresh(db_upload)
         
         from services.rebalancing_engine import analyze_rebalancing
-        result = await asyncio.to_thread(analyze_rebalancing, stock_df, demand_df, freight_df)
+        result = await asyncio.to_thread(analyze_rebalancing, stock_df, demand_df, freight_df, min_transfer_qty)
         
         # Save result to DB for global visibility
         result_str = json.dumps(result)

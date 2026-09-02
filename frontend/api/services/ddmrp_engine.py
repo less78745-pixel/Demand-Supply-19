@@ -417,7 +417,7 @@ def analyze_ddmrp_from_file(
         groups = [("All", df)]
 
     try:
-        from .forecast_engine import _gb_forecast
+        from .forecast_engine import _xgboost_forecast as _gb_forecast
     except ImportError:
         def _gb_forecast(y, steps):
             return [np.mean(y[-30:])]*steps if len(y)>=30 else [np.mean(y)]*steps

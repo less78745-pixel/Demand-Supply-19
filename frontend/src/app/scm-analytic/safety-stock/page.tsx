@@ -54,11 +54,11 @@ const SCENARIOS = [
 
 function generateDemoSafetyStock() {
   const sampleData = [
-    { cabang: 'Jakarta', sku: 'SKU-001 (Mainboard)', adu: 150, std_usage: 25, lead_time: 7, safety_stock: 120, rop: 1170, current_stock: 800, net_flow: 950, dos: 6.3, status: 'WARNING', needs_reorder: true },
-    { cabang: 'Surabaya', sku: 'SKU-002 (Power Supply)', adu: 120, std_usage: 18, lead_time: 10, safety_stock: 145, rop: 1345, current_stock: 1600, net_flow: 1750, dos: 14.5, status: 'SAFE', needs_reorder: false },
-    { cabang: 'Medan', sku: 'SKU-003 (Display Screen)', adu: 100, std_usage: 22, lead_time: 14, safety_stock: 180, rop: 1580, current_stock: 450, net_flow: 650, dos: 6.5, status: 'CRITICAL', needs_reorder: true },
-    { cabang: 'Makassar', sku: 'SKU-001 (Mainboard)', adu: 70, std_usage: 15, lead_time: 18, safety_stock: 160, rop: 1420, current_stock: 2200, net_flow: 2300, dos: 32.8, status: 'OVERSTOCK', needs_reorder: false },
-    { cabang: 'Bali', sku: 'SKU-004 (Audio Module)', adu: 95, std_usage: 14, lead_time: 8, safety_stock: 90, rop: 850, current_stock: 920, net_flow: 1040, dos: 10.9, status: 'SAFE', needs_reorder: false }
+    { cabang: 'Jakarta', sku: 'SKU-001 (Mainboard)', segment: 'A', assigned_service_level: 0.99, adu: 150, std_usage: 25, lead_time: 7, safety_stock: 120, rop: 1170, current_stock: 800, net_flow: 950, dos: 6.3, status: 'WARNING', needs_reorder: true },
+    { cabang: 'Surabaya', sku: 'SKU-002 (Power Supply)', segment: 'A', assigned_service_level: 0.99, adu: 120, std_usage: 18, lead_time: 10, safety_stock: 145, rop: 1345, current_stock: 1600, net_flow: 1750, dos: 14.5, status: 'SAFE', needs_reorder: false },
+    { cabang: 'Medan', sku: 'SKU-003 (Display Screen)', segment: 'B', assigned_service_level: 0.95, adu: 100, std_usage: 22, lead_time: 14, safety_stock: 180, rop: 1580, current_stock: 450, net_flow: 650, dos: 6.5, status: 'CRITICAL', needs_reorder: true },
+    { cabang: 'Makassar', sku: 'SKU-001 (Mainboard)', segment: 'B', assigned_service_level: 0.95, adu: 70, std_usage: 15, lead_time: 18, safety_stock: 160, rop: 1420, current_stock: 2200, net_flow: 2300, dos: 32.8, status: 'OVERSTOCK', needs_reorder: false },
+    { cabang: 'Bali', sku: 'SKU-004 (Audio Module)', segment: 'C', assigned_service_level: 0.90, adu: 95, std_usage: 14, lead_time: 8, safety_stock: 90, rop: 850, current_stock: 920, net_flow: 1040, dos: 10.9, status: 'SAFE', needs_reorder: false }
   ];
 
   const z_data = [
@@ -317,9 +317,9 @@ export default function SafetyStockPage() {
   const handleExport = () => {
     if (!filtered.length) { toast.error('Tidak ada data untuk di-export'); return; }
     const lines: string[] = [];
-    lines.push('Cabang,SKU,ADU,Std_Usage,Lead_Time,Safety_Stock,ROP,Current_Stock,Net_Flow,DoS,Status,Needs_Reorder');
+    lines.push('Cabang,SKU,Segment,Assigned_Service_Level,ADU,Std_Usage,Lead_Time,Safety_Stock,ROP,Current_Stock,Net_Flow,DoS,Status,Needs_Reorder');
     for (const r of filtered) {
-      lines.push(`"${r.cabang}","${r.sku}",${r.adu},${r.std_usage},${r.lead_time},${r.safety_stock},${r.rop},${r.current_stock},${r.net_flow},${r.dos},${r.status},${r.needs_reorder}`);
+      lines.push(`"${r.cabang}","${r.sku}",${r.segment ?? '-'},${r.assigned_service_level ?? ''},${r.adu},${r.std_usage},${r.lead_time},${r.safety_stock},${r.rop},${r.current_stock},${r.net_flow},${r.dos},${r.status},${r.needs_reorder}`);
     }
     const blob = new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -744,6 +744,7 @@ export default function SafetyStockPage() {
                   <tr>
                     <th className="px-3 py-3">Cabang</th>
                     <th className="px-3 py-3">SKU</th>
+                    <th className="px-3 py-3">Segmen</th>
                     <th className="px-3 py-3 text-right">ADU</th>
                     <th className="px-3 py-3 text-right">LT</th>
                     <th className="px-3 py-3 text-right">Safety Stock</th>
@@ -759,6 +760,18 @@ export default function SafetyStockPage() {
                     <tr key={i} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
                       <td className="px-3 py-2.5 font-semibold text-foreground">{r.cabang}</td>
                       <td className="px-3 py-2.5 font-medium">{r.sku}</td>
+                      <td className="px-3 py-2.5">
+                        {r.segment && r.segment !== '-' ? (
+                          <span
+                            className="px-2 py-0.5 rounded text-xs font-bold uppercase bg-primary/10 text-primary"
+                            title={`Target service level: ${Math.round((r.assigned_service_level || 0) * 100)}%`}
+                          >
+                            Tier {r.segment} · {Math.round((r.assigned_service_level || 0) * 100)}%
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">-</span>
+                        )}
+                      </td>
                       <td className="px-3 py-2.5 text-right">{r.adu}</td>
                       <td className="px-3 py-2.5 text-right">{r.lead_time} hr</td>
                       <td className="px-3 py-2.5 text-right font-medium">{r.safety_stock}</td>

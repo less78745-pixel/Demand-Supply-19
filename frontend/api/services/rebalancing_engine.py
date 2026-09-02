@@ -14,13 +14,29 @@ def _safe_float(v):
         return 0.0
 
 
-def analyze_rebalancing(stock_df: pd.DataFrame, demand_df: pd.DataFrame, freight_df: pd.DataFrame) -> dict:
+def analyze_rebalancing(
+    stock_df: pd.DataFrame,
+    demand_df: pd.DataFrame,
+    freight_df: pd.DataFrame,
+    min_transfer_qty: float = 1.0,
+) -> dict:
     """
     Optimize inter-branch stock rebalancing.
-    
+
     stock_df columns: Cabang, SKU, Qty_Available
     demand_df columns: Cabang, Entity, SKU, Qty_Needed, Max_Lead_Time_Days
     freight_df columns: Origin, Destination, Mode, Cost_Per_Ton, Capacity_Max, Lead_Time_Est
+
+    min_transfer_qty: a candidate transfer below this quantity is skipped
+    rather than recommended - moving a fraction of a unit (or a handful of
+    units) across islands rarely clears its own handling cost even when the
+    per-ton freight rate looks cheap. Skipped candidates are reported
+    separately from genuine stock/route infeasibility so the two causes
+    aren't conflated.
+
+    Output is advisory only (a draft transfer order for a human planner to
+    review) - this function never executes a movement, so every
+    recommendation is tagged accordingly rather than treated as final.
     """
     
     # ── Column normalization ──
@@ -136,6 +152,7 @@ def analyze_rebalancing(stock_df: pd.DataFrame, demand_df: pd.DataFrame, freight
     # ── Greedy optimization per Entity (STRICT partition) ──
     recommendations = []
     infeasible = []
+    low_value_skipped = []
     total_cost = 0
     total_cost_central = 0  # comparison: what if all from central
     
@@ -182,13 +199,18 @@ def analyze_rebalancing(stock_df: pd.DataFrame, demand_df: pd.DataFrame, freight
                 send_qty = min(remaining, cand['available'], cand['capacity'])
                 if send_qty <= 0:
                     continue
-                
+                if send_qty < min_transfer_qty:
+                    # This origin can't contribute an economically meaningful
+                    # quantity on its own - try the next candidate instead of
+                    # recommending a fractional-unit shipment.
+                    continue
+
                 cost = send_qty * cand['cost']
                 total_cost += cost
-                
+
                 # Deduct from supply
                 supply_by_sku[sku][cand['origin']] -= send_qty
-                
+
                 recommendations.append({
                     'entity': str(entity),
                     'origin': cand['origin'],
@@ -200,8 +222,9 @@ def analyze_rebalancing(stock_df: pd.DataFrame, demand_df: pd.DataFrame, freight
                     'total_cost': _safe_float(cost),
                     'lead_time': _safe_float(cand['lead_time']),
                     'max_allowed_lt': _safe_float(max_lt),
+                    'status': 'DRAFT_PENDING_APPROVAL',
                 })
-                
+
                 remaining -= send_qty
             
             # Estimate central WH cost for comparison
@@ -211,13 +234,26 @@ def analyze_rebalancing(stock_df: pd.DataFrame, demand_df: pd.DataFrame, freight
                 total_cost_central += central_cost
             
             if remaining > 0:
-                infeasible.append({
-                    'entity': str(entity),
-                    'destination': dest,
-                    'sku': sku,
-                    'qty_unfulfilled': _safe_float(remaining),
-                    'reason': 'Stok tidak cukup atau tidak ada rute yang memenuhi lead time constraint',
-                })
+                if 0 < remaining < min_transfer_qty and candidates:
+                    # A viable route existed, but what's left is too small to
+                    # ship on its own - a human planner should batch it with
+                    # the destination's next order rather than move it alone.
+                    low_value_skipped.append({
+                        'entity': str(entity),
+                        'destination': dest,
+                        'sku': sku,
+                        'qty_unfulfilled': _safe_float(remaining),
+                        'reason': f'Sisa kebutuhan ({remaining:.2f} unit) di bawah ambang transfer ekonomis '
+                                  f'({min_transfer_qty} unit) - gabungkan manual dengan order berikutnya.',
+                    })
+                else:
+                    infeasible.append({
+                        'entity': str(entity),
+                        'destination': dest,
+                        'sku': sku,
+                        'qty_unfulfilled': _safe_float(remaining),
+                        'reason': 'Stok tidak cukup atau tidak ada rute yang memenuhi lead time constraint',
+                    })
     
     # ── Summary by origin-destination pair ──
     route_summary = {}
@@ -234,7 +270,13 @@ def analyze_rebalancing(stock_df: pd.DataFrame, demand_df: pd.DataFrame, freight
     return {
         'recommendations': recommendations,
         'infeasible': infeasible,
+        'low_value_skipped': low_value_skipped,
         'route_summary': list(route_summary.values()),
+        'requires_manual_approval': True,
+        'advisory_note': (
+            'Setiap baris adalah draft usulan transfer, bukan perintah eksekusi. '
+            'Stok baru berpindah setelah planner meninjau dan menerbitkan STO secara manual.'
+        ),
         'kpi': {
             'total_transfers': len(recommendations),
             'total_cost': _safe_float(total_cost),
@@ -242,6 +284,7 @@ def analyze_rebalancing(stock_df: pd.DataFrame, demand_df: pd.DataFrame, freight
             'savings': _safe_float(savings),
             'savings_pct': _safe_float((savings / total_cost_central * 100) if total_cost_central > 0 else 0),
             'infeasible_count': len(infeasible),
+            'low_value_skipped_count': len(low_value_skipped),
             'entities_served': len(set(r['entity'] for r in recommendations)),
         },
         'analysis_date': datetime.now().strftime("%Y-%m-%d %H:%M"),

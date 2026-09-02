@@ -2,6 +2,7 @@ import os
 import io
 import math
 import base64
+import numpy as np
 from datetime import datetime, timedelta
 
 from openpyxl import load_workbook, Workbook
@@ -13,6 +14,9 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
+
+from sklearn.ensemble import IsolationForest
+from .forecast_engine import _holt_winters_forecast
 
 def _safe_float(v):
     try:
@@ -850,6 +854,70 @@ def build_to_recommendations(records, bal_t, period_labels, n_weeks) -> list:
     return recommendations
 
 
+def flag_occupancy_anomalies(daily_data: list) -> None:
+    """Flag statistically unusual (cabang, week) rows via Isolation Forest.
+
+    Additive-only: mutates each row in `daily_data` in place by adding an
+    `is_anomaly` boolean, and never changes occupancy_pct/total_on_hand or
+    any other existing field. This is a data-quality signal on TOP OF the
+    deterministic running-balance calculation above, not a replacement for
+    any part of it - a row can be "correct" per the formula and still get
+    flagged here because it's an outlier versus the rest of the same upload
+    (e.g. a fat-fingered On Hand or Target figure).
+
+    Runs once per upload, on whatever rows this batch produced - there is no
+    minimum-row check beyond what IsolationForest itself needs, since a
+    small upload is exactly common for this module (a handful of cabang).
+    """
+    for row in daily_data:
+        row["is_anomaly"] = False
+
+    if len(daily_data) < 10:
+        # Too few rows for "unusual vs. the rest of this batch" to mean
+        # anything - every row would look equally unique.
+        return
+
+    features = np.array([
+        [d["occupancy_pct"], d["total_on_hand"]] for d in daily_data
+    ], dtype=float)
+
+    try:
+        model = IsolationForest(contamination=0.05, random_state=42, n_estimators=100)
+        preds = model.fit_predict(features)  # -1 = anomaly, 1 = normal
+    except Exception:
+        return
+
+    for row, pred in zip(daily_data, preds):
+        row["is_anomaly"] = bool(pred == -1)
+
+
+def project_occupancy_forward(occ_t: dict, week_awal: int, n_weeks: int, steps: int = 3) -> dict:
+    """Project each cabang's occupancy ratio `steps` weeks beyond the
+    uploaded horizon, using the same genuine Holt-Winters fit used by the
+    Demand Forecasting module (see services/forecast_engine.py) - not a new,
+    separately-invented method.
+
+    Purely additive: this never feeds back into daily_data, shortage/overstock
+    alerts, TO recommendations, or the generated Excel workbook - it is an
+    extra, clearly-separate "what's coming next" signal for the dashboard.
+    Falls back silently (empty projection for that cabang) if the fit fails
+    or history is too short, same fallback behavior as forecast_engine.
+    """
+    projection = {}
+    for cabang, series in occ_t.items():
+        clean_series = [v if v is not None else 0.0 for v in series]
+        if len(clean_series) < 4:
+            continue
+        try:
+            preds = _holt_winters_forecast(clean_series, steps)
+        except Exception:
+            continue
+        projection[str(cabang)] = [round(max(0.0, p) * 100, 2) for p in preds]
+
+    future_labels = [period_label(week_awal + n_weeks - 1 + i) for i in range(1, steps + 1)] if projection else []
+    return {"series_by_cabang": projection, "period_labels": future_labels}
+
+
 def calculate_mrp_occupancy_from_bytes(file_bytes: bytes) -> dict:
     # read_only=True: pass ini cuma pernah memanggil iter_rows()/sheetnames pada
     # wb_data (nilai terhitung, bukan formula) -- tidak pernah menulis atau
@@ -1071,6 +1139,10 @@ def calculate_mrp_occupancy_from_bytes(file_bytes: bytes) -> dict:
                 },
             })
 
+    # Additive-only data-quality pass - see flag_occupancy_anomalies docstring.
+    # Adds `is_anomaly` to each row; never changes occupancy_pct/total_on_hand.
+    flag_occupancy_anomalies(daily_data)
+
     shortage_alerts = []
     # Overstock = perhitungan SAMA PERSIS seperti Shortage di atas, cuma arah
     # tandanya dibalik -- tidak ada threshold/pengali tambahan (coverage-weeks,
@@ -1127,6 +1199,12 @@ def calculate_mrp_occupancy_from_bytes(file_bytes: bytes) -> dict:
 
     avg_occ = sum(d["occupancy_pct"] for d in daily_data) / len(daily_data) if daily_data else 0
     max_occ = max(d["occupancy_pct"] for d in daily_data) if daily_data else 0
+    anomaly_count = sum(1 for d in daily_data if d.get("is_anomaly"))
+
+    # Predictive occupancy - projects occ_t (already computed above for
+    # daily_data/charts) `steps` weeks past the uploaded horizon. Additive
+    # only: see project_occupancy_forward docstring.
+    occupancy_projection = project_occupancy_forward(occ_t, week_awal, n_weeks)
 
     # NOTE: `mrp_results` used to be duplicated verbatim into a legacy
     # `ddmrp_results` key (a leftover from a module rename), and each of the
@@ -1149,7 +1227,8 @@ def calculate_mrp_occupancy_from_bytes(file_bytes: bytes) -> dict:
             "max_occupancy": round(max_occ, 1),
             "categories_at_risk": len(shortage_alerts),
             "overstock_count": len(overstock_alerts),
-            "to_recommendation_count": len(to_recommendations)
+            "to_recommendation_count": len(to_recommendations),
+            "anomaly_count": anomaly_count,
         },
         "mos_data": df_mos.to_dict('records') if not df_mos.empty else [],
         "over_occupancy_insights": insights,
@@ -1161,6 +1240,10 @@ def calculate_mrp_occupancy_from_bytes(file_bytes: bytes) -> dict:
             "excel_base64": excel_base64,
             "insights_list": insights,
             "occupancy_series_target": {str(k): [round(v * 100, 2) if v is not None else 0 for v in val] for k, val in occ_t.items()},
+            # Predictive occupancy (Holt-Winters, same fit used by Demand
+            # Forecasting) - projects `steps` weeks past the uploaded horizon.
+            # Additive-only: see project_occupancy_forward docstring.
+            "occupancy_projection": occupancy_projection,
             # Konversi Container -> QTY -> Rupiah (lookup CBM & Harga Product per
             # Cabang+Category), diagregasi per cabang per minggu -- dipakai untuk
             # tabel "Analisa Nilai Inventori (QTY & Value)" di dashboard.

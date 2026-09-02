@@ -4,6 +4,11 @@ import warnings
 import gc
 import math
 
+from statsmodels.tsa.holtwinters import ExponentialSmoothing
+from statsmodels.tsa.statespace.sarimax import SARIMAX
+from xgboost import XGBRegressor
+from lightgbm import LGBMRegressor
+
 warnings.filterwarnings("ignore")
 
 
@@ -64,7 +69,13 @@ def _safe_list(arr):
         return []
 
 def _ses_forecast(y_train, steps, alpha=0.3):
-    """Simple Exponential Smoothing without statsmodels."""
+    """Simple Exponential Smoothing without statsmodels.
+
+    Deliberately hand-rolled (not a stand-in for a bigger model): this is the
+    universal fallback used by every model below when a series is too short
+    or a real fit fails to converge, so it must never depend on the same
+    libraries it is backing up.
+    """
     series = list(y_train)
     if not series:
         return [0.0] * steps
@@ -73,110 +84,74 @@ def _ses_forecast(y_train, steps, alpha=0.3):
         s = alpha * val + (1 - alpha) * s
     return [_safe_float(s)] * steps
 
-def _hw_forecast(y_train, steps, seasonality=3):
-    """Lightweight Holt-Winters (Seasonal Trend) proxy for SARIMAX."""
-    series = list(y_train)
+def _holt_winters_forecast(y_train, steps, seasonality=3):
+    """Holt-Winters exponential smoothing via statsmodels (genuine fit, not a proxy)."""
+    series = np.asarray(y_train, dtype=float)
     n = len(series)
-    if n < seasonality * 2:
+    if n < seasonality * 2 or np.all(series == series[0]):
         return _ses_forecast(series, steps)
-    indices = [1.0] * seasonality
-    for i in range(seasonality):
-        season_vals = series[i::seasonality]
-        if season_vals and sum(series) > 0:
-            indices[i] = _safe_float(np.mean(season_vals) / (np.mean(series) + 1e-5))
-    deseasonalized = [series[i] / (indices[i % seasonality] + 1e-5) for i in range(n)]
-    x_train = np.arange(n, dtype=float)
-    x_steps = np.arange(n, n + steps, dtype=float)
-    trend_steps = _ols_predict(x_train, deseasonalized, x_steps)
-    preds = [_safe_float(trend_steps[i] * indices[(n + i) % seasonality]) for i in range(steps)]
-    return preds
+    try:
+        has_seasonal = n >= seasonality * 2
+        model = ExponentialSmoothing(
+            series,
+            trend='add',
+            seasonal='add' if has_seasonal else None,
+            seasonal_periods=seasonality if has_seasonal else None,
+            initialization_method='estimated',
+        ).fit(optimized=True)
+        return _safe_list(model.forecast(steps))
+    except Exception:
+        return _ses_forecast(series, steps)
 
-def _gb_forecast(y_train, steps, exog_train=None):
-    """Lightweight Gradient Boosting proxy for XGBoost, optionally adjusted by exogenous factors."""
-    series = list(y_train)
+def _sarimax_forecast(y_train, steps, exog_train=None, seasonality=3):
+    """Real SARIMAX (statsmodels), with optional exogenous regressors.
+
+    Order/seasonal_order are kept small on purpose: these run once per
+    Cabang x Kategori group (potentially hundreds per upload), so MLE fitting
+    time matters. Falls back to SES if the series is too short or the
+    optimizer fails to converge (common for short/degenerate series).
+    """
+    series = np.asarray(y_train, dtype=float)
     n = len(series)
-    if n < 3:
+    if n < 6:
         return _ses_forecast(series, steps)
-    X = np.array(series[:-1])
-    Y = np.array(series[1:])
-    F_val = float(np.mean(Y))
-    trees = []
-    residuals = Y - F_val
+    try:
+        exog = None
+        if exog_train is not None and len(exog_train) == n:
+            exog = np.asarray(exog_train, dtype=float)
+        seasonal_order = (1, 0, 0, seasonality) if n >= seasonality * 3 else (0, 0, 0, 0)
+        model = SARIMAX(
+            series,
+            exog=exog,
+            order=(1, 1, 1),
+            seasonal_order=seasonal_order,
+            enforce_stationarity=False,
+            enforce_invertibility=False,
+        ).fit(disp=False, maxiter=50, low_memory=True)
 
-    # Decision-stump split search, vectorized. The original re-scanned and
-    # re-averaged the WHOLE residual array from scratch for every unique X
-    # value - O(n x distinct values), i.e. O(n^2) for series with mostly
-    # unique values (e.g. long daily history per branch). Bucketing
-    # residuals by their unique-X group once and taking cumulative sums
-    # finds the identical best split (same strict tie-break: first/smallest
-    # split value wins, matching np.unique's ascending order + argmin's
-    # first-occurrence behavior) in one O(n log n) pass per tree instead.
-    unique_vals, bucket_idx = np.unique(X, return_inverse=True)
-    m = len(unique_vals)
-    for _ in range(5):
-        bucket_sum = np.zeros(m)
-        bucket_sumsq = np.zeros(m)
-        bucket_count = np.zeros(m)
-        np.add.at(bucket_sum, bucket_idx, residuals)
-        np.add.at(bucket_sumsq, bucket_idx, residuals ** 2)
-        np.add.at(bucket_count, bucket_idx, 1.0)
-
-        cum_sum   = np.cumsum(bucket_sum)
-        cum_sumsq = np.cumsum(bucket_sumsq)
-        cum_count = np.cumsum(bucket_count)
-        total_sum, total_sumsq, total_count = cum_sum[-1], cum_sumsq[-1], cum_count[-1]
-
-        left_count  = cum_count
-        right_count = total_count - left_count
-        left_sum    = cum_sum
-        right_sum   = total_sum - cum_sum
-
-        left_mean  = np.divide(left_sum, left_count, out=np.zeros(m), where=left_count > 0)
-        right_mean = np.divide(right_sum, right_count, out=np.zeros(m), where=right_count > 0)
-
-        left_sse    = np.where(left_count > 0, cum_sumsq - (left_sum ** 2) / np.maximum(left_count, 1), 0.0)
-        right_sumsq = total_sumsq - cum_sumsq
-        right_sse   = np.where(right_count > 0, right_sumsq - (right_sum ** 2) / np.maximum(right_count, 1), 0.0)
-
-        best_k = int(np.argmin(left_sse + right_sse))
-        best_split = float(unique_vals[best_k])
-        best_left  = float(left_mean[best_k])
-        best_right = float(right_mean[best_k])
-
-        trees.append((best_split, best_left, best_right))
-        pred = np.where(X <= best_split, best_left, best_right)
-        residuals -= pred * 0.5
-
-    curr_x = series[-1]
-    preds = []
-    
-    exog_factors = _compute_exog_factor(exog_train, steps)
-    
-    for i in range(steps):
-        nxt = F_val
-        for split, l_val, r_val in trees:
-            nxt += (l_val if curr_x <= split else r_val) * 0.5
-        preds.append(_safe_float(nxt * exog_factors[i]))
-        curr_x = nxt
-    return preds
+        exog_future = np.tile(exog[-1], (steps, 1)) if exog is not None else None
+        preds = model.forecast(steps, exog=exog_future)
+        return _safe_list(preds)
+    except Exception:
+        return _ses_forecast(series, steps)
 
 def _samai_forecast(y_train, steps, seasonality=3):
-    """SAMAI: Simple Average with Moving Average Indexing (perishable/volatile proxy)."""
+    """SAMAI: Simple Average with Moving Average Indexing (perishable/volatile baseline)."""
     series = list(y_train)
     n = len(series)
     if n < seasonality * 2:
         return _ses_forecast(series, steps)
-    
+
     # Calculate simple average
     overall_avg = np.mean(series)
-    
+
     # Calculate seasonal indices (Moving Average Indexing)
     ma_indices = [1.0] * seasonality
     for i in range(seasonality):
         season_vals = series[i::seasonality]
         if season_vals and overall_avg > 0:
             ma_indices[i] = _safe_float(np.mean(season_vals) / overall_avg)
-            
+
     preds = []
     for i in range(steps):
         # Forecast is simple average * seasonal index
@@ -184,177 +159,82 @@ def _samai_forecast(y_train, steps, seasonality=3):
         preds.append(_safe_float(overall_avg * idx))
     return preds
 
-def _bilstm_proxy_forecast(y_train, steps):
-    """BiLSTM Proxy: Lightweight RNN-like simulation using numpy for temporal dependencies."""
-    series = np.array(y_train, dtype=float)
+def _make_lag_features(series, exog=None, n_lags=3):
+    """Build a supervised (X, y) lag-feature table for tree-based regressors."""
     n = len(series)
-    if n < 4:
+    rows, targets = [], []
+    for i in range(n_lags, n):
+        feat = list(series[i - n_lags:i])
+        if exog is not None:
+            feat += list(exog[i])
+        rows.append(feat)
+        targets.append(series[i])
+    return np.array(rows), np.array(targets)
+
+def _tree_forecast(y_train, steps, exog_train, model_cls, model_kwargs, n_lags=3):
+    """Genuine gradient-boosted-tree forecast, recursive multi-step.
+
+    Shared by XGBoost and LightGBM: build lag(+exog) features, fit a real
+    regressor, then predict one step at a time feeding each prediction back
+    in as the next lag. Exogenous columns are held at their last observed
+    value across the forecast horizon (no future exog is available).
+    """
+    series = np.asarray(y_train, dtype=float)
+    n = len(series)
+    if n < n_lags + 3:
         return _ses_forecast(series, steps)
-    
-    # Normalize
-    s_min, s_max = np.min(series), np.max(series)
-    if s_max - s_min == 0:
-        return [_safe_float(series[-1])] * steps
-        
-    norm_series = (series - s_min) / (s_max - s_min)
-    
-    # Simple simulated bi-directional cell state (forward and backward memory)
-    forward_state = 0.0
-    backward_state = 0.0
-    
-    # Forward pass
-    for x in norm_series:
-        forward_state = 0.8 * forward_state + 0.2 * x
-        
-    # Backward pass
-    for x in reversed(norm_series):
-        backward_state = 0.8 * backward_state + 0.2 * x
-        
-    # Predict step-by-step using combined state
-    preds = []
-    curr_val = norm_series[-1]
-    
-    for _ in range(steps):
-        # Simulated gate activation (tanh/sigmoid-like)
-        combined_state = (forward_state + backward_state) / 2
-        nxt_norm = curr_val * 0.7 + combined_state * 0.3
-        
-        # Denormalize
-        nxt_val = nxt_norm * (s_max - s_min) + s_min
-        preds.append(_safe_float(nxt_val))
-        
-        # Update states for next step
-        forward_state = 0.8 * forward_state + 0.2 * nxt_norm
-        curr_val = nxt_norm
-        
-    return preds
+    try:
+        exog = None
+        if exog_train is not None and len(exog_train) == n:
+            exog = np.asarray(exog_train, dtype=float)
+        X, y = _make_lag_features(series, exog, n_lags)
+        if len(X) < 2:
+            return _ses_forecast(series, steps)
 
-def _prophet_proxy_forecast(y_train, steps, exog_train=None):
-    """Fb Prophet Proxy: Additive model with trend, seasonality, and optional exogenous regressor simulation."""
-    series = np.array(y_train, dtype=float)
-    n = len(series)
-    if n < 4: return _ses_forecast(series, steps)
-    
-    x = np.arange(n, dtype=float)
-    slope, intercept = _ols_line(x, series)
-    trend = slope * x + intercept
-    detrended = series - trend
-    seasonality = [np.mean(detrended[i::3]) for i in range(3)]
+        model = model_cls(**model_kwargs)
+        model.fit(X, y)
 
-    preds = []
-    exog_factors = _compute_exog_factor(exog_train, steps)
-    for i in range(steps):
-        t = n + i
-        val = slope * t + intercept + seasonality[t % 3]
-        preds.append(_safe_float(val * exog_factors[i]))
-    return preds
+        history = list(series[-n_lags:])
+        exog_hist = exog[-1] if exog is not None else None
+        preds = []
+        for _ in range(steps):
+            feat = list(history[-n_lags:])
+            if exog_hist is not None:
+                feat += list(exog_hist)
+            nxt = float(model.predict(np.array([feat]))[0])
+            preds.append(_safe_float(nxt))
+            history.append(nxt)
+        return preds
+    except Exception:
+        return _ses_forecast(series, steps)
 
-def _arimax_proxy_forecast(y_train, steps, exog_train=None):
-    """ARIMAX Proxy: AutoRegressive Integrated Moving Average with Exogenous simulation."""
-    series = np.array(y_train, dtype=float)
-    n = len(series)
-    if n < 3: return _ses_forecast(series, steps)
-    
-    # Simulate AR(1) + MA(1) + exogenous boost
-    ar_coef = 0.6
-    ma_coef = 0.3
-    errors = [0.0] * n
-    for i in range(1, n):
-        pred_i = series[i-1] * ar_coef
-        errors[i] = series[i] - pred_i
-        
-    preds = []
-    curr_val = series[-1]
-    curr_err = errors[-1]
-    exog_factors = _compute_exog_factor(exog_train, steps)
-    for i in range(steps):
-        # external factor simulation (e.g. promo bump = 1.02, plus exog impact)
-        exogenous_factor = 1.02 * exog_factors[i]
-        nxt = (curr_val * ar_coef + curr_err * ma_coef) * exogenous_factor
-        preds.append(_safe_float(nxt))
-        curr_err = 0.0 # decay error
-        curr_val = nxt
-    return preds
+def _xgboost_forecast(y_train, steps, exog_train=None):
+    """Real XGBoost regressor on lag(+exog) features (not a heuristic stand-in)."""
+    return _tree_forecast(
+        y_train, steps, exog_train,
+        model_cls=XGBRegressor,
+        model_kwargs=dict(
+            n_estimators=100, max_depth=3, learning_rate=0.1,
+            objective='reg:squarederror', verbosity=0,
+        ),
+    )
 
-def _sarima_proxy_forecast(y_train, steps):
-    """SARIMA Proxy: Seasonal ARIMA simulation without exogenous variables."""
-    series = np.array(y_train, dtype=float)
-    n = len(series)
-    if n < 4: return _ses_forecast(series, steps)
-    
-    ar_coef = 0.5
-    ma_coef = 0.2
-    seasonality = 3
-    
-    errors = [0.0] * n
-    for i in range(1, n):
-        pred_i = series[i-1] * ar_coef
-        errors[i] = series[i] - pred_i
-        
-    preds = []
-    curr_val = series[-1]
-    curr_err = errors[-1]
-    
-    for i in range(steps):
-        # seasonal oscillation proxy
-        s_idx = 1.0 + 0.1 * np.sin(2 * np.pi * (n + i) / seasonality)
-        nxt = (curr_val * ar_coef + curr_err * ma_coef) * s_idx
-        preds.append(_safe_float(nxt))
-        curr_err = 0.0
-        curr_val = nxt
-    return preds
+def _lightgbm_forecast(y_train, steps, exog_train=None):
+    """Real LightGBM regressor on lag(+exog) features (not a heuristic stand-in).
 
-def _gnn_proxy_forecast(y_train, steps):
-    """GNN Proxy: Graph Neural Network simulating cross-store spatial correlations."""
-    series = np.array(y_train, dtype=float)
-    if len(series) < 2: return _ses_forecast(series, steps)
-    
-    # Simulate spatial smoothing (node embeddings)
-    smoothed = np.convolve(series, [0.2, 0.6, 0.2], mode='valid')
-    if len(smoothed) == 0: smoothed = series
-    return _ses_forecast(smoothed, steps)
-
-def _lightgbm_proxy_forecast(y_train, steps, exog_train=None):
-    """LightGBM Proxy: Gradient boosting with leaf-wise tree growth simulation, adjusted by exog."""
-    # Very similar to XGBoost but slightly different learning rate / split
-    preds = _gb_forecast(y_train, steps, exog_train)
-    # add slight random optimization bias
-    return [_safe_float(p * 0.99) for p in preds]
-
-def _garch_proxy_forecast(y_train, steps):
-    """GARCH Proxy: Generalized Autoregressive Conditional Heteroskedasticity for volatility."""
-    series = np.array(y_train, dtype=float)
-    if len(series) < 3: return _ses_forecast(series, steps)
-    
-    returns = np.diff(series) / (series[:-1] + 1e-5)
-    volatility = np.std(returns)
-    
-    preds = []
-    curr_val = series[-1]
-    for _ in range(steps):
-        # GARCH focuses on variance, meaning it predicts mean with volatility bands
-        # We'll just return a mean-reverting forecast slightly adjusted by variance
-        nxt = curr_val * (1 + volatility * 0.1)
-        preds.append(_safe_float(nxt))
-        curr_val = nxt
-    return preds
-
-def _wavelet_proxy_forecast(y_train, steps):
-    """Wavelet Transform Proxy: Time-frequency decomposition simulation."""
-    series = np.array(y_train, dtype=float)
-    if len(series) < 4: return _ses_forecast(series, steps)
-    
-    # Simulate low frequency (approximation) and high frequency (detail)
-    low_freq = np.convolve(series, [0.5, 0.5], mode='valid')
-    if len(low_freq) == 0: low_freq = series
-    
-    return _hw_forecast(low_freq, steps)
-
-def _lstm_gru_proxy_forecast(y_train, steps):
-    """LSTM-GRU Proxy: Hybrid RNN simulation."""
-    lstm_preds = np.array(_bilstm_proxy_forecast(y_train, steps))
-    # GRU is slightly simpler/faster, we mix it
-    return _safe_list(lstm_preds * 0.98 + np.mean(y_train) * 0.02)
+    min_child_samples/min_data_in_leaf are dropped to 1 because most
+    Cabang x Kategori groups only have a handful of monthly rows -
+    LightGBM's default leaf-size minimums (20) would refuse to split at all
+    on data this small.
+    """
+    return _tree_forecast(
+        y_train, steps, exog_train,
+        model_cls=LGBMRegressor,
+        model_kwargs=dict(
+            n_estimators=100, max_depth=3, learning_rate=0.1,
+            min_child_samples=1, min_data_in_leaf=1, verbosity=-1,
+        ),
+    )
 
 def _process_group(cabang: str, category: str, df: pd.DataFrame, test_size: int) -> dict:
     try:
@@ -385,7 +265,7 @@ def _process_group(cabang: str, category: str, df: pd.DataFrame, test_size: int)
         train = df
         test  = df.iloc[0:0]
     y_train, y_test = train['Penjualan'], test['Penjualan']
-    
+
     exog_cols = [c for c in ['AO', 'RO', 'Rerata Drop Size', 'NOO'] if c in df.columns]
     exog_train = train[exog_cols].values if exog_cols else None
     exog_full  = df[exog_cols].values if exog_cols else None
@@ -395,7 +275,7 @@ def _process_group(cabang: str, category: str, df: pd.DataFrame, test_size: int)
     forecasts_map = {}
     future_map    = {}
 
-    # ── SMA-3 ──
+    # ── SMA-3 (baseline) ──
     sma3_val = y_train.rolling(3).mean().iloc[-1]
     if pd.isna(sma3_val):
         sma3_val = float(y_train.mean())
@@ -411,7 +291,7 @@ def _process_group(cabang: str, category: str, df: pd.DataFrame, test_size: int)
         full_sma3 = float(df['Penjualan'].mean())
     future_map['SMA-3'] = _safe_list(np.full(future_size, _safe_float(full_sma3)))
 
-    # ── SES (manual, no statsmodels) ──
+    # ── SES (baseline) ──
     ses_preds = _ses_forecast(y_train.values, test_size)
     rmse_ses = _safe_float(np.sqrt(np.mean((y_test.values - np.array(ses_preds)) ** 2)))
     forecasts_map['SES'] = ses_preds
@@ -421,7 +301,7 @@ def _process_group(cabang: str, category: str, df: pd.DataFrame, test_size: int)
                         'bias': _bias(y_test, ses_preds),
                         'mad': _mad(y_test, ses_preds)})
 
-    # ── Linear Trend (replaces SARIMAX / XGBoost) ──
+    # ── Trend (OLS, baseline) ──
     try:
         x_train = np.arange(len(y_train), dtype=float)
         x_test  = np.arange(len(y_train), len(y_train) + test_size, dtype=float)
@@ -442,27 +322,7 @@ def _process_group(cabang: str, category: str, df: pd.DataFrame, test_size: int)
                             'mape': models_eval[0]['mape'], 'bias': models_eval[0]['bias'],
                             'mad': models_eval[0]['mad']})
 
-    # ── SARIMAX (Lightweight Proxy) ──
-    sarimax_preds = _hw_forecast(y_train.values, test_size)
-    rmse_sarimax = _safe_float(np.sqrt(np.mean((y_test.values - np.array(sarimax_preds)) ** 2)))
-    forecasts_map['SARIMAX'] = sarimax_preds
-    future_map['SARIMAX'] = _hw_forecast(df['Penjualan'].values, future_size)
-    models_eval.append({'model': 'SARIMAX', 'rmse': rmse_sarimax,
-                        'mape': _mape(y_test, sarimax_preds),
-                        'bias': _bias(y_test, sarimax_preds),
-                        'mad': _mad(y_test, sarimax_preds)})
-
-    # ── XGBoost (Lightweight Proxy) ──
-    xgb_preds = _gb_forecast(y_train.values, test_size, exog_train)
-    rmse_xgb = _safe_float(np.sqrt(np.mean((y_test.values - np.array(xgb_preds)) ** 2)))
-    forecasts_map['XGBoost'] = xgb_preds
-    future_map['XGBoost'] = _gb_forecast(df['Penjualan'].values, future_size, exog_full)
-    models_eval.append({'model': 'XGBoost', 'rmse': rmse_xgb,
-                        'mape': _mape(y_test, xgb_preds),
-                        'bias': _bias(y_test, xgb_preds),
-                        'mad': _mad(y_test, xgb_preds)})
-
-    # ── SAMAI ──
+    # ── SAMAI (baseline, perishable/volatile) ──
     samai_preds = _samai_forecast(y_train.values, test_size)
     rmse_samai = _safe_float(np.sqrt(np.mean((y_test.values - np.array(samai_preds)) ** 2)))
     forecasts_map['SAMAI'] = samai_preds
@@ -472,105 +332,55 @@ def _process_group(cabang: str, category: str, df: pd.DataFrame, test_size: int)
                         'bias': _bias(y_test, samai_preds),
                         'mad': _mad(y_test, samai_preds)})
 
-    # ── BiLSTM (Lightweight Proxy) ──
-    bilstm_preds = _bilstm_proxy_forecast(y_train.values, test_size)
-    rmse_bilstm = _safe_float(np.sqrt(np.mean((y_test.values - np.array(bilstm_preds)) ** 2)))
-    forecasts_map['BiLSTM'] = bilstm_preds
-    future_map['BiLSTM'] = _bilstm_proxy_forecast(df['Penjualan'].values, future_size)
-    models_eval.append({'model': 'BiLSTM', 'rmse': rmse_bilstm,
-                        'mape': _mape(y_test, bilstm_preds),
-                        'bias': _bias(y_test, bilstm_preds),
-                        'mad': _mad(y_test, bilstm_preds)})
+    # ── Holt-Winters (real statsmodels fit) ──
+    hw_preds = _holt_winters_forecast(y_train.values, test_size)
+    rmse_hw = _safe_float(np.sqrt(np.mean((y_test.values - np.array(hw_preds)) ** 2)))
+    forecasts_map['Holt-Winters'] = hw_preds
+    future_map['Holt-Winters'] = _holt_winters_forecast(df['Penjualan'].values, future_size)
+    models_eval.append({'model': 'Holt-Winters', 'rmse': rmse_hw,
+                        'mape': _mape(y_test, hw_preds),
+                        'bias': _bias(y_test, hw_preds),
+                        'mad': _mad(y_test, hw_preds)})
 
-    # ── Hybrid Ensemble (XGBoost + BiLSTM) ──
-    ensemble_preds = _safe_list((np.array(xgb_preds) + np.array(bilstm_preds)) / 2)
-    rmse_ens = _safe_float(np.sqrt(np.mean((y_test.values - np.array(ensemble_preds)) ** 2)))
-    forecasts_map['Hybrid Ensemble'] = ensemble_preds
-    future_map['Hybrid Ensemble'] = _safe_list((np.array(future_map['XGBoost']) + np.array(future_map['BiLSTM'])) / 2)
-    models_eval.append({'model': 'Hybrid Ensemble', 'rmse': rmse_ens,
-                        'mape': _mape(y_test, ensemble_preds),
-                        'bias': _bias(y_test, ensemble_preds),
-                        'mad': _mad(y_test, ensemble_preds)})
+    # ── SARIMAX (real statsmodels fit, with exogenous regressors) ──
+    sarimax_preds = _sarimax_forecast(y_train.values, test_size, exog_train)
+    rmse_sarimax = _safe_float(np.sqrt(np.mean((y_test.values - np.array(sarimax_preds)) ** 2)))
+    forecasts_map['SARIMAX'] = sarimax_preds
+    future_map['SARIMAX'] = _sarimax_forecast(df['Penjualan'].values, future_size, exog_full)
+    models_eval.append({'model': 'SARIMAX', 'rmse': rmse_sarimax,
+                        'mape': _mape(y_test, sarimax_preds),
+                        'bias': _bias(y_test, sarimax_preds),
+                        'mad': _mad(y_test, sarimax_preds)})
 
-    # ── Fb Prophet (Proxy) ──
-    prophet_preds = _prophet_proxy_forecast(y_train.values, test_size, exog_train)
-    rmse_prophet = _safe_float(np.sqrt(np.mean((y_test.values - np.array(prophet_preds)) ** 2)))
-    forecasts_map['Fb Prophet'] = prophet_preds
-    future_map['Fb Prophet'] = _prophet_proxy_forecast(df['Penjualan'].values, future_size, exog_full)
-    models_eval.append({'model': 'Fb Prophet', 'rmse': rmse_prophet,
-                        'mape': _mape(y_test, prophet_preds),
-                        'bias': _bias(y_test, prophet_preds),
-                        'mad': _mad(y_test, prophet_preds)})
+    # ── XGBoost (real xgboost.XGBRegressor) ──
+    xgb_preds = _xgboost_forecast(y_train.values, test_size, exog_train)
+    rmse_xgb = _safe_float(np.sqrt(np.mean((y_test.values - np.array(xgb_preds)) ** 2)))
+    forecasts_map['XGBoost'] = xgb_preds
+    future_map['XGBoost'] = _xgboost_forecast(df['Penjualan'].values, future_size, exog_full)
+    models_eval.append({'model': 'XGBoost', 'rmse': rmse_xgb,
+                        'mape': _mape(y_test, xgb_preds),
+                        'bias': _bias(y_test, xgb_preds),
+                        'mad': _mad(y_test, xgb_preds)})
 
-    # ── ARIMAX (Proxy) ──
-    arimax_preds = _arimax_proxy_forecast(y_train.values, test_size, exog_train)
-    rmse_arimax = _safe_float(np.sqrt(np.mean((y_test.values - np.array(arimax_preds)) ** 2)))
-    forecasts_map['ARIMAX'] = arimax_preds
-    future_map['ARIMAX'] = _arimax_proxy_forecast(df['Penjualan'].values, future_size, exog_full)
-    models_eval.append({'model': 'ARIMAX', 'rmse': rmse_arimax,
-                        'mape': _mape(y_test, arimax_preds),
-                        'bias': _bias(y_test, arimax_preds),
-                        'mad': _mad(y_test, arimax_preds)})
-
-    # ── SARIMA (Proxy) ──
-    sarima_preds = _sarima_proxy_forecast(y_train.values, test_size)
-    rmse_sarima = _safe_float(np.sqrt(np.mean((y_test.values - np.array(sarima_preds)) ** 2)))
-    forecasts_map['SARIMA'] = sarima_preds
-    future_map['SARIMA'] = _sarima_proxy_forecast(df['Penjualan'].values, future_size)
-    models_eval.append({'model': 'SARIMA', 'rmse': rmse_sarima,
-                        'mape': _mape(y_test, sarima_preds),
-                        'bias': _bias(y_test, sarima_preds),
-                        'mad': _mad(y_test, sarima_preds)})
-
-    # ── GNN (Proxy) ──
-    gnn_preds = _gnn_proxy_forecast(y_train.values, test_size)
-    rmse_gnn = _safe_float(np.sqrt(np.mean((y_test.values - np.array(gnn_preds)) ** 2)))
-    forecasts_map['GNN'] = gnn_preds
-    future_map['GNN'] = _gnn_proxy_forecast(df['Penjualan'].values, future_size)
-    models_eval.append({'model': 'GNN', 'rmse': rmse_gnn,
-                        'mape': _mape(y_test, gnn_preds),
-                        'bias': _bias(y_test, gnn_preds),
-                        'mad': _mad(y_test, gnn_preds)})
-
-    # ── LightGBM (Proxy) ──
-    lgbm_preds = _lightgbm_proxy_forecast(y_train.values, test_size, exog_train)
+    # ── LightGBM (real lightgbm.LGBMRegressor) ──
+    lgbm_preds = _lightgbm_forecast(y_train.values, test_size, exog_train)
     rmse_lgbm = _safe_float(np.sqrt(np.mean((y_test.values - np.array(lgbm_preds)) ** 2)))
     forecasts_map['LightGBM'] = lgbm_preds
-    future_map['LightGBM'] = _lightgbm_proxy_forecast(df['Penjualan'].values, future_size, exog_full)
+    future_map['LightGBM'] = _lightgbm_forecast(df['Penjualan'].values, future_size, exog_full)
     models_eval.append({'model': 'LightGBM', 'rmse': rmse_lgbm,
                         'mape': _mape(y_test, lgbm_preds),
                         'bias': _bias(y_test, lgbm_preds),
                         'mad': _mad(y_test, lgbm_preds)})
 
-    # ── GARCH (Proxy) ──
-    garch_preds = _garch_proxy_forecast(y_train.values, test_size)
-    rmse_garch = _safe_float(np.sqrt(np.mean((y_test.values - np.array(garch_preds)) ** 2)))
-    forecasts_map['GARCH'] = garch_preds
-    future_map['GARCH'] = _garch_proxy_forecast(df['Penjualan'].values, future_size)
-    models_eval.append({'model': 'GARCH', 'rmse': rmse_garch,
-                        'mape': _mape(y_test, garch_preds),
-                        'bias': _bias(y_test, garch_preds),
-                        'mad': _mad(y_test, garch_preds)})
-
-    # ── Wavelet (Proxy) ──
-    wavelet_preds = _wavelet_proxy_forecast(y_train.values, test_size)
-    rmse_wavelet = _safe_float(np.sqrt(np.mean((y_test.values - np.array(wavelet_preds)) ** 2)))
-    forecasts_map['Wavelet'] = wavelet_preds
-    future_map['Wavelet'] = _wavelet_proxy_forecast(df['Penjualan'].values, future_size)
-    models_eval.append({'model': 'Wavelet', 'rmse': rmse_wavelet,
-                        'mape': _mape(y_test, wavelet_preds),
-                        'bias': _bias(y_test, wavelet_preds),
-                        'mad': _mad(y_test, wavelet_preds)})
-
-    # ── LSTM-GRU (Proxy) ──
-    lstm_gru_preds = _lstm_gru_proxy_forecast(y_train.values, test_size)
-    rmse_lstm_gru = _safe_float(np.sqrt(np.mean((y_test.values - np.array(lstm_gru_preds)) ** 2)))
-    forecasts_map['LSTM-GRU'] = lstm_gru_preds
-    future_map['LSTM-GRU'] = _lstm_gru_proxy_forecast(df['Penjualan'].values, future_size)
-    models_eval.append({'model': 'LSTM-GRU', 'rmse': rmse_lstm_gru,
-                        'mape': _mape(y_test, lstm_gru_preds),
-                        'bias': _bias(y_test, lstm_gru_preds),
-                        'mad': _mad(y_test, lstm_gru_preds)})
+    # ── Hybrid Ensemble (avg of the two real tree models) ──
+    ensemble_preds = _safe_list((np.array(xgb_preds) + np.array(lgbm_preds)) / 2)
+    rmse_ens = _safe_float(np.sqrt(np.mean((y_test.values - np.array(ensemble_preds)) ** 2)))
+    forecasts_map['Hybrid Ensemble'] = ensemble_preds
+    future_map['Hybrid Ensemble'] = _safe_list((np.array(future_map['XGBoost']) + np.array(future_map['LightGBM'])) / 2)
+    models_eval.append({'model': 'Hybrid Ensemble', 'rmse': rmse_ens,
+                        'mape': _mape(y_test, ensemble_preds),
+                        'bias': _bias(y_test, ensemble_preds),
+                        'mad': _mad(y_test, ensemble_preds)})
 
     # ── Best Model Selection ──
     best_model_info = min(models_eval, key=lambda x: (x['mape'], x['rmse']))
@@ -653,26 +463,6 @@ def _process_group(cabang: str, category: str, df: pd.DataFrame, test_size: int)
         'rop':             round(rop, 2),
         'validated':       is_validated,
     }
-
-def _compute_exog_factor(exog_train, steps):
-    if exog_train is None or len(exog_train) == 0:
-        return np.ones(steps)
-    try:
-        exog_mean = np.mean(exog_train, axis=0)
-        last_exog = exog_train[-1]
-        factors = []
-        for m, l in zip(exog_mean, last_exog):
-            if m > 0:
-                factors.append(l / m)
-        if not factors:
-            return np.ones(steps)
-        avg_factor = float(np.mean(factors))
-        avg_factor = max(0.9, min(1.1, avg_factor))
-        if math.isnan(avg_factor):
-            return np.ones(steps)
-        return np.full(steps, avg_factor)
-    except Exception:
-        return np.ones(steps)
 
 def _empty_response(reason: str) -> dict:
     return {
@@ -813,7 +603,7 @@ def run_forecast_pipeline(df: pd.DataFrame) -> dict:
                 'mad': _safe_float(sum(metrics['mad']) / count),
                 'rmse': _safe_float(sum(metrics['rmse']) / count)
             })
-    
+
     # Sort model comparison by MAPE
     model_comparison.sort(key=lambda x: x['mape'])
 
@@ -853,7 +643,7 @@ def run_forecast_pipeline(df: pd.DataFrame) -> dict:
             f"⚠️ {len(failed_groups)} kombinasi Cabang × Kategori gagal diproses karena error teknis: {detail}."
         )
 
-    all_methods = ["SMA-3", "SES", "Trend", "SARIMA", "SARIMAX", "XGBoost", "SAMAI", "BiLSTM", "Hybrid Ensemble", "Fb Prophet", "ARIMAX", "GNN", "LightGBM", "GARCH", "Wavelet", "LSTM-GRU"]
+    all_methods = ["SMA-3", "SES", "Trend", "SAMAI", "Holt-Winters", "SARIMAX", "XGBoost", "LightGBM", "Hybrid Ensemble"]
 
     return {
         "forecast_data":         all_combined,
